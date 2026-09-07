@@ -179,6 +179,7 @@ import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCollaboration } from "@/lib/useCollaboration";
+import { useManualDataRefresh } from "@/lib/manualDataRefresh";
 import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown, ListChecks, Merge } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Link, useLocation, useSearch } from "wouter";
@@ -3748,6 +3749,14 @@ export function EntityRecords({
   }, [fieldFilters, pageFieldFilters, allFields, pageFields, fieldLabelOverrides, ml]);
 
   const queryKey = JSON.stringify(recordQuery);
+  const skipNextTickFetchRef = useRef(false);
+  const recordsRequestIdRef = useRef(0);
+  useEffect(
+    () => () => {
+      recordsRequestIdRef.current += 1;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!realtimeTick) return;
@@ -3767,45 +3776,62 @@ export function EntityRecords({
     collabWasConnectedRef.current = collab.connected;
   }, [collab.connected]);
 
-  useEffect(() => {
+  const loadRecords = useCallback(async () => {
+    const requestId = ++recordsRequestIdRef.current;
     if (!canView) {
-      setRecordsLoading(false);
+      if (requestId === recordsRequestIdRef.current) setRecordsLoading(false);
       return;
     }
-    let cancelled = false;
-    setRecordsLoading(true);
+    if (requestId === recordsRequestIdRef.current) setRecordsLoading(true);
     // Group signature this fetch is for, so the render can tell whether the rows
     // it holds match the currently-expanded group (see loadedGroupSig).
     const sigForFetch = expandAll ? "__all__" : (expandedGroupKey ?? "__none__");
-    runQuery({ entityId, data: { ...recordQuery, pageId: permPageId } })
-      .then((res) => {
-        if (cancelled) return;
-        setRecords(res.data);
-        setTotal(res.total);
-        setNumericTotals(res.numericTotals ?? {});
-        setPageFormulaValues(res.pageFormulaValues ?? {});
-        setGroups(res.groups ?? null);
-        setRowGroupMap((res as { rowGroups?: Record<string, string | null> }).rowGroups ?? {});
-        setLoadedGroupSig(sigForFetch);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setRecords([]);
-        setTotal(0);
-        setNumericTotals({});
-        setPageFormulaValues({});
-        setGroups(null);
-        setRowGroupMap({});
-        toast({ title: t("records.loadError", "Ошибка загрузки записей"), description: extractError(err), variant: "destructive" });
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setRecordsLoading(false);
-          setHasLoadedRecords(true);
-        }
-      });
+    try {
+      const res = await runQuery({ entityId, data: { ...recordQuery, pageId: permPageId } });
+      if (requestId !== recordsRequestIdRef.current) return;
+      setRecords(res.data);
+      setTotal(res.total);
+      setNumericTotals(res.numericTotals ?? {});
+      setPageFormulaValues(res.pageFormulaValues ?? {});
+      setGroups(res.groups ?? null);
+      setRowGroupMap((res as { rowGroups?: Record<string, string | null> }).rowGroups ?? {});
+      setLoadedGroupSig(sigForFetch);
+    } catch (err) {
+      if (requestId !== recordsRequestIdRef.current) return;
+      setRecords([]);
+      setTotal(0);
+      setNumericTotals({});
+      setPageFormulaValues({});
+      setGroups(null);
+      setRowGroupMap({});
+      toast({ title: t("records.loadError", "Ошибка загрузки записей"), description: extractError(err), variant: "destructive" });
+    } finally {
+      if (requestId === recordsRequestIdRef.current) {
+        setRecordsLoading(false);
+        setHasLoadedRecords(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canView, entityId, queryKey, permPageId, runQuery]);
+
+  useManualDataRefresh(async () => {
+    await loadRecords();
+    // The tick refreshes related-value and pivot mutation paths. Set it after
+    // the direct request settles so this effect's cleanup cannot cancel it.
+    skipNextTickFetchRef.current = true;
+    setRefreshTick((tick) => tick + 1);
+  });
+
+  useEffect(() => {
+    if (skipNextTickFetchRef.current) {
+      skipNextTickFetchRef.current = false;
+      return;
+    }
+    void loadRecords();
     return () => {
-      cancelled = true;
+      // Generated mutation requests cannot be aborted, so invalidate their
+      // response token when query inputs change or this table unmounts.
+      recordsRequestIdRef.current += 1;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityId, queryKey, refreshTick, permPageId]);

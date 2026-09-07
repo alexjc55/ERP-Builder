@@ -11018,5 +11018,21 @@
   {"key":"documents.error.sourceFileNotFound","ru":"Исходный файл шаблона не найден","en":"The source template file was not found","he":"קובץ תבנית המקור לא נמצא"},
   {"key":"roles.cap.documentGeneration","ru":"Генерация документов","en":"Document generation","he":"הפקת מסמכים"},
   {"key":"roles.capShort.documentGeneration","ru":"Документы","en":"Documents","he":"מסמכים"},
-  {"key":"roles.capHelp.documentGeneration","ru":"Управление шаблонами документов и историей их генерации.","en":"Manage document templates and their generation history.","he":"ניהול תבניות מסמכים והיסטוריית ההפקה שלהן."}
+  {"key":"roles.capHelp.documentGeneration","ru":"Управление шаблонами документов и историей их генерации.","en":"Manage document templates and their generation history.","he":"ניהול תבניות מסמכים והיסטוריית ההפקה שלהן."},
+  {"key":"layout.refresh","ru":"Обновить данные","en":"Refresh data","he":"רענון נתונים"},
+  {"key":"layout.refreshing","ru":"Обновление данных…","en":"Refreshing data…","he":"מרענן נתונים…"},
+  {"key":"auto.createFolder","ru":"Создать папку","en":"Create folder","he":"יצירת תיקייה"},
+  {"key":"auto.renameFolder","ru":"Переименовать папку","en":"Rename folder","he":"שינוי שם התיקייה"},
+  {"key":"auto.deleteFolder","ru":"Удалить папку?","en":"Delete folder?","he":"למחוק את התיקייה?"},
+  {"key":"auto.deleteFolderWarning","ru":"Автоматизации останутся и будут перемещены в раздел «Без папки».","en":"Automations will remain and move to the Ungrouped section.","he":"האוטומציות יישארו ויועברו למקטע ללא תיקייה."},
+  {"key":"auto.folder","ru":"Папка","en":"Folder","he":"תיקייה"},
+  {"key":"auto.folderName","ru":"Название папки","en":"Folder name","he":"שם התיקייה"},
+  {"key":"auto.folderCreated","ru":"Папка создана","en":"Folder created","he":"התיקייה נוצרה"},
+  {"key":"auto.folderUpdated","ru":"Папка переименована","en":"Folder renamed","he":"שם התיקייה שונה"},
+  {"key":"auto.folderDeleted","ru":"Папка удалена","en":"Folder deleted","he":"התיקייה נמחקה"},
+  {"key":"auto.ungrouped","ru":"Без папки","en":"Ungrouped","he":"ללא תיקייה"},
+  {"key":"auto.emptyGroup","ru":"В этой папке нет автоматизаций.","en":"No automations in this folder.","he":"אין אוטומציות בתיקייה זו."},
+  {"key":"auto.collapseFolder","ru":"Свернуть папку","en":"Collapse folder","he":"כיווץ התיקייה"},
+  {"key":"auto.expandFolder","ru":"Развернуть папку","en":"Expand folder","he":"הרחבת התיקייה"},
+  {"key":"auto.folderDialogDesc","ru":"Папка помогает организовать список и не изменяет работу автоматизаций.","en":"Folders organize the list without changing how automations run.","he":"תיקיות מארגנות את הרשימה בלי לשנות את אופן פעולת האוטומציות."}
 ]

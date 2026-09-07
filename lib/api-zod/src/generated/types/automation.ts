@@ -14,6 +14,8 @@ import type { MultilingualText } from './multilingualText';
 export interface Automation {
   id: number;
   entityId: number;
+  /** @nullable */
+  folderId: number | null;
   nameJson: MultilingualText;
   isActive: boolean;
   triggerJson: AutomationTrigger;

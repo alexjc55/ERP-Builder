@@ -6347,6 +6347,126 @@ export const DeleteTransitionResponse = zod.object({
 
 
 /**
+ * @summary Reorder automation folders within an entity
+ */
+export const ReorderAutomationFoldersBody = zod.object({
+  "entityId": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "sortOrder": zod.number()
+}))
+})
+
+export const ReorderAutomationFoldersResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary List automation folders for an entity
+ */
+export const ListEntityAutomationFoldersParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const ListEntityAutomationFoldersResponseItem = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListEntityAutomationFoldersResponse = zod.array(ListEntityAutomationFoldersResponseItem)
+
+
+/**
+ * @summary Create an automation folder on an entity
+ */
+export const CreateEntityAutomationFolderParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const CreateEntityAutomationFolderBody = zod.object({
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "sortOrder": zod.number().optional()
+})
+
+
+/**
+ * @summary Get an automation folder
+ */
+export const GetAutomationFolderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetAutomationFolderResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update an automation folder
+ */
+export const UpdateAutomationFolderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAutomationFolderBody = zod.object({
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "sortOrder": zod.number().optional()
+})
+
+export const UpdateAutomationFolderResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "sortOrder": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a folder while preserving its automations as ungrouped
+ */
+export const DeleteAutomationFolderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteAutomationFolderResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary Reorder automations within an entity
  */
 export const ReorderAutomationsBody = zod.object({
@@ -6426,6 +6546,7 @@ export const listEntityAutomationsResponseActionsJsonItemOutputTwoFilenameTempla
 export const ListEntityAutomationsResponseItem = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
+  "folderId": zod.number().nullable(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -6604,6 +6725,7 @@ export const createEntityAutomationBodyActionsJsonItemOutputTwoFilenameTemplateT
 export const createEntityAutomationBodyActionsJsonDefault = [];
 
 export const CreateEntityAutomationBody = zod.object({
+  "folderId": zod.number().nullish(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -6801,6 +6923,7 @@ export const getAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwoSec
 export const GetAutomationResponse = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
+  "folderId": zod.number().nullable(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -6977,6 +7100,7 @@ export const updateAutomationBodyActionsJsonItemOutputTwoFilenameTemplateTwoSect
 
 
 export const UpdateAutomationBody = zod.object({
+  "folderId": zod.number().nullish(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -7145,6 +7269,7 @@ export const updateAutomationResponseActionsJsonItemOutputTwoFilenameTemplateTwo
 export const UpdateAutomationResponse = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
+  "folderId": zod.number().nullable(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),

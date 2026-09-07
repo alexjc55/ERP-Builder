@@ -3819,6 +3819,35 @@ export interface TransitionUpdate {
   sortOrder?: number;
 }
 
+export interface AutomationFolder {
+  id: number;
+  entityId: number;
+  nameJson: MultilingualText;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationFolderInput {
+  nameJson: MultilingualText;
+  sortOrder?: number;
+}
+
+export interface AutomationFolderUpdate {
+  nameJson?: MultilingualText;
+  sortOrder?: number;
+}
+
+export type AutomationFoldersReorderInputItemsItem = {
+  id: number;
+  sortOrder: number;
+};
+
+export interface AutomationFoldersReorderInput {
+  entityId: number;
+  items: AutomationFoldersReorderInputItemsItem[];
+}
+
 export type AutomationConditionOperator = typeof AutomationConditionOperator[keyof typeof AutomationConditionOperator];
 
 
@@ -4000,6 +4029,8 @@ export const AutomationConditionConjunction = {
 export interface Automation {
   id: number;
   entityId: number;
+  /** @nullable */
+  folderId: number | null;
   nameJson: MultilingualText;
   isActive: boolean;
   triggerJson: AutomationTrigger;
@@ -4020,6 +4051,8 @@ export const AutomationInputConditionConjunction = {
 } as const;
 
 export interface AutomationInput {
+  /** @nullable */
+  folderId?: number | null;
   nameJson?: MultilingualText;
   isActive?: boolean;
   triggerJson: AutomationTrigger;
@@ -4038,6 +4071,8 @@ export const AutomationUpdateConditionConjunction = {
 } as const;
 
 export interface AutomationUpdate {
+  /** @nullable */
+  folderId?: number | null;
   nameJson?: MultilingualText;
   isActive?: boolean;
   triggerJson?: AutomationTrigger;

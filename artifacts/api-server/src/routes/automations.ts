@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import {
   db,
+  automationFoldersTable,
   entityAutomationsTable,
   entityAutomationRunsTable,
   entitiesTable,
@@ -33,6 +34,14 @@ import {
   UpdateAutomationBody,
   DeleteAutomationParams,
   ReorderAutomationsBody,
+  ReorderAutomationFoldersBody,
+  ListEntityAutomationFoldersParams,
+  CreateEntityAutomationFolderParams,
+  CreateEntityAutomationFolderBody,
+  GetAutomationFolderParams,
+  UpdateAutomationFolderParams,
+  UpdateAutomationFolderBody,
+  DeleteAutomationFolderParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -40,6 +49,15 @@ const router: IRouter = Router();
 async function entityExists(entityId: number): Promise<boolean> {
   const [entity] = await db.select({ id: entitiesTable.id }).from(entitiesTable).where(eq(entitiesTable.id, entityId)).limit(1);
   return Boolean(entity);
+}
+
+async function folderBelongsToEntity(folderId: number, entityId: number): Promise<boolean> {
+  const [folder] = await db
+    .select({ id: automationFoldersTable.id })
+    .from(automationFoldersTable)
+    .where(and(eq(automationFoldersTable.id, folderId), eq(automationFoldersTable.entityId, entityId)))
+    .limit(1);
+  return Boolean(folder);
 }
 
 async function activeFieldKeys(entityId: number): Promise<Map<string, string>> {
@@ -293,6 +311,144 @@ async function validateSpec(
   return null;
 }
 
+router.get("/entities/:entityId/automation-folders", requireAuth, requireAdmin("automations"), async (req, res): Promise<void> => {
+  const params = ListEntityAutomationFoldersParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  if (!(await entityExists(params.data.entityId))) {
+    res.status(404).json({ error: "Entity not found" });
+    return;
+  }
+  const folders = await db
+    .select()
+    .from(automationFoldersTable)
+    .where(eq(automationFoldersTable.entityId, params.data.entityId))
+    .orderBy(asc(automationFoldersTable.sortOrder), asc(automationFoldersTable.id));
+  res.json(folders);
+});
+
+router.post("/entities/:entityId/automation-folders", requireAuth, requireAdmin("automations"), async (req, res): Promise<void> => {
+  const params = CreateEntityAutomationFolderParams.safeParse(req.params);
+  const body = CreateEntityAutomationFolderBody.safeParse(req.body);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  if (!(await entityExists(params.data.entityId))) {
+    res.status(404).json({ error: "Entity not found" });
+    return;
+  }
+  const [folder] = await db.insert(automationFoldersTable).values({
+    entityId: params.data.entityId,
+    nameJson: body.data.nameJson,
+    sortOrder: body.data.sortOrder ?? 0,
+  }).returning();
+  res.status(201).json(folder);
+});
+
+router.get("/automation-folders/:id", requireAuth, requireAdmin("automations"), async (req, res): Promise<void> => {
+  const params = GetAutomationFolderParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [folder] = await db.select().from(automationFoldersTable).where(eq(automationFoldersTable.id, params.data.id));
+  if (!folder) {
+    res.status(404).json({ error: "Automation folder not found" });
+    return;
+  }
+  res.json(folder);
+});
+
+router.put("/automation-folders/:id", requireAuth, requireAdmin("automations"), async (req, res): Promise<void> => {
+  const params = UpdateAutomationFolderParams.safeParse(req.params);
+  const body = UpdateAutomationFolderBody.safeParse(req.body);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  if (!body.success) {
+    res.status(400).json({ error: body.error.message });
+    return;
+  }
+  if (Object.keys(body.data).length === 0) {
+    res.status(400).json({ error: "No fields to update" });
+    return;
+  }
+  const [folder] = await db
+    .update(automationFoldersTable)
+    .set(body.data)
+    .where(eq(automationFoldersTable.id, params.data.id))
+    .returning();
+  if (!folder) {
+    res.status(404).json({ error: "Automation folder not found" });
+    return;
+  }
+  res.json(folder);
+});
+
+router.delete("/automation-folders/:id", requireAuth, requireAdmin("automations"), async (req, res): Promise<void> => {
+  const params = DeleteAutomationFolderParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const [folder] = await db
+    .delete(automationFoldersTable)
+    .where(eq(automationFoldersTable.id, params.data.id))
+    .returning({ id: automationFoldersTable.id });
+  if (!folder) {
+    res.status(404).json({ error: "Automation folder not found" });
+    return;
+  }
+  res.json({ success: true, message: "Automation folder deleted" });
+});
+
+router.post("/automation-folders/reorder", requireAuth, requireAdmin("automations"), async (req, res): Promise<void> => {
+  const parsed = ReorderAutomationFoldersBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { entityId, items } = parsed.data;
+  if (!(await entityExists(entityId))) {
+    res.status(404).json({ error: "Entity not found" });
+    return;
+  }
+  const ids = items.map((item) => item.id);
+  if (new Set(ids).size !== ids.length) {
+    res.status(400).json({ error: "Duplicate automation folder ids in reorder payload" });
+    return;
+  }
+  if (ids.length > 0) {
+    const owned = await db
+      .select({ id: automationFoldersTable.id })
+      .from(automationFoldersTable)
+      .where(and(eq(automationFoldersTable.entityId, entityId), inArray(automationFoldersTable.id, ids)));
+    const ownedIds = new Set(owned.map((folder) => folder.id));
+    const foreign = ids.filter((id) => !ownedIds.has(id));
+    if (foreign.length > 0) {
+      res.status(400).json({ error: `Some automation folders do not belong to this entity: ${foreign.join(", ")}` });
+      return;
+    }
+  }
+  await db.transaction(async (tx) => {
+    for (const item of items) {
+      await tx
+        .update(automationFoldersTable)
+        .set({ sortOrder: item.sortOrder })
+        .where(and(eq(automationFoldersTable.id, item.id), eq(automationFoldersTable.entityId, entityId)));
+    }
+  });
+  res.json({ success: true, message: "Reordered" });
+});
+
 router.get("/entities/:entityId/automations", requireAuth, requireAdmin("automations"), async (req, res): Promise<void> => {
   const params = ListEntityAutomationsParams.safeParse(req.params);
   if (!params.success) {
@@ -332,6 +488,10 @@ router.post("/entities/:entityId/automations", requireAuth, requireAdmin("automa
     res.status(404).json({ error: "Entity not found" });
     return;
   }
+  if (parsed.data.folderId != null && !(await folderBelongsToEntity(parsed.data.folderId, entityId))) {
+    res.status(400).json({ error: "Automation folder does not belong to this entity" });
+    return;
+  }
 
   const trigger = automationTriggerSchema.safeParse(parsed.data.triggerJson);
   if (!trigger.success) {
@@ -358,6 +518,7 @@ router.post("/entities/:entityId/automations", requireAuth, requireAdmin("automa
     .insert(entityAutomationsTable)
     .values({
       entityId,
+      folderId: parsed.data.folderId ?? null,
       nameJson: parsed.data.nameJson ?? {},
       isActive: parsed.data.isActive ?? true,
       triggerJson: trigger.data,
@@ -467,6 +628,10 @@ router.put("/automations/:id", requireAuth, requireAdmin("automations"), async (
   }
   const entityId = current.entityId;
   const body = parsed.data;
+  if (body.folderId != null && !(await folderBelongsToEntity(body.folderId, entityId))) {
+    res.status(400).json({ error: "Automation folder does not belong to this entity" });
+    return;
+  }
 
   const trigger = body.triggerJson !== undefined ? automationTriggerSchema.safeParse(body.triggerJson) : null;
   if (trigger && !trigger.success) {
@@ -497,6 +662,7 @@ router.put("/automations/:id", requireAuth, requireAdmin("automations"), async (
   }
 
   const updateData: Record<string, unknown> = {};
+  if (body.folderId !== undefined) updateData.folderId = body.folderId;
   if (body.nameJson != null) updateData.nameJson = body.nameJson;
   if (body.isActive != null) updateData.isActive = body.isActive;
   if (trigger) updateData.triggerJson = trigger.data;

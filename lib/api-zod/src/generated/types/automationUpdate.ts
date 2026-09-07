@@ -12,6 +12,8 @@ import type { AutomationUpdateConditionConjunction } from './automationUpdateCon
 import type { MultilingualText } from './multilingualText';
 
 export interface AutomationUpdate {
+  /** @nullable */
+  folderId?: number | null;
   nameJson?: MultilingualText;
   isActive?: boolean;
   triggerJson?: AutomationTrigger;

@@ -11,6 +11,7 @@
     "test:affix": "node --experimental-strip-types --test src/components/AffixedNumericValue.test.ts",
     "test:format-rules": "node --experimental-strip-types --test src/lib/formatRules.test.ts",
     "test:layout-links": "node --experimental-strip-types --test src/components/layout/Layout.links.test.ts",
+    "test:manual-refresh": "node --experimental-strip-types --test src/lib/manualDataRefresh.test.ts",
     "test:relation-edit": "node --experimental-strip-types --test src/components/EntityRecords.relation-edit.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

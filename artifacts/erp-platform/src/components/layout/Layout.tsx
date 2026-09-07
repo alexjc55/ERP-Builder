@@ -8,7 +8,7 @@ import {
   Building2, Languages, Settings, LayoutDashboard,
   LogOut, ChevronDown, ChevronRight,
   Menu, X, Check, UserCog, Eye,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, RefreshCw,
 } from "lucide-react";
 import { getIconComponent } from "@/lib/icons";
 import { useState, useEffect } from "react";
@@ -23,6 +23,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useQueryClient } from "@tanstack/react-query";
+import { refreshManualDataPaths } from "@/lib/manualDataRefresh";
 
 function SidebarItem({
   name,
@@ -111,6 +113,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const t = useT();
   const { lang, setLang } = useLang();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshLabel = isRefreshing
+    ? t("layout.refreshing", "Обновление данных…")
+    : t("layout.refresh", "Обновить данные");
+  const refreshData = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.refetchQueries({ type: "active" }),
+        refreshManualDataPaths(),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
   const [desktopCollapsed, setDesktopCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem("sidebarCollapsed") === "1";
@@ -208,17 +227,31 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className="text-xs text-slate-500 truncate">{brandSubtitle}</div>
           </div>
         )}
-        <button
-          onClick={toggleDesktopSidebar}
-          title={collapsed ? t("layout.expandSidebar", "Развернуть меню") : t("layout.collapseSidebar", "Свернуть меню")}
-          aria-label={collapsed ? t("layout.expandSidebar", "Развернуть меню") : t("layout.collapseSidebar", "Свернуть меню")}
-          className={cn(
-            "hidden lg:flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-700/60 hover:text-white shrink-0",
-            collapsed ? "w-9 h-7" : "ml-auto w-7 h-7"
-          )}
-        >
-          {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-        </button>
+        <div className={cn("hidden lg:flex items-center shrink-0", collapsed ? "flex-col gap-1" : "ml-auto gap-1")}>
+          <button
+            type="button"
+            onClick={() => { void refreshData(); }}
+            disabled={isRefreshing}
+            title={refreshLabel}
+            aria-label={refreshLabel}
+            data-testid="button-refresh-data-desktop"
+            className="flex w-7 h-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-700/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={cn("w-4 h-4", isRefreshing && "animate-spin")} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={toggleDesktopSidebar}
+            title={collapsed ? t("layout.expandSidebar", "Развернуть меню") : t("layout.collapseSidebar", "Свернуть меню")}
+            aria-label={collapsed ? t("layout.expandSidebar", "Развернуть меню") : t("layout.collapseSidebar", "Свернуть меню")}
+            className={cn(
+              "flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-700/60 hover:text-white shrink-0",
+              collapsed ? "w-9 h-7" : "w-7 h-7"
+            )}
+          >
+            {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
 
       <nav className={cn("flex-1 overflow-y-auto py-4 space-y-1", collapsed ? "px-2" : "px-3")}>
@@ -387,6 +420,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             )}
             <span className="font-semibold text-slate-800 truncate">{brandName}</span>
           </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="ms-auto shrink-0"
+            onClick={() => { void refreshData(); }}
+            disabled={isRefreshing}
+            title={refreshLabel}
+            aria-label={refreshLabel}
+            data-testid="button-refresh-data-mobile"
+          >
+            <RefreshCw className={cn("w-5 h-5", isRefreshing && "animate-spin")} aria-hidden="true" />
+          </Button>
         </header>
 
         <main className="flex-1 overflow-y-auto">

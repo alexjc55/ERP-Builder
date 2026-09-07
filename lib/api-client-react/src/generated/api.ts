@@ -31,6 +31,10 @@ import type {
   AuditLogEntry,
   AuthResult,
   Automation,
+  AutomationFolder,
+  AutomationFolderInput,
+  AutomationFolderUpdate,
+  AutomationFoldersReorderInput,
   AutomationInput,
   AutomationRun,
   AutomationUpdate,
@@ -7939,6 +7943,445 @@ export const useDeleteTransition = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteTransitionMutationOptions(options));
+    }
+
+export const getReorderAutomationFoldersUrl = () => {
+
+
+
+
+  return `/api/automation-folders/reorder`
+}
+
+/**
+ * @summary Reorder automation folders within an entity
+ */
+export const reorderAutomationFolders = async (automationFoldersReorderInput: AutomationFoldersReorderInput, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getReorderAutomationFoldersUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      automationFoldersReorderInput,)
+  }
+);}
+
+
+
+
+export const getReorderAutomationFoldersMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderAutomationFolders>>, TError,{data: BodyType<AutomationFoldersReorderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reorderAutomationFolders>>, TError,{data: BodyType<AutomationFoldersReorderInput>}, TContext> => {
+
+const mutationKey = ['reorderAutomationFolders'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reorderAutomationFolders>>, {data: BodyType<AutomationFoldersReorderInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reorderAutomationFolders(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReorderAutomationFoldersMutationResult = NonNullable<Awaited<ReturnType<typeof reorderAutomationFolders>>>
+    export type ReorderAutomationFoldersMutationBody = BodyType<AutomationFoldersReorderInput>
+    export type ReorderAutomationFoldersMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Reorder automation folders within an entity
+ */
+export const useReorderAutomationFolders = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reorderAutomationFolders>>, TError,{data: BodyType<AutomationFoldersReorderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reorderAutomationFolders>>,
+        TError,
+        {data: BodyType<AutomationFoldersReorderInput>},
+        TContext
+      > => {
+      return useMutation(getReorderAutomationFoldersMutationOptions(options));
+    }
+
+export const getListEntityAutomationFoldersUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/automation-folders`
+}
+
+/**
+ * @summary List automation folders for an entity
+ */
+export const listEntityAutomationFolders = async (entityId: number, options?: RequestInit): Promise<AutomationFolder[]> => {
+
+  return customFetch<AutomationFolder[]>(getListEntityAutomationFoldersUrl(entityId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEntityAutomationFoldersQueryKey = (entityId: number,) => {
+    return [
+    `/api/entities/${entityId}/automation-folders`
+    ] as const;
+    }
+
+
+export const getListEntityAutomationFoldersQueryOptions = <TData = Awaited<ReturnType<typeof listEntityAutomationFolders>>, TError = ErrorType<unknown>>(entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEntityAutomationFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEntityAutomationFoldersQueryKey(entityId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEntityAutomationFolders>>> = ({ signal }) => listEntityAutomationFolders(entityId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(entityId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEntityAutomationFolders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEntityAutomationFoldersQueryResult = NonNullable<Awaited<ReturnType<typeof listEntityAutomationFolders>>>
+export type ListEntityAutomationFoldersQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List automation folders for an entity
+ */
+
+export function useListEntityAutomationFolders<TData = Awaited<ReturnType<typeof listEntityAutomationFolders>>, TError = ErrorType<unknown>>(
+ entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEntityAutomationFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEntityAutomationFoldersQueryOptions(entityId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateEntityAutomationFolderUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/automation-folders`
+}
+
+/**
+ * @summary Create an automation folder on an entity
+ */
+export const createEntityAutomationFolder = async (entityId: number,
+    automationFolderInput: AutomationFolderInput, options?: RequestInit): Promise<AutomationFolder> => {
+
+  return customFetch<AutomationFolder>(getCreateEntityAutomationFolderUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      automationFolderInput,)
+  }
+);}
+
+
+
+
+export const getCreateEntityAutomationFolderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEntityAutomationFolder>>, TError,{entityId: number;data: BodyType<AutomationFolderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEntityAutomationFolder>>, TError,{entityId: number;data: BodyType<AutomationFolderInput>}, TContext> => {
+
+const mutationKey = ['createEntityAutomationFolder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEntityAutomationFolder>>, {entityId: number;data: BodyType<AutomationFolderInput>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  createEntityAutomationFolder(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEntityAutomationFolderMutationResult = NonNullable<Awaited<ReturnType<typeof createEntityAutomationFolder>>>
+    export type CreateEntityAutomationFolderMutationBody = BodyType<AutomationFolderInput>
+    export type CreateEntityAutomationFolderMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create an automation folder on an entity
+ */
+export const useCreateEntityAutomationFolder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEntityAutomationFolder>>, TError,{entityId: number;data: BodyType<AutomationFolderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEntityAutomationFolder>>,
+        TError,
+        {entityId: number;data: BodyType<AutomationFolderInput>},
+        TContext
+      > => {
+      return useMutation(getCreateEntityAutomationFolderMutationOptions(options));
+    }
+
+export const getGetAutomationFolderUrl = (id: number,) => {
+
+
+
+
+  return `/api/automation-folders/${id}`
+}
+
+/**
+ * @summary Get an automation folder
+ */
+export const getAutomationFolder = async (id: number, options?: RequestInit): Promise<AutomationFolder> => {
+
+  return customFetch<AutomationFolder>(getGetAutomationFolderUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAutomationFolderQueryKey = (id: number,) => {
+    return [
+    `/api/automation-folders/${id}`
+    ] as const;
+    }
+
+
+export const getGetAutomationFolderQueryOptions = <TData = Awaited<ReturnType<typeof getAutomationFolder>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAutomationFolder>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAutomationFolderQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAutomationFolder>>> = ({ signal }) => getAutomationFolder(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAutomationFolder>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAutomationFolderQueryResult = NonNullable<Awaited<ReturnType<typeof getAutomationFolder>>>
+export type GetAutomationFolderQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get an automation folder
+ */
+
+export function useGetAutomationFolder<TData = Awaited<ReturnType<typeof getAutomationFolder>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAutomationFolder>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAutomationFolderQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateAutomationFolderUrl = (id: number,) => {
+
+
+
+
+  return `/api/automation-folders/${id}`
+}
+
+/**
+ * @summary Update an automation folder
+ */
+export const updateAutomationFolder = async (id: number,
+    automationFolderUpdate: AutomationFolderUpdate, options?: RequestInit): Promise<AutomationFolder> => {
+
+  return customFetch<AutomationFolder>(getUpdateAutomationFolderUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      automationFolderUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateAutomationFolderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAutomationFolder>>, TError,{id: number;data: BodyType<AutomationFolderUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAutomationFolder>>, TError,{id: number;data: BodyType<AutomationFolderUpdate>}, TContext> => {
+
+const mutationKey = ['updateAutomationFolder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAutomationFolder>>, {id: number;data: BodyType<AutomationFolderUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAutomationFolder(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAutomationFolderMutationResult = NonNullable<Awaited<ReturnType<typeof updateAutomationFolder>>>
+    export type UpdateAutomationFolderMutationBody = BodyType<AutomationFolderUpdate>
+    export type UpdateAutomationFolderMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update an automation folder
+ */
+export const useUpdateAutomationFolder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAutomationFolder>>, TError,{id: number;data: BodyType<AutomationFolderUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateAutomationFolder>>,
+        TError,
+        {id: number;data: BodyType<AutomationFolderUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateAutomationFolderMutationOptions(options));
+    }
+
+export const getDeleteAutomationFolderUrl = (id: number,) => {
+
+
+
+
+  return `/api/automation-folders/${id}`
+}
+
+/**
+ * @summary Delete a folder while preserving its automations as ungrouped
+ */
+export const deleteAutomationFolder = async (id: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getDeleteAutomationFolderUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteAutomationFolderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAutomationFolder>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAutomationFolder>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteAutomationFolder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAutomationFolder>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteAutomationFolder(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAutomationFolderMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAutomationFolder>>>
+
+    export type DeleteAutomationFolderMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a folder while preserving its automations as ungrouped
+ */
+export const useDeleteAutomationFolder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAutomationFolder>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAutomationFolder>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteAutomationFolderMutationOptions(options));
     }
 
 export const getReorderAutomationsUrl = () => {

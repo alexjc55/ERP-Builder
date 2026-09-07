@@ -75,3 +75,5 @@
 - [Numeric display affixes](numeric-display-affixes.md) — affixes are display-only for number/numeric formula values; semantic before/after mirrors via inherited RTL direction.
 - [Inbound webhook integrations](inbound-webhook-integrations.md) — generic CRM-neutral ingestion with technical-user RBAC, versioned mappings, atomic deliveries, and globally ordered target locks.
 - [Document generation](document-generation.md) — DOCX revisions own design/mappings; automation actions own output; rendering authority and fail-closed PDF isolation must remain distinct.
+- [Manual data refresh](manual-data-refresh.md) — global refresh refetches active queries plus registered mutation-backed readers; coalescing and unmount safety are mandatory.
+- [Automation folders](automation-folders.md) — folders are entity-scoped organization only; deleting one must preserve its automations as ungrouped.

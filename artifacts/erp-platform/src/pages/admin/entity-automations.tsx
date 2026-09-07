@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback, type ReactElement } from "react";
 import { useParams, useLocation } from "wouter";
 import {
+  useListEntityAutomationFolders,
+  getListEntityAutomationFoldersQueryKey,
+  useCreateEntityAutomationFolder,
+  useUpdateAutomationFolder,
+  useDeleteAutomationFolder,
+  useReorderAutomationFolders,
+  type AutomationFolder,
   useListEntityAutomations,
   useCreateEntityAutomation,
   useUpdateAutomation,
@@ -377,7 +384,13 @@ export default function EntityAutomationsPage() {
   const [toDelete, setToDelete] = useState<Automation | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false);
+  const [editingFolder, setEditingFolder] = useState<AutomationFolder | null>(null);
+  const [folderToDelete, setFolderToDelete] = useState<AutomationFolder | null>(null);
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<number>>(new Set());
+
   const [nameJson, setNameJson] = useState<MLValue>({});
+  const [folderIdForm, setFolderIdForm] = useState<string>("none");
   const [isActive, setIsActive] = useState(true);
   const [triggerType, setTriggerType] = useState<AutomationTriggerType>("record_created");
   const [trigFieldKey, setTrigFieldKey] = useState("");
@@ -399,6 +412,7 @@ export default function EntityAutomationsPage() {
   const mirrorPages = (allPages as Page[]).filter((p) => p.mirrorEntityId === entityId);
 
   const { data: automations = [], isLoading } = useListEntityAutomations(entityId);
+  const { data: folders = [], isLoading: foldersLoading } = useListEntityAutomationFolders(entityId);
   const { data: statuses = [] } = useListEntityStatuses(entityId);
   const { data: allFields = [] } = useListEntityFields(entityId);
   const { data: userOptions = [] } = useListUserOptions();
@@ -428,6 +442,34 @@ export default function EntityAutomationsPage() {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/automations`] });
   };
+  const invalidateFolders = () => {
+    queryClient.invalidateQueries({ queryKey: getListEntityAutomationFoldersQueryKey(entityId) });
+  };
+
+  const createFolderMutation = useCreateEntityAutomationFolder({
+    mutation: {
+      onSuccess: () => { toast({ title: t("auto.folderCreated", "Папка создана") }); setFolderDialogOpen(false); invalidateFolders(); },
+      onError: (err: unknown) => toast({ title: t("auto.createError", "Ошибка создания"), description: extractError(err), variant: "destructive" }),
+    },
+  });
+  const updateFolderMutation = useUpdateAutomationFolder({
+    mutation: {
+      onSuccess: () => { toast({ title: t("auto.folderUpdated", "Папка переименована") }); setFolderDialogOpen(false); invalidateFolders(); },
+      onError: (err: unknown) => toast({ title: t("auto.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }),
+    },
+  });
+  const deleteFolderMutation = useDeleteAutomationFolder({
+    mutation: {
+      onSuccess: () => { toast({ title: t("auto.folderDeleted", "Папка удалена") }); setFolderToDelete(null); invalidateFolders(); invalidate(); },
+      onError: () => toast({ title: t("auto.deleteError", "Ошибка удаления"), variant: "destructive" }),
+    },
+  });
+  const reorderFoldersMutation = useReorderAutomationFolders({
+    mutation: {
+      onSuccess: () => invalidateFolders(),
+      onError: () => toast({ title: t("auto.reorderError", "Ошибка изменения порядка"), variant: "destructive" }),
+    },
+  });
 
   const createMutation = useCreateEntityAutomation({
     mutation: {
@@ -468,9 +510,55 @@ export default function EntityAutomationsPage() {
     });
   };
 
-  const openCreate = () => {
+  const moveFolder = (list: AutomationFolder[], index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= list.length) return;
+    const a = list[index];
+    const b = list[target];
+    reorderFoldersMutation.mutate({
+      data: { entityId, items: [{ id: a.id, sortOrder: b.sortOrder }, { id: b.id, sortOrder: a.sortOrder }] },
+    });
+  };
+
+  const toggleFolderCollapse = (folderId: number) => {
+    setCollapsedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+
+  const openCreateFolder = () => {
+    setEditingFolder(null);
+    setNameJson({});
+    setFolderDialogOpen(true);
+  };
+
+  const openEditFolder = (f: AutomationFolder) => {
+    setEditingFolder(f);
+    const n = f.nameJson;
+    setNameJson(typeof n === "object" && n ? { ru: n.ru, en: n.en, he: n.he } : {});
+    setFolderDialogOpen(true);
+  };
+
+  const handleFolderSubmit = () => {
+    if (!nameJson.ru?.trim() && !nameJson.en?.trim() && !nameJson.he?.trim()) {
+      toast({ title: t("auto.specifyName", "Укажите название"), variant: "destructive" });
+      return;
+    }
+    const payload = { nameJson: nameJson as MultilingualText };
+    if (editingFolder) {
+      updateFolderMutation.mutate({ id: editingFolder.id, data: payload });
+    } else {
+      createFolderMutation.mutate({ entityId, data: { ...payload, sortOrder: folders.length + 1 } });
+    }
+  };
+
+  const openCreate = (prefillFolderId: string = "none") => {
     setEditing(null);
     setNameJson({});
+    setFolderIdForm(prefillFolderId);
     setIsActive(true);
     setTriggerType("record_created");
     setTrigFieldKey(fields[0]?.fieldKey ?? "");
@@ -489,6 +577,7 @@ export default function EntityAutomationsPage() {
     setEditing(a);
     const n = a.nameJson;
     setNameJson(typeof n === "object" && n ? { ru: n.ru, en: n.en, he: n.he } : {});
+    setFolderIdForm(a.folderId != null ? String(a.folderId) : "none");
     setIsActive(a.isActive);
     const trig = a.triggerJson;
     setTriggerType(trig.type);
@@ -701,6 +790,7 @@ export default function EntityAutomationsPage() {
 
     const payload = {
       nameJson: nameJson as MultilingualText,
+      folderId: folderIdForm === "none" ? null : Number(folderIdForm),
       isActive,
       triggerJson: trigger,
       conditionsJson: buildConditions(conditions, fieldByKey),
@@ -708,11 +798,30 @@ export default function EntityAutomationsPage() {
       actionsJson: builtActions,
     };
     if (editing) updateMutation.mutate({ id: editing.id, data: payload });
-    else createMutation.mutate({ entityId, data: { ...payload, sortOrder: automations.length + 1 } });
+    else {
+      // Find max sortOrder in the target folder
+      const folderAutos = automations.filter((a) => a.folderId === payload.folderId);
+      const maxSort = folderAutos.reduce((max, a) => Math.max(max, a.sortOrder), 0);
+      createMutation.mutate({ entityId, data: { ...payload, sortOrder: maxSort + 1 } });
+    }
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
-  const sorted = [...automations].sort((a: Automation, b: Automation) => a.sortOrder - b.sortOrder);
+  const isFolderPending = createFolderMutation.isPending || updateFolderMutation.isPending;
+
+  const foldersSorted = [...folders].sort((a: AutomationFolder, b: AutomationFolder) => a.sortOrder - b.sortOrder);
+  const groupedAutomations = new Map<number | null, Automation[]>();
+  for (const f of foldersSorted) {
+    groupedAutomations.set(f.id, []);
+  }
+  groupedAutomations.set(null, []);
+  for (const a of automations) {
+    const arr = groupedAutomations.get(a.folderId ?? null) ?? groupedAutomations.get(null)!;
+    arr.push(a);
+  }
+  for (const arr of groupedAutomations.values()) {
+    arr.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
 
   const triggerLabel = (trig: AutomationTrigger): string => {
     const base = t(TRIGGER_TYPES.find((x) => x.value === trig.type)?.labelKey ?? "", TRIGGER_TYPES.find((x) => x.value === trig.type)?.label ?? trig.type);
@@ -972,64 +1081,108 @@ export default function EntityAutomationsPage() {
             <Button variant="outline" className="gap-2" onClick={() => setHistoryOpen(true)}>
               <History className="w-4 h-4" />{t("auto.history", "История")}
             </Button>
-            <Button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 gap-2">
+            <Button variant="outline" className="gap-2" onClick={openCreateFolder}>
+              <Plus className="w-4 h-4" />{t("auto.createFolder", "Создать папку")}
+            </Button>
+            <Button onClick={() => openCreate("none")} className="bg-blue-600 hover:bg-blue-700 gap-2">
               <Plus className="w-4 h-4" />{t("auto.add", "Добавить автоматизацию")}
             </Button>
           </div>
         </div>
       </div>
 
-      <Card className="border-slate-200 shadow-sm">
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-4 space-y-2">{Array.from({ length: 3 }).map((_, i) => (<Skeleton key={i} className="h-12 w-full" />))}</div>
-          ) : sorted.length === 0 ? (
-            <div className="text-center py-16 text-slate-400">{t("auto.empty", "Автоматизаций пока нет.")}</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("auto.colName", "Название")}</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("auto.colTrigger", "Триггер")}</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("auto.colActions", "Действия")}</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-600">{t("auto.colActive", "Активна")}</th>
-                  <th className="text-right px-4 py-3 font-medium text-slate-600"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((a: Automation, idx: number) => (
-                  <tr key={a.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-700 font-medium">{ml(a.nameJson) || <span className="text-slate-300">—</span>}</td>
-                    <td className="px-4 py-3 text-slate-600 text-xs">{triggerLabel(a.triggerJson)}</td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">
-                      {(a.actionsJson?.length ?? 0) === 0 ? <span className="text-slate-300">—</span> : a.actionsJson.map(actionSummary).join("; ")}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Switch checked={a.isActive} onCheckedChange={() => toggleActive(a)} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={idx === 0 || reorderMutation.isPending} onClick={() => move(sorted, idx, -1)}>
-                          <ChevronUp className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={idx === sorted.length - 1 || reorderMutation.isPending} onClick={() => move(sorted, idx, 1)}>
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(a)}>
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setToDelete(a)}>
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
+      {isLoading || foldersLoading ? (
+        <div className="p-4 space-y-2">{Array.from({ length: 3 }).map((_, i) => (<Skeleton key={i} className="h-12 w-full" />))}</div>
+      ) : automations.length === 0 && foldersSorted.length === 0 ? (
+        <Card className="border-slate-200 shadow-sm"><CardContent className="p-0 text-center py-16 text-slate-400">{t("auto.empty", "Автоматизаций пока нет.")}</CardContent></Card>
+      ) : (
+        <div className="space-y-6">
+          {[...foldersSorted, null].map((folder, folderIdx) => {
+            const autos = groupedAutomations.get(folder?.id ?? null) ?? [];
+            if (folder === null && autos.length === 0 && foldersSorted.length > 0) return null;
+
+            const isCollapsed = folder && collapsedFolders.has(folder.id);
+
+            return (
+              <div
+                key={folder?.id ?? 'ungrouped'}
+                className="space-y-2"
+                data-testid={folder ? "automation-folder-section" : "automation-ungrouped-section"}
+                {...(folder ? { "data-folder-id": folder.id } : {})}
+              >
+                {folder ? (
+                  <div className="flex items-center justify-between group h-9">
+                    <button onClick={() => toggleFolderCollapse(folder.id)} title={isCollapsed ? t("auto.expandFolder", "Развернуть папку") : t("auto.collapseFolder", "Свернуть папку")} aria-label={isCollapsed ? t("auto.expandFolder", "Развернуть папку") : t("auto.collapseFolder", "Свернуть папку")} className="flex items-center gap-2 text-lg font-semibold text-slate-800 hover:text-slate-600 transition-colors">
+                      {isCollapsed ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronUp className="w-4 h-4 text-slate-400" />}
+                      {ml(folder.nameJson)}
+                      <span className="text-sm font-normal text-slate-400">({autos.length})</span>
+                    </button>
+                    <div className="flex items-center gap-1 opacity-100 lg:opacity-0 focus-within:opacity-100 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600" onClick={() => moveFolder(foldersSorted, folderIdx, -1)} disabled={folderIdx === 0 || reorderFoldersMutation.isPending || reorderMutation.isPending} title={t("common.moveUp", "Вверх")} aria-label={t("common.moveUp", "Вверх")}><ChevronUp className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600" onClick={() => moveFolder(foldersSorted, folderIdx, 1)} disabled={folderIdx === foldersSorted.length - 1 || reorderFoldersMutation.isPending || reorderMutation.isPending} title={t("common.moveDown", "Вниз")} aria-label={t("common.moveDown", "Вниз")}><ChevronDown className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => openCreate(String(folder.id))} title={t("auto.add", "Добавить автоматизацию")} aria-label={t("auto.add", "Добавить автоматизацию")}><Plus className="w-4 h-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600" onClick={() => openEditFolder(folder)} title={t("auto.renameFolder", "Переименовать папку")} aria-label={t("auto.renameFolder", "Переименовать папку")}><Pencil className="w-4 h-4" /></Button>
+                      <Button data-testid="automation-folder-delete" variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => setFolderToDelete(folder)} title={t("auto.deleteFolder", "Удалить папку")} aria-label={t("auto.deleteFolder", "Удалить папку")}><Trash2 className="w-4 h-4" /></Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between h-9">
+                    <h2 className="text-lg font-semibold text-slate-500 italic flex items-center gap-2">
+                      <div className="w-4" /> {/* Spacer to align with chevron */}
+                      {t("auto.ungrouped", "Без папки")}
+                      <span className="text-sm font-normal text-slate-400">({autos.length})</span>
+                    </h2>
+                  </div>
+                )}
+
+                {!isCollapsed && (
+                  <Card className="border-slate-200 shadow-sm overflow-hidden">
+                    <CardContent className="p-0">
+                      {autos.length === 0 ? (
+                        <div className="text-center py-8 text-slate-400 text-sm">{t("auto.emptyGroup", "Папка пуста")}</div>
+                      ) : (
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-100 bg-slate-50">
+                              <th className="text-start px-4 py-3 font-medium text-slate-600">{t("auto.colName", "Название")}</th>
+                              <th className="text-start px-4 py-3 font-medium text-slate-600">{t("auto.colTrigger", "Триггер")}</th>
+                              <th className="text-start px-4 py-3 font-medium text-slate-600">{t("auto.colActions", "Действия")}</th>
+                              <th className="text-start px-4 py-3 font-medium text-slate-600">{t("auto.colActive", "Активна")}</th>
+                              <th className="text-end px-4 py-3 font-medium text-slate-600"></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {autos.map((a: Automation, idx: number) => (
+                              <tr key={a.id} data-testid="automation-row" data-automation-id={a.id} className="border-b border-slate-100 hover:bg-slate-50 group/tr">
+                                <td className="px-4 py-3 text-slate-700 font-medium">{ml(a.nameJson) || <span className="text-slate-300">—</span>}</td>
+                                <td className="px-4 py-3 text-slate-600 text-xs">{triggerLabel(a.triggerJson)}</td>
+                                <td className="px-4 py-3 text-slate-500 text-xs">
+                                  {(a.actionsJson?.length ?? 0) === 0 ? <span className="text-slate-300">—</span> : a.actionsJson.map(actionSummary).join("; ")}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <Switch checked={a.isActive} onCheckedChange={() => toggleActive(a)} />
+                                </td>
+                                <td className="px-4 py-3 text-end">
+                                  <div className="flex items-center justify-end gap-1 opacity-100 lg:opacity-0 focus-within:opacity-100 group-hover/tr:opacity-100 transition-opacity">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => move(autos, idx, -1)} disabled={idx === 0 || reorderMutation.isPending || reorderFoldersMutation.isPending} title={t("common.moveUp", "Вверх")} aria-label={t("common.moveUp", "Вверх")}><ChevronUp className="w-4 h-4" /></Button>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => move(autos, idx, 1)} disabled={idx === autos.length - 1 || reorderMutation.isPending || reorderFoldersMutation.isPending} title={t("common.moveDown", "Вниз")} aria-label={t("common.moveDown", "Вниз")}><ChevronDown className="w-4 h-4" /></Button>
+                                    <Button data-testid="automation-edit" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600" onClick={() => openEdit(a)} title={t("common.edit", "Редактировать")} aria-label={t("common.edit", "Редактировать")}><Pencil className="w-4 h-4" /></Button>
+                                    <Button data-testid="automation-delete" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={() => setToDelete(a)} title={t("common.delete", "Удалить")} aria-label={t("common.delete", "Удалить")}><Trash2 className="w-4 h-4" /></Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Create / edit dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -1041,6 +1194,21 @@ export default function EntityAutomationsPage() {
 
           <div className="space-y-5 py-2">
             <MultilingualInput label={t("auto.nameRequired", "Название")} value={nameJson} onChange={setNameJson} required />
+
+            <div className="flex flex-col gap-1.5">
+              <Label>{t("auto.folder", "Папка")}</Label>
+              <Select value={folderIdForm} onValueChange={setFolderIdForm}>
+                <SelectTrigger data-testid="automation-folder-select" className="w-full sm:w-64">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t("auto.ungrouped", "Без папки")}</SelectItem>
+                  {foldersSorted.map(f => (
+                    <SelectItem key={f.id} value={String(f.id)}>{ml(f.nameJson)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             <div className="flex items-center gap-2">
               <Switch checked={isActive} onCheckedChange={setIsActive} />
@@ -1167,11 +1335,11 @@ export default function EntityAutomationsPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-100 text-slate-500">
-                  <th className="text-left py-2 px-2">{t("auto.runTime", "Время")}</th>
-                  <th className="text-left py-2 px-2">{t("auto.runAuto", "Автоматизация")}</th>
-                  <th className="text-left py-2 px-2">{t("auto.runTrigger", "Триггер")}</th>
-                  <th className="text-left py-2 px-2">{t("auto.runRecord", "Запись")}</th>
-                  <th className="text-left py-2 px-2">{t("auto.runStatus", "Статус")}</th>
+                  <th className="text-start py-2 px-2">{t("auto.runTime", "Время")}</th>
+                  <th className="text-start py-2 px-2">{t("auto.runAuto", "Автоматизация")}</th>
+                  <th className="text-start py-2 px-2">{t("auto.runTrigger", "Триггер")}</th>
+                  <th className="text-start py-2 px-2">{t("auto.runRecord", "Запись")}</th>
+                  <th className="text-start py-2 px-2">{t("auto.runStatus", "Статус")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1206,6 +1374,42 @@ export default function EntityAutomationsPage() {
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               onClick={() => toDelete && deleteMutation.mutate({ id: toDelete.id })}
+            >
+              {t("common.delete", "Удалить")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={folderDialogOpen} onOpenChange={setFolderDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingFolder ? t("auto.renameFolder", "Переименовать папку") : t("auto.createFolder", "Создать папку")}</DialogTitle>
+            <DialogDescription>
+              {t("auto.folderDialogDesc", "Папка помогает организовать список и не изменяет работу автоматизаций.")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <MultilingualInput label={t("auto.folderName", "Название папки")} value={nameJson} onChange={setNameJson} required />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFolderDialogOpen(false)}>{t("common.cancel", "Отмена")}</Button>
+            <Button onClick={handleFolderSubmit} disabled={isFolderPending}>{t("common.save", "Сохранить")}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!folderToDelete} onOpenChange={(open) => !open && setFolderToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("auto.deleteFolder", "Удалить папку?")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("auto.deleteFolderWarning", "Удалить папку? Автоматизации останутся без папки.")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel", "Отмена")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => folderToDelete && deleteFolderMutation.mutate({ id: folderToDelete.id })}
             >
               {t("common.delete", "Удалить")}
             </AlertDialogAction>

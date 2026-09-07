@@ -12,6 +12,8 @@ import type { AutomationTrigger } from './automationTrigger';
 import type { MultilingualText } from './multilingualText';
 
 export interface AutomationInput {
+  /** @nullable */
+  folderId?: number | null;
   nameJson?: MultilingualText;
   isActive?: boolean;
   triggerJson: AutomationTrigger;

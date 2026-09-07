@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   usePivotEntityRecords,
   type PivotQuery,
@@ -7,6 +7,7 @@ import {
 import { useT } from "@/lib/i18n";
 import { Loader2, TableProperties } from "lucide-react";
 import { AffixedNumericValue } from "@/components/AffixedNumericValue";
+import { useManualDataRefresh } from "@/lib/manualDataRefresh";
 
 /**
  * Cross-tab (Сводная таблица) renderer for an entity's records. Receives a fully
@@ -36,27 +37,54 @@ export function PivotView({
   // identity changes every render). refreshTick lets the parent force a refetch.
   const queryKey = useMemo(() => JSON.stringify(query), [query]);
   const reqIdRef = useRef(0);
+  const effectRequestIdRef = useRef(0);
+  const skipNextRefreshTickRef = useRef(false);
+  useEffect(
+    () => () => {
+      reqIdRef.current += 1;
+    },
+    [],
+  );
 
-  useEffect(() => {
+  const loadPivot = useCallback(async () => {
     const reqId = ++reqIdRef.current;
     setLoading(true);
     setError(null);
-    run({ entityId, data: query })
-      .then((res) => {
-        if (reqId !== reqIdRef.current) return; // a newer request superseded this one
-        setResult(res);
-        setLoading(false);
-      })
-      .catch((err: unknown) => {
-        if (reqId !== reqIdRef.current) return;
-        const msg =
-          err && typeof err === "object" && "data" in err
-            ? ((err as { data?: { error?: string } }).data?.error ?? null)
-            : null;
-        setError(msg ?? t("pivot.error", "Не удалось построить сводную таблицу"));
-        setResult(null);
-        setLoading(false);
-      });
+    try {
+      const res = await run({ entityId, data: query });
+      if (reqId !== reqIdRef.current) return;
+      setResult(res);
+    } catch (err: unknown) {
+      if (reqId !== reqIdRef.current) return;
+      const msg =
+        err && typeof err === "object" && "data" in err
+          ? ((err as { data?: { error?: string } }).data?.error ?? null)
+          : null;
+      setError(msg ?? t("pivot.error", "Не удалось построить сводную таблицу"));
+      setResult(null);
+    } finally {
+      if (reqId === reqIdRef.current) setLoading(false);
+    }
+  }, [entityId, queryKey, run, t]);
+
+  useManualDataRefresh(async () => {
+    skipNextRefreshTickRef.current = true;
+    await loadPivot();
+  });
+
+  useEffect(() => {
+    if (skipNextRefreshTickRef.current) {
+      skipNextRefreshTickRef.current = false;
+      return;
+    }
+    void loadPivot();
+    effectRequestIdRef.current = reqIdRef.current;
+    return () => {
+      // Do not cancel a manual-refresh request that began after this effect's
+      // request; the mutation cannot be aborted, so stale effect responses are
+      // instead made a no-op by invalidating their own token.
+      if (reqIdRef.current === effectRequestIdRef.current) reqIdRef.current += 1;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entityId, queryKey, refreshTick]);
 

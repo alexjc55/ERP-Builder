@@ -2280,6 +2280,108 @@ paths:
                 $ref: "#/components/schemas/SuccessResponse"
 
   # AUTOMATIONS (Automations Engine)
+  /automation-folders/reorder:
+    post:
+      operationId: reorderAutomationFolders
+      tags: [automations]
+      summary: Reorder automation folders within an entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutomationFoldersReorderInput"
+      responses:
+        "200":
+          description: Reordered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /entities/{entityId}/automation-folders:
+    get:
+      operationId: listEntityAutomationFolders
+      tags: [automations]
+      summary: List automation folders for an entity
+      parameters:
+        - { name: entityId, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: List of automation folders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AutomationFolder"
+    post:
+      operationId: createEntityAutomationFolder
+      tags: [automations]
+      summary: Create an automation folder on an entity
+      parameters:
+        - { name: entityId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutomationFolderInput"
+      responses:
+        "201":
+          description: Automation folder created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutomationFolder"
+
+  /automation-folders/{id}:
+    get:
+      operationId: getAutomationFolder
+      tags: [automations]
+      summary: Get an automation folder
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Automation folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutomationFolder"
+    put:
+      operationId: updateAutomationFolder
+      tags: [automations]
+      summary: Update an automation folder
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AutomationFolderUpdate"
+      responses:
+        "200":
+          description: Updated automation folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AutomationFolder"
+    delete:
+      operationId: deleteAutomationFolder
+      tags: [automations]
+      summary: Delete a folder while preserving its automations as ungrouped
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   /automations/reorder:
     post:
       operationId: reorderAutomations
@@ -8497,6 +8599,47 @@ components:
           type: integer
 
     # AUTOMATIONS (Automations Engine)
+    AutomationFolder:
+      type: object
+      required: [id, entityId, nameJson, sortOrder, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        entityId: { type: integer }
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        sortOrder: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    AutomationFolderInput:
+      type: object
+      required: [nameJson]
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        sortOrder: { type: integer }
+
+    AutomationFolderUpdate:
+      type: object
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        sortOrder: { type: integer }
+
+    AutomationFoldersReorderInput:
+      type: object
+      required: [entityId, items]
+      properties:
+        entityId: { type: integer }
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, sortOrder]
+            properties:
+              id: { type: integer }
+              sortOrder: { type: integer }
+
     AutomationCondition:
       type: object
       required: [fieldKey, operator]
@@ -8640,12 +8783,14 @@ components:
 
     Automation:
       type: object
-      required: [id, entityId, nameJson, isActive, triggerJson, conditionsJson, conditionConjunction, actionsJson, sortOrder, createdAt, updatedAt]
+      required: [id, entityId, folderId, nameJson, isActive, triggerJson, conditionsJson, conditionConjunction, actionsJson, sortOrder, createdAt, updatedAt]
       properties:
         id:
           type: integer
         entityId:
           type: integer
+        folderId:
+          type: ["integer", "null"]
         nameJson:
           $ref: "#/components/schemas/MultilingualText"
         isActive:
@@ -8676,6 +8821,8 @@ components:
       type: object
       required: [triggerJson]
       properties:
+        folderId:
+          type: ["integer", "null"]
         nameJson:
           $ref: "#/components/schemas/MultilingualText"
         isActive:
@@ -8702,6 +8849,8 @@ components:
     AutomationUpdate:
       type: object
       properties:
+        folderId:
+          type: ["integer", "null"]
         nameJson:
           $ref: "#/components/schemas/MultilingualText"
         isActive:

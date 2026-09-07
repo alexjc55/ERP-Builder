@@ -181,6 +181,24 @@ export const automationActionSchema = z.discriminatedUnion("type", [
 ]);
 export type AutomationAction = z.infer<typeof automationActionSchema>;
 
+export const automationFoldersTable = pgTable(
+  "automation_folders",
+  {
+    id: serial("id").primaryKey(),
+    entityId: integer("entity_id")
+      .notNull()
+      .references(() => entitiesTable.id, { onDelete: "cascade" }),
+    nameJson: jsonb("name_json").notNull().default({}),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index("automation_folder_entity_idx").on(t.entityId)],
+);
+
 export const entityAutomationsTable = pgTable(
   "entity_automations",
   {
@@ -188,6 +206,7 @@ export const entityAutomationsTable = pgTable(
     entityId: integer("entity_id")
       .notNull()
       .references(() => entitiesTable.id, { onDelete: "cascade" }),
+    folderId: integer("folder_id").references(() => automationFoldersTable.id, { onDelete: "set null" }),
     nameJson: jsonb("name_json").notNull().default({}),
     isActive: boolean("is_active").notNull().default(true),
     triggerJson: jsonb("trigger_json").notNull(),
@@ -202,7 +221,10 @@ export const entityAutomationsTable = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (t) => [index("entity_automation_entity_idx").on(t.entityId)],
+  (t) => [
+    index("entity_automation_entity_idx").on(t.entityId),
+    index("entity_automation_folder_idx").on(t.folderId),
+  ],
 );
 
 export const entityAutomationRunsTable = pgTable(
@@ -245,3 +267,8 @@ export const insertEntityAutomationSchema = createInsertSchema(entityAutomations
 export type InsertEntityAutomation = z.infer<typeof insertEntityAutomationSchema>;
 export type EntityAutomation = typeof entityAutomationsTable.$inferSelect;
 export type EntityAutomationRun = typeof entityAutomationRunsTable.$inferSelect;
+
+export const insertAutomationFolderSchema = createInsertSchema(automationFoldersTable)
+  .omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertAutomationFolder = z.infer<typeof insertAutomationFolderSchema>;
+export type AutomationFolder = typeof automationFoldersTable.$inferSelect;
