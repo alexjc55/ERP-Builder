@@ -10701,12 +10701,13 @@ function InlineCellEditor({
     return (
       <Select
         defaultOpen
-        value={draft ? String(draft) : ""}
-        onValueChange={(v) => commitOnce(v)}
+        value={draft == null || draft === "" ? "" : String(draft)}
+        onValueChange={(v) => commitOnce(v === CLEAR_SELECT_VALUE ? "" : v)}
         onOpenChange={(o) => { if (!o && !committedRef.current) onCancel(); }}
       >
         <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("records.selectValue", "Выберите значение")} /></SelectTrigger>
         <SelectContent>
+          <SelectItem value={CLEAR_SELECT_VALUE}>{t("records.notSelected", "Не выбрано")}</SelectItem>
           {options.map((o) => (
             <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
           ))}
@@ -10909,11 +10910,16 @@ function FieldInput({
       if ((field.percentConfigJson?.mode ?? "value") === "list") {
         const options = normalizeSelectOptions(field.optionsJson);
         return (
-          <Select value={value ? String(value) : ""} onValueChange={onChange} disabled={disabled}>
+          <Select
+            value={value == null || value === "" ? "" : String(value)}
+            onValueChange={(next) => onChange(next === CLEAR_SELECT_VALUE ? "" : next)}
+            disabled={disabled}
+          >
             <SelectTrigger>
               <SelectValue placeholder={t("records.selectValue", "Выберите значение")} />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value={CLEAR_SELECT_VALUE}>{t("records.notSelected", "Не выбрано")}</SelectItem>
               {options.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>{ml(opt.labelJson) || `${opt.value}%`}</SelectItem>
               ))}
