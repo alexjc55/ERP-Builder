@@ -126,11 +126,12 @@ async function rollbackSnapshot(recordId: number) {
 
 async function pageRefRollbackSnapshot(recordId: number) {
   const row = await record(recordId);
-  const [sourceRow, targetRow, audits, events] = await Promise.all([
+  const [sourceRow, targetRow, audits, events, deletedFiles] = await Promise.all([
     pageValue(ids.sourcePage, recordId),
     pageValue(ids.targetPage, recordId),
     db.select().from(auditLogTable).where(eq(auditLogTable.recordId, recordId)),
     db.select().from(systemEventsTable).where(eq(systemEventsTable.recordId, recordId)),
+    db.select().from(deletedFilesTable).where(eq(deletedFilesTable.recordId, recordId)),
   ]);
   return {
     valuesJson: row.valuesJson,
@@ -141,6 +142,7 @@ async function pageRefRollbackSnapshot(recordId: number) {
     targetRow,
     audits,
     events,
+    deletedFiles,
   };
 }
 
@@ -290,6 +292,55 @@ test("page-local select mappings synchronize entity status atomically", async (t
       beforeDenied,
     );
     await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) }).where(eq(rolesTable.id, ids.role));
+  });
+
+  await t.test("page_ref source field permissions deny single writes without side effects", async () => {
+    for (const access of ["hidden", "view"] as const) {
+      await reset([ids.one]);
+      const beforeDenied = await pageRefRollbackSnapshot(ids.one);
+      await db.update(pageFieldsTable).set({
+        permissionsJson: { [String(ids.role)]: access },
+      }).where(and(eq(pageFieldsTable.pageId, ids.sourcePage), eq(pageFieldsTable.fieldKey, "stage")));
+      try {
+        const response = await request(
+          `/pages/${ids.targetPage}/records/${ids.one}/values`,
+          { valuesJson: { source_stage: "done" } },
+          "PUT",
+        );
+        assert.equal(response.status, 403, `${access} source field must deny page_ref writes`);
+        assert.match(String(response.body.error), /Source field "stage" is read-only for your role/);
+        assert.deepEqual(await pageRefRollbackSnapshot(ids.one), beforeDenied);
+      } finally {
+        await db.update(pageFieldsTable).set({ permissionsJson: {} })
+          .where(and(eq(pageFieldsTable.pageId, ids.sourcePage), eq(pageFieldsTable.fieldKey, "stage")));
+      }
+    }
+  });
+
+  await t.test("page_ref source field permissions deny bulk writes atomically without side effects", async () => {
+    for (const access of ["hidden", "view"] as const) {
+      await reset();
+      const beforeDenied = await Promise.all([pageRefRollbackSnapshot(ids.one), pageRefRollbackSnapshot(ids.two)]);
+      await db.update(pageFieldsTable).set({
+        permissionsJson: { [String(ids.role)]: access },
+      }).where(and(eq(pageFieldsTable.pageId, ids.sourcePage), eq(pageFieldsTable.fieldKey, "stage")));
+      try {
+        const response = await request(
+          `/pages/${ids.targetPage}/records/bulk-field-values`,
+          { fieldKey: "source_stage", value: "done", recordIds: [ids.one, ids.two] },
+          "POST",
+        );
+        assert.equal(response.status, 403, `${access} source field must deny bulk page_ref writes`);
+        assert.match(String(response.body.error), /Source field "stage" is read-only for your role/);
+        assert.deepEqual(
+          await Promise.all([pageRefRollbackSnapshot(ids.one), pageRefRollbackSnapshot(ids.two)]),
+          beforeDenied,
+        );
+      } finally {
+        await db.update(pageFieldsTable).set({ permissionsJson: {} })
+          .where(and(eq(pageFieldsTable.pageId, ids.sourcePage), eq(pageFieldsTable.fieldKey, "stage")));
+      }
+    }
   });
 
   await t.test("workflow, required-field failures roll back page/status/version/audit/event state", async () => {
