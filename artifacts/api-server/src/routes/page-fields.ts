@@ -1436,6 +1436,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     writtenPrevValues?: Record<string, unknown>;
     validatedValues?: Record<string, unknown>;
     writtenVersion?: number;
+    scope?: Awaited<ReturnType<typeof effectiveScopeFor>>;
     rowBoundaryChecked: boolean;
   };
   const sourceStates = new Map<number, SourceWriteState>();
@@ -1479,6 +1480,24 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     // source unchanged". An explicit empty/null value is the clear operation.
     if (!hasIncomingAlias) continue;
 
+    // Authorize the public alias before inspecting any private source metadata.
+    // Otherwise a hidden/read-only alias with stale config could distinguish a
+    // missing source from a valid one through the response status or message.
+    if (
+      !perms.superAdmin &&
+      mostPermissiveFieldPerm(
+        refField.permissionsJson as FieldPermissions | null,
+        roleIds,
+        "edit",
+        perms,
+        entityId,
+        pageId,
+      ) !== "edit"
+    ) {
+      res.status(403).json({ error: `Field "${refField.fieldKey}" is not editable for your role` });
+      return;
+    }
+
     const cfg = (refField.pageRefConfigJson ?? {}) as PageRefFieldConfig;
     if (cfg.sourcePageId == null || !cfg.sourceFieldKey) {
       if (hasIncomingAlias) {
@@ -1502,16 +1521,6 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     const sourceState = await getSourceState(cfg.sourcePageId);
     sourceState.aliasFieldKeys.add(refField.fieldKey);
     const sourcePrev = sourceState.prevValues[cfg.sourceFieldKey];
-    const targetFieldPerm = perms.superAdmin
-      ? "edit"
-      : mostPermissiveFieldPerm(
-          refField.permissionsJson as FieldPermissions | null,
-          roleIds,
-          "edit",
-          perms,
-          entityId,
-          pageId,
-        );
     const sourceFieldPerm = perms.superAdmin
       ? "edit"
       : mostPermissiveFieldPerm(
@@ -1528,34 +1537,22 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     const refWritable =
       perms.superAdmin ||
       (pageAccessAllowed &&
-        targetFieldPerm === "edit" &&
         sourceFieldPerm === "edit" &&
         sourceRecordPerm?.update === true);
     const requested = isEmpty(requestedRaw) ? undefined : requestedRaw;
     const changed = JSON.stringify(sourcePrev ?? null) !== JSON.stringify(requested ?? null);
-    if (!changed) continue;
 
     if (!refWritable) {
-      if (!pageAccessAllowed) {
-        res.status(403).json({ error: `No access to the source page for field "${refField.fieldKey}"` });
-        return;
-      }
-      if (targetFieldPerm !== "edit") {
-        res.status(403).json({ error: `Field "${refField.fieldKey}" is read-only for your role` });
-        return;
-      }
-      if (sourceFieldPerm !== "edit") {
-        res.status(403).json({ error: `Source field "${cfg.sourceFieldKey}" is read-only for your role` });
-        return;
-      }
-      if (sourceRecordPerm?.update !== true) {
-        res.status(403).json({ error: "You cannot update records through the source page" });
-        return;
-      }
+      // A page_ref denial must not disclose which private source boundary
+      // failed. In particular, same-value requests still cross every boundary:
+      // otherwise their allow/deny result becomes an oracle for source values.
+      res.status(403).json({ error: `Field "${refField.fieldKey}" is not editable for your role` });
+      return;
     }
     if (!perms.superAdmin) {
       if (!sourceState.rowBoundaryChecked) {
         const sourceScope = await effectiveScopeFor(req, perms, entityId, cfg.sourcePageId);
+        sourceState.scope = sourceScope;
         if (
           sourceScope.scope === "own" &&
           !(await isRecordOwned(
@@ -1579,6 +1576,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         sourceState.rowBoundaryChecked = true;
       }
     }
+    if (!changed) continue;
 
     const sourceIdentity = `${cfg.sourcePageId}\u0000${cfg.sourceFieldKey}`;
     if (pendingSourceValues.has(sourceIdentity)) {
@@ -1644,6 +1642,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
   const mappedTransitionState: { value: MappedStatusTransitionResult | null } = { value: null };
 
   class LockedPageValidationError extends Error {}
+  class LockedPageNotFoundError extends Error {}
   class LockedPageConflictError extends Error {
     constructor(message: string, readonly pageId: number, readonly currentVersion: number) {
       super(message);
@@ -1668,6 +1667,28 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds.includes(lockedEntityRecord.statusId)
       ) {
         throw new LockedPageValidationError("Record not found");
+      }
+      // The initial source own-scope check is only a fast preflight. Re-check
+      // every supplied alias's source page against the entity row locked above,
+      // including no-op aliases, so ownership cannot change between preflight
+      // and the source write/status effects.
+      if (!perms.superAdmin) {
+        for (const sourceState of sourceStates.values()) {
+          const sourceScope = sourceState.scope;
+          if (
+            sourceScope?.scope === "own" &&
+            !(await isRecordOwned(
+              entityId,
+              lockedEntityRecord,
+              sourceScope.scopeFieldKeys,
+              req.user!.userId,
+              entityFields,
+              tx,
+            ))
+          ) {
+            throw new LockedPageNotFoundError("Record not found");
+          }
+        }
       }
       const touchedSourceStates = [...sourceStates.values()]
         .filter((state) => state.changedKeys.size > 0)
@@ -1900,6 +1921,10 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         pageId: err.pageId,
         currentVersion: err.currentVersion,
       });
+      return;
+    }
+    if (err instanceof LockedPageNotFoundError) {
+      res.status(404).json({ error: err.message });
       return;
     }
     if (err instanceof LockedPageValidationError) {
@@ -2177,7 +2202,7 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
     const pageAccessAllowed =
       perms.superAdmin || (perms.pageIds.includes(pageId) && perms.pageIds.includes(cfg.sourcePageId));
     if (!pageAccessAllowed) {
-      res.status(403).json({ error: `No access to the source page for field "${fieldKey}"` });
+      res.status(403).json({ error: `Field "${fieldKey}" is not editable for your role` });
       return;
     }
     const sourceFieldPerm = perms.superAdmin
@@ -2191,11 +2216,11 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
           cfg.sourcePageId,
         );
     if (sourceFieldPerm !== "edit") {
-      res.status(403).json({ error: `Source field "${cfg.sourceFieldKey}" is read-only for your role` });
+      res.status(403).json({ error: `Field "${fieldKey}" is not editable for your role` });
       return;
     }
     if (!perms.superAdmin && sourceRecordPerm?.update !== true) {
-      res.status(403).json({ error: "You cannot update records through the source page" });
+      res.status(403).json({ error: `Field "${fieldKey}" is not editable for your role` });
       return;
     }
     writePageId = cfg.sourcePageId;
@@ -2264,10 +2289,10 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
             entityFields,
           ))
         ) {
-          throw new BulkPageFieldUpdateError(404, recordId, "запись недоступна через source page");
+          throw new BulkPageFieldUpdateError(404, recordId, "запись недоступна");
         }
         if (record.statusId != null && hiddenSourceStatuses.has(record.statusId)) {
-          throw new BulkPageFieldUpdateError(404, recordId, "запись недоступна через source page");
+          throw new BulkPageFieldUpdateError(404, recordId, "запись недоступна");
         }
       }
 

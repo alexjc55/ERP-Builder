@@ -7,7 +7,7 @@ A `page_ref` page field on mirror page B is a live alias of a page-local field f
 Rules that must stay consistent:
 - The source must be another page over the same effective entity and an active supported value-backed field.
 - Reads expose the source value under B's alias. Only an explicitly supplied alias may write or clear the source; omission is always a no-op. B never stores an alias copy.
-- Both sides are independent permission boundaries. Writing requires target-page/alias edit access plus source-page/source-field/record/row access; stale sources remain read-only and direct requests are rejected.
+- Both sides are independent permission boundaries. Every explicitly supplied alias, including a same-value no-op, requires target-page/alias edit access plus source-page/source-field/record/row access; otherwise value-dependent success becomes an oracle. Re-check source row scope after locking the entity record, and report denials through only the public alias or a generic row error.
 - A write changes only the authoritative source key and preserves unrelated values under concurrency. Multiple aliases to one source may agree; conflicting edits are rejected.
 - Source rename/delete/retype integrity must keep aliases valid or remove them safely. Filters and aggregates use the same authoritative source value and boundaries.
 

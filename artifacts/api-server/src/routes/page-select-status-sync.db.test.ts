@@ -18,6 +18,7 @@ import {
   rolesTable,
   systemEventsTable,
   usersTable,
+  mirrorPermKey,
   type RolePermissions,
 } from "@workspace/db";
 import { signToken } from "../lib/jwt";
@@ -31,7 +32,11 @@ app.use(express.json());
 app.use("/api", pageFieldsRouter);
 app.use("/api", recordsRouter);
 
-function permissions(pageIds: number[], hiddenStatusIds: number[] = []): RolePermissions {
+function permissions(
+  pageIds: number[],
+  hiddenStatusIds: number[] = [],
+  hiddenRowStatusIds: number[] = [],
+): RolePermissions {
   return {
     superAdmin: false,
     admin: {
@@ -45,6 +50,7 @@ function permissions(pageIds: number[], hiddenStatusIds: number[] = []): RolePer
       [String(ids.entity)]: {
         view: true, create: true, update: true, delete: true,
         ...(hiddenStatusIds.length ? { hiddenStatusIds } : {}),
+        ...(hiddenRowStatusIds.length ? { hiddenRowStatusIds } : {}),
       },
     },
   };
@@ -146,6 +152,14 @@ async function pageRefRollbackSnapshot(recordId: number) {
   };
 }
 
+function assertPageRefDenialRedacted(response: { status: number; body: Record<string, unknown> }) {
+  assert.equal(response.status, 403);
+  const error = String(response.body.error);
+  assert.ok(!error.includes(String(ids.sourcePage)), "must not expose source page id");
+  assert.ok(!error.includes(`${runId} source`), "must not expose source page name");
+  assert.ok(!error.includes('"stage"'), "must not expose source field key");
+}
+
 async function reset(recordIds = [ids.one, ids.two]) {
   await db.delete(entityTransitionsTable).where(eq(entityTransitionsTable.entityId, ids.entity));
   await db.delete(auditLogTable).where(inArray(auditLogTable.recordId, recordIds));
@@ -154,7 +168,11 @@ async function reset(recordIds = [ids.one, ids.two]) {
   await db.update(entityRecordsTable).set({
     statusId: ids.base,
     archivedAt: null,
-    valuesJson: { name: "Ready", attachment: { kind: "server", path: `/local/${runId}.txt`, name: "old.txt" } },
+    valuesJson: {
+      name: "Ready",
+      owner: ids.user,
+      attachment: { kind: "server", path: `/local/${runId}.txt`, name: "old.txt" },
+    },
   }).where(inArray(entityRecordsTable.id, recordIds));
   await db.delete(pageRecordValuesTable).where(inArray(pageRecordValuesTable.recordId, recordIds));
 }
@@ -180,6 +198,7 @@ async function setup() {
   ids.user = user!.id;
   await db.insert(entityFieldsTable).values([
     { entityId: ids.entity, fieldKey: "name", nameJson: { en: "Name" }, fieldType: "text", isRequired: true },
+    { entityId: ids.entity, fieldKey: "owner", nameJson: { en: "Owner" }, fieldType: "user" },
     { entityId: ids.entity, fieldKey: "attachment", nameJson: { en: "Attachment" }, fieldType: "file" },
   ]);
   const statuses = await db.insert(entityStatusesTable).values([
@@ -210,8 +229,8 @@ async function setup() {
     },
   ]);
   const records = await db.insert(entityRecordsTable).values([
-    { entityId: ids.entity, valuesJson: { name: "Ready", attachment: { kind: "server", path: `/local/${runId}.txt`, name: "old.txt" } }, statusId: ids.base },
-    { entityId: ids.entity, valuesJson: { name: "Ready", attachment: { kind: "server", path: `/local/${runId}-2.txt`, name: "old2.txt" } }, statusId: ids.base },
+    { entityId: ids.entity, valuesJson: { name: "Ready", owner: ids.user, attachment: { kind: "server", path: `/local/${runId}.txt`, name: "old.txt" } }, statusId: ids.base },
+    { entityId: ids.entity, valuesJson: { name: "Ready", owner: ids.user, attachment: { kind: "server", path: `/local/${runId}-2.txt`, name: "old2.txt" } }, statusId: ids.base },
   ]).returning({ id: entityRecordsTable.id });
   ids.one = records[0]!.id; ids.two = records[1]!.id;
 }
@@ -255,11 +274,11 @@ test("page-local select mappings synchronize entity status atomically", async (t
     assert.equal(await pageValue(ids.targetPage, ids.one), undefined);
     assert.equal((await record(ids.one)).statusId, ids.done);
     await reset([ids.one]);
+    const beforeDenied = await pageRefRollbackSnapshot(ids.one);
     await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage]) }).where(eq(rolesTable.id, ids.role));
     response = await request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { source_stage: "done" } }, "PUT");
-    assert.equal(response.status, 403);
-    assert.equal(await pageValue(ids.sourcePage, ids.one), undefined);
-    assert.equal((await record(ids.one)).statusId, ids.base);
+    assertPageRefDenialRedacted(response);
+    assert.deepEqual(await pageRefRollbackSnapshot(ids.one), beforeDenied);
     await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) }).where(eq(rolesTable.id, ids.role));
   });
 
@@ -286,7 +305,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
       "POST",
     );
     assert.equal(response.status, 403);
-    assert.match(String(response.body.error), /No access to the source page/);
+    assertPageRefDenialRedacted(response);
     assert.deepEqual(
       await Promise.all([pageRefRollbackSnapshot(ids.one), pageRefRollbackSnapshot(ids.two)]),
       beforeDenied,
@@ -308,7 +327,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
           "PUT",
         );
         assert.equal(response.status, 403, `${access} source field must deny page_ref writes`);
-        assert.match(String(response.body.error), /Source field "stage" is read-only for your role/);
+        assertPageRefDenialRedacted(response);
         assert.deepEqual(await pageRefRollbackSnapshot(ids.one), beforeDenied);
       } finally {
         await db.update(pageFieldsTable).set({ permissionsJson: {} })
@@ -331,7 +350,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
           "POST",
         );
         assert.equal(response.status, 403, `${access} source field must deny bulk page_ref writes`);
-        assert.match(String(response.body.error), /Source field "stage" is read-only for your role/);
+        assertPageRefDenialRedacted(response);
         assert.deepEqual(
           await Promise.all([pageRefRollbackSnapshot(ids.one), pageRefRollbackSnapshot(ids.two)]),
           beforeDenied,
@@ -340,6 +359,236 @@ test("page-local select mappings synchronize entity status atomically", async (t
         await db.update(pageFieldsTable).set({ permissionsJson: {} })
           .where(and(eq(pageFieldsTable.pageId, ids.sourcePage), eq(pageFieldsTable.fieldKey, "stage")));
       }
+    }
+  });
+
+  await t.test("page_ref target alias permissions deny single and bulk writes without leaking the source", async () => {
+    for (const access of ["hidden", "view"] as const) {
+      for (const mode of ["single", "bulk"] as const) {
+        await reset();
+        const recordIds = mode === "single" ? [ids.one] : [ids.one, ids.two];
+        const beforeDenied = await Promise.all(recordIds.map(pageRefRollbackSnapshot));
+        await db.update(pageFieldsTable).set({
+          permissionsJson: { [String(ids.role)]: access },
+          ...(mode === "single"
+            ? { pageRefConfigJson: { sourcePageId: ids.sourcePage, sourceFieldKey: "stale_source_key" } }
+            : {}),
+        }).where(and(eq(pageFieldsTable.pageId, ids.targetPage), eq(pageFieldsTable.fieldKey, "source_stage")));
+        try {
+          const response = mode === "single"
+            ? await request(
+                `/pages/${ids.targetPage}/records/${ids.one}/values`,
+                { valuesJson: { source_stage: "done" } },
+                "PUT",
+              )
+            : await request(
+                `/pages/${ids.targetPage}/records/bulk-field-values`,
+                { fieldKey: "source_stage", value: "done", recordIds },
+                "POST",
+              );
+          assertPageRefDenialRedacted(response);
+          assert.deepEqual(
+            await Promise.all(recordIds.map(pageRefRollbackSnapshot)),
+            beforeDenied,
+            `${access} target alias ${mode} denial must have no side effects`,
+          );
+        } finally {
+          await db.update(pageFieldsTable).set({
+            permissionsJson: {},
+            pageRefConfigJson: { sourcePageId: ids.sourcePage, sourceFieldKey: "stage" },
+          })
+            .where(and(eq(pageFieldsTable.pageId, ids.targetPage), eq(pageFieldsTable.fieldKey, "source_stage")));
+        }
+      }
+    }
+  });
+
+  await t.test("page_ref no-ops require every source and target permission in single and bulk", async () => {
+    const cases: Array<{
+      name: string;
+      expectedStatus?: number;
+      apply: () => Promise<void>;
+      restore: () => Promise<void>;
+    }> = [
+      ...(["hidden", "view"] as const).map((access) => ({
+        name: `${access} target alias`,
+        apply: async () => {
+          await db.update(pageFieldsTable).set({ permissionsJson: { [String(ids.role)]: access } })
+            .where(and(eq(pageFieldsTable.pageId, ids.targetPage), eq(pageFieldsTable.fieldKey, "source_stage")));
+        },
+        restore: async () => {
+          await db.update(pageFieldsTable).set({ permissionsJson: {} })
+            .where(and(eq(pageFieldsTable.pageId, ids.targetPage), eq(pageFieldsTable.fieldKey, "source_stage")));
+        },
+      })),
+      ...(["hidden", "view"] as const).map((access) => ({
+        name: `${access} source field`,
+        apply: async () => {
+          await db.update(pageFieldsTable).set({ permissionsJson: { [String(ids.role)]: access } })
+            .where(and(eq(pageFieldsTable.pageId, ids.sourcePage), eq(pageFieldsTable.fieldKey, "stage")));
+        },
+        restore: async () => {
+          await db.update(pageFieldsTable).set({ permissionsJson: {} })
+            .where(and(eq(pageFieldsTable.pageId, ids.sourcePage), eq(pageFieldsTable.fieldKey, "stage")));
+        },
+      })),
+      {
+        name: "hidden source page",
+        apply: async () => {
+          await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage]) })
+            .where(eq(rolesTable.id, ids.role));
+        },
+        restore: async () => {
+          await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) })
+            .where(eq(rolesTable.id, ids.role));
+        },
+      },
+      {
+        name: "read-only source records",
+        apply: async () => {
+          const denied = permissions([ids.targetPage, ids.sourcePage]);
+          denied.records[mirrorPermKey(ids.sourcePage)] = {
+            view: true, create: false, update: false, delete: false,
+          };
+          await db.update(rolesTable).set({ permissionsJson: denied }).where(eq(rolesTable.id, ids.role));
+        },
+        restore: async () => {
+          await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) })
+            .where(eq(rolesTable.id, ids.role));
+        },
+      },
+      {
+        name: "hidden source status",
+        expectedStatus: 404,
+        apply: async () => {
+          await db.update(rolesTable).set({
+            permissionsJson: permissions([ids.targetPage, ids.sourcePage], [], [ids.done]),
+          }).where(eq(rolesTable.id, ids.role));
+        },
+        restore: async () => {
+          await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) })
+            .where(eq(rolesTable.id, ids.role));
+        },
+      },
+    ];
+
+    for (const permissionCase of cases) {
+      for (const mode of ["single", "bulk"] as const) {
+        await reset();
+        const recordIds = mode === "single" ? [ids.one] : [ids.one, ids.two];
+        const seed = await request(
+          `/pages/${ids.targetPage}/records/bulk-field-values`,
+          { fieldKey: "source_stage", value: "done", recordIds },
+          "POST",
+        );
+        assert.equal(seed.status, 200);
+        const beforeDenied = await Promise.all(recordIds.map(pageRefRollbackSnapshot));
+        await permissionCase.apply();
+        try {
+          const response = mode === "single"
+            ? await request(
+                `/pages/${ids.targetPage}/records/${ids.one}/values`,
+                { valuesJson: { source_stage: "done" } },
+                "PUT",
+              )
+            : await request(
+                `/pages/${ids.targetPage}/records/bulk-field-values`,
+                { fieldKey: "source_stage", value: "done", recordIds },
+                "POST",
+              );
+          if (permissionCase.expectedStatus === 404) {
+            assert.equal(response.status, 404);
+            assert.ok(!String(response.body.error).includes("source page"));
+          } else {
+            assertPageRefDenialRedacted(response);
+          }
+          assert.deepEqual(
+            await Promise.all(recordIds.map(pageRefRollbackSnapshot)),
+            beforeDenied,
+            `${permissionCase.name} ${mode} no-op denial must preserve the full rollback snapshot`,
+          );
+        } finally {
+          await permissionCase.restore();
+        }
+      }
+    }
+  });
+
+  await t.test("page_ref source own-scope denies changed and no-op single writes without side effects", async () => {
+    for (const mode of ["changed", "no-op"] as const) {
+      await reset([ids.one]);
+      if (mode === "no-op") {
+        const seed = await request(
+          `/pages/${ids.targetPage}/records/${ids.one}/values`,
+          { valuesJson: { source_stage: "done" } },
+          "PUT",
+        );
+        assert.equal(seed.status, 200);
+      }
+      await db.update(entityRecordsTable).set({
+        valuesJson: { name: "Ready", owner: 0 },
+      }).where(eq(entityRecordsTable.id, ids.one));
+      const sourceOwn = permissions([ids.targetPage, ids.sourcePage]);
+      sourceOwn.records[mirrorPermKey(ids.sourcePage)] = {
+        view: true, create: false, update: true, delete: false, scope: "own", scopeFieldKeys: ["owner"],
+      };
+      await db.update(rolesTable).set({ permissionsJson: sourceOwn }).where(eq(rolesTable.id, ids.role));
+      const beforeDenied = await pageRefRollbackSnapshot(ids.one);
+      try {
+        const response = await request(
+          `/pages/${ids.targetPage}/records/${ids.one}/values`,
+          { valuesJson: { source_stage: "done" } },
+          "PUT",
+        );
+        assert.equal(response.status, 404, `${mode} source-own denial must hide the record`);
+        assert.deepEqual(await pageRefRollbackSnapshot(ids.one), beforeDenied);
+      } finally {
+        await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) })
+          .where(eq(rolesTable.id, ids.role));
+      }
+    }
+  });
+
+  await t.test("single page_ref rechecks source own-scope after locking the entity record", async () => {
+    await reset([ids.one]);
+    const sourceOwn = permissions([ids.targetPage, ids.sourcePage]);
+    sourceOwn.records[mirrorPermKey(ids.sourcePage)] = {
+      view: true, create: false, update: true, delete: false, scope: "own", scopeFieldKeys: ["owner"],
+    };
+    await db.update(rolesTable).set({ permissionsJson: sourceOwn }).where(eq(rolesTable.id, ids.role));
+    let releaseLock: (() => void) | undefined;
+    const release = new Promise<void>((resolve) => { releaseLock = resolve; });
+    let lockReadyResolve: (() => void) | undefined;
+    const lockReady = new Promise<void>((resolve) => { lockReadyResolve = resolve; });
+    const holder = db.transaction(async (tx) => {
+      await tx.select({ id: entityRecordsTable.id }).from(entityRecordsTable)
+        .where(eq(entityRecordsTable.id, ids.one)).for("update");
+      await tx.update(entityRecordsTable).set({ valuesJson: { name: "Ready", owner: 0 } })
+        .where(eq(entityRecordsTable.id, ids.one));
+      lockReadyResolve!();
+      await release;
+    });
+    try {
+      await lockReady;
+      const responsePromise = request(
+        `/pages/${ids.targetPage}/records/${ids.one}/values`,
+        { valuesJson: { source_stage: "done" } },
+        "PUT",
+      );
+      // The request's unlocked preflight observes the still-committed owner,
+      // then waits on this lock; release on a bounded timer to avoid a hung test.
+      await new Promise((resolve) => setTimeout(resolve, 75));
+      releaseLock!();
+      await holder;
+      const beforeResponseEffects = await pageRefRollbackSnapshot(ids.one);
+      const response = await responsePromise;
+      assert.equal(response.status, 404);
+      assert.deepEqual(await pageRefRollbackSnapshot(ids.one), beforeResponseEffects);
+    } finally {
+      releaseLock?.();
+      await holder.catch(() => undefined);
+      await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) })
+        .where(eq(rolesTable.id, ids.role));
     }
   });
 
