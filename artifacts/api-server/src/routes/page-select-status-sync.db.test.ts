@@ -200,6 +200,7 @@ async function setup() {
     { entityId: ids.entity, fieldKey: "name", nameJson: { en: "Name" }, fieldType: "text", isRequired: true },
     { entityId: ids.entity, fieldKey: "owner", nameJson: { en: "Owner" }, fieldType: "user" },
     { entityId: ids.entity, fieldKey: "attachment", nameJson: { en: "Attachment" }, fieldType: "file" },
+    { entityId: ids.entity, fieldKey: "workflow_note", nameJson: { en: "Workflow note" }, fieldType: "text" },
   ]);
   const statuses = await db.insert(entityStatusesTable).values([
     { entityId: ids.entity, statusKey: "base", nameJson: { en: "Base" }, isDefault: true, sortOrder: 0 },
@@ -629,40 +630,167 @@ test("page-local select mappings synchronize entity status atomically", async (t
     assert.equal(deleted!.filePath, `/local/${runId}.txt`);
   });
 
-  await t.test("records PUT treats a matching explicit mapped status as system-derived and rejects other explicit statuses atomically", async () => {
-    await reset([ids.one]);
-    await db.delete(entityTransitionsTable).where(eq(entityTransitionsTable.entityId, ids.entity));
-    await db.update(entitiesTable).set({ statusManualEditPolicy: "disabled_all" }).where(eq(entitiesTable.id, ids.entity));
-    await db.update(rolesTable).set({
-      permissionsJson: permissions([ids.targetPage, ids.sourcePage], [ids.done]),
-    }).where(eq(rolesTable.id, ids.role));
+  await t.test("records PUT resolves matching mapped statuses after CAS and enforces their workflow atomically", async () => {
+    try {
+      await db.update(entitiesTable).set({ statusManualEditPolicy: "disabled_all" })
+        .where(eq(entitiesTable.id, ids.entity));
+      await db.update(rolesTable).set({
+        permissionsJson: permissions([ids.targetPage, ids.sourcePage], [ids.done]),
+      }).where(eq(rolesTable.id, ids.role));
 
-    let response = await request(
-      `/records/${ids.one}`,
-      { valuesJson: { mapped_stage: "done" }, statusId: ids.done },
-      "PUT",
-    );
-    assert.equal(response.status, 200);
-    const mapped = await record(ids.one);
-    assert.equal(mapped.statusId, ids.done);
-    assert.equal((mapped.valuesJson as Record<string, unknown>).mapped_stage, "done");
+      // The stale version must win before mapping can reach either manual-policy
+      // or workflow validation.
+      await reset([ids.one]);
+      const staleVersion = (await record(ids.one)).version;
+      let response = await request(
+        `/records/${ids.one}`,
+        { valuesJson: { workflow_note: "advance version" }, expectedVersion: staleVersion },
+        "PUT",
+      );
+      assert.equal(response.status, 200);
+      const advancedVersion = (await record(ids.one)).version;
+      assert.ok(advancedVersion > staleVersion);
+      await db.insert(entityTransitionsTable).values({
+        entityId: ids.entity, fromStatusId: ids.base, toStatusId: ids.archive,
+        nameJson: {}, allowedRoleIds: [], requiredFieldKeys: [], actionsJson: [],
+      });
+      const beforeCasFailure = await rollbackSnapshot(ids.one);
+      response = await request(
+        `/records/${ids.one}`,
+        { valuesJson: { mapped_stage: "done" }, statusId: ids.done, expectedVersion: staleVersion },
+        "PUT",
+      );
+      assert.equal(response.status, 409);
+      assert.equal(response.body.currentVersion, advancedVersion);
+      assert.deepEqual(await rollbackSnapshot(ids.one), beforeCasFailure);
 
-    await reset([ids.one]);
-    const beforeConflict = await rollbackSnapshot(ids.one);
-    response = await request(
-      `/records/${ids.one}`,
-      { valuesJson: { mapped_stage: "done" }, statusId: ids.archive },
-      "PUT",
-    );
-    assert.equal(response.status, 422);
-    assert.match(String(response.body.error), /conflicts with the explicitly selected system status/);
-    assert.deepEqual(await rollbackSnapshot(ids.one), beforeConflict);
+      // A mapped write bypasses the hidden picker, manual-policy and transition
+      // role restrictions, but still runs its matching graph transition/actions.
+      await reset([ids.one]);
+      await db.insert(entityTransitionsTable).values({
+        entityId: ids.entity, fromStatusId: ids.base, toStatusId: ids.done,
+        nameJson: {}, allowedRoleIds: [999999], requiredFieldKeys: ["name"],
+        actionsJson: [{ type: "set_field", fieldKey: "attachment", value: null }],
+      });
+      const beforeSuccess = await record(ids.one);
+      response = await request(
+        `/records/${ids.one}`,
+        { valuesJson: { mapped_stage: "done" }, statusId: ids.done, expectedVersion: beforeSuccess.version },
+        "PUT",
+      );
+      assert.equal(response.status, 200);
+      const mapped = await record(ids.one);
+      assert.equal(mapped.statusId, ids.done);
+      assert.equal(mapped.archivedAt, null);
+      assert.equal(mapped.version, beforeSuccess.version + 1);
+      assert.equal((mapped.valuesJson as Record<string, unknown>).mapped_stage, "done");
+      assert.equal((mapped.valuesJson as Record<string, unknown>).attachment, undefined);
+      const [audits, events, deletedFiles] = await Promise.all([
+        db.select({ fieldKey: auditLogTable.fieldKey }).from(auditLogTable)
+          .where(eq(auditLogTable.recordId, ids.one)),
+        db.select({ eventName: systemEventsTable.eventName, payload: systemEventsTable.payloadJson })
+          .from(systemEventsTable).where(eq(systemEventsTable.recordId, ids.one)),
+        db.select().from(deletedFilesTable).where(eq(deletedFilesTable.recordId, ids.one)),
+      ]);
+      for (const fieldKey of ["mapped_stage", "attachment", "__status__"]) {
+        assert.ok(audits.some((row) => row.fieldKey === fieldKey), `missing ${fieldKey} audit`);
+      }
+      assert.ok(!audits.some((row) => row.fieldKey === "__archived__"));
+      assert.ok(events.some((row) =>
+        row.eventName === "record.updated" &&
+        ["mapped_stage", "attachment"].every((fieldKey) =>
+          ((row.payload as Record<string, unknown>).changedFields as string[]).includes(fieldKey),
+        ),
+      ));
+      assert.ok(events.some((row) => row.eventName === "status.changed"));
+      assert.equal(deletedFiles.length, 1);
+      assert.equal(deletedFiles[0]!.filePath, `/local/${runId}.txt`);
 
-    const beforeManualRejection = await rollbackSnapshot(ids.one);
-    response = await request(`/records/${ids.one}`, { statusId: ids.archive }, "PUT");
-    assert.equal(response.status, 403);
-    assert.match(String(response.body.error), /Manual status editing is disabled/);
-    assert.deepEqual(await rollbackSnapshot(ids.one), beforeManualRejection);
+      // A configured graph without the mapped edge still rejects the write.
+      await reset([ids.one]);
+      await db.insert(entityTransitionsTable).values({
+        entityId: ids.entity, fromStatusId: ids.base, toStatusId: ids.archive,
+        nameJson: {}, allowedRoleIds: [], requiredFieldKeys: [], actionsJson: [],
+      });
+      const beforeGraphFailure = await rollbackSnapshot(ids.one);
+      response = await request(
+        `/records/${ids.one}`, { valuesJson: { mapped_stage: "done" }, statusId: ids.done }, "PUT",
+      );
+      assert.equal(response.status, 422);
+      assert.deepEqual(await rollbackSnapshot(ids.one), beforeGraphFailure);
+
+      // workflow_note is optional at the entity level, so this is specifically
+      // the transition's required-field check rather than normal validation.
+      await reset([ids.one]);
+      await db.insert(entityTransitionsTable).values({
+        entityId: ids.entity, fromStatusId: ids.base, toStatusId: ids.done,
+        nameJson: {}, allowedRoleIds: [], requiredFieldKeys: ["workflow_note"], actionsJson: [],
+      });
+      const beforeRequiredFailure = await rollbackSnapshot(ids.one);
+      response = await request(
+        `/records/${ids.one}`, { valuesJson: { mapped_stage: "done" }, statusId: ids.done }, "PUT",
+      );
+      assert.equal(response.status, 422);
+      assert.match(String(response.body.error), /Fields required for this transition: workflow_note/);
+      assert.deepEqual(await rollbackSnapshot(ids.one), beforeRequiredFailure);
+
+      await reset([ids.one]);
+      const beforeConflict = await rollbackSnapshot(ids.one);
+      response = await request(
+        `/records/${ids.one}`,
+        { valuesJson: { mapped_stage: "done" }, statusId: ids.archive },
+        "PUT",
+      );
+      assert.equal(response.status, 422);
+      assert.match(String(response.body.error), /conflicts with the explicitly selected system status/);
+      assert.deepEqual(await rollbackSnapshot(ids.one), beforeConflict);
+
+      const beforeManualRejection = await rollbackSnapshot(ids.one);
+      response = await request(`/records/${ids.one}`, { statusId: ids.archive }, "PUT");
+      assert.equal(response.status, 403);
+      assert.match(String(response.body.error), /Manual status editing is disabled/);
+      assert.deepEqual(await rollbackSnapshot(ids.one), beforeManualRejection);
+
+      // Supplying valuesJson is not itself a mapped write. Without an actual
+      // mapped-select change, ordinary picker and transition-role checks apply.
+      await reset([ids.one]);
+      await db.update(entitiesTable).set({ statusManualEditPolicy: "allowed" })
+        .where(eq(entitiesTable.id, ids.entity));
+      const beforeHiddenRejection = await rollbackSnapshot(ids.one);
+      response = await request(
+        `/records/${ids.one}`,
+        { valuesJson: { name: "Ready" }, statusId: ids.done },
+        "PUT",
+      );
+      assert.equal(response.status, 403);
+      assert.match(String(response.body.error), /status is not available to your role/);
+      assert.deepEqual(await rollbackSnapshot(ids.one), beforeHiddenRejection);
+
+      await reset([ids.one]);
+      await db.update(rolesTable).set({
+        permissionsJson: permissions([ids.targetPage, ids.sourcePage]),
+      }).where(eq(rolesTable.id, ids.role));
+      await db.insert(entityTransitionsTable).values({
+        entityId: ids.entity, fromStatusId: ids.base, toStatusId: ids.done,
+        nameJson: {}, allowedRoleIds: [999999], requiredFieldKeys: [], actionsJson: [],
+      });
+      const beforeRoleRejection = await rollbackSnapshot(ids.one);
+      response = await request(
+        `/records/${ids.one}`,
+        { valuesJson: { name: "Ready" }, statusId: ids.done },
+        "PUT",
+      );
+      assert.equal(response.status, 403);
+      assert.match(String(response.body.error), /role is not allowed to perform this transition/);
+      assert.deepEqual(await rollbackSnapshot(ids.one), beforeRoleRejection);
+    } finally {
+      await db.delete(entityTransitionsTable).where(eq(entityTransitionsTable.entityId, ids.entity));
+      await db.update(entitiesTable).set({ statusManualEditPolicy: "allowed" })
+        .where(eq(entitiesTable.id, ids.entity));
+      await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) })
+        .where(eq(rolesTable.id, ids.role));
+      await reset([ids.one]);
+    }
   });
 
   await t.test("bulk archive mapping applies actions and emits complete effects for every record", async () => {
