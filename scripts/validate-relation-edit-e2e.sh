@@ -2,9 +2,8 @@
 set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
-validation_lock="/tmp/erp-validations-$(printf '%s' "$repo_root" | sha256sum | cut -d' ' -f1).lock"
-exec 9>"$validation_lock"
-flock 9
+source "$repo_root/scripts/with-validation-lock.sh"
+acquire_validation_lock
 
 wait_for_service() {
   local name="$1"

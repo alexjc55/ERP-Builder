@@ -4,9 +4,8 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-validation_lock="/tmp/erp-validations-$(printf '%s' "$repo_root" | sha256sum | cut -d' ' -f1).lock"
-exec 9>"$validation_lock"
-flock 9
+source "$repo_root/scripts/with-validation-lock.sh"
+acquire_validation_lock
 
 package_manager="$(node -p "require('./package.json').packageManager")"
 case "$package_manager" in
