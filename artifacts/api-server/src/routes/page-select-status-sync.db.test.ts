@@ -252,6 +252,27 @@ async function setup() {
       formulaConfigJson: { expression: `{entity:${ids.entity}.name}` },
     },
     {
+      pageId: ids.sourcePage,
+      fieldKey: "projection_leaf",
+      nameJson: { en: "Projection leaf" },
+      fieldType: "function",
+      formulaConfigJson: { expression: "6" },
+    },
+    {
+      pageId: ids.sourcePage,
+      fieldKey: "projection_branch",
+      nameJson: { en: "Projection branch" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{page:${ids.targetPage}.projection_middle}` },
+    },
+    {
+      pageId: ids.sourcePage,
+      fieldKey: "cycle_source",
+      nameJson: { en: "Cycle source" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{page:${ids.targetPage}.cycle_target}` },
+    },
+    {
       pageId: ids.targetPage,
       fieldKey: "formula_ref",
       nameJson: { en: "Formula ref" },
@@ -264,6 +285,41 @@ async function setup() {
       nameJson: { en: "Same page formula" },
       fieldType: "function",
       formulaConfigJson: { expression: "{stage}" },
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "projection_middle",
+      nameJson: { en: "Projection middle" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{page:${ids.sourcePage}.projection_leaf}` },
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "projection_left",
+      nameJson: { en: "Projection left" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{page:${ids.sourcePage}.projection_branch}` },
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "projection_right",
+      nameJson: { en: "Projection right" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{page:${ids.sourcePage}.projection_leaf}` },
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "cycle_target",
+      nameJson: { en: "Cycle target" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{page:${ids.sourcePage}.cycle_source}` },
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "cycle_result",
+      nameJson: { en: "Cycle result" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{page:${ids.sourcePage}.cycle_source}` },
     },
   ]);
   const records = await db.insert(entityRecordsTable).values([
@@ -322,6 +378,31 @@ test("page-local select mappings synchronize entity status atomically", async (t
     assert.equal(deniedWrite.status, 403);
     assert.equal(await pageValue(ids.sourcePage, ids.one), undefined);
     await reset([ids.one]);
+  });
+  await t.test("acyclic sibling page projections resolve while a real cross-page cycle stays neutral", async () => {
+    await reset([ids.one]);
+    assert.equal(await pageValue(ids.targetPage, ids.one), undefined);
+    assert.equal(await pageValue(ids.sourcePage, ids.one), undefined);
+
+    const response = await read(`/pages/${ids.targetPage}/record-values`);
+    assert.equal(response.status, 200);
+    const rows = response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>;
+    const row = rows.find((candidate) => candidate.recordId === ids.one);
+    assert.ok(row);
+
+    // projection_left -> source.branch -> target.middle -> source.leaf.
+    // projection_right and source.leaf are sibling projection targets in the
+    // same batch, not active ancestors, so neither may be classified as a cycle.
+    assert.equal(row.valuesJson.projection_left, 6);
+    assert.equal(row.valuesJson.projection_right, 6);
+    assert.equal(row.valuesJson.projection_middle, 6);
+
+    // cycle_result -> source.cycle_source -> target.cycle_target
+    //              -> source.cycle_source is a real cycle and must fail neutral.
+    assert.equal(row.valuesJson.cycle_result, null);
+    assert.equal(row.valuesJson.cycle_target, null);
+    assert.equal(await pageValue(ids.targetPage, ids.one), undefined);
+    assert.equal(await pageValue(ids.sourcePage, ids.one), undefined);
   });
   await t.test("single and bulk writes commit page values and mapped statuses", async () => {
     let response = await request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { stage: "done" } }, "PUT");
