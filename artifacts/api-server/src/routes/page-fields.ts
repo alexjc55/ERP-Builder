@@ -69,6 +69,7 @@ import {
   mergeLinkedFormulaInputs,
   projectViewerFormulaValues,
 } from "../lib/formula-runtime";
+import { idArrayAny } from "../lib/sql-id-array";
 import { emitEvent, EVENT_PAGE_FIELD_SAVED, EVENT_RECORD_UPDATED, EVENT_STATUS_CHANGED } from "../lib/events";
 import { writeAudit, diffValues, AUDIT_STATUS, AUDIT_ARCHIVED } from "./audit-log";
 import {
@@ -2379,7 +2380,7 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
       const records = await tx
         .select()
         .from(entityRecordsTable)
-        .where(and(eq(entityRecordsTable.entityId, entityId), inArray(entityRecordsTable.id, recordIds)))
+        .where(and(eq(entityRecordsTable.entityId, entityId), idArrayAny(entityRecordsTable.id, recordIds)))
         .orderBy(asc(entityRecordsTable.id))
         .for("update");
       const recordsById = new Map(records.map((record) => [record.id, record]));
@@ -2428,7 +2429,7 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
         .where(
           and(
             eq(pageRecordValuesTable.pageId, writePageId),
-            inArray(pageRecordValuesTable.recordId, recordIds),
+            idArrayAny(pageRecordValuesTable.recordId, recordIds),
           ),
         )
         .orderBy(asc(pageRecordValuesTable.recordId))
@@ -2651,7 +2652,7 @@ interface LookupResolveCtx {
   req: Parameters<typeof interactiveFormulaPermissions>[0];
 }
 
-interface ChainResolution {
+export interface ChainResolution {
   /** First-hop access after the full-chain gate: "hidden" if ANY hop is view-blocked. */
   access: "hidden" | "view" | "edit";
   /** The TERMINAL (deepest) field's type, used by the client to render the value. */
@@ -2660,6 +2661,8 @@ interface ChainResolution {
   optionsJson: SelectOption[];
   /** host recordId -> projected value, present only for viewable records (value may be null). */
   valueByRecordId: Map<number, unknown>;
+  /** host recordId -> visible first-hop linked record identity. */
+  linkedIdByRecordId: Map<number, number>;
 }
 
 /**
@@ -2672,7 +2675,7 @@ interface ChainResolution {
  * used by both related-values endpoints for chained columns; keep it in lockstep
  * with the inline first-hop logic (audit-field-security invariant).
  */
-async function resolveChainValues(
+export async function resolveChainValues(
   hostEntityId: number,
   recordIds: number[],
   relationId: number,
@@ -2686,9 +2689,8 @@ async function resolveChainValues(
     relatedFieldType: null,
     optionsJson: [],
     valueByRecordId: new Map(),
+    linkedIdByRecordId: new Map(),
   };
-  if (recordIds.length === 0) return empty;
-
   const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
   if (!relation) return empty;
   const direction = relationDirection(relation, hostEntityId);
@@ -2767,21 +2769,23 @@ async function resolveChainValues(
       ? await db
           .select({ from: recordLinksTable.sourceRecordId, to: recordLinksTable.targetRecordId })
           .from(recordLinksTable)
-          .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.sourceRecordId, recordIds)))
+          .where(and(eq(recordLinksTable.relationId, relationId), idArrayAny(recordLinksTable.sourceRecordId, recordIds)))
       : await db
           .select({ from: recordLinksTable.targetRecordId, to: recordLinksTable.sourceRecordId })
           .from(recordLinksTable)
-          .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.targetRecordId, recordIds)));
+          .where(and(eq(recordLinksTable.relationId, relationId), idArrayAny(recordLinksTable.targetRecordId, recordIds)));
   const linkMap = new Map<number, number>();
   for (const l of linkRows) linkMap.set(l.from, l.to);
   const linkedIds = Array.from(new Set(linkRows.map((l) => l.to)));
-  if (linkedIds.length === 0) return { access, relatedFieldType, optionsJson, valueByRecordId: new Map() };
+  if (linkedIds.length === 0) {
+    return { access, relatedFieldType, optionsJson, valueByRecordId: new Map(), linkedIdByRecordId: new Map() };
+  }
 
   // Load only the VIEWABLE linked records (row-hidden status + related own-scope).
   const relHiddenRowWhere = hiddenRowStatusWhere(effectiveStatusVisibility(perms, relatedEntityId).hiddenRowStatusIds);
   const linkedConds: SQL[] = [
     eq(entityRecordsTable.entityId, relatedEntityId),
-    inArray(entityRecordsTable.id, linkedIds),
+    idArrayAny(entityRecordsTable.id, linkedIds),
   ];
   if (relHiddenRowWhere) linkedConds.push(relHiddenRowWhere);
   if (relScope.scope === "own") {
@@ -2805,7 +2809,7 @@ async function resolveChainValues(
       if (!allowedForRelatedPage.has(id)) linkedMap.delete(id);
     }
     if (linkedMap.size === 0) {
-      return { access, relatedFieldType, optionsJson, valueByRecordId: new Map() };
+      return { access, relatedFieldType, optionsJson, valueByRecordId: new Map(), linkedIdByRecordId: new Map() };
     }
   }
   // Computed lookup targets use the same read-time materializer as record
@@ -2850,7 +2854,7 @@ async function resolveChainValues(
     const pRelId = pcfg?.relationId ?? null;
     const pKey = pcfg?.relatedFieldKey ?? null;
     if (pRelId == null || !pKey) {
-      return { access, relatedFieldType: null, optionsJson: [], valueByRecordId: new Map() };
+      return { access, relatedFieldType: null, optionsJson: [], valueByRecordId: new Map(), linkedIdByRecordId: new Map() };
     }
     const inner = await resolveChainValues(
       relatedEntityId,
@@ -2862,7 +2866,7 @@ async function resolveChainValues(
       depth + 1,
     );
     if (inner.access === "hidden") {
-      return { access: "hidden", relatedFieldType: null, optionsJson: [], valueByRecordId: new Map() };
+      return { access: "hidden", relatedFieldType: null, optionsJson: [], valueByRecordId: new Map(), linkedIdByRecordId: new Map() };
     }
     terminalType = inner.relatedFieldType;
     terminalOptions = inner.optionsJson;
@@ -2874,7 +2878,10 @@ async function resolveChainValues(
       const prv = await db
         .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
         .from(pageRecordValuesTable)
-        .where(and(eq(pageRecordValuesTable.pageId, relatedPageId), inArray(pageRecordValuesTable.recordId, allowedLinkedIds)));
+        .where(and(
+          eq(pageRecordValuesTable.pageId, relatedPageId),
+          idArrayAny(pageRecordValuesTable.recordId, allowedLinkedIds),
+        ));
       for (const r of prv) pageValuesMap.set(r.recordId, (r.valuesJson as Record<string, unknown>) ?? {});
     }
     const pageFields = await db.select().from(pageFieldsTable).where(and(
@@ -2926,12 +2933,14 @@ async function resolveChainValues(
   }
 
   const valueByRecordId = new Map<number, unknown>();
+  const linkedIdByRecordId = new Map<number, number>();
   for (const rid of recordIds) {
     const linkedId = linkMap.get(rid);
     if (linkedId == null || !linkedMap.has(linkedId)) continue; // no link, or linked record not viewable
     valueByRecordId.set(rid, linkedValueMap.get(linkedId) ?? null);
+    linkedIdByRecordId.set(rid, linkedId);
   }
-  return { access, relatedFieldType: terminalType, optionsJson: terminalOptions, valueByRecordId };
+  return { access, relatedFieldType: terminalType, optionsJson: terminalOptions, valueByRecordId, linkedIdByRecordId };
 }
 
 router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Promise<void> => {
@@ -2992,7 +3001,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
   // entity) must not be returned even when their ids are passed in explicitly.
   const baseConds: SQL[] = [
     eq(entityRecordsTable.entityId, entityId),
-    inArray(entityRecordsTable.id, requested),
+    idArrayAny(entityRecordsTable.id, requested),
   ];
   const baseHiddenRowWhere = hiddenRowStatusWhere(effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds);
   if (baseHiddenRowWhere) baseConds.push(baseHiddenRowWhere);
@@ -3149,11 +3158,11 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
         ? await db
             .select({ from: recordLinksTable.sourceRecordId, to: recordLinksTable.targetRecordId })
             .from(recordLinksTable)
-            .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.sourceRecordId, allowedIds)))
+            .where(and(eq(recordLinksTable.relationId, relationId), idArrayAny(recordLinksTable.sourceRecordId, allowedIds)))
         : await db
             .select({ from: recordLinksTable.targetRecordId, to: recordLinksTable.sourceRecordId })
             .from(recordLinksTable)
-            .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.targetRecordId, allowedIds)));
+            .where(and(eq(recordLinksTable.relationId, relationId), idArrayAny(recordLinksTable.targetRecordId, allowedIds)));
     const linkMap = new Map<number, number>();
     for (const l of linkRows) linkMap.set(l.from, l.to);
 
@@ -3171,7 +3180,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
       );
       const linkedConds: SQL[] = [
         eq(entityRecordsTable.entityId, relatedEntityId),
-        inArray(entityRecordsTable.id, linkedIds),
+        idArrayAny(entityRecordsTable.id, linkedIds),
       ];
       if (relHiddenRowWhere) linkedConds.push(relHiddenRowWhere);
       // Related own-scope (relation-aware): restrict the loaded linked records to
@@ -3196,7 +3205,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
             .where(
               and(
                 eq(pageRecordValuesTable.pageId, relatedPageId),
-                inArray(pageRecordValuesTable.recordId, allowedLinkedIds),
+                idArrayAny(pageRecordValuesTable.recordId, allowedLinkedIds),
               ),
             );
           for (const r of prv) pageValuesMap.set(r.recordId, (r.valuesJson as Record<string, unknown>) ?? {});
@@ -3324,7 +3333,7 @@ async function loadCandidateRows(
       const prv = await db
         .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
         .from(pageRecordValuesTable)
-        .where(and(eq(pageRecordValuesTable.pageId, relatedPageId), inArray(pageRecordValuesTable.recordId, ids)));
+        .where(and(eq(pageRecordValuesTable.pageId, relatedPageId), idArrayAny(pageRecordValuesTable.recordId, ids)));
       for (const r of prv) pvMap.set(r.recordId, (r.valuesJson as Record<string, unknown>) ?? {});
     }
     return rows.map((r) => {
@@ -4131,7 +4140,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
   const requested = Array.from(new Set(parsed.data.recordIds));
   const baseConds: SQL[] = [
     eq(entityRecordsTable.entityId, entityId),
-    inArray(entityRecordsTable.id, requested),
+    idArrayAny(entityRecordsTable.id, requested),
   ];
   const baseHiddenRowWhere = hiddenRowStatusWhere(effectiveStatusVisibility(perms, entityId).hiddenRowStatusIds);
   if (baseHiddenRowWhere) baseConds.push(baseHiddenRowWhere);
@@ -4304,11 +4313,11 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
         ? await db
             .select({ from: recordLinksTable.sourceRecordId, to: recordLinksTable.targetRecordId })
             .from(recordLinksTable)
-            .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.sourceRecordId, allowedIds)))
+            .where(and(eq(recordLinksTable.relationId, relationId), idArrayAny(recordLinksTable.sourceRecordId, allowedIds)))
         : await db
             .select({ from: recordLinksTable.targetRecordId, to: recordLinksTable.sourceRecordId })
             .from(recordLinksTable)
-            .where(and(eq(recordLinksTable.relationId, relationId), inArray(recordLinksTable.targetRecordId, allowedIds)));
+            .where(and(eq(recordLinksTable.relationId, relationId), idArrayAny(recordLinksTable.targetRecordId, allowedIds)));
     const linkMap = new Map<number, number>();
     for (const l of linkRows) linkMap.set(l.from, l.to);
 
@@ -4324,7 +4333,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
       );
       const linkedConds: SQL[] = [
         eq(entityRecordsTable.entityId, relatedEntityId),
-        inArray(entityRecordsTable.id, linkedIds),
+        idArrayAny(entityRecordsTable.id, linkedIds),
       ];
       if (relHiddenRowWhere) linkedConds.push(relHiddenRowWhere);
       // Related own-scope (relation-aware) applied in SQL; non-owned linked
@@ -4347,7 +4356,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
             .where(
               and(
                 eq(pageRecordValuesTable.pageId, relatedPageId),
-                inArray(pageRecordValuesTable.recordId, allowedLinkedIds),
+                idArrayAny(pageRecordValuesTable.recordId, allowedLinkedIds),
               ),
             );
           for (const r of prv) pageValuesMap.set(r.recordId, (r.valuesJson as Record<string, unknown>) ?? {});

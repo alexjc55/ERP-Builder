@@ -108,7 +108,7 @@ import {
   materializeVisiblePageFormulas,
   loadFormulaOptions,
 } from "../lib/formula-runtime";
-import { effectiveEntityForPage } from "./page-fields";
+import { effectiveEntityForPage, resolveChainValues } from "./page-fields";
 import {
   applyFormulaGroupResults,
   formulaGroupResultWinners,
@@ -117,6 +117,15 @@ import {
   type FormulaGroupReference,
 } from "../lib/formula-group-result";
 import { isManualStatusEditDisabled } from "../lib/status-manual-edit";
+import {
+  derivedFilterDisplayValue,
+  derivedPageValueMatches,
+  derivedRawValue,
+  derivedWireValue,
+  validateDerivedFilterCondition,
+  validateDerivedOperandType,
+} from "../lib/derived-page-filter";
+import { idArrayAny } from "../lib/sql-id-array";
 import {
   canonicalGdriveFileIdUnion,
   DriveFileTombstonedError,
@@ -146,6 +155,11 @@ const PAGE_LOCAL_FILTERABLE_TYPES = new Set([
   "user",
 ]);
 
+const PAGE_DERIVED_FILTERABLE_TYPES = new Set(["function", "relation", "lookup"]);
+type PageLocalFilterTarget =
+  | { kind: "stored"; effType: string; exprPageId: number; exprKey: string; sourcePageId?: number }
+  | { kind: "derived"; effType: string; pageId: number; field: PageField };
+
 /**
  * Resolve a page-local field into the (pageId, key, type) triple its VALUE
  * actually lives under, enforcing the filter boundary. For ordinary page fields
@@ -155,27 +169,52 @@ const PAGE_LOCAL_FILTERABLE_TYPES = new Set([
  * Returns null when the field must not be filterable for this viewer.
  */
 async function resolvePageLocalFilterTarget(
+  req: Request,
   pf: PageField,
   roleIds: number[],
   perms: Awaited<ReturnType<typeof getPermissions>>,
   entityId: number,
   pageId: number,
-): Promise<{ effType: string; exprPageId: number; exprKey: string } | null> {
+): Promise<PageLocalFilterTarget | null> {
   if (!pf.isFilterable) return null;
   if (mostPermissiveFieldPerm(pf.permissionsJson, roleIds, "view", perms, entityId, pageId) === "hidden") return null;
   if (pf.fieldType === "page_ref") {
     const cfg = (pf.pageRefConfigJson ?? {}) as PageRefFieldConfig;
     const src = await loadPageRefSource(cfg);
-    if (!src || !PAGE_LOCAL_FILTERABLE_TYPES.has(src.fieldType)) return null;
+    if (!src || (!PAGE_LOCAL_FILTERABLE_TYPES.has(src.fieldType) && !PAGE_DERIVED_FILTERABLE_TYPES.has(src.fieldType))) return null;
+    if (cfg.sourcePageId == null || !cfg.sourceFieldKey) return null;
+    const sourcePage = await effectiveEntityForPage(cfg.sourcePageId);
+    if (!sourcePage.found || sourcePage.entityId !== entityId) return null;
+    const sourceRecordPerm = await effectiveRecordPerm(req, perms, entityId, cfg.sourcePageId);
+    if (!perms.superAdmin && sourceRecordPerm?.view !== true) return null;
+    if (
+      src.fieldType === "function" &&
+      (src.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+    ) return null;
     if (!(perms.superAdmin || perms.admin.pages)) {
       if (!perms.pageIds.includes(cfg.sourcePageId!)) return null;
       if (mostPermissiveFieldPerm(src.permissionsJson, roleIds, "view", perms, entityId, cfg.sourcePageId!) === "hidden")
         return null;
     }
-    return { effType: src.fieldType, exprPageId: cfg.sourcePageId!, exprKey: cfg.sourceFieldKey! };
+    return PAGE_LOCAL_FILTERABLE_TYPES.has(src.fieldType)
+      ? {
+          kind: "stored",
+          effType: src.fieldType,
+          exprPageId: cfg.sourcePageId!,
+          exprKey: cfg.sourceFieldKey!,
+          sourcePageId: cfg.sourcePageId!,
+        }
+      : { kind: "derived", effType: src.fieldType, pageId: cfg.sourcePageId!, field: src };
   }
-  if (!PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType)) return null;
-  return { effType: pf.fieldType, exprPageId: pageId, exprKey: pf.fieldKey };
+  if (PAGE_LOCAL_FILTERABLE_TYPES.has(pf.fieldType)) {
+    return { kind: "stored", effType: pf.fieldType, exprPageId: pageId, exprKey: pf.fieldKey };
+  }
+  if (!PAGE_DERIVED_FILTERABLE_TYPES.has(pf.fieldType)) return null;
+  if (
+    pf.fieldType === "function" &&
+    (pf.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+  ) return null;
+  return { kind: "derived", effType: pf.fieldType, pageId, field: pf };
 }
 
 /**
@@ -569,11 +608,292 @@ async function loadPageFormulaResponseContext(
       .from(pageRecordValuesTable)
       .where(and(
         eq(pageRecordValuesTable.pageId, authorizedPageId),
-        inArray(pageRecordValuesTable.recordId, [...recordIds]),
+        idArrayAny(pageRecordValuesTable.recordId, [...recordIds]),
       ));
     for (const row of rows) values.set(row.recordId, (row.values as Record<string, unknown> | null) ?? {});
   }
   return { fields, hidden, values };
+}
+
+/** Page-aware row scope without imposing an active-only archive predicate. */
+async function filterPageScopedCandidateIds(
+  req: Request,
+  perms: Awaited<ReturnType<typeof getPermissions>>,
+  entityId: number,
+  pageId: number,
+  recordIds: readonly number[],
+): Promise<Set<number>> {
+  if (recordIds.length === 0) return new Set();
+  if (await resolvePageFormulaContextId(req, entityId, pageId) == null) {
+    throw new Error("Page source is inaccessible");
+  }
+  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, pageId);
+  const recordPermission = await effectiveRecordPerm(req, perms, entityId, pageId);
+  if (!perms.superAdmin && recordPermission?.view !== true) throw new Error("Page source is inaccessible");
+  const clauses: SQL[] = [
+    eq(entityRecordsTable.entityId, entityId),
+    idArrayAny(entityRecordsTable.id, recordIds),
+  ];
+  if (scope === "own") {
+    const fields = await loadActiveFields(entityId);
+    clauses.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, fields));
+  }
+  const hiddenRows = hiddenRowStatusWhere(recordPermission?.hiddenRowStatusIds ?? []);
+  if (hiddenRows) clauses.push(hiddenRows);
+  const rows = await db.select({ id: entityRecordsTable.id }).from(entityRecordsTable).where(and(...clauses));
+  return new Set(rows.map((row) => row.id));
+}
+
+/**
+ * Resolve read-time page projections for a complete permission-scoped candidate
+ * set. Nothing produced here is written to values_json/page_record_values.
+ */
+async function materializeDerivedPageTargets(options: {
+  req: Request;
+  entityId: number;
+  rows: readonly { id: number; values: unknown }[];
+  entityFields: EntityField[];
+  hiddenEntity: ReadonlySet<string>;
+  targets: readonly Extract<PageLocalFilterTarget, { kind: "derived" }>[];
+  permissions: Awaited<ReturnType<typeof interactiveFormulaPermissions>>;
+  formulaOptions: Awaited<ReturnType<typeof loadFormulaOptions>>;
+}, depth = 0, state: {
+  active: Set<string>;
+  completed: Map<string, Map<number, unknown>>;
+} = { active: new Set(), completed: new Map() }): Promise<Map<string, Map<number, unknown>>> {
+  if (depth > 8) throw new Error("Page projection depth exceeded");
+  const result = new Map<string, Map<number, unknown>>();
+  const visibleEntityFields = options.entityFields.filter((field) => !options.hiddenEntity.has(field.fieldKey));
+  for (const pageId of [...new Set(options.targets.map((target) => target.pageId))]) {
+    const allowedIds = await filterPageScopedCandidateIds(
+      options.req,
+      await getPermissions(options.req),
+      options.entityId,
+      pageId,
+      options.rows.map((row) => row.id),
+    );
+    const pageScopedRows = options.rows.filter((row) => allowedIds.has(row.id));
+    const context = await loadPageFormulaResponseContext(
+      options.req,
+      options.entityId,
+      pageId,
+      pageScopedRows.map((row) => row.id),
+    );
+    const visiblePageFields = context.fields.filter((field) => !context.hidden.has(field.fieldKey));
+    const pageTargets = options.targets.filter((target) => target.pageId === pageId);
+    // A page_ref source may have become inaccessible between metadata resolution
+    // and evaluation. Fail closed instead of treating it as an observable empty.
+    if (pageTargets.some((target) => !visiblePageFields.some((field) => field.id === target.field.id))) {
+      throw new Error("Derived page filter source is inaccessible");
+    }
+    // Match the page read pipeline: authorized page_ref columns are temporary
+    // aliases and must be present before same-page formulas are evaluated.
+    const [perms, roleIds] = await Promise.all([
+      getPermissions(options.req),
+      getUserRoleIds(options.req),
+    ]);
+    const pageFieldByKey = new Map(visiblePageFields.map((field) => [field.fieldKey, field]));
+    const neededPageRefs = new Set<string>();
+    const visitedFormulaFields = new Set<string>();
+    const visitFormulaDependencies = (field: PageField) => {
+      if (field.fieldType !== "function" || visitedFormulaFields.has(field.fieldKey)) return;
+      visitedFormulaFields.add(field.fieldKey);
+      const expression = (field.formulaConfigJson as { expression?: unknown } | null)?.expression;
+      if (typeof expression !== "string") return;
+      for (const match of expression.matchAll(/\{([^{}]+)\}/g)) {
+        let key = match[1].trim();
+        const qualified = new RegExp(`^page:${pageId}\\.(.+)$`).exec(key);
+        if (qualified) key = qualified[1];
+        if (key.includes(":") || key.includes(".")) continue;
+        const dependency = pageFieldByKey.get(key);
+        if (dependency?.fieldType === "page_ref") neededPageRefs.add(key);
+        else if (dependency?.fieldType === "function") visitFormulaDependencies(dependency);
+      }
+    };
+    for (const target of pageTargets) visitFormulaDependencies(target.field);
+    // Formula evaluation is lazy, but linked-source discovery is metadata based.
+    // Keep only this target batch's local formula closure so an unrelated sibling
+    // formula (or page_ref alias pointing at one) cannot enter the recursion
+    // stack and be reported as a cycle. Stored fields remain available as inputs.
+    const evaluationPageFields = visiblePageFields.filter((field) =>
+      field.fieldType !== "function" || visitedFormulaFields.has(field.fieldKey));
+    for (const ref of visiblePageFields.filter(
+      (field) => field.fieldType === "page_ref" && neededPageRefs.has(field.fieldKey),
+    )) {
+      const cfg = (ref.pageRefConfigJson ?? {}) as PageRefFieldConfig;
+      const [source, sourcePage] = await Promise.all([
+        loadPageRefSource(cfg),
+        cfg.sourcePageId == null ? null : effectiveEntityForPage(cfg.sourcePageId),
+      ]);
+      if (!source || cfg.sourcePageId == null || !cfg.sourceFieldKey) continue;
+      if (!sourcePage?.found || sourcePage.entityId !== options.entityId) continue;
+      const sourceRecordPerm = await effectiveRecordPerm(
+        options.req,
+        perms,
+        options.entityId,
+        cfg.sourcePageId,
+      );
+      if (!perms.superAdmin && sourceRecordPerm?.view !== true) continue;
+      const sourceContext = await loadPageFormulaResponseContext(
+        options.req,
+        options.entityId,
+        cfg.sourcePageId,
+        pageScopedRows.map((row) => row.id),
+      );
+      if (
+        !sourceContext.fields.some((field) => field.id === source.id) ||
+        sourceContext.hidden.has(source.fieldKey)
+      ) continue;
+      if (
+        mostPermissiveFieldPerm(
+          source.permissionsJson,
+          roleIds,
+          "view",
+          perms,
+          options.entityId,
+          cfg.sourcePageId,
+        ) === "hidden"
+      ) continue;
+      const sourceAllowed = await filterPageScopedCandidateIds(
+        options.req,
+        perms,
+        options.entityId,
+        cfg.sourcePageId,
+        pageScopedRows.map((row) => row.id),
+      );
+      const sourceRows = pageScopedRows.filter((row) => sourceAllowed.has(row.id));
+      let sourceValues = new Map<number, unknown>();
+      if (PAGE_LOCAL_FILTERABLE_TYPES.has(source.fieldType)) {
+        sourceValues = new Map(sourceRows.map((row) => [
+          row.id,
+          sourceContext.values.get(row.id)?.[cfg.sourceFieldKey!],
+        ]));
+      } else if (PAGE_DERIVED_FILTERABLE_TYPES.has(source.fieldType)) {
+        const nestedTarget: Extract<PageLocalFilterTarget, { kind: "derived" }> = {
+          kind: "derived",
+          effType: source.fieldType,
+          pageId: cfg.sourcePageId,
+          field: source,
+        };
+        const dependencyKey = `${cfg.sourcePageId}:${source.id}:${sourceRows.map((row) => row.id).join(",")}`;
+        const completed = state.completed.get(dependencyKey);
+        if (completed) {
+          sourceValues = completed;
+        } else {
+          if (state.active.has(dependencyKey)) throw new Error("Page projection cycle detected");
+          state.active.add(dependencyKey);
+          try {
+            const nested = await materializeDerivedPageTargets({
+              ...options,
+              rows: sourceRows,
+              targets: [nestedTarget],
+            }, depth + 1, state);
+            const nestedValues = nested.get(`${cfg.sourcePageId}:${source.id}`) ?? new Map();
+            sourceValues = new Map([...nestedValues].map(([id, value]) => [id, derivedRawValue(value)]));
+            state.completed.set(dependencyKey, sourceValues);
+          } finally {
+            state.active.delete(dependencyKey);
+          }
+        }
+      }
+      for (const row of sourceRows) {
+        const value = sourceValues.get(row.id);
+        if (value !== undefined) {
+          const values = context.values.get(row.id) ?? {};
+          values[ref.fieldKey] = value;
+          context.values.set(row.id, values);
+        }
+      }
+    }
+    const baseRows = pageScopedRows.map((row) => ({
+      id: row.id,
+      values: projectViewerFormulaValues(
+        ((row.values ?? {}) as Record<string, unknown>),
+        visibleEntityFields,
+      ),
+    }));
+    const linked = await mergeLinkedFormulaInputs({
+      entityId: options.entityId,
+      pageId,
+      rows: baseRows,
+      fields: [...visibleEntityFields, ...evaluationPageFields],
+      permissions: options.permissions,
+    });
+    const pageValues = materializeVisiblePageFormulas({
+      entityId: options.entityId,
+      pageId,
+      rows: baseRows.map((row) => ({
+        id: row.id,
+        entityValues: row.values,
+        pageValues: context.values.get(row.id) ?? {},
+      })),
+      entityFields: visibleEntityFields,
+      pageFields: evaluationPageFields,
+      hiddenEntity: options.hiddenEntity,
+      hiddenPage: context.hidden,
+      linkedInputs: linked,
+      formulaOptions: options.formulaOptions,
+    });
+    const linkedIdentityValues = new Map<number, Map<number, unknown>>();
+    const linkedTerminalTypes = new Map<number, string | null>();
+    for (const target of pageTargets.filter((item) =>
+      item.effType === "relation" || item.effType === "lookup")) {
+      const config = target.field.relationConfigJson as {
+        relationId?: unknown;
+        relatedPageId?: unknown;
+        relatedFieldKey?: unknown;
+      } | null;
+      const relationId = Number(config?.relationId);
+      const relatedFieldKey = typeof config?.relatedFieldKey === "string" ? config.relatedFieldKey : "";
+      const relatedPageId = typeof config?.relatedPageId === "number" ? config.relatedPageId : undefined;
+      if (!Number.isInteger(relationId) || relationId <= 0 || !relatedFieldKey) {
+        throw new Error("Invalid relation filter configuration");
+      }
+      const [perms, roleIds] = await Promise.all([
+        getPermissions(options.req),
+        getUserRoleIds(options.req),
+      ]);
+      const projection = await resolveChainValues(
+        options.entityId,
+        pageScopedRows.map((row) => row.id),
+        relationId,
+        relatedFieldKey,
+        relatedPageId ?? null,
+        { perms, roleIds, userId: options.req.user!.userId, req: options.req },
+        0,
+      );
+      if (projection.access === "hidden") throw new Error("Relation filter source is inaccessible");
+      linkedTerminalTypes.set(target.field.id, projection.relatedFieldType);
+      const values = new Map<number, unknown>();
+      for (const [baseId, linkedId] of projection.linkedIdByRecordId) {
+        const raw = projection.valueByRecordId.get(baseId);
+        values.set(baseId, {
+          raw,
+          display: raw == null ? `#${linkedId}` : String(raw),
+          linkedId,
+          fieldType: projection.relatedFieldType,
+        });
+      }
+      linkedIdentityValues.set(target.field.id, values);
+    }
+    for (const target of pageTargets) {
+      const values = new Map<number, unknown>();
+      for (const row of pageScopedRows) {
+        values.set(
+          row.id,
+          target.effType === "function"
+            ? {
+                raw: pageValues.get(row.id)?.[target.field.fieldKey] ?? null,
+                fieldType: target.effType,
+              }
+            : linkedIdentityValues.get(target.field.id)?.get(row.id)
+              ?? { raw: null, fieldType: linkedTerminalTypes.get(target.field.id) ?? target.effType },
+        );
+      }
+      result.set(`${target.pageId}:${target.field.id}`, values);
+    }
+  }
+  return result;
 }
 
 /** Remove hidden field keys from a record's valuesJson before returning it. */
@@ -1241,13 +1561,18 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   }
 
   const perms = await getPermissions(req);
-  const formulaPermissions = await interactiveFormulaPermissions(req, entityId, formulaPageId);
   const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, body.data.pageId);
   const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
 
   // Guests are strictly read-only: skip the archival write sweep for guest sessions.
   if (!req.user?.guest) await runAutoArchiveSweep(entityId);
   const archived = (body.data.archived ?? "active") as ArchiveFilterValue;
+  const formulaPermissions = await interactiveFormulaPermissions(
+    req,
+    entityId,
+    formulaPageId,
+    archived !== "active",
+  );
 
   const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
   if (built.where) clauses.push(built.where);
@@ -1267,6 +1592,10 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   // from which rows appear. AND-combined with the rest of the query. Requires
   // pageId (the page context that owns these fields).
   const pageLocalFilters = (body.data.pageLocalFilters ?? []) as FilterCondition[];
+  const derivedPageLocalFilters: {
+    condition: FilterCondition;
+    target: Extract<PageLocalFilterTarget, { kind: "derived" }>;
+  }[] = [];
   if (pageLocalFilters.length > 0) {
     const plPageId = body.data.pageId;
     if (plPageId == null) {
@@ -1281,10 +1610,34 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     const plByKey = new Map(plRows.map((pf) => [pf.fieldKey, pf] as const));
     for (const cond of pageLocalFilters) {
       const pf = plByKey.get(cond.field);
-      const target = pf ? await resolvePageLocalFilterTarget(pf, roleIds, perms, entityId, plPageId) : null;
+      const target = pf ? await resolvePageLocalFilterTarget(req, pf, roleIds, perms, entityId, plPageId) : null;
       if (!target) {
         res.status(400).json({ error: `Unknown or non-filterable page field "${cond.field}"` });
         return;
+      }
+      if (target.kind === "derived") {
+        const validationError = validateDerivedFilterCondition(cond);
+        if (validationError) {
+          res.status(400).json({ error: `Field "${cond.field}" ${validationError}` });
+          return;
+        }
+        derivedPageLocalFilters.push({ condition: cond, target });
+        continue;
+      }
+      if (target.sourcePageId != null) {
+        const boundaryRows = await db
+          .select({ id: entityRecordsTable.id })
+          .from(entityRecordsTable)
+          .where(combineAuthoritativeAndViewerWhere(selectedView.hardWhere, clauses)!);
+        const allowed = await filterPageScopedCandidateIds(
+          req, perms, entityId, target.sourcePageId, boundaryRows.map((row) => row.id),
+        );
+        const allowedIds = boundaryRows.map((row) => row.id).filter((id) => allowed.has(id));
+        clauses.push(
+          allowedIds.length
+            ? idArrayAny(entityRecordsTable.id, allowedIds)
+            : sql`false`,
+        );
       }
       const r = buildPageLocalCondition({ ...cond, field: target.exprKey }, target.effType, target.exprPageId);
       if ("error" in r) {
@@ -1370,6 +1723,61 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       return;
     }
     for (const c of cf.clauses) clauses.push(c);
+  }
+
+  // SQL cannot address read-time formula/relation/lookup projections. Resolve
+  // them over the complete permission-scoped candidate set first, then turn the
+  // matches into an authoritative id predicate. Count, pagination, totals and
+  // grouping below all consume this narrowed predicate.
+  if (derivedPageLocalFilters.length > 0) {
+    const candidateWhere = combineAuthoritativeAndViewerWhere(selectedView.hardWhere, clauses)!;
+    const candidates = await db
+      .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
+      .from(entityRecordsTable)
+      .where(candidateWhere);
+    let projected: Map<string, Map<number, unknown>>;
+    try {
+      projected = await materializeDerivedPageTargets({
+        req,
+        entityId,
+        rows: candidates,
+        entityFields: fields,
+        hiddenEntity: hidden,
+        targets: derivedPageLocalFilters.map(({ target }) => target),
+        permissions: formulaPermissions,
+        formulaOptions,
+      });
+    } catch (error) {
+      res.status(400).json({
+        error: error instanceof Error ? error.message : "Derived page filter source is inaccessible",
+      });
+      return;
+    }
+    for (const { condition, target } of derivedPageLocalFilters) {
+      const validationError = validateDerivedOperandType(
+        condition,
+        projected.get(`${target.pageId}:${target.field.id}`)?.values() ?? [],
+      );
+      if (validationError) {
+        res.status(400).json({ error: `Field "${condition.field}" ${validationError}` });
+        return;
+      }
+    }
+    const matchingIds = candidates
+      .filter((row) => derivedPageLocalFilters.every(({ condition, target }) => {
+        const values = projected.get(`${target.pageId}:${target.field.id}`);
+        return values?.has(row.id) === true && derivedPageValueMatches(
+          values.get(row.id),
+          condition,
+          target.effType,
+        );
+      }))
+      .map((row) => row.id);
+    clauses.push(
+      matchingIds.length > 0
+        ? idArrayAny(entityRecordsTable.id, matchingIds)
+        : sql`false`,
+    );
   }
 
   // ---- Mirror-page grouping (pages.groupByFieldKey) -------------------------
@@ -1647,7 +2055,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         .from(pageRecordValuesTable)
         .where(and(
           eq(pageRecordValuesTable.pageId, formulaPageId),
-          inArray(pageRecordValuesTable.recordId, formulaGroupRows.map((row) => row.id)),
+          idArrayAny(pageRecordValuesTable.recordId, formulaGroupRows.map((row) => row.id)),
         ));
       for (const row of pageRows) {
         formulaGroupPageValues.set(
@@ -1771,7 +2179,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       const keyed = await db
         .select({ id: entityRecordsTable.id, k: sql<string | null>`${rowGroupKeyExpr}` })
         .from(entityRecordsTable)
-        .where(inArray(entityRecordsTable.id, ids));
+        .where(idArrayAny(entityRecordsTable.id, ids));
       for (const row of keyed) {
         const raw = (row as { k: unknown }).k;
         rowGroups[String(row.id)] = raw == null || raw === "" ? null : String(raw);
@@ -1839,7 +2247,10 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       const rows = await db
         .select({ recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson })
         .from(pageRecordValuesTable)
-        .where(and(eq(pageRecordValuesTable.pageId, formulaPageId), inArray(pageRecordValuesTable.recordId, allRows.map((row) => row.id))));
+        .where(and(
+          eq(pageRecordValuesTable.pageId, formulaPageId),
+          idArrayAny(pageRecordValuesTable.recordId, allRows.map((row) => row.id)),
+        ));
           for (const row of rows) totalCurrentPageValues.set(
             row.recordId,
             projectViewerFormulaValues((row.values ?? {}) as Record<string, unknown>, visibleDataPageFields),
@@ -1999,7 +2410,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           ? await db
               .select({ recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson })
               .from(pageRecordValuesTable)
-              .where(and(eq(pageRecordValuesTable.pageId, totalsPageId), inArray(pageRecordValuesTable.recordId, ids)))
+              .where(and(eq(pageRecordValuesTable.pageId, totalsPageId), idArrayAny(pageRecordValuesTable.recordId, ids)))
           : [];
       const pvByRecord = new Map<number, Record<string, unknown>>();
       for (const r of pvRows) pvByRecord.set(
@@ -2016,7 +2427,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           const rows = await db
             .select({ recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson })
             .from(pageRecordValuesTable)
-            .where(and(eq(pageRecordValuesTable.pageId, spid), inArray(pageRecordValuesTable.recordId, ids)));
+            .where(and(eq(pageRecordValuesTable.pageId, spid), idArrayAny(pageRecordValuesTable.recordId, ids)));
           const m = new Map<number, Record<string, unknown>>();
           for (const r of rows) m.set(r.recordId, (r.values as Record<string, unknown> | null) ?? {});
           srcPvByPage.set(spid, m);
@@ -2777,7 +3188,6 @@ router.post(
     }
 
     const perms = await getPermissions(req);
-    const pivotFormulaPermissions = await interactiveFormulaPermissions(req, entityId, formulaPageId);
 
     // Pivot role visibility. The request's viewId is UNTRUSTED, so we never use its
     // mere presence as the branch condition (that would let a caller dodge the
@@ -2801,6 +3211,12 @@ router.post(
 
     if (!req.user?.guest) await runAutoArchiveSweep(entityId);
     const archived = (body.data.archived ?? "active") as ArchiveFilterValue;
+    const pivotFormulaPermissions = await interactiveFormulaPermissions(
+      req,
+      entityId,
+      formulaPageId,
+      archived !== "active",
+    );
 
     const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
     if (built.where) clauses.push(built.where);
@@ -2812,6 +3228,10 @@ router.post(
     if (queryHiddenRowWhere) clauses.push(queryHiddenRowWhere);
 
     const pageLocalFilters = (body.data.pageLocalFilters ?? []) as FilterCondition[];
+    const derivedPivotPageFilters: {
+      condition: FilterCondition;
+      target: Extract<PageLocalFilterTarget, { kind: "derived" }>;
+    }[] = [];
     if (pageLocalFilters.length > 0) {
       if (formulaPageId == null) {
         res.status(400).json({ error: "pageLocalFilters require pageId" });
@@ -2820,10 +3240,32 @@ router.post(
       const plFilterByKey = new Map(visiblePl.map((pf) => [pf.fieldKey, pf] as const));
       for (const cond of pageLocalFilters) {
         const pf = plFilterByKey.get(cond.field);
-        const target = pf ? await resolvePageLocalFilterTarget(pf, roleIds, plPerms, entityId, formulaPageId) : null;
+        const target = pf ? await resolvePageLocalFilterTarget(req, pf, roleIds, plPerms, entityId, formulaPageId) : null;
         if (!target) {
           res.status(400).json({ error: `Unknown or non-filterable page field "${cond.field}"` });
           return;
+        }
+        if (target.kind === "derived") {
+          const validationError = validateDerivedFilterCondition(cond);
+          if (validationError) {
+            res.status(400).json({ error: `Field "${cond.field}" ${validationError}` });
+            return;
+          }
+          derivedPivotPageFilters.push({ condition: cond, target });
+          continue;
+        }
+        if (target.sourcePageId != null) {
+          const boundaryRows = await db
+            .select({ id: entityRecordsTable.id })
+            .from(entityRecordsTable)
+            .where(combineAuthoritativeAndViewerWhere(selectedView.hardWhere, clauses)!);
+          const allowed = await filterPageScopedCandidateIds(
+            req, perms, entityId, target.sourcePageId, boundaryRows.map((row) => row.id),
+          );
+          const allowedIds = boundaryRows.map((row) => row.id).filter((id) => allowed.has(id));
+          clauses.push(allowedIds.length
+            ? idArrayAny(entityRecordsTable.id, allowedIds)
+            : sql`false`);
         }
         const r = buildPageLocalCondition({ ...cond, field: target.exprKey }, target.effType, target.exprPageId);
         if ("error" in r) {
@@ -2857,6 +3299,55 @@ router.post(
       for (const c of cf.clauses) clauses.push(c);
     }
 
+    if (derivedPivotPageFilters.length > 0) {
+      const candidateWhere = combineAuthoritativeAndViewerWhere(selectedView.hardWhere, clauses)!;
+      const candidates = await db
+        .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
+        .from(entityRecordsTable)
+        .where(candidateWhere);
+      try {
+        const projected = await materializeDerivedPageTargets({
+          req,
+          entityId,
+          rows: candidates,
+          entityFields: fields,
+          hiddenEntity: hidden,
+          targets: derivedPivotPageFilters.map(({ target }) => target),
+          permissions: pivotFormulaPermissions,
+          formulaOptions,
+        });
+        for (const { condition, target } of derivedPivotPageFilters) {
+          const validationError = validateDerivedOperandType(
+            condition,
+            projected.get(`${target.pageId}:${target.field.id}`)?.values() ?? [],
+          );
+          if (validationError) {
+            res.status(400).json({ error: `Field "${condition.field}" ${validationError}` });
+            return;
+          }
+        }
+        const matchingIds = candidates.filter((row) =>
+          derivedPivotPageFilters.every(({ condition, target }) => {
+            const values = projected.get(`${target.pageId}:${target.field.id}`);
+            return values?.has(row.id) === true && derivedPageValueMatches(
+              values.get(row.id),
+              condition,
+              target.effType,
+            );
+          })).map((row) => row.id);
+        clauses.push(
+          matchingIds.length > 0
+            ? idArrayAny(entityRecordsTable.id, matchingIds)
+            : sql`false`,
+        );
+      } catch (error) {
+        res.status(400).json({
+          error: error instanceof Error ? error.message : "Derived page filter source is inaccessible",
+        });
+        return;
+      }
+    }
+
     const where = combineAuthoritativeAndViewerWhere(selectedView.hardWhere, clauses)!;
     // Pivot formula measures are evaluated in JS. Supply their linked inputs in
     // one batch; without this an otherwise declared `{entity:…}`/linked token
@@ -2872,7 +3363,6 @@ router.post(
       fields: [...visibleFields, ...visiblePl],
       permissions: pivotFormulaPermissions,
     });
-
     const outcome = await computePivot({
       entityId,
       pivot,
@@ -3115,17 +3605,12 @@ router.post(
       .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.isActive, true)));
     const targetPf = plRows.find((pf) => pf.fieldKey === body.data.field);
     const resolved = targetPf
-      ? await resolvePageLocalFilterTarget(targetPf, roleIds, fvPerms, entityId, pageId)
+      ? await resolvePageLocalFilterTarget(req, targetPf, roleIds, fvPerms, entityId, pageId)
       : null;
     if (!resolved) {
       res.status(400).json({ error: `Field is not a filterable page field: ${body.data.field}` });
       return;
     }
-    // For page_ref the VALUE lives on the source page under the source key —
-    // all value reads below go through the resolved (pageId, key) pair.
-    const valPageId = resolved.exprPageId;
-    const valKey = resolved.exprKey;
-
     const fields = await loadActiveFields(entityId);
     const selectedView = await resolveAuthoritativeView({
       req,
@@ -3143,9 +3628,6 @@ router.post(
     const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
     const archived = (body.data.archived ?? "active") as ArchiveFilterValue;
 
-    // Value lives in page_record_values keyed by (pageId, recordId). INNER JOIN so
-    // only records that actually carry a page value contribute (= "in the table").
-    const valueExpr = sql<string | null>`(${pageRecordValuesTable.valuesJson} ->> ${valKey})`;
     const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
     const archWhere = archivedWhere(archived);
     if (archWhere) clauses.push(archWhere);
@@ -3154,9 +3636,79 @@ router.post(
     if (pfvHiddenRowWhere) clauses.push(pfvHiddenRowWhere);
     // Boundary-only clauses (no value predicates) — reused for the "(empty)" probe below.
     const pfBoundaryClauses = [...clauses];
+    const pfValueSearch = (body.data.valueSearch ?? "").trim();
+
+    if (resolved.kind === "stored" && resolved.sourcePageId != null) {
+      const boundaryRows = await db
+        .select({ id: entityRecordsTable.id })
+        .from(entityRecordsTable)
+        .where(combineAuthoritativeAndViewerWhere(selectedView.hardWhere, pfBoundaryClauses)!);
+      const allowed = await filterPageScopedCandidateIds(
+        req, perms, entityId, resolved.sourcePageId, boundaryRows.map((row) => row.id),
+      );
+      const allowedIds = boundaryRows.map((row) => row.id).filter((id) => allowed.has(id));
+      const sourceRowBoundary = allowedIds.length
+        ? idArrayAny(entityRecordsTable.id, allowedIds)
+        : sql`false`;
+      clauses.push(sourceRowBoundary);
+      pfBoundaryClauses.push(sourceRowBoundary);
+    }
+
+    if (resolved.kind === "derived") {
+      const candidateWhere = combineAuthoritativeAndViewerWhere(selectedView.hardWhere, pfBoundaryClauses)!;
+      const candidates = await db
+        .select({ id: entityRecordsTable.id, values: entityRecordsTable.valuesJson })
+        .from(entityRecordsTable)
+        .where(candidateWhere);
+      const { hidden: hiddenEntity } = await fieldAccessContext(req, entityId, fields, pageId);
+      try {
+        const projected = await materializeDerivedPageTargets({
+          req,
+          entityId,
+          rows: candidates,
+          entityFields: fields,
+          hiddenEntity,
+          targets: [resolved],
+          permissions: await interactiveFormulaPermissions(req, entityId, pageId, archived !== "active"),
+          formulaOptions: await loadFormulaOptions(),
+        });
+        const map = projected.get(`${resolved.pageId}:${resolved.field.id}`) ?? new Map<number, unknown>();
+        const distinct = new Set<string>();
+        let hasEmpty = false;
+        for (const row of candidates) {
+          if (!map.has(row.id)) continue;
+          const value = map.get(row.id);
+          const raw = derivedRawValue(value);
+          if (raw == null || raw === "") {
+            hasEmpty = true;
+          } else {
+            const text = derivedWireValue(value);
+            if (
+              !pfValueSearch ||
+              derivedFilterDisplayValue(text).toLocaleLowerCase().includes(pfValueSearch.toLocaleLowerCase())
+            ) {
+              distinct.add(text);
+            }
+          }
+        }
+        const values = [...distinct].sort((a, b) => a.localeCompare(b)).slice(0, 500);
+        if (!pfValueSearch && hasEmpty) values.unshift(EMPTY_FILTER_VALUE);
+        res.json({ values });
+      } catch (error) {
+        res.status(400).json({
+          error: error instanceof Error ? error.message : "Derived page filter source is inaccessible",
+        });
+      }
+      return;
+    }
+
+    // For a scalar page_ref the VALUE lives on the source page under its source
+    // key; all SQL reads below use that authorized pair.
+    const valPageId = resolved.exprPageId;
+    const valKey = resolved.exprKey;
+    const valueExpr = sql<string | null>`(${pageRecordValuesTable.valuesJson} ->> ${valKey})`;
     clauses.push(sql`${valueExpr} IS NOT NULL AND ${valueExpr} <> ''`);
     // Same server-side picker search as entity filter-values (pre-limit).
-    const pfValueSearch = (body.data.valueSearch ?? "").trim();
     if (pfValueSearch) clauses.push(sql`${valueExpr} ILIKE ${"%" + pfValueSearch + "%"}`);
     const where = combineAuthoritativeAndViewerWhere(selectedView.hardWhere, clauses)!;
 

@@ -288,11 +288,38 @@ const PAGE_LOCAL_FILTERABLE_TYPES = new Set<string>([
   "date",
   "datetime",
   "user",
+  "function",
+  "relation",
+  "lookup",
 ]);
 // Stored scalar types for which page setup can hide rows with no value. Entity
 // fields use the same set so the client never offers computed/relation/file
 // fields whose "empty" semantics are ambiguous.
-const EMPTY_EXCLUDABLE_FIELD_TYPES = PAGE_LOCAL_FILTERABLE_TYPES;
+// Default "exclude empty" remains a stored-scalar-only feature. Derived values
+// are intentionally restricted to the live filter channel.
+const EMPTY_EXCLUDABLE_FIELD_TYPES = new Set(
+  [...PAGE_LOCAL_FILTERABLE_TYPES].filter(
+    (type) => type !== "function" && type !== "relation" && type !== "lookup",
+  ),
+);
+const LINKED_FILTER_VALUE_PREFIX = "__linked__:";
+
+function linkedFilterValueLabel(value: string): string | null {
+  if (!value.startsWith(LINKED_FILTER_VALUE_PREFIX)) return null;
+  const separator = value.indexOf(":", LINKED_FILTER_VALUE_PREFIX.length);
+  if (separator < 0) return null;
+  try {
+    return decodeURIComponent(value.slice(separator + 1));
+  } catch {
+    return value.slice(separator + 1);
+  }
+}
+
+function linkedFilterValueIdentity(value: string): string {
+  if (!value.startsWith(LINKED_FILTER_VALUE_PREFIX)) return value;
+  const separator = value.indexOf(":", LINKED_FILTER_VALUE_PREFIX.length);
+  return separator < 0 ? value : value.slice(0, separator);
+}
 
 function extractError(err: unknown): string | undefined {
   if (err && typeof err === "object") {
@@ -891,6 +918,8 @@ function FieldFilterPopover({
 }) {
   const ft = effectiveType ?? field.fieldType;
   const labelFor = (v: string): string => {
+    const linkedLabel = linkedFilterValueLabel(v);
+    if (linkedLabel != null) return linkedLabel;
     if (ft === "user") return userNames.get(Number(v)) ?? `#${v}`;
     if (ft === "boolean") return v === "true" ? t("common.yes", "Да") : t("common.no", "Нет");
     if (ft === "select") return getOptionLabel(field.optionsJson, v, ml);
@@ -904,6 +933,7 @@ function FieldFilterPopover({
       onChange={onChange}
       getOptions={getOptions}
       labelFor={labelFor}
+      identityFor={linkedFilterValueIdentity}
       // Server-side search matches the RAW stored value, so it only helps when
       // the label IS the value (text/number/date/…). user/select/boolean render
       // labels that differ from the stored value — those search client-side.
@@ -2359,6 +2389,10 @@ export function EntityRecords({
                 PAGE_LOCAL_FILTERABLE_TYPES.has(
                   String((pf.pageRefConfigJson as { resolvedFieldType?: string } | undefined)?.resolvedFieldType ?? ""),
                 ))) &&
+            !(
+              pf.fieldType === "function" &&
+              (pf.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null | undefined)?.groupResult?.enabled === true
+            ) &&
             (userRoleIds.length === 0 ||
               userRoleIds.some((rid) => pf.permissionsJson?.[String(rid)] !== "hidden")),
         )

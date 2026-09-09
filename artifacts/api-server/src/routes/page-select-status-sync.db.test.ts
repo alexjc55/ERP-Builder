@@ -15,6 +15,8 @@ import {
   pageFieldsTable,
   pageRecordValuesTable,
   pagesTable,
+  recordLinksTable,
+  relationsTable,
   rolesTable,
   systemEventsTable,
   usersTable,
@@ -52,6 +54,9 @@ function permissions(
         ...(hiddenStatusIds.length ? { hiddenStatusIds } : {}),
         ...(hiddenRowStatusIds.length ? { hiddenRowStatusIds } : {}),
       },
+      ...(ids.relatedEntity
+        ? { [String(ids.relatedEntity)]: { view: true, create: false, update: false, delete: false } }
+        : {}),
     },
   };
 }
@@ -197,6 +202,11 @@ async function setup() {
   const [entity] = await db.insert(entitiesTable).values({ entityKey: runId, nameJson: { en: runId } })
     .returning({ id: entitiesTable.id });
   ids.entity = entity!.id;
+  const [relatedEntity] = await db.insert(entitiesTable).values({
+    entityKey: `${runId}-related`,
+    nameJson: { en: `${runId} related` },
+  }).returning({ id: entitiesTable.id });
+  ids.relatedEntity = relatedEntity!.id;
   const pages = await db.insert(pagesTable).values([
     { nameJson: { en: `${runId} target` }, mirrorEntityId: ids.entity },
     { nameJson: { en: `${runId} source` }, mirrorEntityId: ids.entity },
@@ -218,6 +228,12 @@ async function setup() {
     { entityId: ids.entity, fieldKey: "attachment", nameJson: { en: "Attachment" }, fieldType: "file" },
     { entityId: ids.entity, fieldKey: "workflow_note", nameJson: { en: "Workflow note" }, fieldType: "text" },
   ]);
+  await db.insert(entityFieldsTable).values({
+    entityId: ids.relatedEntity,
+    fieldKey: "name",
+    nameJson: { en: "Name" },
+    fieldType: "text",
+  });
   const statuses = await db.insert(entityStatusesTable).values([
     { entityId: ids.entity, statusKey: "base", nameJson: { en: "Base" }, isDefault: true, sortOrder: 0 },
     { entityId: ids.entity, statusKey: "done", nameJson: { en: "Done" }, sortOrder: 1 },
@@ -278,6 +294,15 @@ async function setup() {
       nameJson: { en: "Formula ref" },
       fieldType: "page_ref",
       pageRefConfigJson: { sourcePageId: ids.sourcePage, sourceFieldKey: "formula_name" },
+      isFilterable: true,
+      showInTable: false,
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "independent_cycle_ref",
+      nameJson: { en: "Independent cycle ref" },
+      fieldType: "page_ref",
+      pageRefConfigJson: { sourcePageId: ids.sourcePage, sourceFieldKey: "cycle_source" },
     },
     {
       pageId: ids.targetPage,
@@ -285,6 +310,33 @@ async function setup() {
       nameJson: { en: "Same page formula" },
       fieldType: "function",
       formulaConfigJson: { expression: "{stage}" },
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "filter_formula",
+      nameJson: { en: "Filter formula" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{entity:${ids.entity}.name}` },
+      isFilterable: true,
+      showInTable: false,
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "disabled_filter_formula",
+      nameJson: { en: "Disabled filter formula" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{entity:${ids.entity}.name}` },
+      isFilterable: false,
+      showInTable: false,
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "customer",
+      nameJson: { en: "Customer" },
+      fieldType: "relation",
+      relationConfigJson: { relationId: 0, relatedFieldKey: "name" },
+      isFilterable: true,
+      showInTable: false,
     },
     {
       pageId: ids.targetPage,
@@ -327,6 +379,29 @@ async function setup() {
     { entityId: ids.entity, valuesJson: { name: "Ready", owner: ids.user, attachment: { kind: "server", path: `/local/${runId}-2.txt`, name: "old2.txt" } }, statusId: ids.base },
   ]).returning({ id: entityRecordsTable.id });
   ids.one = records[0]!.id; ids.two = records[1]!.id;
+  const [relatedRecord] = await db.insert(entityRecordsTable).values({
+    entityId: ids.relatedEntity,
+    valuesJson: { name: "לקוח Договор" },
+  }).returning({ id: entityRecordsTable.id });
+  ids.relatedRecord = relatedRecord!.id;
+  const [relation] = await db.insert(relationsTable).values({
+    sourceEntityId: ids.entity,
+    targetEntityId: ids.relatedEntity,
+    relationKey: `${runId}-customer`,
+    relationType: "many_to_one",
+    nameJson: { en: "Customer" },
+    inverseNameJson: { en: "Records" },
+  }).returning({ id: relationsTable.id });
+  ids.relation = relation!.id;
+  await db.update(pageFieldsTable)
+    .set({ relationConfigJson: { relationId: ids.relation, relatedFieldKey: "name" } })
+    .where(and(eq(pageFieldsTable.pageId, ids.targetPage), eq(pageFieldsTable.fieldKey, "customer")));
+  await db.insert(recordLinksTable).values({
+    relationId: ids.relation,
+    relationType: "many_to_one",
+    sourceRecordId: ids.one,
+    targetRecordId: ids.relatedRecord,
+  });
 }
 
 async function cleanup() {
@@ -335,6 +410,7 @@ async function cleanup() {
     await db.delete(auditLogTable).where(eq(auditLogTable.entityId, ids.entity));
     await db.delete(deletedFilesTable).where(eq(deletedFilesTable.entityId, ids.entity));
   }
+  if (ids.relatedEntity) await db.delete(entitiesTable).where(eq(entitiesTable.id, ids.relatedEntity));
   if (ids.targetPage || ids.sourcePage) await db.delete(pagesTable).where(inArray(pagesTable.id, [ids.targetPage, ids.sourcePage]));
   if (ids.entity) await db.delete(entitiesTable).where(eq(entitiesTable.id, ids.entity));
   if (ids.user) await db.delete(usersTable).where(eq(usersTable.id, ids.user));
@@ -345,6 +421,201 @@ after(async () => { await cleanup(); });
 
 test("page-local select mappings synchronize entity status atomically", async (t) => {
   await setup();
+  await t.test("computed page filters require opt-in and narrow total before pagination while hidden from table", async () => {
+    await reset();
+    await db.update(entityRecordsTable)
+      .set({ valuesJson: { name: "Other", owner: ids.user } })
+      .where(eq(entityRecordsTable.id, ids.one));
+    await db.update(entityRecordsTable)
+      .set({ valuesJson: { name: "Договор ירושלים", owner: ids.user } })
+      .where(eq(entityRecordsTable.id, ids.two));
+
+    let response = await request(
+      `/entities/${ids.entity}/records/query`,
+      {
+        pageId: ids.targetPage,
+        page: 1,
+        pageSize: 1,
+        pageLocalFilters: [{ field: "disabled_filter_formula", operator: "in", value: ["Договор ירושלים"] }],
+      },
+      "POST",
+    );
+    assert.equal(response.status, 400);
+
+    response = await request(
+      `/entities/${ids.entity}/records/query`,
+      {
+        pageId: ids.targetPage,
+        page: 1,
+        pageSize: 1,
+        pageLocalFilters: [{ field: "filter_formula", operator: "in", value: ["Договор ירושלים"] }],
+      },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.total, 1);
+    assert.deepEqual((response.body.data as { id: number }[]).map((row) => row.id), [ids.two]);
+
+    response = await request(
+      `/entities/${ids.entity}/records/page-filter-values`,
+      {
+        pageId: ids.targetPage,
+        field: "filter_formula",
+        valueSearch: "ירושלים",
+      },
+      "POST",
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body.values, ["Договор ירושלים"]);
+
+    response = await request(
+      `/entities/${ids.entity}/records/query`,
+      {
+        pageId: ids.targetPage,
+        page: 1,
+        pageSize: 10,
+        filters: [{ field: "name", operator: "eq", value: "missing" }],
+        pageLocalFilters: [{ field: "customer", operator: "is_empty" }],
+      },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.total, 0);
+
+    for (const malformed of [
+      { field: "filter_formula", operator: "gt" },
+      { field: "filter_formula", operator: "in", value: "x" },
+      { field: "filter_formula", operator: "between", value: ["x"] },
+    ]) {
+      response = await request(
+        `/entities/${ids.entity}/records/query`,
+        { pageId: ids.targetPage, page: 1, pageSize: 10, pageLocalFilters: [malformed] },
+        "POST",
+      );
+      assert.equal(response.status, 400);
+    }
+
+    await db.update(entityRecordsTable).set({ archivedAt: new Date() }).where(eq(entityRecordsTable.id, ids.two));
+    response = await request(
+      `/entities/${ids.entity}/records/query`,
+      {
+        pageId: ids.targetPage,
+        page: 1,
+        pageSize: 10,
+        archived: "all",
+        pageLocalFilters: [{ field: "filter_formula", operator: "in", value: ["Договор ירושלים"] }],
+      },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.total, 1);
+    await reset();
+  });
+  await t.test("page_ref filter reapplies source field boundary", async () => {
+    await reset();
+    let response = await request(
+      `/entities/${ids.entity}/records/query`,
+      {
+        pageId: ids.targetPage,
+        page: 1,
+        pageSize: 10,
+        pageLocalFilters: [{ field: "formula_ref", operator: "in", value: ["Ready"] }],
+      },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.total, 2);
+
+    await db.update(pageFieldsTable)
+      .set({ permissionsJson: { [String(ids.role)]: "hidden" } })
+      .where(and(eq(pageFieldsTable.pageId, ids.sourcePage), eq(pageFieldsTable.fieldKey, "formula_name")));
+    response = await request(
+      `/entities/${ids.entity}/records/query`,
+      {
+        pageId: ids.targetPage,
+        page: 1,
+        pageSize: 10,
+        pageLocalFilters: [{ field: "formula_ref", operator: "in", value: ["Ready"] }],
+      },
+      "POST",
+    );
+    assert.equal(response.status, 400);
+    await db.update(pageFieldsTable)
+      .set({ permissionsJson: {} })
+      .where(and(eq(pageFieldsTable.pageId, ids.sourcePage), eq(pageFieldsTable.fieldKey, "formula_name")));
+
+    await db.update(rolesTable)
+      .set({ permissionsJson: permissions([ids.targetPage]) })
+      .where(eq(rolesTable.id, ids.role));
+    response = await request(
+      `/entities/${ids.entity}/records/query`,
+      {
+        pageId: ids.targetPage,
+        page: 1,
+        pageSize: 10,
+        pageLocalFilters: [{ field: "formula_ref", operator: "in", value: ["Ready"] }],
+      },
+      "POST",
+    );
+    assert.equal(response.status, 400);
+
+    const sourceOwn = permissions([ids.targetPage, ids.sourcePage]);
+    sourceOwn.records[mirrorPermKey(ids.sourcePage)] = {
+      view: true, create: false, update: false, delete: false, scope: "own", scopeFieldKeys: ["owner"],
+    };
+    await db.update(rolesTable).set({ permissionsJson: sourceOwn }).where(eq(rolesTable.id, ids.role));
+    await db.update(entityRecordsTable)
+      .set({ valuesJson: { name: "Ready", owner: null } })
+      .where(eq(entityRecordsTable.id, ids.one));
+    response = await request(
+      `/entities/${ids.entity}/records/query`,
+      {
+        pageId: ids.targetPage,
+        page: 1,
+        pageSize: 10,
+        pageLocalFilters: [{ field: "formula_ref", operator: "in", value: ["Ready"] }],
+      },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.total, 1);
+    assert.deepEqual((response.body.data as { id: number }[]).map((row) => row.id), [ids.two]);
+    await db.update(rolesTable)
+      .set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) })
+      .where(eq(rolesTable.id, ids.role));
+    await reset();
+  });
+  await t.test("relation filter resolves without formula references and searches Unicode label", async () => {
+    await reset();
+    let response = await request(
+      `/entities/${ids.entity}/records/page-filter-values`,
+      {
+        pageId: ids.targetPage,
+        field: "customer",
+        valueSearch: "לקוח",
+      },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const values = response.body.values as string[];
+    assert.equal(values.length, 1);
+    const linked = values.find((value) => value.startsWith(`__linked__:${ids.relatedRecord}:`));
+    assert.ok(linked);
+
+    response = await request(
+      `/entities/${ids.entity}/records/query`,
+      {
+        pageId: ids.targetPage,
+        page: 1,
+        pageSize: 10,
+        pageLocalFilters: [{ field: "customer", operator: "in", value: [linked] }],
+      },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.total, 1);
+    assert.deepEqual((response.body.data as { id: number }[]).map((row) => row.id), [ids.one]);
+  });
   await t.test("read-time page formulas and formula page_ref need no source value row", async () => {
     await reset([ids.one]);
     assert.equal(await pageValue(ids.targetPage, ids.one), undefined);

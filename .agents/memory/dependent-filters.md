@@ -157,41 +157,35 @@ off that meta would flip a lookup-of-date field back to the checklist as soon as
 empty day/period. Cache `relatedFieldType` per fieldKey (accumulate, never clear on empty; reset on
 entity switch) and use it as the routing fallback so the calendar persists across empty results.
 
-## Page-local fields participate in the filter bar via a separate channel
-Page-local fields (values live in `page_record_values.values_json`, keyed by fieldKey, NOT the
-record's own `valuesJson`) can opt into filtering with `page_fields.isFilterable` (default false).
-They ride a DEDICATED `RecordQuery.pageLocalFilters: FilterCondition[]` channel, never mixed into the
-normal `filters` array — this keeps page-local vs entity fieldKey collisions harmless (separate code
-paths) and lets the server validate/scope them independently.
-- **Server (`/records/query`)** requires `pageId`, loads active page fields, and accepts a page-local
-  filter ONLY when the field is `isFilterable`, a value-backed type, AND not hidden for the caller's
-  roleIds (`mostPermissiveFieldPerm(...,"view") !== "hidden"` — superAdmin/pages-admin get NO pass
-  here; this is the hard inference-leak boundary). Conditions are built via
-  `buildPageLocalCondition(cond, fieldType, pageId)` → `buildCondition(cond, type, pageLocalValueExpr)`,
-  where `pageLocalValueExpr(pageId,key)` is a CORRELATED subquery
-  `(SELECT prv.values_json ->> key FROM page_record_values prv WHERE prv.page_id=? AND prv.record_id=entity_records.id)`
-  passed as `buildCondition`'s `exprOverride` (default expr is the normal `textExpr(field)`).
-- **Client (EntityRecords)** scopes the page-local filter UI to types `select`/`boolean`/`date`/`datetime`.
-  Boolean is a fixed `["true","false"]`; date/datetime reuse the same half-open `between` range pattern
-  as entity date filters. For everything else (select), the dropdown shows the DISTINCT EXISTING values
-  actually present in the table — NOT the field's static `optionsJson` — so an option no record uses is
-  never offered. There is still NO *dependent* (cross-filter) narrowing for page-local options; the
-  values just reflect what is stored.
-- **Existing-values endpoint:** `POST /entities/{entityId}/records/page-filter-values` (op
-  `getPageFilterValues`, body `{pageId, field, archived?}` → reuses `FilterValuesResult`). It mirrors the
-  EXACT `/records/query` page-local read boundary (requireRecordParam view + entityExists + page-field
-  lookup by `(pageId,isActive)` + `isFilterable && PAGE_LOCAL_FILTERABLE_TYPES.has(type) &&
-  mostPermissiveFieldPerm(...,"view")!=="hidden"` with NO super bypass), then runs
-  `selectDistinct({v: valuesJson->>field})` over `entity_records INNER JOIN page_record_values ON
-  (page_id, record_id)` with `eq(entityId)` + `archivedWhere` + `ownScopeWhere` (when scope=own) +
-  `hiddenRowStatusWhere` + value-non-empty, `.orderBy(sql`1`)` (the ordinal gotcha below), `.limit(500)`.
-  Cross-entity safe because `entity_records.id` is a global PK so a mismatched page row joins to nothing.
-  Client `getPageFilterOptions` calls it for non-boolean and returns `[]` when `permPageId` is null.
-- **Client visibility must match the server boundary:** `filterablePageFields` ALSO drops any field
-  hidden for every assigned role (same per-role display-only hide as `tableFields`, applied even to
-  admins). Without this, a pages-admin — who receives hidden page-fields from `GET /pages/:id/fields`
-  for setup mode — would see a filter the `/query` endpoint then 400s on. Never offer a page-local
-  filter the server would reject.
+## Page-local and computed page fields use a separate filter channel
+
+Page fields ride a dedicated `pageLocalFilters` channel so a page key can never collide with an
+entity key. A field appears in the live filter bar only when it is active, visible to the viewer, and
+its own `isFilterable` flag is enabled. `showInTable` is independent: a hidden column is not
+automatically a filter, but it may be an opt-in filter.
+
+Stored scalar page values can compile directly to SQL. Formula, relation, lookup, and eligible
+`page_ref` targets are materialized at read time over the complete permission-scoped candidate set;
+the matching record IDs narrow the authoritative query before count, pagination, grouping, totals,
+and pivot computation. Computed values are never persisted.
+
+**Why:** users need filters such as “Customer” without displaying an extra table column, while
+pagination and totals must still describe every matching row rather than only the current page.
+
+**How to apply:** every new computed filter target must reuse the same resolver as its displayed
+value and reapply page access, record view, own/filter row scope, hidden statuses, and field
+visibility at every source or relation hop. A `page_ref` requires both destination-field and
+source-page/source-field authorization. Group-result formulas remain ineligible because a linked or
+filtered subset cannot choose the full-set winner correctly.
+
+Linked relation/lookup choices use the linked record ID as stable equality identity and the projected
+value only as the display label. Duplicate labels must remain distinct, label renames must not break
+saved selections, and text search/operators use the decoded display value. Full-set ID predicates
+must use an array-bound parameter or safe batching rather than one SQL placeholder per record.
+
+The existing-values endpoint follows the same boundary and filterability gate. Stored values use the
+direct distinct-value path; computed targets use the protected read-time materializer. Any capped
+option list must search before the limit, including Unicode labels.
 
 ## SELECT DISTINCT + ORDER BY gotcha (the bug that cost the most here)
 Building the distinct query as

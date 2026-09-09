@@ -160,6 +160,9 @@ const PAGE_FILTERABLE_TYPES = new Set<FieldType>([
   "date",
   "datetime",
   "user",
+  "function",
+  "relation",
+  "lookup",
 ]);
 
 function extractError(err: unknown): string | undefined {
@@ -493,7 +496,14 @@ export function PageFieldConfigDialog({
       : undefined;
   const canFilter =
     PAGE_FILTERABLE_TYPES.has(fieldType) ||
-    (fieldType === "page_ref" && refSrcType != null && PAGE_FILTERABLE_TYPES.has(refSrcType));
+    (fieldType === "page_ref" &&
+      refSrcType != null &&
+      PAGE_FILTERABLE_TYPES.has(refSrcType) &&
+      !(
+        refSrcType === "function" &&
+        (refSourceFields.find((f) => f.fieldKey === refSourceFieldKey)?.formulaConfigJson as FormulaFieldConfig | null | undefined)
+          ?.groupResult?.enabled === true
+      ));
   const canTotal =
     fieldType === "number" ||
     fieldType === "function" ||

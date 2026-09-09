@@ -9,7 +9,8 @@ import {
   recordLinksTable,
   relationsTable,
 } from "@workspace/db";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { idArrayAny } from "./sql-id-array";
 
 export type LinkedFormulaAggregate = "sum" | "average" | "min" | "max" | "count" | "uniqueJoin";
 
@@ -70,6 +71,8 @@ export interface LinkedFormulaRowScope {
 export interface LinkedFormulaPermissionContext {
   authorizeResources(resources: readonly LinkedFormulaResource[]): Promise<ReadonlySet<string>>;
   filterRows(scope: LinkedFormulaRowScope): Promise<ReadonlySet<number>>;
+  /** Interactive full-set reads may intentionally include archived base rows. */
+  includeArchivedBaseRows?: boolean;
 }
 
 export interface ResolveLinkedFormulaOptions {
@@ -471,7 +474,11 @@ export async function resolveLinkedFormulaData(
     baseIds.length
       ? db.select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, values: entityRecordsTable.valuesJson })
           .from(entityRecordsTable)
-          .where(and(eq(entityRecordsTable.entityId, options.baseEntityId), inArray(entityRecordsTable.id, baseIds), isNull(entityRecordsTable.archivedAt)))
+          .where(and(
+            eq(entityRecordsTable.entityId, options.baseEntityId),
+            idArrayAny(entityRecordsTable.id, baseIds),
+            ...(options.permissions.includeArchivedBaseRows ? [] : [isNull(entityRecordsTable.archivedAt)]),
+          ))
       : Promise.resolve([] as RecordRow[]),
     aggregates.length
       ? db.select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, values: entityRecordsTable.valuesJson })
@@ -481,7 +488,7 @@ export async function resolveLinkedFormulaData(
       : Promise.resolve([] as RecordRow[]),
   ]);
   if (baseRows.length !== baseIds.length) {
-    throw new LinkedFormulaResolutionError("NOT_FOUND", "One or more base records do not exist or are archived");
+    throw new LinkedFormulaResolutionError("NOT_FOUND", "One or more base records are unavailable");
   }
   if (targetRows.length > maxTargets) {
     throw new LinkedFormulaResolutionError("LIMIT_EXCEEDED", `Linked formula target scan exceeds ${maxTargets} records`);
@@ -523,7 +530,7 @@ export async function resolveLinkedFormulaData(
   const pageValueRows = pageIds.size && allRecordIds.length
     ? await db.select({ pageId: pageRecordValuesTable.pageId, recordId: pageRecordValuesTable.recordId, values: pageRecordValuesTable.valuesJson })
         .from(pageRecordValuesTable)
-        .where(and(inArray(pageRecordValuesTable.pageId, [...pageIds]), inArray(pageRecordValuesTable.recordId, allRecordIds)))
+        .where(and(inArray(pageRecordValuesTable.pageId, [...pageIds]), idArrayAny(pageRecordValuesTable.recordId, allRecordIds)))
     : [];
   const loaded = new Map<number, LoadedRecord>();
   for (const row of allRows) loaded.set(row.id, { id: row.id, entityId: row.entityId, values: row.values as Record<string, unknown>, pages: new Map() });
@@ -532,7 +539,10 @@ export async function resolveLinkedFormulaData(
   const links = relationIds.length && allRecordIds.length
     ? await db.select().from(recordLinksTable).where(and(
         inArray(recordLinksTable.relationId, relationIds),
-        or(inArray(recordLinksTable.sourceRecordId, allRecordIds), inArray(recordLinksTable.targetRecordId, allRecordIds)),
+        or(
+          idArrayAny(recordLinksTable.sourceRecordId, allRecordIds),
+          idArrayAny(recordLinksTable.targetRecordId, allRecordIds),
+        ),
       ))
     : [];
 

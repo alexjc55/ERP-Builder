@@ -12,7 +12,7 @@ import {
   type RolePermissions,
   appSettingsTable,
 } from "@workspace/db";
-import { and, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import {
   effectiveRecordPerm,
   effectiveScopeFor,
@@ -24,11 +24,13 @@ import {
 import { ownScopeWhere } from "../routes/own-scope";
 import {
   linkedFormulaResourceKey,
+  LinkedFormulaResolutionError,
   resolveLinkedFormulaData,
   type LinkedFormulaPermissionContext,
   type LinkedFormulaResource,
   type LinkedFormulaSource,
 } from "./linked-formula-resolver";
+import { idArrayAny } from "./sql-id-array";
 import { normalizeFormulaFieldSources } from "./formula-field-config";
 import { buildFormulaScope, DEFAULT_FORMULA_TIME_ZONE, DEFAULT_WORKING_DAYS, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
 
@@ -357,9 +359,11 @@ export async function interactiveFormulaPermissions(
   req: Request,
   baseEntityId?: number,
   basePageId?: number,
+  includeArchivedBaseRows = false,
 ): Promise<LinkedFormulaPermissionContext> {
   const [perms, roleIds] = await Promise.all([getPermissions(req), getUserRoleIds(req)]);
   return {
+    includeArchivedBaseRows,
     async authorizeResources(resources) {
       const allowed = new Set<string>();
       // Resolver calls this with the complete dependency graph.  Load its
@@ -452,8 +456,8 @@ export async function interactiveFormulaPermissions(
       const effective = await effectiveScopeFor(req, perms, scope.entityId, scope.pageId);
       const clauses = [
         eq(entityRecordsTable.entityId, scope.entityId),
-        inArray(entityRecordsTable.id, [...scope.recordIds]),
-        isNull(entityRecordsTable.archivedAt),
+        idArrayAny(entityRecordsTable.id, scope.recordIds),
+        ...(includeArchivedBaseRows ? [] : [isNull(entityRecordsTable.archivedAt)]),
       ];
       if (effective.scope === "own") {
         clauses.push(await ownScopeWhere(scope.entityId, effective.scopeFieldKeys, req.user!.userId, fields));
@@ -658,7 +662,7 @@ export async function mergeLinkedFormulaInputs(options: {
             values: pageRecordValuesTable.valuesJson,
           }).from(pageRecordValuesTable).where(and(
             inArray(pageRecordValuesTable.pageId, sourcePageIds),
-            inArray(pageRecordValuesTable.recordId, eligibleIds),
+            idArrayAny(pageRecordValuesTable.recordId, eligibleIds),
           )),
         ]);
         const fieldResources: LinkedFormulaResource[] = [
@@ -753,7 +757,10 @@ export async function mergeLinkedFormulaInputs(options: {
         }
       }
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof LinkedFormulaResolutionError && error.code === "LIMIT_EXCEEDED") {
+      throw error;
+    }
     // Formula sources are optional derived data. Fail closed and neutral rather
     // than turning an inaccessible dependency into an observable HTTP error.
   }

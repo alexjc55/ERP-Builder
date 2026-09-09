@@ -29,6 +29,7 @@ export function ValueChecklistPicker({
   onChange,
   getOptions,
   labelFor,
+  identityFor,
   serverSearch = false,
   multiple = true,
   allowManual = false,
@@ -47,6 +48,8 @@ export function ValueChecklistPicker({
    */
   getOptions: (fieldKey: string, search?: string) => Promise<string[]>;
   labelFor?: (v: string) => string;
+  /** Stable equality key when an option's wire value also carries a label. */
+  identityFor?: (v: string) => string;
   /**
    * Pass the search box text to `getOptions` so the SERVER narrows the list
    * before its row limit. Must be OFF for fields whose displayed label differs
@@ -92,9 +95,15 @@ export function ValueChecklistPicker({
     return () => { cancelled = true; };
   }, [open, getOptions, fieldKey, effectiveSearch]);
 
+  const identity = identityFor ?? ((v: string) => v);
+  const isSelected = (v: string) => selected.some((item) => identity(item) === identity(v));
   const toggle = (v: string) => {
     if (multiple) {
-      onChange(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
+      onChange(
+        isSelected(v)
+          ? selected.filter((x) => identity(x) !== identity(v))
+          : [...selected.filter((x) => identity(x) !== identity(v)), v],
+      );
     } else {
       onChange([v]);
       setOpen(false);
@@ -114,7 +123,10 @@ export function ValueChecklistPicker({
   };
 
   // Keep already-selected values visible even if they aren't in the fetched list.
-  const allValues = [...options, ...selected.filter((s) => !options.includes(s))];
+  // Prefer freshly fetched options for a stable identity so a renamed linked
+  // record immediately displays its current label instead of a stale token.
+  const optionIdentities = new Set(options.map(identity));
+  const allValues = [...options, ...selected.filter((s) => !optionIdentities.has(identity(s)))];
   const q = optSearch.toLowerCase();
   const filtered = allValues.filter((v) => label(v).toLowerCase().includes(q));
 
@@ -149,7 +161,7 @@ export function ValueChecklistPicker({
                   key={v}
                   className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer text-sm"
                 >
-                  <Checkbox checked={selected.includes(v)} onCheckedChange={() => toggle(v)} />
+                  <Checkbox checked={isSelected(v)} onCheckedChange={() => toggle(v)} />
                   <span className="truncate">{label(v)}</span>
                 </label>
               ))
