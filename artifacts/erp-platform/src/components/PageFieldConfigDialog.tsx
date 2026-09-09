@@ -132,6 +132,7 @@ const PAGE_REF_SOURCE_TYPES = new Set<FieldType>([
   "url",
   "phone",
   "user",
+  "function",
 ]);
 
 const FIELD_ACCESS_OPTIONS: { value: FieldAccess; label: string }[] = [
@@ -475,7 +476,13 @@ export function PageFieldConfigDialog({
     },
   });
   const refSourceFields = refSourceFieldsRaw.filter(
-    (f) => f.isActive && PAGE_REF_SOURCE_TYPES.has(f.fieldType),
+    (f) =>
+      f.isActive &&
+      PAGE_REF_SOURCE_TYPES.has(f.fieldType) &&
+      !(
+        f.fieldType === "function" &&
+        (f.formulaConfigJson as FormulaFieldConfig | null | undefined)?.groupResult?.enabled === true
+      ),
   );
   // Effective SOURCE type of the selected page_ref target — drives which
   // filter/total toggles make sense (they aggregate the source's values).

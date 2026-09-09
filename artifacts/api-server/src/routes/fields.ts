@@ -115,7 +115,11 @@ async function validateEntityRelationConfig(
   }
 
   const [rf] = await db
-    .select({ id: entityFieldsTable.id })
+    .select({
+      id: entityFieldsTable.id,
+      fieldType: entityFieldsTable.fieldType,
+      formulaConfigJson: entityFieldsTable.formulaConfigJson,
+    })
     .from(entityFieldsTable)
     .where(
       and(
@@ -125,6 +129,12 @@ async function validateEntityRelationConfig(
       ),
     );
   if (!rf) return { error: "Связанное поле не найдено в связанной сущности" };
+  if (
+    rf.fieldType === "function" &&
+    (rf.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+  ) {
+    return { error: "Формулу с групповым результатом нельзя использовать как источник подстановки" };
+  }
   const cleaned: RelationFieldConfig = { relationId, relatedFieldKey };
   // writeThrough is a lookup-only flag: when set, the (read-only) lookup cell
   // becomes a gateway that opens the linked record's full editor in the related
@@ -166,7 +176,7 @@ async function validateRelatedPageSource(
     return { error: "Страница подстановки не относится к связанной сущности" };
   }
   const [pf] = await db
-    .select({ fieldType: pageFieldsTable.fieldType })
+    .select({ fieldType: pageFieldsTable.fieldType, formulaConfigJson: pageFieldsTable.formulaConfigJson })
     .from(pageFieldsTable)
     .where(
       and(
@@ -176,7 +186,13 @@ async function validateRelatedPageSource(
       ),
     );
   if (!pf) return { error: "Поле страницы для подстановки не найдено" };
-  if (pf.fieldType === "function" || pf.fieldType === "relation" || pf.fieldType === "lookup") {
+  if (
+    pf.fieldType === "function" &&
+    (pf.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+  ) {
+    return { error: "Формулу с групповым результатом нельзя использовать как источник подстановки" };
+  }
+  if (pf.fieldType === "relation" || pf.fieldType === "lookup" || pf.fieldType === "page_ref") {
     return { error: "Это поле страницы нельзя использовать для подстановки" };
   }
   return { ok: true };

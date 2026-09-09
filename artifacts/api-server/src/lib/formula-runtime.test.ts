@@ -374,3 +374,54 @@ test("entity formulas materialize page-qualified values and page formula chains"
   assert.equal(values.page_based, 14);
   assert.equal("source:private" in values, false);
 });
+
+test("computed page sources remain lazy and cycles fail closed", () => {
+  const values = materializeVisiblePageFormulas({
+    entityId: 7,
+    pageId: 81,
+    rows: [{ id: 1, entityValues: {}, pageValues: { base: 3 } }],
+    entityFields: [],
+    pageFields: [
+      { fieldKey: "base", fieldType: "number", formulaConfigJson: {} },
+      { fieldKey: "stoimost_montazha", fieldType: "function", formulaConfigJson: { expression: "{base} * 2" } },
+      { fieldKey: "chain", fieldType: "function", formulaConfigJson: { expression: "{stoimost_montazha} + 1" } },
+      { fieldKey: "cycle_a", fieldType: "function", formulaConfigJson: { expression: "{cycle_b}" } },
+      { fieldKey: "cycle_b", fieldType: "function", formulaConfigJson: { expression: "{cycle_a}" } },
+    ],
+    hiddenEntity: new Set(),
+    hiddenPage: new Set(),
+  }).get(1)!;
+  assert.equal(values.stoimost_montazha, 6);
+  assert.equal(values.chain, 7);
+  assert.equal(values.cycle_a, null);
+  assert.equal(values.cycle_b, null);
+});
+
+test("a same-key page field cannot re-admit a hidden entity value", () => {
+  const values = materializeVisiblePageFormulas({
+    entityId: 7,
+    pageId: 81,
+    rows: [{
+      id: 1,
+      entityValues: { secret: 41 },
+      pageValues: { secret: 1 },
+    }],
+    entityFields: [
+      { fieldKey: "secret", fieldType: "number", formulaConfigJson: {} },
+    ],
+    pageFields: [
+      { fieldKey: "secret", fieldType: "number", formulaConfigJson: {} },
+      {
+        fieldKey: "leak_check",
+        fieldType: "function",
+        formulaConfigJson: { expression: "{entity:7.secret}" },
+      },
+    ],
+    hiddenEntity: new Set(["secret"]),
+    hiddenPage: new Set(),
+    linkedInputs: new Map([[1, { secret: 41 }]]),
+  }).get(1)!;
+
+  assert.equal(values.secret, 1);
+  assert.equal(values.leak_check, null);
+});

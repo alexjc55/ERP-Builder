@@ -19,6 +19,14 @@ Structured linked-formula source tokens are server-only capabilities. Never seri
 
 **How to apply:** Infer only positive page IDs and non-empty keys, then let canonical page ownership, active-field, page-access, field-access, and row-scope checks fail closed. Never copy raw cross-page values into client responses.
 
+## Computed projection targets
+
+**Rule:** A page-local formula may be projected only through the shared read-time formula runtime. Keep native entity and page inputs in separately permission-filtered scopes; a same-key page field must never re-admit a hidden entity value. Evaluate recursion with a per-formula ancestor path, not one batch-wide visited set. Group-result formulas are not projection targets until the caller can compute winners over the full authorized set.
+
+**Why:** Formula results are not stored, batch-wide cycle tracking rejects valid sibling dependency graphs, merged native scopes can leak hidden same-key values, and evaluating a grouped formula over a linked subset produces a plausible but incorrect result.
+
+**How to apply:** Materialize visible scalar formulas transiently with qualified scopes, calendar options, linked inputs, bounded recursion, and page-aware row filtering. Reject computed aggregate/equality operands and grouped projection targets at save time and re-check at read time until those paths have equivalent full-set semantics.
+
 ## Legacy flat relation/lookup references
 
 **Rule:** A legacy flat formula reference to a relation/lookup field must be derived from the active field schema and resolved through the same permission-aware linked-source path as a structured source. Keep formula scope inputs separate from response values: current-page projections may shadow flat keys, but must not overwrite or remove a same-key entity scalar or leak a transient source token.

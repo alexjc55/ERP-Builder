@@ -22,6 +22,7 @@ manual picker; the two-hop data chain already existed but resolved to null.
   logic. There is currently NO test guarding this; changing one side means re-checking the other by hand.
 - Both related-values endpoints (page-source and entity-source) must invoke the chain identically.
 - Recursion is bounded by a max-hops cycle guard; page-source projections are always terminal.
+- A terminal entity/page formula is materialized transiently through the same permission-aware formula runtime. Group-result formulas remain unsupported because a linked subset cannot determine the global winner safely.
 
 ## Scope limit (v1)
 - Display path ONLY. Filter/sort/pivot read stored `values_json` and return null for a chained lookup, so chained

@@ -11,13 +11,28 @@ import { FORMULA_CONFIG_LIMITS, normalizeFormulaFieldSources } from "./formula-f
 
 type Base = { kind: "entity"; entityId: number } | { kind: "page"; pageId: number; entityId: number };
 type Ref = { scope: "entity"; fieldKey: string } | { scope: "page"; pageId: number; fieldKey: string };
-type Field = { fieldType: string; relationConfigJson?: unknown };
+type Field = { fieldType: string; relationConfigJson?: unknown; formulaConfigJson?: unknown };
 
-const UNSUPPORTED = new Set(["file", "relation", "lookup", "page_ref", "function"]);
+// Computed formulas are read-time values and are valid projection targets.
+// Relation/lookup/page_ref remain excluded as they can themselves introduce
+// another resolver graph (and page_ref writes must never become recursive).
+const UNSUPPORTED = new Set(["file", "relation", "lookup", "page_ref"]);
 const NUMERIC = new Set(["number", "percent"]);
 
 function unsupported(field: Field | null): boolean {
   return !field || UNSUPPORTED.has(field.fieldType);
+}
+
+function unsupportedStoredSource(field: Field | null): boolean {
+  // Linked aggregates and equality joins are still implemented over stored
+  // JSON values. Computed formulas are supported only by the pageLocal
+  // projection path until linked target materialization is added.
+  return unsupported(field) || field?.fieldType === "function";
+}
+
+function hasEnabledGroupResult(field: Field | null): boolean {
+  return field?.fieldType === "function" &&
+    (field.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true;
 }
 
 /**
@@ -67,6 +82,7 @@ export async function validateFormulaSources(base: Base, config: unknown): Promi
       fieldKey: entityFieldsTable.fieldKey,
       fieldType: entityFieldsTable.fieldType,
       relationConfigJson: entityFieldsTable.relationConfigJson,
+      formulaConfigJson: entityFieldsTable.formulaConfigJson,
     })
       .from(entityFieldsTable).where(and(inArray(entityFieldsTable.entityId, [...entityIds]), eq(entityFieldsTable.isActive, true))),
     pageIds.size ? db.select({
@@ -74,8 +90,9 @@ export async function validateFormulaSources(base: Base, config: unknown): Promi
       fieldKey: pageFieldsTable.fieldKey,
       fieldType: pageFieldsTable.fieldType,
       relationConfigJson: pageFieldsTable.relationConfigJson,
+      formulaConfigJson: pageFieldsTable.formulaConfigJson,
     })
-      .from(pageFieldsTable).where(and(inArray(pageFieldsTable.pageId, [...pageIds]), eq(pageFieldsTable.isActive, true))) : Promise.resolve([] as Array<{ pageId: number; fieldKey: string; fieldType: string; relationConfigJson: unknown }>),
+      .from(pageFieldsTable).where(and(inArray(pageFieldsTable.pageId, [...pageIds]), eq(pageFieldsTable.isActive, true))) : Promise.resolve([] as Array<{ pageId: number; fieldKey: string; fieldType: string; relationConfigJson: unknown; formulaConfigJson: unknown }>),
     // Equality joins may compare two relation fields that point to one shared
     // entity. The relation table is small metadata and loading it once keeps
     // validation set-based.
@@ -123,6 +140,8 @@ export async function validateFormulaSources(base: Base, config: unknown): Promi
     if (source.kind === "pageLocal") {
       if (!pageBelongsTo(source.pageId, base.entityId)) {
         errors.push(`Source "${source.key}" page ${source.pageId} does not belong to the base entity`);
+      } else if (hasEnabledGroupResult(activeField(base.entityId, { scope: "page", pageId: source.pageId, fieldKey: source.fieldKey }))) {
+        errors.push(`Source "${source.key}" cannot project a groupResult formula; grouped formulas are not supported as projection targets`);
       } else if (unsupported(activeField(base.entityId, { scope: "page", pageId: source.pageId, fieldKey: source.fieldKey }))) {
         errors.push(`Source "${source.key}" must reference an active, value-backed page field on the same record`);
       }
@@ -139,7 +158,9 @@ export async function validateFormulaSources(base: Base, config: unknown): Promi
     }
     if (source.value) {
       const valueField = activeField(source.targetEntityId, source.value);
-      if (unsupported(valueField)) errors.push(`Source "${source.key}" value must reference an active supported target field`);
+      if (hasEnabledGroupResult(valueField)) {
+        errors.push(`Source "${source.key}" cannot project a groupResult formula; grouped formulas are not supported as projection targets`);
+      } else if (unsupportedStoredSource(valueField)) errors.push(`Source "${source.key}" value must reference an active value-backed target field`);
       else if (valueField && (source.aggregate === "sum" || source.aggregate === "average") && !NUMERIC.has(valueField.fieldType)) {
         errors.push(`Source "${source.key}" ${source.aggregate} requires a numeric target field`);
       }
@@ -165,8 +186,8 @@ export async function validateFormulaSources(base: Base, config: unknown): Promi
             errors.push(`Source "${source.key}" equality relation references must both link to the same entity`);
           }
         } else {
-          if (unsupported(baseField)) errors.push(`Source "${source.key}" equality base reference must be an active supported base field`);
-          if (unsupported(targetField)) errors.push(`Source "${source.key}" equality target reference must be an active supported target field`);
+          if (unsupportedStoredSource(baseField)) errors.push(`Source "${source.key}" equality base reference must be an active value-backed base field`);
+          if (unsupportedStoredSource(targetField)) errors.push(`Source "${source.key}" equality target reference must be an active value-backed target field`);
         }
         if (pair.target.scope === "page" && source.targetPageId !== pair.target.pageId) {
           errors.push(`Source "${source.key}" targetPageId must qualify every target page equality reference`);

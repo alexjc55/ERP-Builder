@@ -5,7 +5,8 @@ import type { EntityField, PageField, PageRefFieldConfig } from "@workspace/db";
 /**
  * Page-field types a `page_ref` field may point at: scalar, value-backed types
  * whose values live in page_record_values and render without extra resolution.
- * Derived types (function/relation/lookup/page_ref itself) and files are out.
+ * Relation/lookup/page_ref and files are out; formulas are read-time scalar
+ * projections and are intentionally allowed (they are never writable).
  * Kept in lockstep with the client copy in PageFieldConfigDialog.
  */
 export const PAGE_REF_SOURCE_TYPES = new Set([
@@ -21,6 +22,7 @@ export const PAGE_REF_SOURCE_TYPES = new Set([
   "url",
   "phone",
   "user",
+  "function",
 ]);
 
 /**
@@ -42,6 +44,12 @@ export async function loadPageRefSource(cfg: PageRefFieldConfig | null | undefin
       ),
     );
   if (!src || !PAGE_REF_SOURCE_TYPES.has(src.fieldType)) return null;
+  if (
+    src.fieldType === "function" &&
+    (src.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+  ) {
+    return null;
+  }
   return src;
 }
 

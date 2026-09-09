@@ -494,6 +494,19 @@ export async function resolveLinkedFormulaData(
   if (!allowedBase?.has || baseIds.some((id) => !allowedBase.has(id))) {
     throw new LinkedFormulaResolutionError("FORBIDDEN", "Linked formula base row access denied");
   }
+  const allowedPageLocalRows = new Map<number, ReadonlySet<number>>();
+  await Promise.all([...new Set(options.sources.flatMap((source) =>
+    source.kind === "pageLocal" ? [source.pageId] : []))].map(async (pageId) => {
+    const allowed = await options.permissions.filterRows({
+      entityId: options.baseEntityId,
+      pageId,
+      recordIds: baseIds,
+    });
+    if (!allowed?.has || [...allowed].some((id) => !baseIds.includes(id))) {
+      throw new LinkedFormulaResolutionError("FORBIDDEN", "Invalid page-local row permission result");
+    }
+    allowedPageLocalRows.set(pageId, allowed);
+  }));
 
   const allowedTargetsBySource = await filterLinkedFormulaTargetsByScope(
     aggregates,
@@ -583,7 +596,9 @@ export async function resolveLinkedFormulaData(
   for (const source of options.sources) {
     if (source.kind === "pageLocal") {
       for (const id of baseIds) {
-        valuesByRecordId.get(id)![source.key] = loaded.get(id)?.pages.get(source.pageId)?.[source.fieldKey] ?? null;
+        valuesByRecordId.get(id)![source.key] = allowedPageLocalRows.get(source.pageId)?.has(id)
+          ? loaded.get(id)?.pages.get(source.pageId)?.[source.fieldKey] ?? null
+          : null;
       }
       continue;
     }

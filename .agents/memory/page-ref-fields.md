@@ -5,7 +5,7 @@ description: live page-field alias that reads and permission-gated writes anothe
 A `page_ref` page field on mirror page B is a live alias of a page-local field from another page A with the SAME effective entity — same record, no relation/link involved. Its value may be edited from B, but A remains the only storage authority.
 
 Rules that must stay consistent:
-- The source must be another page over the same effective entity and an active supported value-backed field.
+- The source must be another page over the same effective entity and an active supported value-backed field, or a normal per-row formula materialized at read time. Formula aliases are always read-only; grouped formulas are excluded.
 - Reads expose the source value under B's alias. Only an explicitly supplied alias may write or clear the source; omission is always a no-op. B never stores an alias copy.
 - Both sides are independent permission boundaries. Every explicitly supplied alias, including a same-value no-op, requires target-page/alias edit access plus source-page/source-field/record/row access; otherwise value-dependent success becomes an oracle. Re-check source row scope after locking the entity record, and report denials through only the public alias or a generic row error.
 - A write changes only the authoritative source key and preserves unrelated values under concurrency. Multiple aliases to one source may agree; conflicting edits are rejected.
@@ -13,4 +13,4 @@ Rules that must stay consistent:
 
 **Why:** users need one value to stay synchronized across mirror pages without fake self-relations or duplicated storage. The double boundary prevents B from becoming a permission bypass into A.
 
-**How to apply:** treat `page_ref` as a typed alias and explicit source-key patch, never as a second stored value or as a full-map field.
+**How to apply:** treat `page_ref` as a typed alias and explicit source-key patch, never as a second stored value or as a full-map field. Build reads from the authorized entity-record universe rather than requiring either page to already have a value row.

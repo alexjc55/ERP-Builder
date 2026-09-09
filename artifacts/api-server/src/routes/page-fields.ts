@@ -19,6 +19,7 @@ import {
   type EntityField,
   type FileFieldConfig,
   type PageRefFieldConfig,
+  mirrorPermKey,
 } from "@workspace/db";
 import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
 import { replaceSingleRelationLink, emitLinkChangedEvents } from "../lib/record-links";
@@ -62,6 +63,8 @@ import { validateFormulaGroupResultReferences } from "../lib/formula-group-resul
 import { validateFormulaSources } from "../lib/formula-source-validator";
 import {
   interactiveFormulaPermissions,
+  loadFormulaOptions,
+  materializeVisibleEntityFormulas,
   materializeVisiblePageFormulas,
   mergeLinkedFormulaInputs,
   projectViewerFormulaValues,
@@ -218,7 +221,11 @@ async function validateRelationFieldConfig(
   }
 
   const [rf] = await db
-    .select({ id: entityFieldsTable.id })
+    .select({
+      id: entityFieldsTable.id,
+      fieldType: entityFieldsTable.fieldType,
+      formulaConfigJson: entityFieldsTable.formulaConfigJson,
+    })
     .from(entityFieldsTable)
     .where(
       and(
@@ -228,6 +235,12 @@ async function validateRelationFieldConfig(
       ),
     );
   if (!rf) return { error: "Related field not found on the related entity" };
+  if (
+    rf.fieldType === "function" &&
+    (rf.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+  ) {
+    return { error: "A groupResult formula cannot be used as a lookup projection target" };
+  }
   // Entity-source: strip any stray relatedPageId/writeThrough. Page fields never
   // offer write-through (no per-page nav affordance), so it is always dropped.
   return { ok: true, cleaned: { relationId, relatedFieldKey } };
@@ -249,7 +262,7 @@ async function validateRelatedPageSource(
     return { error: "Lookup page does not belong to the related entity" };
   }
   const [pf] = await db
-    .select({ fieldType: pageFieldsTable.fieldType })
+    .select({ fieldType: pageFieldsTable.fieldType, formulaConfigJson: pageFieldsTable.formulaConfigJson })
     .from(pageFieldsTable)
     .where(
       and(
@@ -259,7 +272,13 @@ async function validateRelatedPageSource(
       ),
     );
   if (!pf) return { error: "Lookup page field not found" };
-  if (pf.fieldType === "function" || pf.fieldType === "relation" || pf.fieldType === "lookup") {
+  if (
+    pf.fieldType === "function" &&
+    (pf.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+  ) {
+    return { error: "A groupResult formula cannot be used as a lookup projection target" };
+  }
+  if (pf.fieldType === "relation" || pf.fieldType === "lookup" || pf.fieldType === "page_ref") {
     return { error: "This page field cannot be used as a lookup source" };
   }
   return { ok: true };
@@ -292,7 +311,7 @@ async function validatePageRefConfig(
     return { error: "Страница-источник должна показывать те же записи (та же сущность)" };
   }
   const [srcField] = await db
-    .select({ fieldType: pageFieldsTable.fieldType })
+    .select({ fieldType: pageFieldsTable.fieldType, formulaConfigJson: pageFieldsTable.formulaConfigJson })
     .from(pageFieldsTable)
     .where(
       and(
@@ -302,6 +321,12 @@ async function validatePageRefConfig(
       ),
     );
   if (!srcField) return { error: "Поле на странице-источнике не найдено" };
+  if (
+    srcField.fieldType === "function" &&
+    (srcField.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+  ) {
+    return { error: "Формулу с групповым результатом нельзя отображать через «Поле другой страницы»" };
+  }
   if (!PAGE_REF_SOURCE_TYPES.has(srcField.fieldType)) {
     return { error: "Этот тип поля нельзя отображать через «Поле другой страницы»" };
   }
@@ -600,6 +625,7 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
           resolvedOptionsJson: normalizeOptions(src.optionsJson),
           resolvedPercentConfigJson: src.percentConfigJson ?? {},
           resolvedEditable:
+            src.fieldType !== "function" &&
             pageAccessAllowed &&
             targetFieldEditable &&
             sourceFieldEditable &&
@@ -1164,6 +1190,34 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     }
     refFields.push(f);
   }
+  // A page_ref is an alias over the same entity record and must not depend on a
+  // target page_record_values row already existing. Build the authorized base
+  // record universe independently, then use version 1 for synthesized empty
+  // target/source page maps. This also lets entity-only source formulas resolve
+  // without creating page-local storage as a side effect.
+  if (refFields.length > 0) {
+    const baseRecordWhere: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
+    if (scope === "own") {
+      const activeFields = await loadActiveEntityFields(entityId);
+      baseRecordWhere.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, activeFields));
+    }
+    if (rvHiddenRowWhere) baseRecordWhere.push(rvHiddenRowWhere);
+    const authorizedBaseRows = await db
+      .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+      .from(entityRecordsTable)
+      .where(and(...baseRecordWhere));
+    const storedTargetById = new Map(rows.map((row) => [row.recordId, row]));
+    for (const record of authorizedBaseRows) {
+      if (!storedTargetById.has(record.id)) {
+        rows.push({
+          recordId: record.id,
+          valuesJson: {},
+          version: 1,
+          entityValuesJson: record.valuesJson,
+        });
+      }
+    }
+  }
   const visibleLocalFieldKeys = pageFieldCandidates
     .filter(
       (field) =>
@@ -1202,11 +1256,28 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     });
   }
   const sourcePageIds = [...new Set(refFields.map((f) => (f.pageRefConfigJson as PageRefFieldConfig).sourcePageId!))];
+  const entityRows = new Map(rows.map((row) => [
+    row.recordId,
+    (row.entityValuesJson as Record<string, unknown>) ?? {},
+  ]));
+  const entityFields = await loadActiveEntityFields(entityId);
+  const entityPerm = await effectiveRecordPerm(req, perms, entityId, params.data.pageId);
+  const entityHidden = new Set(
+    entityFields
+      .filter((field) => resolveFieldAccess(field, perms, viewerRoleIds, entityId, entityPerm, params.data.pageId) === "hidden")
+      .map((field) => field.fieldKey),
+  );
   const sourceRowsByPage = new Map<
     number,
     Map<number, { valuesJson: Record<string, unknown>; version: number }>
   >();
   for (const spid of sourcePageIds) {
+    const sourcePermissions = await interactiveFormulaPermissions(req, entityId, spid);
+    const sourceAllowedIds = await sourcePermissions.filterRows({
+      entityId,
+      pageId: spid,
+      recordIds: [...entityRows.keys()],
+    });
     // Same viewer boundary as the base query (entity rows + own scope +
     // hidden-row statuses), only the pageId differs.
     const srcWhere: SQL[] = [
@@ -1228,6 +1299,7 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
       .innerJoin(entityRecordsTable, eq(entityRecordsTable.id, pageRecordValuesTable.recordId))
       .where(and(...srcWhere));
     for (const sr of srcRows) {
+      if (!sourceAllowedIds.has(sr.recordId)) continue;
       const pageRows = sourceRowsByPage.get(spid) ?? new Map();
       pageRows.set(sr.recordId, {
         valuesJson: (sr.valuesJson as Record<string, unknown>) ?? {},
@@ -1243,6 +1315,63 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
           fieldVersions: Object.fromEntries(visibleLocalFieldKeys.map((fieldKey) => [fieldKey, 1])),
         });
       }
+    }
+    // A formula is never persisted in page_record_values. Keep an authorized
+    // empty input row so it can still be evaluated for this record.
+    for (const recordId of sourceAllowedIds) {
+      const pageRows = sourceRowsByPage.get(spid) ?? new Map();
+      if (!pageRows.has(recordId)) pageRows.set(recordId, { valuesJson: {}, version: 1 });
+      sourceRowsByPage.set(spid, pageRows);
+    }
+  }
+  // Page-ref sources may themselves be formulas. Resolve those values through
+  // the same lazy, permission-aware materializer used by ordinary page reads;
+  // the result is kept only in this response map.
+  for (const spid of sourcePageIds) {
+    const sourceFields = await db.select().from(pageFieldsTable).where(and(
+      eq(pageFieldsTable.pageId, spid), eq(pageFieldsTable.isActive, true),
+    ));
+    const sourceHidden = new Set(sourceFields
+      .filter((field) =>
+        (
+          !isSetupAdmin &&
+          mostPermissiveFieldPerm(
+            field.permissionsJson as FieldPermissions | null, viewerRoleIds, "view", perms, entityId, spid,
+          ) === "hidden"
+        ) ||
+        (
+          field.fieldType === "function" &&
+          (field.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+        ))
+      .map((field) => field.fieldKey));
+    const sourceRows = sourceRowsByPage.get(spid);
+    if (!sourceRows) continue;
+    const sourceIds = [...sourceRows.keys()];
+    const sourceInputs = await mergeLinkedFormulaInputs({
+      entityId,
+      pageId: spid,
+      rows: sourceIds.map((id) => ({ id, values: entityRows.get(id) ?? {} })),
+      fields: [...entityFields.filter((field) => !entityHidden.has(field.fieldKey)), ...sourceFields.filter((field) => !sourceHidden.has(field.fieldKey))],
+      permissions: await interactiveFormulaPermissions(req, entityId, spid),
+    });
+    const computed = materializeVisiblePageFormulas({
+      entityId,
+      pageId: spid,
+      rows: sourceIds.map((id) => ({
+        id,
+        entityValues: entityRows.get(id) ?? {},
+        pageValues: sourceRows.get(id)!.valuesJson,
+      })),
+      entityFields,
+      pageFields: sourceFields,
+      hiddenEntity: entityHidden,
+      hiddenPage: sourceHidden,
+      linkedInputs: sourceInputs,
+      formulaOptions: await loadFormulaOptions(),
+    });
+    for (const [id, values] of computed) {
+      const source = sourceRows.get(id);
+      if (source) source.valuesJson = values;
     }
   }
   for (const [recordId, target] of enrichedByRecord) {
@@ -1260,23 +1389,13 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
   // Page formulas are derived response data just like entity formulas. Resolve
   // their structured inputs on the server, then emit only visible scalar field
   // results under the page field's ordinary key.
-  const entityRows = new Map(rows.map((row) => [
-    row.recordId,
-    (row.entityValuesJson as Record<string, unknown>) ?? {},
-  ]));
-  const entityFields = await loadActiveEntityFields(entityId);
+  // entityRows is initialized above so source page formulas can use it.
   const pageHidden = new Set(
     pageFieldCandidates
       .filter((field) => !isSetupAdmin && mostPermissiveFieldPerm(
         field.permissionsJson as FieldPermissions | null,
         viewerRoleIds, "view", perms, entityId, params.data.pageId,
       ) === "hidden")
-      .map((field) => field.fieldKey),
-  );
-  const entityPerm = await effectiveRecordPerm(req, perms, entityId, params.data.pageId);
-  const entityHidden = new Set(
-    entityFields
-      .filter((field) => resolveFieldAccess(field, perms, viewerRoleIds, entityId, entityPerm, params.data.pageId) === "hidden")
       .map((field) => field.fieldKey),
   );
   const formulaRows = [...enrichedByRecord.entries()].map(([id, value]) => ({
@@ -1535,10 +1654,10 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
     const pageAccessAllowed =
       perms.superAdmin || (perms.pageIds.includes(pageId) && perms.pageIds.includes(cfg.sourcePageId));
     const refWritable =
-      perms.superAdmin ||
+      sourceField.fieldType !== "function" && (perms.superAdmin ||
       (pageAccessAllowed &&
         sourceFieldPerm === "edit" &&
-        sourceRecordPerm?.update === true);
+        sourceRecordPerm?.update === true));
     const requested = isEmpty(requestedRaw) ? undefined : requestedRaw;
     const changed = JSON.stringify(sourcePrev ?? null) !== JSON.stringify(requested ?? null);
 
@@ -2529,6 +2648,7 @@ interface LookupResolveCtx {
   perms: Awaited<ReturnType<typeof getPermissions>>;
   roleIds: number[];
   userId: number;
+  req: Parameters<typeof interactiveFormulaPermissions>[0];
 }
 
 interface ChainResolution {
@@ -2590,6 +2710,7 @@ async function resolveChainValues(
         fieldType: pageFieldsTable.fieldType,
         optionsJson: pageFieldsTable.optionsJson,
         permissionsJson: pageFieldsTable.permissionsJson,
+        formulaConfigJson: pageFieldsTable.formulaConfigJson,
       })
       .from(pageFieldsTable)
       .where(
@@ -2600,8 +2721,19 @@ async function resolveChainValues(
         ),
       );
     if (!rpf) return empty;
+    if (
+      rpf.fieldType === "function" &&
+      (rpf.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+    ) {
+      return empty;
+    }
     const pagePerm = mostPermissiveFieldPerm(rpf.permissionsJson as FieldPermissions | null, roleIds, "view", perms, relatedEntityId, relatedPageId);
-    access = canViewRelated && pagePerm !== "hidden" ? "view" : "hidden";
+    const relatedPageRecordPerm = perms.records[mirrorPermKey(relatedPageId)] ?? perms.records[String(relatedEntityId)];
+    access =
+      (perms.superAdmin || (perms.pageIds.includes(relatedPageId) && relatedPageRecordPerm?.view === true))
+      && canViewRelated && pagePerm !== "hidden"
+        ? "view"
+        : "hidden";
     relatedFieldType = access === "hidden" ? null : rpf.fieldType;
     optionsJson = access === "hidden" ? [] : normalizeOptions(rpf.optionsJson);
   } else {
@@ -2616,6 +2748,12 @@ async function resolveChainValues(
         ),
       );
     if (!rf) return empty;
+    if (
+      rf.fieldType === "function" &&
+      (rf.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+    ) {
+      return empty;
+    }
     projectedField = rf;
     access = canViewRelated ? resolveFieldAccess(rf, perms, roleIds, relatedEntityId) : "hidden";
     relatedFieldType = access === "hidden" ? null : rf.fieldType;
@@ -2656,6 +2794,45 @@ async function resolveChainValues(
     .where(and(...linkedConds));
   const linkedMap = new Map<number, Record<string, unknown>>();
   for (const lr of linkedRecords) linkedMap.set(lr.id, (lr.valuesJson as Record<string, unknown>) ?? {});
+  if (relatedPageId != null && linkedMap.size > 0) {
+    const relatedPagePermissions = await interactiveFormulaPermissions(ctx.req, relatedEntityId, relatedPageId);
+    const allowedForRelatedPage = await relatedPagePermissions.filterRows({
+      entityId: relatedEntityId,
+      pageId: relatedPageId,
+      recordIds: [...linkedMap.keys()],
+    });
+    for (const id of linkedMap.keys()) {
+      if (!allowedForRelatedPage.has(id)) linkedMap.delete(id);
+    }
+    if (linkedMap.size === 0) {
+      return { access, relatedFieldType, optionsJson, valueByRecordId: new Map() };
+    }
+  }
+  // Computed lookup targets use the same read-time materializer as record
+  // responses; never treat a formula result as stored record data.
+  const relatedFields = await loadActiveEntityFields(relatedEntityId);
+  const relatedHidden = new Set(relatedFields
+    .filter((field) =>
+      resolveFieldAccess(field, ctx.perms, ctx.roleIds, relatedEntityId) === "hidden" ||
+      (
+        field.fieldType === "function" &&
+        (field.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+      ))
+    .map((field) => field.fieldKey));
+  const relatedComputed = materializeVisibleEntityFormulas({
+    entityId: relatedEntityId,
+    rows: [...linkedMap].map(([id, values]) => ({ id, values })),
+    fields: relatedFields,
+    hidden: relatedHidden,
+    linkedInputs: await mergeLinkedFormulaInputs({
+      entityId: relatedEntityId,
+      rows: [...linkedMap].map(([id, values]) => ({ id, values })),
+      fields: relatedFields.filter((field) => !relatedHidden.has(field.fieldKey)),
+      permissions: await interactiveFormulaPermissions(ctx.req, relatedEntityId),
+    }),
+    formulaOptions: await loadFormulaOptions(),
+  });
+  for (const [id, values] of relatedComputed) linkedMap.set(id, values);
 
   // Recurse when the projected field is itself an entity-source relation/lookup.
   const projectedIsChain =
@@ -2700,6 +2877,49 @@ async function resolveChainValues(
         .where(and(eq(pageRecordValuesTable.pageId, relatedPageId), inArray(pageRecordValuesTable.recordId, allowedLinkedIds)));
       for (const r of prv) pageValuesMap.set(r.recordId, (r.valuesJson as Record<string, unknown>) ?? {});
     }
+    const pageFields = await db.select().from(pageFieldsTable).where(and(
+      eq(pageFieldsTable.pageId, relatedPageId), eq(pageFieldsTable.isActive, true),
+    ));
+    const pageHidden = new Set(pageFields
+      .filter((field) =>
+        mostPermissiveFieldPerm(
+          field.permissionsJson as FieldPermissions | null,
+          ctx.roleIds,
+          "view",
+          ctx.perms,
+          relatedEntityId,
+          relatedPageId,
+        ) === "hidden" ||
+        (
+          field.fieldType === "function" &&
+          (field.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+        ))
+      .map((field) => field.fieldKey));
+    const pageComputed = materializeVisiblePageFormulas({
+      entityId: relatedEntityId,
+      pageId: relatedPageId,
+      rows: [...linkedMap].map(([id, entityValues]) => ({
+        id,
+        entityValues,
+        pageValues: pageValuesMap.get(id) ?? {},
+      })),
+      entityFields: relatedFields,
+      pageFields,
+      hiddenEntity: relatedHidden,
+      hiddenPage: pageHidden,
+      linkedInputs: await mergeLinkedFormulaInputs({
+        entityId: relatedEntityId,
+        pageId: relatedPageId,
+        rows: [...linkedMap].map(([id, values]) => ({ id, values })),
+        fields: [
+          ...relatedFields.filter((field) => !relatedHidden.has(field.fieldKey)),
+          ...pageFields.filter((field) => !pageHidden.has(field.fieldKey)),
+        ],
+        permissions: await interactiveFormulaPermissions(ctx.req, relatedEntityId, relatedPageId),
+      }),
+      formulaOptions: await loadFormulaOptions(),
+    });
+    for (const [id, values] of pageComputed) pageValuesMap.set(id, values);
     for (const id of linkedMap.keys()) linkedValueMap.set(id, pageValuesMap.get(id)?.[relatedFieldKey] ?? null);
   } else {
     for (const [id, vals] of linkedMap) linkedValueMap.set(id, vals[relatedFieldKey] ?? null);
@@ -2864,6 +3084,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
       access = canViewRelated && projPerm !== "hidden" ? "view" : "hidden";
       relatedFieldType = access === "hidden" ? null : relatedPageField.fieldType;
       optionsJson = access === "hidden" ? [] : normalizeOptions(relatedPageField.optionsJson);
+      if (relatedPageField.fieldType === "function") projectedChain = true;
     } else {
       const [relatedField] = await db
         .select()
@@ -2885,7 +3106,11 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
       // relation/lookup, follow it one more hop (recursively) instead of reading
       // values_json (which has no scalar for it). resolveChainValues re-applies
       // the full RBAC boundary at every hop.
-      if (relatedField.fieldType === "relation" || relatedField.fieldType === "lookup") {
+      if (
+        relatedField.fieldType === "relation" ||
+        relatedField.fieldType === "lookup" ||
+        relatedField.fieldType === "function"
+      ) {
         projectedChain = true;
       }
     }
@@ -2893,7 +3118,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
     // Resolve the chained value/metadata once per column (entity-source only).
     let chain: ChainResolution | null = null;
     if (projectedChain && access !== "hidden") {
-      chain = await resolveChainValues(entityId, allowedIds, relationId, relatedFieldKey, relatedPageId, { perms, roleIds, userId }, 0);
+      chain = await resolveChainValues(entityId, allowedIds, relationId, relatedFieldKey, relatedPageId, { perms, roleIds, userId, req }, 0);
       relatedFieldType = chain.access === "hidden" ? null : chain.relatedFieldType;
       optionsJson = chain.optionsJson;
       if (chain.access === "hidden") access = "hidden";
@@ -3523,16 +3748,25 @@ async function pageSourcesForEntity(entityId: number): Promise<RelationOptionPag
   const result: RelationOptionPage[] = [];
   for (const page of byId.values()) {
     const fields = await db
-      .select({ fieldKey: pageFieldsTable.fieldKey, nameJson: pageFieldsTable.nameJson, fieldType: pageFieldsTable.fieldType })
+      .select({
+        fieldKey: pageFieldsTable.fieldKey,
+        nameJson: pageFieldsTable.nameJson,
+        fieldType: pageFieldsTable.fieldType,
+        formulaConfigJson: pageFieldsTable.formulaConfigJson,
+      })
       .from(pageFieldsTable)
       .where(and(eq(pageFieldsTable.pageId, page.id), eq(pageFieldsTable.isActive, true)))
       .orderBy(asc(pageFieldsTable.sortOrder));
     const valueBacked = fields.filter(
       (f) =>
         f.fieldKey.trim() !== "" &&
-        f.fieldType !== "function" &&
         f.fieldType !== "relation" &&
-        f.fieldType !== "lookup",
+        f.fieldType !== "lookup" &&
+        f.fieldType !== "page_ref" &&
+        !(
+          f.fieldType === "function" &&
+          (f.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+        ),
     );
     if (valueBacked.length === 0) continue;
     result.push({
@@ -3562,7 +3796,12 @@ async function buildRelationOptions(entityId: number): Promise<RelationOption[]>
       .where(eq(entitiesTable.id, relatedEntityId));
     if (!relatedEntity) continue;
     const fields = await db
-      .select({ fieldKey: entityFieldsTable.fieldKey, nameJson: entityFieldsTable.nameJson, fieldType: entityFieldsTable.fieldType })
+      .select({
+        fieldKey: entityFieldsTable.fieldKey,
+        nameJson: entityFieldsTable.nameJson,
+        fieldType: entityFieldsTable.fieldType,
+        formulaConfigJson: entityFieldsTable.formulaConfigJson,
+      })
       .from(entityFieldsTable)
       .where(and(eq(entityFieldsTable.entityId, relatedEntityId), eq(entityFieldsTable.isActive, true)))
       .orderBy(asc(entityFieldsTable.sortOrder));
@@ -3578,7 +3817,12 @@ async function buildRelationOptions(entityId: number): Promise<RelationOption[]>
       // selected or projected and Radix Select rejects value="", so omit them
       // at the API boundary instead of letting one bad row crash the editor.
       fields: fields
-        .filter((f) => f.fieldKey.trim() !== "")
+        .filter((f) =>
+          f.fieldKey.trim() !== "" &&
+          !(
+            f.fieldType === "function" &&
+            (f.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
+          ))
         .map((f) => ({ key: f.fieldKey, label: f.nameJson, fieldType: f.fieldType })),
       pages: await pageSourcesForEntity(relatedEntityId),
     });
@@ -3980,6 +4224,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
       access = canViewRelated && pagePerm !== "hidden" ? "view" : "hidden";
       relatedFieldType = access === "hidden" ? null : relatedPageField.fieldType;
       optionsJson = access === "hidden" ? [] : normalizeOptions(relatedPageField.optionsJson);
+      if (relatedPageField.fieldType === "function") projectedChain = true;
     } else {
       const [relatedField] = await db
         .select()
@@ -4000,7 +4245,11 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
       optionsJson = access === "hidden" ? [] : normalizeOptions(relatedField.optionsJson);
       // Double-hop: when the projected field is itself an entity-source
       // relation/lookup, follow it one more hop (see resolveChainValues).
-      if (relatedField.fieldType === "relation" || relatedField.fieldType === "lookup") {
+      if (
+        relatedField.fieldType === "relation" ||
+        relatedField.fieldType === "lookup" ||
+        relatedField.fieldType === "function"
+      ) {
         projectedChain = true;
       }
     }
@@ -4008,7 +4257,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     // Resolve the chained value/metadata once per column (entity-source only).
     let chain: ChainResolution | null = null;
     if (projectedChain && access !== "hidden") {
-      chain = await resolveChainValues(entityId, allowedIds, relationId, relatedFieldKey, relatedPageId, { perms, roleIds, userId }, 0);
+      chain = await resolveChainValues(entityId, allowedIds, relationId, relatedFieldKey, relatedPageId, { perms, roleIds, userId, req }, 0);
       relatedFieldType = chain.access === "hidden" ? null : chain.relatedFieldType;
       optionsJson = chain.optionsJson;
       if (chain.access === "hidden") access = "hidden";

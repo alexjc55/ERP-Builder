@@ -94,6 +94,22 @@ async function request(
   }
 }
 
+async function read(path: string): Promise<{ status: number; body: unknown }> {
+  const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
+    const listener = app.listen(0, "127.0.0.1", () => resolve(listener));
+  });
+  try {
+    const address = server.address();
+    assert.ok(address && typeof address !== "string");
+    const response = await fetch(`http://127.0.0.1:${address.port}/api${path}`, {
+      headers: { authorization: `Bearer ${signToken({ userId: ids.user, roleId: ids.role })}` },
+    });
+    return { status: response.status, body: await response.json() };
+  } finally {
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
 async function pageValue(pageId: number, recordId: number) {
   const [row] = await db.select().from(pageRecordValuesTable).where(and(
     eq(pageRecordValuesTable.pageId, pageId), eq(pageRecordValuesTable.recordId, recordId),
@@ -228,6 +244,27 @@ async function setup() {
       pageId: ids.sourcePage, fieldKey: "stage", nameJson: { en: "Stage" }, fieldType: "select",
       optionsJson: [{ value: "done", labelJson: { en: "Done" }, statusId: ids.done }],
     },
+    {
+      pageId: ids.sourcePage,
+      fieldKey: "formula_name",
+      nameJson: { en: "Formula name" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{entity:${ids.entity}.name}` },
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "formula_ref",
+      nameJson: { en: "Formula ref" },
+      fieldType: "page_ref",
+      pageRefConfigJson: { sourcePageId: ids.sourcePage, sourceFieldKey: "formula_name" },
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "same_page_formula",
+      nameJson: { en: "Same page formula" },
+      fieldType: "function",
+      formulaConfigJson: { expression: "{stage}" },
+    },
   ]);
   const records = await db.insert(entityRecordsTable).values([
     { entityId: ids.entity, valuesJson: { name: "Ready", owner: ids.user, attachment: { kind: "server", path: `/local/${runId}.txt`, name: "old.txt" } }, statusId: ids.base },
@@ -252,6 +289,40 @@ after(async () => { await cleanup(); });
 
 test("page-local select mappings synchronize entity status atomically", async (t) => {
   await setup();
+  await t.test("read-time page formulas and formula page_ref need no source value row", async () => {
+    await reset([ids.one]);
+    assert.equal(await pageValue(ids.targetPage, ids.one), undefined);
+    assert.equal(await pageValue(ids.sourcePage, ids.one), undefined);
+    let response = await read(`/pages/${ids.targetPage}/record-values`);
+    assert.equal(response.status, 200);
+    let rows = response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>;
+    let row = rows.find((candidate) => candidate.recordId === ids.one);
+    assert.ok(row);
+    assert.equal(row.valuesJson.formula_ref, "Ready");
+    assert.equal(row.valuesJson.same_page_formula, null);
+    assert.equal(await pageValue(ids.targetPage, ids.one), undefined, "target formula projection must remain unpersisted");
+    assert.equal(await pageValue(ids.sourcePage, ids.one), undefined, "formula projection must remain unpersisted");
+
+    await db.insert(pageRecordValuesTable).values({
+      pageId: ids.targetPage,
+      recordId: ids.one,
+      valuesJson: { stage: "done" },
+    });
+    response = await read(`/pages/${ids.targetPage}/record-values`);
+    rows = response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>;
+    row = rows.find((candidate) => candidate.recordId === ids.one);
+    assert.ok(row);
+    assert.equal(row.valuesJson.same_page_formula, "done");
+
+    const deniedWrite = await request(
+      `/pages/${ids.targetPage}/records/${ids.one}/values`,
+      { valuesJson: { formula_ref: "changed" } },
+      "PUT",
+    );
+    assert.equal(deniedWrite.status, 403);
+    assert.equal(await pageValue(ids.sourcePage, ids.one), undefined);
+    await reset([ids.one]);
+  });
   await t.test("single and bulk writes commit page values and mapped statuses", async () => {
     let response = await request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { stage: "done" } }, "PUT");
     assert.equal(response.status, 200);
