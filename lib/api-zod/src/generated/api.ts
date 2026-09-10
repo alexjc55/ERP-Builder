@@ -5049,7 +5049,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "resolvedEditable": zod.boolean().optional().describe('Response-only. True when the current viewer has page, record and field-level permission to write this value through to its source.')
 }).optional().describe('Config for a page_ref page field: display of another mirror page\'s page-local field for the same record, with permission-gated write-through. resolved\* properties are response-only enrichment of the source field.'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
-  "formulaExportRoleIds": zod.array(zod.number()).optional().describe('Role ids explicitly allowed to let a formula on another accessible page consume this field while source-page membership remains denied. Ordinary source field, record and row permissions still apply.'),
+  "allowFormulaExport": zod.boolean().optional().describe('When enabled, a formula on another accessible page may consume this exact field without source-page membership. Every role with ordinary view access to this field is eligible; source record and row permissions still apply.'),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
@@ -5105,7 +5105,7 @@ export const createPageFieldBodyPercentConfigJsonDecimalsMax = 10;
 export const createPageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMin = 0;
 export const createPageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecimalsMax = 10;
 
-export const createPageFieldBodyFormulaExportRoleIdsDefault = [];
+export const createPageFieldBodyAllowFormulaExportDefault = false;
 export const createPageFieldBodyShowInTableDefault = true;
 export const createPageFieldBodyIsPinnedDefault = false;
 export const createPageFieldBodyWrapTextDefault = false;
@@ -5252,7 +5252,7 @@ export const CreatePageFieldBody = zod.object({
   "resolvedEditable": zod.boolean().optional().describe('Response-only. True when the current viewer has page, record and field-level permission to write this value through to its source.')
 }).optional().describe('Config for a page_ref page field: display of another mirror page\'s page-local field for the same record, with permission-gated write-through. resolved\* properties are response-only enrichment of the source field.'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
-  "formulaExportRoleIds": zod.array(zod.number()).default(createPageFieldBodyFormulaExportRoleIdsDefault),
+  "allowFormulaExport": zod.boolean().default(createPageFieldBodyAllowFormulaExportDefault),
   "showInTable": zod.boolean().default(createPageFieldBodyShowInTableDefault),
   "isPinned": zod.boolean().default(createPageFieldBodyIsPinnedDefault),
   "showColumnTotal": zod.boolean().optional(),
@@ -5446,7 +5446,7 @@ export const UpdatePageFieldBody = zod.object({
   "resolvedEditable": zod.boolean().optional().describe('Response-only. True when the current viewer has page, record and field-level permission to write this value through to its source.')
 }).optional().describe('Config for a page_ref page field: display of another mirror page\'s page-local field for the same record, with permission-gated write-through. resolved\* properties are response-only enrichment of the source field.'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
-  "formulaExportRoleIds": zod.array(zod.number()).optional(),
+  "allowFormulaExport": zod.boolean().optional(),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),
@@ -5642,7 +5642,7 @@ export const UpdatePageFieldResponse = zod.object({
   "resolvedEditable": zod.boolean().optional().describe('Response-only. True when the current viewer has page, record and field-level permission to write this value through to its source.')
 }).optional().describe('Config for a page_ref page field: display of another mirror page\'s page-local field for the same record, with permission-gated write-through. resolved\* properties are response-only enrichment of the source field.'),
   "permissionsJson": zod.record(zod.string(), zod.enum(['hidden', 'view', 'edit'])).optional(),
-  "formulaExportRoleIds": zod.array(zod.number()).optional().describe('Role ids explicitly allowed to let a formula on another accessible page consume this field while source-page membership remains denied. Ordinary source field, record and row permissions still apply.'),
+  "allowFormulaExport": zod.boolean().optional().describe('When enabled, a formula on another accessible page may consume this exact field without source-page membership. Every role with ordinary view access to this field is eligible; source record and row permissions still apply.'),
   "showInTable": zod.boolean().optional(),
   "isPinned": zod.boolean().optional(),
   "showColumnTotal": zod.boolean().optional(),

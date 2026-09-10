@@ -612,7 +612,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
           fieldKey: "inherited_format_regression",
           nameJson: { en: "Inherited format regression" },
           fieldType: "text",
-          formulaExportRoleIds: [ids.role],
+          allowFormulaExport: true,
           formatRulesJson: [ownRule],
           formatInheritJson: [{ kind: "pageField", pageId: ids.sourcePage, fieldKey: "stage" }],
         },
@@ -623,7 +623,8 @@ test("page-local select mappings synchronize entity status atomically", async (t
       assert.ok(Number.isInteger(createdId));
       assert.deepEqual(created.body.formatRulesJson, [ownRule]);
       assert.deepEqual(created.body.inheritedFormatRulesJson, [pageRule]);
-      assert.deepEqual(created.body.formulaExportRoleIds, [ids.role]);
+      assert.equal(created.body.allowFormulaExport, true);
+      assert.equal("formulaExportRoleIds" in created.body, false);
 
       let reloaded = await read(`/pages/${ids.targetPage}/fields`);
       assert.equal(reloaded.status, 200);
@@ -632,31 +633,47 @@ test("page-local select mappings synchronize entity status atomically", async (t
       assert.deepEqual(field.formatRulesJson, [ownRule]);
       assert.deepEqual(field.formatInheritJson, [{ kind: "pageField", pageId: ids.sourcePage, fieldKey: "stage" }]);
       assert.deepEqual(field.inheritedFormatRulesJson, [pageRule]);
-      assert.deepEqual(field.formulaExportRoleIds, [ids.role]);
+      assert.equal(field.allowFormulaExport, true);
+      assert.equal("formulaExportRoleIds" in field, false);
 
       const [storedAfterCreate] = await db.select({
         formatRulesJson: pageFieldsTable.formatRulesJson,
         formatInheritJson: pageFieldsTable.formatInheritJson,
+        allowFormulaExport: pageFieldsTable.allowFormulaExport,
         formulaExportRoleIds: pageFieldsTable.formulaExportRoleIds,
       }).from(pageFieldsTable).where(eq(pageFieldsTable.id, createdId));
       assert.deepEqual(storedAfterCreate?.formatRulesJson, [ownRule]);
       assert.deepEqual(storedAfterCreate?.formatInheritJson, [
         { kind: "pageField", pageId: ids.sourcePage, fieldKey: "stage" },
       ]);
-      assert.deepEqual(storedAfterCreate?.formulaExportRoleIds, [ids.role]);
+      assert.equal(storedAfterCreate?.allowFormulaExport, true);
+      assert.deepEqual(storedAfterCreate?.formulaExportRoleIds, []);
+
+      // A stale legacy list must never override an explicit false written
+      // through the current API.
+      await db.update(pageFieldsTable)
+        .set({ formulaExportRoleIds: [ids.role] })
+        .where(eq(pageFieldsTable.id, createdId));
 
       const changed = await request(
         `/page-fields/${createdId}`,
         {
           formatInheritJson: [{ kind: "field", entityId: ids.entity, fieldKey: "workflow_note" }],
-          formulaExportRoleIds: [],
+          allowFormulaExport: false,
         },
         "PUT",
       );
       assert.equal(changed.status, 200);
       assert.deepEqual(changed.body.formatRulesJson, [ownRule]);
       assert.deepEqual(changed.body.inheritedFormatRulesJson, [entityRule]);
-      assert.deepEqual(changed.body.formulaExportRoleIds, []);
+      assert.equal(changed.body.allowFormulaExport, false);
+      assert.equal("formulaExportRoleIds" in changed.body, false);
+      const [storedAfterDisable] = await db.select({
+        allowFormulaExport: pageFieldsTable.allowFormulaExport,
+        formulaExportRoleIds: pageFieldsTable.formulaExportRoleIds,
+      }).from(pageFieldsTable).where(eq(pageFieldsTable.id, createdId));
+      assert.equal(storedAfterDisable?.allowFormulaExport, false);
+      assert.deepEqual(storedAfterDisable?.formulaExportRoleIds, [ids.role]);
 
       const cleared = await request(`/page-fields/${createdId}`, { formatInheritJson: [] }, "PUT");
       assert.equal(cleared.status, 200);
@@ -1049,7 +1066,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
         nameJson: { en: "Production days" },
         fieldType: "function",
         permissionsJson: { [String(ids.role)]: "view" },
-        formulaExportRoleIds: [ids.role],
+        allowFormulaExport: true,
         formulaConfigJson: {
           expression: "if({entry_date} == '', '', daysBetween({entry_date},{material_release_date}))",
         },
@@ -1175,7 +1192,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
         nameJson: { en: "Export alias" },
         fieldType: "page_ref",
         pageRefConfigJson: { sourcePageId: ids.sourcePage, sourceFieldKey: "export_value" },
-        formulaExportRoleIds: [ids.formulaExportRole],
+        allowFormulaExport: true,
       },
       {
         pageId: ids.targetPage,
@@ -1221,26 +1238,36 @@ test("page-local select mappings synchronize entity status atomically", async (t
       assert.equal(deniedEmpty.body.total, 0, "denial must not match is_empty");
 
       await db.update(pageFieldsTable)
-        .set({ formulaExportRoleIds: [ids.formulaExportRole] })
+        .set({
+          allowFormulaExport: true,
+          permissionsJson: {
+            [String(ids.role)]: "hidden",
+            [String(ids.formulaExportRole)]: "view",
+          },
+        })
         .where(sourceFieldWhere);
       response = await read(`/pages/${ids.targetPage}/record-values`);
       assert.equal(response.status, 200);
       row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
         .find((candidate) => candidate.recordId === ids.one);
       assert.ok(row);
-      assert.equal(row.valuesJson.external_formula, "exported");
+      assert.equal(
+        row.valuesJson.external_formula,
+        "exported",
+        "ordinary view from any assigned role is enough for a field-wide export",
+      );
       assert.equal(row.valuesJson.unrelated_formula, null, "a sibling field is not transitively exported");
       assert.equal(row.valuesJson.external_chain_formula, null, "a formula source itself is not implicitly exported");
       assert.equal(row.valuesJson.external_alias_formula, "exported", "page_ref sources resolve through both exact grants");
 
       await db.update(pageFieldsTable)
-        .set({ formulaExportRoleIds: [ids.formulaExportRole] })
+        .set({ allowFormulaExport: true })
         .where(and(
           eq(pageFieldsTable.pageId, ids.sourcePage),
           eq(pageFieldsTable.fieldKey, "export_chain"),
         ));
       await db.update(pageFieldsTable)
-        .set({ formulaExportRoleIds: [ids.formulaExportRole] })
+        .set({ allowFormulaExport: true })
         .where(and(
           eq(pageFieldsTable.pageId, ids.relatedPage),
           eq(pageFieldsTable.fieldKey, "related_cost"),
@@ -1475,7 +1502,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
       row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
         .find((candidate) => candidate.recordId === ids.one);
       assert.ok(row);
-      assert.equal(row.valuesJson.external_formula, null, "removing the granted role revokes immediately");
+      assert.equal(row.valuesJson.external_formula, null, "removing the only ordinary-view role revokes immediately");
       deniedOptions = await request(
         `/entities/${ids.entity}/records/page-filter-values`,
         { pageId: ids.targetPage, field: "external_formula" },
@@ -1524,13 +1551,21 @@ test("page-local select mappings synchronize entity status atomically", async (t
       );
 
       await db.update(pageFieldsTable)
-        .set({ permissionsJson: {}, formulaExportRoleIds: [] })
+        .set({
+          permissionsJson: {},
+          allowFormulaExport: false,
+          formulaExportRoleIds: [ids.formulaExportRole],
+        })
         .where(and(
           eq(pageFieldsTable.pageId, ids.sourcePage),
           inArray(pageFieldsTable.fieldKey, ["export_value", "export_chain"]),
         ));
       await db.update(pageFieldsTable)
-        .set({ permissionsJson: {}, formulaExportRoleIds: [] })
+        .set({
+          permissionsJson: {},
+          allowFormulaExport: false,
+          formulaExportRoleIds: [ids.formulaExportRole],
+        })
         .where(and(
           eq(pageFieldsTable.pageId, ids.relatedPage),
           eq(pageFieldsTable.fieldKey, "related_cost"),
@@ -1545,7 +1580,11 @@ test("page-local select mappings synchronize entity status atomically", async (t
       row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
         .find((candidate) => candidate.recordId === ids.one);
       assert.ok(row);
-      assert.equal(row.valuesJson.external_formula, null, "revocation applies on the next request");
+      assert.equal(
+        row.valuesJson.external_formula,
+        null,
+        "explicit false applies immediately and never falls back to the stale legacy array",
+      );
       deniedOptions = await request(
         `/entities/${ids.entity}/records/page-filter-values`,
         { pageId: ids.targetPage, field: "external_formula" },
@@ -1563,15 +1602,31 @@ test("page-local select mappings synchronize entity status atomically", async (t
         "POST",
       );
       assert.equal(deniedEmpty.body.total, 0);
+
+      await db.update(rolesTable)
+        .set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) })
+        .where(eq(rolesTable.id, ids.role));
+      response = await read(`/pages/${ids.targetPage}/record-values`);
+      row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal(
+        row.valuesJson.external_formula,
+        "exported",
+        "normal source-page membership continues to work while export is disabled",
+      );
+      await db.update(rolesTable)
+        .set({ permissionsJson: permissions([ids.targetPage]) })
+        .where(eq(rolesTable.id, ids.role));
     } finally {
       await db.update(pageFieldsTable)
-        .set({ permissionsJson: {}, formulaExportRoleIds: [] })
+        .set({ permissionsJson: {}, allowFormulaExport: false, formulaExportRoleIds: [] })
         .where(and(
           eq(pageFieldsTable.pageId, ids.sourcePage),
           inArray(pageFieldsTable.fieldKey, ["export_value", "export_chain"]),
         ));
       await db.update(pageFieldsTable)
-        .set({ permissionsJson: {}, formulaExportRoleIds: [] })
+        .set({ permissionsJson: {}, allowFormulaExport: false, formulaExportRoleIds: [] })
         .where(and(
           eq(pageFieldsTable.pageId, ids.relatedPage),
           eq(pageFieldsTable.fieldKey, "related_cost"),

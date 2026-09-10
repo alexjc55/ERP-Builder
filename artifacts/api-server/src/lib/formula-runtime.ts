@@ -62,16 +62,15 @@ type LegacyRelationField = {
 };
 type RelationEndpoint = { id: number; sourceEntityId: number; targetEntityId: number };
 
-/** Default-deny, additive role capability for one exact page-field source. */
+/** Default-deny, field-wide capability for one exact page-field source. */
 export function canExportPageFieldToFormula(options: {
-  formulaExportRoleIds: readonly number[] | null | undefined;
-  roleIds: readonly number[];
+  allowFormulaExport: boolean | null | undefined;
   ordinaryFieldAccess: "hidden" | "view" | "edit";
   recordView: boolean;
 }): boolean {
-  return options.recordView
-    && options.ordinaryFieldAccess !== "hidden"
-    && (options.formulaExportRoleIds ?? []).some((roleId) => options.roleIds.includes(roleId));
+  return options.allowFormulaExport === true
+    && options.recordView
+    && options.ordinaryFieldAccess !== "hidden";
 }
 
 type ExportedFormulaPageContext = {
@@ -458,8 +457,7 @@ export async function interactiveFormulaPermissions(
           field
           && pageEntity.get(resource.pageId) === resource.entityId
           && canExportPageFieldToFormula({
-            formulaExportRoleIds: field.formulaExportRoleIds,
-            roleIds,
+            allowFormulaExport: field.allowFormulaExport,
             ordinaryFieldAccess: mostPermissiveFieldPerm(
               field.permissionsJson,
               roleIds,

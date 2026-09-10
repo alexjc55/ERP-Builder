@@ -11,24 +11,22 @@ import {
   mergeLinkedFormulaInputsBatched,
 } from "./formula-runtime";
 
-test("cross-page formula export is explicit, additive, and preserves ordinary read boundaries", () => {
+test("cross-page formula export is field-wide and preserves ordinary read boundaries", () => {
   const base = {
-    roleIds: [7, 9],
     ordinaryFieldAccess: "view" as const,
     recordView: true,
   };
-  assert.equal(canExportPageFieldToFormula({ ...base, formulaExportRoleIds: undefined }), false);
-  assert.equal(canExportPageFieldToFormula({ ...base, formulaExportRoleIds: [] }), false);
-  assert.equal(canExportPageFieldToFormula({ ...base, formulaExportRoleIds: [8] }), false);
-  assert.equal(canExportPageFieldToFormula({ ...base, formulaExportRoleIds: [9] }), true);
+  assert.equal(canExportPageFieldToFormula({ ...base, allowFormulaExport: undefined }), false);
+  assert.equal(canExportPageFieldToFormula({ ...base, allowFormulaExport: false }), false);
+  assert.equal(canExportPageFieldToFormula({ ...base, allowFormulaExport: true }), true);
   assert.equal(canExportPageFieldToFormula({
     ...base,
-    formulaExportRoleIds: [7],
+    allowFormulaExport: true,
     ordinaryFieldAccess: "hidden",
   }), false);
   assert.equal(canExportPageFieldToFormula({
     ...base,
-    formulaExportRoleIds: [7],
+    allowFormulaExport: true,
     recordView: false,
   }), false);
 });

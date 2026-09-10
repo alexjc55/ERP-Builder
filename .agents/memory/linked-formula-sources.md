@@ -13,10 +13,12 @@ Structured linked-formula source tokens are server-only capabilities. Never seri
 
 ## Qualified page references
 
-**Explicit export exception:** a role-specific source-field export grant may bypass source page
-membership only when used by an authorized destination formula. It never grants direct page API
-access or exports sibling fields. Ordinary source field visibility and source mirror record,
-own/filter scope, and hidden-status restrictions still apply even without page membership.
+**Explicit export exception:** a field-wide source-field export switch may bypass source page
+membership only when used by an authorized destination formula. Every role with ordinary view
+access to that field is eligible; there is no separate export-role list. The switch never grants
+direct page API access or exports sibling fields. Ordinary source field visibility and source
+mirror record, own/filter scope, and hidden-status restrictions still apply even without page
+membership.
 **Why:** operational pages need selected report values without opening the report; using ordinary
 membership-dependent permission helpers would silently drop the inaccessible mirror's restrictions.
 **How to apply:** evaluate exact source dependencies with export-aware source permissions. Propagate

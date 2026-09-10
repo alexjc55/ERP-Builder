@@ -133,6 +133,14 @@ function clampFormulaDecimals<T>(cfg: T): T {
 // numeric so it can be averaged and used in formulas).
 const PERCENT_NUM_RE = /^-?[0-9]+(\.[0-9]+)?$/;
 
+/** Never expose the deprecated per-role export list through active APIs. */
+function publicPageField<T extends { formulaExportRoleIds?: unknown }>(
+  field: T,
+): Omit<T, "formulaExportRoleIds"> {
+  const { formulaExportRoleIds: _deprecated, ...publicField } = field;
+  return publicField;
+}
+
 // Drizzle wraps the pg driver error, so the SQLSTATE code (23505 for a unique
 // violation) can live on err.cause rather than the top-level error. Walk the
 // cause chain — checking only the top level silently misclassifies wrapped
@@ -642,7 +650,7 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
     }),
   );
   if (perms.superAdmin || perms.admin.pages) {
-    res.json(await withInheritedFormatRules(enriched));
+    res.json((await withInheritedFormatRules(enriched)).map(publicPageField));
     return;
   }
   const visible = enriched.filter(
@@ -654,18 +662,17 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
   // when the source FIELD itself is hidden for the viewer's roles — its data
   // must not be re-surfaced here; drop the whole column (admins keep it for
   // setup). A stale/ineligible source (no resolved metadata) is dropped too.
-  res.json(
-    await withInheritedFormatRules(visible.filter((f) => {
-      if (f.fieldType !== "page_ref") return true;
-      const cfg = (f.pageRefConfigJson ?? {}) as PageRefFieldConfig;
-      if (cfg.sourcePageId == null || !perms.pageIds.includes(cfg.sourcePageId)) return false;
-      if (cfg.resolvedFieldType == null) return false;
-      return (
-        mostPermissiveFieldPerm(srcPermsByFieldId.get(f.id) ?? null, viewerRoleIds, "view", perms, eff.entityId ?? undefined, cfg.sourcePageId) !==
-        "hidden"
-      );
-    })),
-  );
+  const visibleWithInheritedRules = await withInheritedFormatRules(visible.filter((f) => {
+    if (f.fieldType !== "page_ref") return true;
+    const cfg = (f.pageRefConfigJson ?? {}) as PageRefFieldConfig;
+    if (cfg.sourcePageId == null || !perms.pageIds.includes(cfg.sourcePageId)) return false;
+    if (cfg.resolvedFieldType == null) return false;
+    return (
+      mostPermissiveFieldPerm(srcPermsByFieldId.get(f.id) ?? null, viewerRoleIds, "view", perms, eff.entityId ?? undefined, cfg.sourcePageId) !==
+      "hidden"
+    );
+  }));
+  res.json(visibleWithInheritedRules.map(publicPageField));
 });
 
 router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {
@@ -808,7 +815,7 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
       })
       .returning();
     const [resolved] = await withInheritedFormatRules([field]);
-    res.status(201).json(resolved);
+    res.status(201).json(publicPageField(resolved));
   } catch (err) {
     if (isUniqueViolation(err)) {
       res.status(409).json({ error: "A page field with this key already exists on this page" });
@@ -1033,9 +1040,7 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
     updateData.relationConfigJson = body.relationConfigJson ?? {};
   }
   if ("permissionsJson" in body) updateData.permissionsJson = body.permissionsJson ?? {};
-  if ("formulaExportRoleIds" in body) {
-    updateData.formulaExportRoleIds = [...new Set(body.formulaExportRoleIds ?? [])];
-  }
+  if ("allowFormulaExport" in body) updateData.allowFormulaExport = body.allowFormulaExport ?? false;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
   if (body.showInTable != null) updateData.showInTable = body.showInTable;
@@ -1100,7 +1105,7 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
         );
     }
     const [resolved] = await withInheritedFormatRules([field]);
-    res.json(resolved);
+    res.json(publicPageField(resolved));
   } catch (err) {
     if (isUniqueViolation(err)) {
       res.status(409).json({ error: "A page field with this key already exists on this page" });

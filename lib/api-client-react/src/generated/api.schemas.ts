@@ -3565,8 +3565,8 @@ export interface PageField {
   fileConfigJson?: FileFieldConfig;
   pageRefConfigJson?: PageRefFieldConfig;
   permissionsJson?: FieldPermissions;
-  /** Role ids explicitly allowed to let a formula on another accessible page consume this field while source-page membership remains denied. Ordinary source field, record and row permissions still apply. */
-  formulaExportRoleIds?: number[];
+  /** When enabled, a formula on another accessible page may consume this exact field without source-page membership. Every role with ordinary view access to this field is eligible; source record and row permissions still apply. */
+  allowFormulaExport?: boolean;
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;
@@ -3602,7 +3602,7 @@ export interface PageFieldInput {
   fileConfigJson?: FileFieldConfig;
   pageRefConfigJson?: PageRefFieldConfig;
   permissionsJson?: FieldPermissions;
-  formulaExportRoleIds?: number[];
+  allowFormulaExport?: boolean;
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;
@@ -3636,7 +3636,7 @@ export interface PageFieldUpdate {
   fileConfigJson?: FileFieldConfig;
   pageRefConfigJson?: PageRefFieldConfig;
   permissionsJson?: FieldPermissions;
-  formulaExportRoleIds?: number[];
+  allowFormulaExport?: boolean;
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;

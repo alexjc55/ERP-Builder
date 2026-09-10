@@ -252,7 +252,7 @@ export function PageFieldConfigDialog({
   const [refSourcePageId, setRefSourcePageId] = useState<number | null>(null);
   const [refSourceFieldKey, setRefSourceFieldKey] = useState("");
   const [permissions, setPermissions] = useState<FieldPermissions>({});
-  const [formulaExportRoleIds, setFormulaExportRoleIds] = useState<number[]>([]);
+  const [allowFormulaExport, setAllowFormulaExport] = useState(false);
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
   const [driveFolderId, setDriveFolderId] = useState<string>("");
   const [localFolderId, setLocalFolderId] = useState<number | null>(null);
@@ -312,7 +312,7 @@ export function PageFieldConfigDialog({
       setRefSourcePageId(field.pageRefConfigJson?.sourcePageId ?? null);
       setRefSourceFieldKey(field.pageRefConfigJson?.sourceFieldKey ?? "");
       setPermissions(field.permissionsJson ? { ...field.permissionsJson } : {});
-      setFormulaExportRoleIds(field.formulaExportRoleIds ?? []);
+      setAllowFormulaExport(field.allowFormulaExport ?? false);
       const src = field.fileConfigJson?.allowedSources;
       setAllowedSources(Array.isArray(src) && src.length > 0 ? (src as FileSource[]) : ["server"]);
       setDriveFolderId(field.fileConfigJson?.driveFolderId ?? "");
@@ -352,7 +352,7 @@ export function PageFieldConfigDialog({
       setRefSourcePageId(null);
       setRefSourceFieldKey("");
       setPermissions({});
-      setFormulaExportRoleIds([]);
+      setAllowFormulaExport(false);
       setAllowedSources(["server"]);
       setDriveFolderId("");
       setLocalFolderId(null);
@@ -613,7 +613,7 @@ export function PageFieldConfigDialog({
               : { relationId, relatedFieldKey: relatedFieldKey || null }
             : {},
       permissionsJson: permissions,
-      formulaExportRoleIds,
+      allowFormulaExport,
       fileConfigJson:
         fieldType === "file"
           ? {
@@ -1140,7 +1140,7 @@ export function PageFieldConfigDialog({
                 ) : (
                   <div className="space-y-2 pt-1">
                     {roles.map((role: Role) => (
-                      <div key={role.id} className="space-y-2 rounded-md border border-slate-100 p-2">
+                      <div key={role.id} className="rounded-md border border-slate-100 p-2">
                         <div className="flex items-center justify-between gap-3">
                           <span className="text-sm text-slate-700 truncate">{ml(role.nameJson)}</span>
                           <Select
@@ -1156,38 +1156,28 @@ export function PageFieldConfigDialog({
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-medium text-slate-600">
-                              {t(
-                                "pageFields.formulaExport",
-                                "Разрешить использование значения на других страницах",
-                              )}
-                            </p>
-                            <p className="text-[11px] text-slate-400">
-                              {t(
-                                "pageFields.formulaExportHint",
-                                "Только для формул; не открывает исходную страницу и не заменяет право просмотра поля.",
-                              )}
-                            </p>
-                          </div>
-                          <Switch
-                            checked={formulaExportRoleIds.includes(role.id)}
-                            onCheckedChange={(checked) =>
-                              setFormulaExportRoleIds((previous) =>
-                                checked
-                                  ? [...new Set([...previous, role.id])]
-                                  : previous.filter((id) => id !== role.id),
-                              )
-                            }
-                          />
-                        </div>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
             )}
+
+            <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+              <div>
+                <Label>{t(
+                  "pageFields.formulaExport",
+                  "Разрешить использование значения на других страницах",
+                )}</Label>
+                <p className="text-xs text-slate-400">
+                  {t(
+                    "pageFields.formulaExportHint",
+                    "Только для формул. Доступ получают все роли с правом просмотра поля; исходная страница не открывается.",
+                  )}
+                </p>
+              </div>
+              <Switch checked={allowFormulaExport} onCheckedChange={setAllowFormulaExport} />
+            </div>
 
             <div className="border-t border-slate-100 pt-4">
               <FieldFormatRulesEditor
