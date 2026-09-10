@@ -4934,6 +4934,20 @@ export const ListPageFieldsResponseItem = zod.object({
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
+  "formatInheritJson": zod.array(zod.object({
+  "kind": zod.enum(['field', 'status', 'pageField']),
+  "entityId": zod.number().optional(),
+  "pageId": zod.number().optional(),
+  "fieldKey": zod.string().optional()
+}).describe('One source a field inherits conditional formatting from. Used when the field\'s value is copied from elsewhere by automations: at read time the source\'s rules are resolved server-side and appended after the field\'s own formatRulesJson. kind \"field\" inherits the source entity field\'s format rules (entityId + fieldKey required); kind \"status\" turns each of the source entity\'s record statuses into equals-rules painted with the status color (entityId required); kind \"pageField\" inherits a page-local field\'s format rules (pageId + fieldKey required).')).optional(),
+  "inheritedFormatRulesJson": zod.array(zod.object({
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
+  "value": zod.string().optional(),
+  "value2": zod.string().optional(),
+  "cellColor": zod.string().optional(),
+  "rowColor": zod.string().optional(),
+  "textColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional().describe('Resolved rules inherited from formatInheritJson sources (response-only; apply after formatRulesJson).'),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({
@@ -5129,6 +5143,12 @@ export const CreatePageFieldBody = zod.object({
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
+  "formatInheritJson": zod.array(zod.object({
+  "kind": zod.enum(['field', 'status', 'pageField']),
+  "entityId": zod.number().optional(),
+  "pageId": zod.number().optional(),
+  "fieldKey": zod.string().optional()
+}).describe('One source a field inherits conditional formatting from. Used when the field\'s value is copied from elsewhere by automations: at read time the source\'s rules are resolved server-side and appended after the field\'s own formatRulesJson. kind \"field\" inherits the source entity field\'s format rules (entityId + fieldKey required); kind \"status\" turns each of the source entity\'s record statuses into equals-rules painted with the status color (entityId required); kind \"pageField\" inherits a page-local field\'s format rules (pageId + fieldKey required).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({
@@ -5316,6 +5336,12 @@ export const UpdatePageFieldBody = zod.object({
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
+  "formatInheritJson": zod.array(zod.object({
+  "kind": zod.enum(['field', 'status', 'pageField']),
+  "entityId": zod.number().optional(),
+  "pageId": zod.number().optional(),
+  "fieldKey": zod.string().optional()
+}).describe('One source a field inherits conditional formatting from. Used when the field\'s value is copied from elsewhere by automations: at read time the source\'s rules are resolved server-side and appended after the field\'s own formatRulesJson. kind \"field\" inherits the source entity field\'s format rules (entityId + fieldKey required); kind \"status\" turns each of the source entity\'s record statuses into equals-rules painted with the status color (entityId required); kind \"pageField\" inherits a page-local field\'s format rules (pageId + fieldKey required).')).optional(),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({
@@ -5497,6 +5523,20 @@ export const UpdatePageFieldResponse = zod.object({
   "rowColor": zod.string().optional(),
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional(),
+  "formatInheritJson": zod.array(zod.object({
+  "kind": zod.enum(['field', 'status', 'pageField']),
+  "entityId": zod.number().optional(),
+  "pageId": zod.number().optional(),
+  "fieldKey": zod.string().optional()
+}).describe('One source a field inherits conditional formatting from. Used when the field\'s value is copied from elsewhere by automations: at read time the source\'s rules are resolved server-side and appended after the field\'s own formatRulesJson. kind \"field\" inherits the source entity field\'s format rules (entityId + fieldKey required); kind \"status\" turns each of the source entity\'s record statuses into equals-rules painted with the status color (entityId required); kind \"pageField\" inherits a page-local field\'s format rules (pageId + fieldKey required).')).optional(),
+  "inheritedFormatRulesJson": zod.array(zod.object({
+  "operator": zod.enum(['equals', 'notEquals', 'contains', 'notContains', 'empty', 'notEmpty', 'gt', 'lt', 'gte', 'lte', 'between']),
+  "value": zod.string().optional(),
+  "value2": zod.string().optional(),
+  "cellColor": zod.string().optional(),
+  "rowColor": zod.string().optional(),
+  "textColor": zod.string().optional()
+}).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional().describe('Resolved rules inherited from formatInheritJson sources (response-only; apply after formatRulesJson).'),
   "formulaConfigJson": zod.object({
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({

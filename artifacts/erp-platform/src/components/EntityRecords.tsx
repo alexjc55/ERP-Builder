@@ -178,7 +178,7 @@ import {
   type FormulaFieldDef,
 } from "@workspace/formula";
 import { operatorLabel, filterValueToText } from "@/components/ViewConfigEditors";
-import { computeRowFormatting, resolveFormattingValue, ruleMatches, type FormatField, type FormatValueField } from "@/lib/formatRules";
+import { computeRowFormatting, orderedFormatRules, resolveFormattingValue, ruleMatches, type FormatField, type FormatValueField } from "@/lib/formatRules";
 import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
@@ -5300,8 +5300,7 @@ export function EntityRecords({
             // Conditional formatting: since every row in the group shares this
             // value, the first matching rule colours the group cell exactly
             // like it colours the individual cells (cell fill + text colour).
-            const colField = col.field as { formatRulesJson?: FieldFormatRule[] | null; inheritedFormatRulesJson?: FieldFormatRule[] | null };
-            const rules = [...(colField.formatRulesJson ?? []), ...(colField.inheritedFormatRulesJson ?? [])];
+            const rules = orderedFormatRules(col.field);
             for (const rule of rules) {
               if (ruleMatches(rule, renderValue)) {
                 if (rule.cellColor) commonCellColor = rule.cellColor;
@@ -7269,11 +7268,13 @@ export function EntityRecords({
                       // formatInheritJson sources (first match wins overall).
                       ...displayFields.map((f: Field) => ({
                         fieldKey: f.fieldKey,
-                        formatRulesJson: [...(f.formatRulesJson ?? []), ...(f.inheritedFormatRulesJson ?? [])],
+                        formatRulesJson: f.formatRulesJson,
+                        inheritedFormatRulesJson: f.inheritedFormatRulesJson,
                       })),
                       ...displayedPageFields.map((pf: PageField) => ({
                         fieldKey: pf.fieldKey,
                         formatRulesJson: pf.formatRulesJson,
+                        inheritedFormatRulesJson: pf.inheritedFormatRulesJson,
                       })),
                     ];
                     const formatFieldByKey = new Map<string, FormatValueField & { formulaConfigJson?: { expression?: string } | null }>([

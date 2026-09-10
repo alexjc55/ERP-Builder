@@ -1,0 +1,1 @@
+ALTER TABLE "page_fields" ADD COLUMN "format_inherit_json" jsonb DEFAULT '[]'::jsonb NOT NULL;

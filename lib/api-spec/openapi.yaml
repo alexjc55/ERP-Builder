@@ -8124,6 +8124,16 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FieldFormatRule"
+        formatInheritJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FormatInheritSource"
+        inheritedFormatRulesJson:
+          type: array
+          readOnly: true
+          description: Resolved rules inherited from formatInheritJson sources (response-only; apply after formatRulesJson).
+          items:
+            $ref: "#/components/schemas/FieldFormatRule"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
         percentConfigJson:
@@ -8192,6 +8202,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FieldFormatRule"
+        formatInheritJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FormatInheritSource"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
         percentConfigJson:
@@ -8254,6 +8268,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FieldFormatRule"
+        formatInheritJson:
+          type: array
+          items:
+            $ref: "#/components/schemas/FormatInheritSource"
         formulaConfigJson:
           $ref: "#/components/schemas/FormulaFieldConfig"
         percentConfigJson:

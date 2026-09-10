@@ -3556,6 +3556,9 @@ export interface PageField {
   defaultValue?: string | null;
   optionsJson: SelectOption[];
   formatRulesJson?: FieldFormatRule[];
+  formatInheritJson?: FormatInheritSource[];
+  /** Resolved rules inherited from formatInheritJson sources (response-only; apply after formatRulesJson). */
+  readonly inheritedFormatRulesJson?: readonly FieldFormatRule[];
   formulaConfigJson?: FormulaFieldConfig;
   percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
@@ -3590,6 +3593,7 @@ export interface PageFieldInput {
   defaultValue?: string | null;
   optionsJson?: SelectOption[];
   formatRulesJson?: FieldFormatRule[];
+  formatInheritJson?: FormatInheritSource[];
   formulaConfigJson?: FormulaFieldConfig;
   percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;
@@ -3622,6 +3626,7 @@ export interface PageFieldUpdate {
   defaultValue?: string | null;
   optionsJson?: SelectOption[];
   formatRulesJson?: FieldFormatRule[];
+  formatInheritJson?: FormatInheritSource[];
   formulaConfigJson?: FormulaFieldConfig;
   percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;

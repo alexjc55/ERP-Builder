@@ -19,6 +19,7 @@ import {
   type EntityField,
   type FileFieldConfig,
   type PageRefFieldConfig,
+  type FormatInheritSource,
   mirrorPermKey,
 } from "@workspace/db";
 import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
@@ -71,6 +72,7 @@ import {
 } from "../lib/formula-runtime";
 import { idArrayAny } from "../lib/sql-id-array";
 import { emitEvent, EVENT_PAGE_FIELD_SAVED, EVENT_RECORD_UPDATED, EVENT_STATUS_CHANGED } from "../lib/events";
+import { validateFormatInherit, withInheritedFormatRules } from "../lib/format-inherit";
 import { writeAudit, diffValues, AUDIT_STATUS, AUDIT_ARCHIVED } from "./audit-log";
 import {
   lockAndValidateUserReferences,
@@ -636,7 +638,7 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
     }),
   );
   if (perms.superAdmin || perms.admin.pages) {
-    res.json(enriched);
+    res.json(await withInheritedFormatRules(enriched));
     return;
   }
   const visible = enriched.filter(
@@ -649,7 +651,7 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
   // must not be re-surfaced here; drop the whole column (admins keep it for
   // setup). A stale/ineligible source (no resolved metadata) is dropped too.
   res.json(
-    visible.filter((f) => {
+    await withInheritedFormatRules(visible.filter((f) => {
       if (f.fieldType !== "page_ref") return true;
       const cfg = (f.pageRefConfigJson ?? {}) as PageRefFieldConfig;
       if (cfg.sourcePageId == null || !perms.pageIds.includes(cfg.sourcePageId)) return false;
@@ -658,7 +660,7 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
         mostPermissiveFieldPerm(srcPermsByFieldId.get(f.id) ?? null, viewerRoleIds, "view", perms, eff.entityId ?? undefined, cfg.sourcePageId) !==
         "hidden"
       );
-    }),
+    })),
   );
 });
 
@@ -689,6 +691,11 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
     return;
   }
   const createOptions = sanitizeOptionsInput(parsed.data.optionsJson);
+  const inheritErr = validateFormatInherit(parsed.data.formatInheritJson ?? []);
+  if (inheritErr) {
+    res.status(400).json({ error: inheritErr });
+    return;
+  }
   if (parsed.data.fieldType === "select" && createOptions.length === 0) {
     res.status(400).json({ error: "Select fields require at least one option" });
     return;
@@ -791,11 +798,13 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
         relationConfigJson: relationConfigToInsert ?? {},
         fileConfigJson: (parsed.data.fileConfigJson ?? {}) as FileFieldConfig,
         pageRefConfigJson: pageRefConfigToInsert,
+        formatInheritJson: (parsed.data.formatInheritJson ?? []) as FormatInheritSource[],
         fieldKey: key,
         pageId: params.data.pageId,
       })
       .returning();
-    res.status(201).json(field);
+    const [resolved] = await withInheritedFormatRules([field]);
+    res.status(201).json(resolved);
   } catch (err) {
     if (isUniqueViolation(err)) {
       res.status(409).json({ error: "A page field with this key already exists on this page" });
@@ -958,6 +967,14 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if ("defaultValue" in body) updateData.defaultValue = body.defaultValue ?? null;
   if (sanitizedOptions != null) updateData.optionsJson = sanitizedOptions;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
+  if (body.formatInheritJson != null) {
+    const inheritErr = validateFormatInherit(body.formatInheritJson);
+    if (inheritErr) {
+      res.status(400).json({ error: inheritErr });
+      return;
+    }
+    updateData.formatInheritJson = body.formatInheritJson as FormatInheritSource[];
+  }
   if (body.formulaConfigJson != null) {
     const formulaErrors = validateFormulaFieldConfig(body.formulaConfigJson);
     if (formulaErrors.length) {
@@ -1075,7 +1092,8 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
           ),
         );
     }
-    res.json(field);
+    const [resolved] = await withInheritedFormatRules([field]);
+    res.json(resolved);
   } catch (err) {
     if (isUniqueViolation(err)) {
       res.status(409).json({ error: "A page field with this key already exists on this page" });

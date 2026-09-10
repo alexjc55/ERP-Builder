@@ -21,6 +21,7 @@ import {
   type FieldType,
   type MultilingualText,
   type FieldFormatRule,
+  type FormatInheritSource,
   type FieldPermissions,
   type FieldAccess,
   type Role,
@@ -64,6 +65,7 @@ import { SelectOptionsEditor } from "@/components/SelectOptionsEditor";
 import { PercentOptionsEditor } from "@/components/PercentOptionsEditor";
 import { normalizeSelectOptions, type SelectOption } from "@/lib/selectOptions";
 import { FieldFormatRulesEditor } from "@/components/FieldFormatRulesEditor";
+import { FormatInheritEditor } from "@/components/FormatInheritEditor";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
 import { FormulaSourceBuilder, type FormulaSource, useFormulaSourceRefs } from "@/components/FormulaSourceBuilder";
@@ -232,6 +234,7 @@ export function PageFieldConfigDialog({
   const [totalFillColor, setTotalFillColor] = useState("");
   const [totalTextColor, setTotalTextColor] = useState("");
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
+  const [formatInherit, setFormatInherit] = useState<FormatInheritSource[]>([]);
   const [formula, setFormula] = useState("");
   const [formulaSources, setFormulaSources] = useState<FormulaSource[]>([]);
   const [groupResult, setGroupResult] = useState<GroupResultConfig>({ enabled: false, fields: [] });
@@ -281,6 +284,7 @@ export function PageFieldConfigDialog({
       setTotalFillColor(field.totalFillColor ?? "");
       setTotalTextColor(field.totalTextColor ?? "");
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
+      setFormatInherit(Array.isArray(field.formatInheritJson) ? [...field.formatInheritJson] : []);
       const formulaConfig = field.formulaConfigJson as FormulaFieldConfig | null | undefined;
       setFormula(formulaConfig?.expression ?? "");
       setFormulaSources(
@@ -332,6 +336,7 @@ export function PageFieldConfigDialog({
       setTotalFillColor("");
       setTotalTextColor("");
       setFormatRules([]);
+      setFormatInherit([]);
       setFormula("");
       setFormulaSources([]);
       setGroupResult({ enabled: false, fields: [] });
@@ -554,6 +559,13 @@ export function PageFieldConfigDialog({
           ? totalTextColor
           : null,
       formatRulesJson: formatRules,
+      formatInheritJson: formatInherit.filter((s) =>
+        s.kind === "status"
+          ? Number.isInteger(s.entityId)
+          : s.kind === "field"
+            ? Number.isInteger(s.entityId) && Boolean(s.fieldKey)
+            : Number.isInteger(s.pageId) && Boolean(s.fieldKey),
+      ),
       formulaConfigJson:
         fieldType === "function"
           ? {
@@ -1154,6 +1166,9 @@ export function PageFieldConfigDialog({
                 rules={formatRules}
                 onChange={setFormatRules}
               />
+            </div>
+            <div className="border-t border-slate-100 pt-4">
+              <FormatInheritEditor sources={formatInherit} onChange={setFormatInherit} />
             </div>
           </div>
           <DialogFooter className="gap-2 sm:justify-between">

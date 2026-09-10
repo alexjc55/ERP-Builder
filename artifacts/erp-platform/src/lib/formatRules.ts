@@ -100,6 +100,12 @@ export function ruleMatches(rule: FieldFormatRule, value: unknown): boolean {
 export interface FormatField {
   fieldKey: string;
   formatRulesJson?: FieldFormatRule[] | null;
+  inheritedFormatRulesJson?: readonly FieldFormatRule[] | null;
+}
+
+/** Own rules always win; resolved inherited rules are response-only followers. */
+export function orderedFormatRules(field: FormatField): readonly FieldFormatRule[] {
+  return [...(field.formatRulesJson ?? []), ...(field.inheritedFormatRulesJson ?? [])];
 }
 
 export interface FormatValueField {
@@ -151,7 +157,7 @@ export function computeRowFormatting(fields: FormatField[], getValue: (fieldKey:
   const cellTextColors: Record<string, string> = {};
   let rowColor: string | undefined;
   for (const field of fields) {
-    const rules = field.formatRulesJson ?? [];
+    const rules = orderedFormatRules(field);
     if (rules.length === 0) continue;
     const value = getValue(field.fieldKey);
     for (const rule of rules) {

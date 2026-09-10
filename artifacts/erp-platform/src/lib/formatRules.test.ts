@@ -3,6 +3,7 @@ import test from "node:test";
 import type { FieldFormatRule } from "@workspace/api-client-react";
 import {
   computeRowFormatting,
+  orderedFormatRules,
   resolveFormattingValue,
   ruleMatches,
   type FormatField,
@@ -85,10 +86,11 @@ test("computeRowFormatting preserves inherited ordering, cell colors, and row pr
   const fields: FormatField[] = [
     {
       fieldKey: "page_text",
-      // Rules are evaluated in the order supplied by the field contract.
       formatRulesJson: [
         { ...rule("contains", "ok"), cellColor: "#own", textColor: "#text", rowColor: "#row-first" },
         { ...rule("contains", "ok"), cellColor: "#later-own", rowColor: "#later-row" },
+      ],
+      inheritedFormatRulesJson: [
         { ...rule("contains", "ok"), cellColor: "#inherited" },
       ],
     },
@@ -105,5 +107,9 @@ test("computeRowFormatting preserves inherited ordering, cell colors, and row pr
       cellTextColors: { page_text: "#text" },
       rowColor: "#row-first",
     },
+  );
+  assert.deepEqual(
+    orderedFormatRules(fields[0]).map((r) => r.cellColor),
+    ["#own", "#later-own", "#inherited"],
   );
 });

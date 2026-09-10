@@ -1,6 +1,6 @@
 ---
 name: Field format inheritance
-description: entity_fields.formatInheritJson — a field inherits conditional formatting from other entities' fields/statuses; resolved server-side into response-only inheritedFormatRulesJson.
+description: Shared entity/page field inheritance policy — response-only resolved rules, target visibility, and own-rule precedence.
 ---
 
 A field whose value is COPIED by automations (e.g. заказ «Общий статус» filled from изделие statuses) can declare `formatInheritJson` sources: `{kind:"field",entityId,fieldKey}` (inherits that field's formatRulesJson), `{kind:"status",entityId}` (each active status → `equals` rules for every ru/en/he label, cellColor `${color}20`, textColor = color), or `{kind:"pageField",pageId,fieldKey}` (a mirror page's page-local field's rules — e.g. «Статус монтажа»).
@@ -12,7 +12,9 @@ A field whose value is COPIED by automations (e.g. заказ «Общий ст�
 - No RBAC issue: only cosmetic source config (rules/colors) is exposed, no record values.
 - **Why** status labels match by ANY language: automations copy one language's label string; matching all labels keeps it working regardless of which language was configured.
 
-**Limits:** page fields themselves cannot inherit (only entity fields carry formatInheritJson); source picker offers pages only when they are mirror pages (page-local fields exist only there).
+**Shared policy:** entity and page fields use the same inheritance semantics and editor. Own rules precede inherited rules; inheritance is explicit, not implied by a formula reference.
+**Why:** a formula's data source and its desired presentation source are independent choices.
+**How to apply:** keep resolved rules response-only for both field kinds, and use the same ordering in row and grouped-cell rendering.
 
 **Visibility decision (user-confirmed, 2026-07-31, supersedes earlier gating):** inherited rules follow the TARGET field's visibility — anyone who sees the target field sees its inherited coloring, even from pages they can't open. Why: the matched values are copied into the target field anyway, so hiding colors leaks nothing extra and just renders inconsistently across roles. The earlier pageField page-access gating was deliberately reverted; do NOT re-add it as a "fix".
 

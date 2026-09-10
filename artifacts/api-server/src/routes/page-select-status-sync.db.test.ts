@@ -439,6 +439,91 @@ after(async () => { await cleanup(); });
 
 test("page-local select mappings synchronize entity status atomically", async (t) => {
   await setup();
+  await t.test("page-field format inheritance persists across create, reload, change, and clear", async () => {
+    const normalPermissions = permissions([ids.targetPage, ids.sourcePage]);
+    await db.update(rolesTable).set({
+      permissionsJson: { ...normalPermissions, superAdmin: true },
+    }).where(eq(rolesTable.id, ids.role));
+
+    const ownRule = { operator: "equals" as const, value: "Ready", cellColor: "#123456" };
+    const pageRule = { operator: "equals" as const, value: "Page source", cellColor: "#234567" };
+    const entityRule = { operator: "equals" as const, value: "Entity source", cellColor: "#345678" };
+    try {
+      await db.update(pageFieldsTable)
+        .set({ formatRulesJson: [pageRule] })
+        .where(and(eq(pageFieldsTable.pageId, ids.sourcePage), eq(pageFieldsTable.fieldKey, "stage")));
+      await db.update(entityFieldsTable)
+        .set({ formatRulesJson: [entityRule] })
+        .where(and(eq(entityFieldsTable.entityId, ids.entity), eq(entityFieldsTable.fieldKey, "workflow_note")));
+
+      const created = await request(
+        `/pages/${ids.targetPage}/fields`,
+        {
+          fieldKey: "inherited_format_regression",
+          nameJson: { en: "Inherited format regression" },
+          fieldType: "text",
+          formatRulesJson: [ownRule],
+          formatInheritJson: [{ kind: "pageField", pageId: ids.sourcePage, fieldKey: "stage" }],
+        },
+        "POST",
+      );
+      assert.equal(created.status, 201);
+      const createdId = Number(created.body.id);
+      assert.ok(Number.isInteger(createdId));
+      assert.deepEqual(created.body.formatRulesJson, [ownRule]);
+      assert.deepEqual(created.body.inheritedFormatRulesJson, [pageRule]);
+
+      let reloaded = await read(`/pages/${ids.targetPage}/fields`);
+      assert.equal(reloaded.status, 200);
+      let field = (reloaded.body as Array<Record<string, unknown>>).find((row) => row.id === createdId);
+      assert.ok(field);
+      assert.deepEqual(field.formatRulesJson, [ownRule]);
+      assert.deepEqual(field.formatInheritJson, [{ kind: "pageField", pageId: ids.sourcePage, fieldKey: "stage" }]);
+      assert.deepEqual(field.inheritedFormatRulesJson, [pageRule]);
+
+      const [storedAfterCreate] = await db.select({
+        formatRulesJson: pageFieldsTable.formatRulesJson,
+        formatInheritJson: pageFieldsTable.formatInheritJson,
+      }).from(pageFieldsTable).where(eq(pageFieldsTable.id, createdId));
+      assert.deepEqual(storedAfterCreate?.formatRulesJson, [ownRule]);
+      assert.deepEqual(storedAfterCreate?.formatInheritJson, [
+        { kind: "pageField", pageId: ids.sourcePage, fieldKey: "stage" },
+      ]);
+
+      const changed = await request(
+        `/page-fields/${createdId}`,
+        { formatInheritJson: [{ kind: "field", entityId: ids.entity, fieldKey: "workflow_note" }] },
+        "PUT",
+      );
+      assert.equal(changed.status, 200);
+      assert.deepEqual(changed.body.formatRulesJson, [ownRule]);
+      assert.deepEqual(changed.body.inheritedFormatRulesJson, [entityRule]);
+
+      const cleared = await request(`/page-fields/${createdId}`, { formatInheritJson: [] }, "PUT");
+      assert.equal(cleared.status, 200);
+      assert.deepEqual(cleared.body.formatRulesJson, [ownRule]);
+      assert.deepEqual(cleared.body.formatInheritJson, []);
+      assert.deepEqual(cleared.body.inheritedFormatRulesJson, []);
+
+      reloaded = await read(`/pages/${ids.targetPage}/fields`);
+      assert.equal(reloaded.status, 200);
+      field = (reloaded.body as Array<Record<string, unknown>>).find((row) => row.id === createdId);
+      assert.ok(field);
+      assert.deepEqual(field.formatRulesJson, [ownRule]);
+      assert.deepEqual(field.formatInheritJson, []);
+      assert.deepEqual(field.inheritedFormatRulesJson, []);
+
+      const [storedAfterClear] = await db.select({
+        formatRulesJson: pageFieldsTable.formatRulesJson,
+        formatInheritJson: pageFieldsTable.formatInheritJson,
+      }).from(pageFieldsTable).where(eq(pageFieldsTable.id, createdId));
+      assert.deepEqual(storedAfterClear?.formatRulesJson, [ownRule]);
+      assert.deepEqual(storedAfterClear?.formatInheritJson, []);
+    } finally {
+      await db.update(rolesTable).set({ permissionsJson: normalPermissions }).where(eq(rolesTable.id, ids.role));
+    }
+  });
+
   await t.test("computed page filters require opt-in and narrow total before pagination while hidden from table", async () => {
     await reset();
     await db.update(entityRecordsTable)

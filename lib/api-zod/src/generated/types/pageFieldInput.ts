@@ -9,6 +9,7 @@ import type { FieldFormatRule } from './fieldFormatRule';
 import type { FieldPermissions } from './fieldPermissions';
 import type { FieldType } from './fieldType';
 import type { FileFieldConfig } from './fileFieldConfig';
+import type { FormatInheritSource } from './formatInheritSource';
 import type { FormulaFieldConfig } from './formulaFieldConfig';
 import type { MultilingualText } from './multilingualText';
 import type { PageRefFieldConfig } from './pageRefFieldConfig';
@@ -28,6 +29,7 @@ export interface PageFieldInput {
   defaultValue?: string | null;
   optionsJson?: SelectOption[];
   formatRulesJson?: FieldFormatRule[];
+  formatInheritJson?: FormatInheritSource[];
   formulaConfigJson?: FormulaFieldConfig;
   percentConfigJson?: PercentFieldConfig;
   relationConfigJson?: RelationFieldConfig;

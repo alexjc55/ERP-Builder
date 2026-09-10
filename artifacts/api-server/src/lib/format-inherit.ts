@@ -64,7 +64,7 @@ function contrastText(hex: string): string {
 }
 
 /** Solid status-color fill + contrast text (user-confirmed: pale chip-style `${color}20` looked "uncolored"). */
-function statusRulesFor(nameJson: unknown, color: string): FieldFormatRule[] {
+export function statusRulesFor(nameJson: unknown, color: string): FieldFormatRule[] {
   const labels =
     nameJson && typeof nameJson === "object"
       ? [...new Set(Object.values(nameJson as Record<string, unknown>).filter((v): v is string => typeof v === "string" && v.trim() !== ""))]
@@ -76,6 +76,35 @@ function statusRulesFor(nameJson: unknown, color: string): FieldFormatRule[] {
     cellColor: safeColor,
     textColor: contrastText(safeColor),
   }));
+}
+
+type SourceFieldRow = { entityId: number; fieldKey: string; formatRulesJson: unknown };
+type SourceStatusRow = { entityId: number; nameJson: unknown; color: string; sortOrder: number };
+type SourcePageFieldRow = { pageId: number; fieldKey: string; formatRulesJson: unknown };
+
+/** Pure ordered resolution used by the bulk DB resolver and its regression tests. */
+export function resolveInheritedFormatRules(
+  sources: FormatInheritSource[],
+  srcFields: SourceFieldRow[],
+  srcStatuses: SourceStatusRow[],
+  srcPageFields: SourcePageFieldRow[],
+): FieldFormatRule[] {
+  const rules: FieldFormatRule[] = [];
+  for (const src of sources) {
+    if (src.kind === "field") {
+      const f = srcFields.find((sf) => sf.entityId === src.entityId && sf.fieldKey === src.fieldKey);
+      if (f && Array.isArray(f.formatRulesJson)) rules.push(...(f.formatRulesJson as FieldFormatRule[]));
+    } else if (src.kind === "pageField") {
+      const pf = srcPageFields.find((sf) => sf.pageId === src.pageId && sf.fieldKey === src.fieldKey);
+      if (pf && Array.isArray(pf.formatRulesJson)) rules.push(...(pf.formatRulesJson as FieldFormatRule[]));
+    } else {
+      const statuses = srcStatuses
+        .filter((st) => st.entityId === src.entityId)
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+      for (const st of statuses) rules.push(...statusRulesFor(st.nameJson, st.color));
+    }
+  }
+  return rules;
 }
 
 /**
@@ -135,31 +164,14 @@ async function buildResolver(allSources: FormatInheritSource[]): Promise<(source
       : Promise.resolve([] as { pageId: number; fieldKey: string; formatRulesJson: unknown }[]),
   ]);
 
-  return (sources: FormatInheritSource[]): FieldFormatRule[] => {
-    const rules: FieldFormatRule[] = [];
-    for (const src of sources) {
-      if (src.kind === "field") {
-        const f = srcFields.find((sf) => sf.entityId === src.entityId && sf.fieldKey === src.fieldKey);
-        if (f && Array.isArray(f.formatRulesJson)) rules.push(...(f.formatRulesJson as FieldFormatRule[]));
-      } else if (src.kind === "pageField") {
-        const pf = srcPageFields.find((sf) => sf.pageId === src.pageId && sf.fieldKey === src.fieldKey);
-        if (pf && Array.isArray(pf.formatRulesJson)) rules.push(...(pf.formatRulesJson as FieldFormatRule[]));
-      } else {
-        const statuses = srcStatuses
-          .filter((st) => st.entityId === src.entityId)
-          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-        for (const st of statuses) rules.push(...statusRulesFor(st.nameJson, st.color));
-      }
-    }
-    return rules;
-  };
+  return (sources: FormatInheritSource[]): FieldFormatRule[] =>
+    resolveInheritedFormatRules(sources, srcFields, srcStatuses, srcPageFields);
 }
 
 /**
- * Attach `inheritedFormatRulesJson` to a list of serialized entity fields.
- * All sources across the whole list are prefetched in TWO queries (one for
- * source fields, one for statuses) — no per-field query fan-out. Fields
- * without sources get [].
+ * Attach `inheritedFormatRulesJson` to a list of serialized entity or page
+ * fields. All sources across the whole list are bulk-prefetched, with no
+ * per-field query fan-out. Fields without sources get [].
  */
 export async function withInheritedFormatRules<
   T extends { formatInheritJson: unknown },
