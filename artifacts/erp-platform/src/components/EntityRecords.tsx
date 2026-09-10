@@ -131,6 +131,10 @@ import {
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { mergeFormulaInputValues } from "@/lib/formulaInputValues";
+import {
+  directEntityFormulaResultType,
+  directFormulaDisplayValue,
+} from "@/lib/directFormulaProvenance";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ValueChecklistPicker } from "@/components/FilterValuePicker";
@@ -1978,33 +1982,38 @@ export function EntityRecords({
     [pageFields],
   );
 
-  // Keys of all `user`-type fields (entity + page). A formula that references a
-  // user field should show the user's NAME, not the raw stored id, so we
-  // substitute id → name in the values map before evaluating.
-  const userFormulaFieldKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const f of allFields) if (f.fieldType === "user") keys.add(f.fieldKey);
-    for (const pf of pageFields) if (pf.fieldType === "user") keys.add(pf.fieldKey);
-    return keys;
-  }, [allFields, pageFields]);
-
-  const resolveFormulaValues = useCallback(
-    (vals: Record<string, unknown>): Record<string, unknown> => {
-      if (userFormulaFieldKeys.size === 0) return vals;
-      const out: Record<string, unknown> = { ...vals };
-      for (const k of userFormulaFieldKeys) {
-        const v = out[k];
-        if (v == null || v === "") continue;
-        if (Array.isArray(v)) {
-          out[k] = v.map((id) => userNames.get(Number(id)) ?? String(id)).join(", ");
-        } else {
-          out[k] = userNames.get(Number(v)) ?? v;
-        }
-      }
-      return out;
-    },
-    [userFormulaFieldKeys, userNames],
-  );
+  // Formula evaluation always keeps raw values (including numeric user ids).
+  // Only a whole-expression direct reference may inherit its source type for
+  // presentation. This mirrors the API filter provenance rules, including
+  // qualified entity refs and legacy page-field shadowing.
+  const directEntityFormulaTypes = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const formula of allFields) {
+      if (formula.fieldType !== "function") continue;
+      const type = directEntityFormulaResultType({
+        formula,
+        entityId,
+        entityFields: allFields,
+        pageFields,
+      });
+      if (type) result.set(formula.fieldKey, type);
+    }
+    return result;
+  }, [allFields, entityId, pageFields]);
+  const directPageFormulaTypes = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const formula of pageFields) {
+      if (formula.fieldType !== "function") continue;
+      const type = directEntityFormulaResultType({
+        formula,
+        entityId,
+        entityFields: allFields,
+        pageFields,
+      });
+      if (type) result.set(formula.fieldKey, type);
+    }
+    return result;
+  }, [allFields, entityId, pageFields]);
   // Formula (`function`) fields can reference OTHER formula fields by key. Their
   // value is never stored, so we describe every formula field here and wrap each
   // record's values in `buildFormulaScope` (below) so a `{other_formula}` ref
@@ -5279,6 +5288,15 @@ export function EntityRecords({
                   : ({ ...col.field, permissionsJson: {}, entityId: 0 } as unknown as Field);
               renderValue = common;
             }
+            const directType =
+              col.kind === "entity"
+                ? directEntityFormulaTypes.get(col.field.fieldKey)
+                : col.kind === "page"
+                  ? directPageFormulaTypes.get(col.field.fieldKey)
+                  : undefined;
+            if (directType === "user") {
+              renderField = { ...renderField, fieldType: "user" } as Field;
+            }
             // Conditional formatting: since every row in the group shares this
             // value, the first matching rule colours the group cell exactly
             // like it colours the individual cells (cell fill + text colour).
@@ -7063,9 +7081,7 @@ export function EntityRecords({
                                   const computed = formatFormulaResult(
                                     pf.formulaConfigJson?.expression ?? "",
                                     buildFormulaScope(
-                                      resolveFormulaValues(
-                                        mergeFormulaInputValues(newRow, newPageRow, newRowProjectedValues, undefined, { entityId, pageId }),
-                                      ),
+                                      mergeFormulaInputValues(newRow, newPageRow, newRowProjectedValues, undefined, { entityId, pageId }),
                                       formulaFieldDefs,
                                       formulaOptions,
                                     ),
@@ -7078,7 +7094,9 @@ export function EntityRecords({
                                     <span className="text-slate-300 text-xs">—</span>
                                   ) : (
                                     <span className="text-sm">
-                                      {computed.bool !== undefined
+                                      {directPageFormulaTypes.get(pf.fieldKey) === "user"
+                                        ? String(directFormulaDisplayValue(computed.text, "user", userNames))
+                                        : computed.bool !== undefined
                                         ? (computed.bool ? "Да" : "Нет")
                                         : computed.numeric
                                           ? <AffixedNumericValue config={pf.formulaConfigJson}>{computed.text}</AffixedNumericValue>
@@ -7138,9 +7156,7 @@ export function EntityRecords({
                                 const computed = formatFormulaResult(
                                   f.formulaConfigJson?.expression ?? "",
                                   buildFormulaScope(
-                                    resolveFormulaValues(
-                                      mergeFormulaInputValues(newRow, newPageRow, newRowProjectedValues, undefined, { entityId, pageId }),
-                                    ),
+                                    mergeFormulaInputValues(newRow, newPageRow, newRowProjectedValues, undefined, { entityId, pageId }),
                                     formulaFieldDefs,
                                     formulaOptions,
                                   ),
@@ -7153,7 +7169,9 @@ export function EntityRecords({
                                   <span className="text-slate-300 text-xs">—</span>
                                 ) : (
                                   <span className="text-sm">
-                                    {computed.bool !== undefined
+                                    {directEntityFormulaTypes.get(f.fieldKey) === "user"
+                                      ? String(directFormulaDisplayValue(computed.text, "user", userNames))
+                                      : computed.bool !== undefined
                                       ? (computed.bool ? "Да" : "Нет")
                                       : computed.numeric
                                         ? <AffixedNumericValue config={f.formulaConfigJson}>{computed.text}</AffixedNumericValue>
@@ -7243,7 +7261,7 @@ export function EntityRecords({
                       relatedByRecord.get(record.id),
                       { entityId, pageId },
                     );
-                    const formulaValues = buildFormulaScope(resolveFormulaValues(allValues), formulaFieldDefs, formulaOptions);
+                    const formulaValues = buildFormulaScope(allValues, formulaFieldDefs, formulaOptions);
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
                     // Conditional formatting across both entity and page columns.
                     const formatFields: FormatField[] = [
@@ -7606,7 +7624,9 @@ export function EntityRecords({
                                   <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span>
                                 ) : (
                                   <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>
-                                    {computed.bool !== undefined
+                                    {directEntityFormulaTypes.get(f.fieldKey) === "user"
+                                      ? String(directFormulaDisplayValue(computed.text, "user", userNames))
+                                      : computed.bool !== undefined
                                       ? t(computed.bool ? "fields.yes" : "fields.no", computed.bool ? "Да" : "Нет")
                                       : computed.numeric
                                         ? <AffixedNumericValue config={f.formulaConfigJson}>{computed.text}</AffixedNumericValue>
@@ -7786,7 +7806,9 @@ export function EntityRecords({
                                   <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span>
                                 ) : (
                                   <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>
-                                    {computed.bool !== undefined
+                                    {directPageFormulaTypes.get(pf.fieldKey) === "user"
+                                      ? String(directFormulaDisplayValue(computed.text, "user", userNames))
+                                      : computed.bool !== undefined
                                       ? t(computed.bool ? "fields.yes" : "fields.no", computed.bool ? "Да" : "Нет")
                                       : computed.numeric
                                         ? <AffixedNumericValue config={pf.formulaConfigJson}>{computed.text}</AffixedNumericValue>
@@ -7969,6 +7991,7 @@ export function EntityRecords({
               recordId={editing?.id ?? null}
               expectedVersion={editing?.version}
               allFields={fields}
+              formulaPageFields={pageFields}
               formFields={visibleFormFields}
               form={form}
               setForm={setForm}
@@ -9195,6 +9218,7 @@ function RecordFormBody({
   recordId,
   expectedVersion,
   allFields,
+  formulaPageFields,
   formFields,
   form,
   setForm,
@@ -9211,6 +9235,8 @@ function RecordFormBody({
   expectedVersion?: number;
   /** Full field list — needed for dependency-chain resolution. */
   allFields: Field[];
+  /** Page fields used only to apply safe legacy-reference shadowing. */
+  formulaPageFields?: PageField[];
   /** The fields actually rendered (caller applies its own visibility filter). */
   formFields: Field[];
   form: FormState;
@@ -9257,6 +9283,23 @@ function RecordFormBody({
     () => new Map<number, string>(userOptions.map((u: UserOption) => [u.id, u.name])),
     [userOptions],
   );
+  const directFormFormulaTypes = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const formula of allFields) {
+      if (formula.fieldType !== "function") continue;
+      const type = directEntityFormulaResultType({
+        formula,
+        entityId,
+        entityFields: allFields,
+        // Standalone nested forms do not receive page-field metadata. In that
+        // case conservatively reject legacy flat refs on a page; qualified
+        // entity refs remain safe and continue to resolve.
+        pageFields: formulaPageFields ?? (pageId == null ? [] : allFields),
+      });
+      if (type) result.set(formula.fieldKey, type);
+    }
+    return result;
+  }, [allFields, entityId, formulaPageFields, pageId]);
 
   // THIS record's relation/lookup values (edit mode only — a create has no record
   // yet). Self-fetched so relation fields render a live picker with the current
@@ -9370,10 +9413,9 @@ function RecordFormBody({
     onRelationChanged?.(version);
   };
 
-  // Live formula preview: compute `function` fields from the CURRENT form values
-  // (create and edit alike) so e.g. "Сумма" updates as the user types instead of
-  // only after saving. user-type refs resolve ids → names (same as the table);
-  // formula-to-formula refs go through buildFormulaScope (lazy + cycle-guarded).
+  // Live formula preview: compute `function` fields from the CURRENT raw form
+  // values (create and edit alike). Formula-to-formula refs go through
+  // buildFormulaScope (lazy + cycle-guarded).
   const formFormulaDefs = useMemo<FormulaFieldDef[]>(
     () => {
       const formulas = allFields
@@ -9398,15 +9440,8 @@ function RecordFormBody({
       undefined,
       { entityId, pageId },
     );
-    for (const f of allFields) {
-      if (f.fieldType !== "user") continue;
-      const v = vals[f.fieldKey];
-      if (v == null || v === "") continue;
-      if (Array.isArray(v)) vals[f.fieldKey] = v.map((id) => userNames.get(Number(id)) ?? String(id)).join(", ");
-      else vals[f.fieldKey] = userNames.get(Number(v)) ?? v;
-    }
     return buildFormulaScope(vals, formFormulaDefs, formulaOptions);
-  }, [formWithRelationParents, relByField, allFields, formFormulaDefs, userNames, formulaOptions, entityId, pageId]);
+  }, [formWithRelationParents, relByField, formFormulaDefs, formulaOptions, entityId, pageId]);
 
   // Read-only display node for a relation/lookup field's current value (its
   // configured display field), or an em dash when nothing is linked.
@@ -9627,6 +9662,8 @@ function RecordFormBody({
                     <span className="text-red-400">#ОШИБКА</span>
                   ) : computed.text === "" ? (
                     <span className="text-slate-300">—</span>
+                  ) : directFormFormulaTypes.get(field.fieldKey) === "user" ? (
+                    String(directFormulaDisplayValue(computed.text, "user", userNames))
                   ) : computed.bool !== undefined ? (
                     computed.bool ? "Да" : "Нет"
                   ) : computed.numeric ? (
