@@ -11,10 +11,10 @@ import type { PageRecordValueInputValuesJson } from './pageRecordValueInputValue
 export interface PageRecordValueInput {
   valuesJson: PageRecordValueInputValuesJson;
   /**
-     * Legacy single-row CAS. Allowed only when the request touches exactly one distinct page_record_values row. A missing row has baseline 1.
-     * @minimum 1
+     * Legacy single-row CAS. Allowed only when the request touches exactly one distinct page_record_values row. A missing row has absence token 0.
+     * @minimum 0
      */
   expectedVersion?: number;
-  /** Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use baseline 1. */
+  /** Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use absence token 0. */
   expectedVersions?: PageRecordValueInputExpectedVersions;
 }

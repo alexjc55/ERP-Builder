@@ -952,7 +952,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
     assert.deepEqual((response.body.data as { id: number }[]).map((row) => row.id), [ids.one]);
   });
   await t.test("read-time page formulas and formula page_ref need no source value row", async () => {
-    await reset([ids.one]);
+    await reset([ids.one, ids.two]);
     assert.equal(await pageValue(ids.targetPage, ids.one), undefined);
     assert.equal(await pageValue(ids.sourcePage, ids.one), undefined);
     let response = await read(`/pages/${ids.targetPage}/record-values`);
@@ -962,6 +962,80 @@ test("page-local select mappings synchronize entity status atomically", async (t
     assert.ok(row);
     assert.equal(row.valuesJson.formula_ref, "Ready");
     assert.equal(row.valuesJson.same_page_formula, null);
+    response = await request(
+      `/pages/${ids.targetPage}/record-values/query`,
+      { recordIds: [ids.one, ids.one, ids.relatedRecord, 2_147_483_647] },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    rows = response.body as unknown as Array<{ recordId: number; valuesJson: Record<string, unknown> }>;
+    assert.deepEqual(rows.map((candidate) => candidate.recordId), [ids.one]);
+    assert.equal(rows[0]!.valuesJson.formula_ref, "Ready");
+    assert.equal((rows[0] as { version?: number }).version, 0);
+    response = await request(
+      `/pages/${ids.sourcePage}/record-values/query`,
+      { recordIds: [ids.one] },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const emptySourceRows = response.body as unknown as Array<{
+      recordId: number;
+      version: number;
+      valuesJson: Record<string, unknown>;
+    }>;
+    assert.equal(emptySourceRows.length, 1);
+    assert.equal(emptySourceRows[0]!.recordId, ids.one);
+    assert.equal(emptySourceRows[0]!.version, 0, "bounded reads use a distinct absence token");
+    assert.equal(emptySourceRows[0]!.valuesJson.formula_name, "Ready");
+    const activeOnlyValues = structuredClone(rows[0]!.valuesJson);
+    await db.update(entityRecordsTable)
+      .set({ archivedAt: new Date() })
+      .where(eq(entityRecordsTable.id, ids.two));
+    response = await request(
+      `/pages/${ids.targetPage}/record-values/query`,
+      { recordIds: [ids.one, ids.two] },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    rows = response.body as unknown as Array<{ recordId: number; valuesJson: Record<string, unknown> }>;
+    const mixedActive = rows.find((candidate) => candidate.recordId === ids.one);
+    const mixedArchived = rows.find((candidate) => candidate.recordId === ids.two);
+    assert.ok(mixedActive);
+    assert.ok(mixedArchived);
+    assert.deepEqual(
+      mixedActive.valuesJson,
+      activeOnlyValues,
+      "an unrelated archived row must not broaden the active row's formula dependency universe",
+    );
+    assert.equal(
+      mixedArchived.valuesJson.formula_ref,
+      "Ready",
+      "an archived requested row retains its page_ref -> source formula -> entity dependency chain",
+    );
+    response = await read(`/pages/${ids.targetPage}/record-values`);
+    assert.equal(response.status, 200);
+    rows = response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>;
+    assert.deepEqual(
+      rows.find((candidate) => candidate.recordId === ids.one)?.valuesJson,
+      activeOnlyValues,
+      "legacy mixed active/archive reads preserve active-row formula semantics",
+    );
+    await db.update(entityRecordsTable)
+      .set({ archivedAt: null })
+      .where(eq(entityRecordsTable.id, ids.two));
+    response = await request(
+      `/pages/${ids.targetPage}/record-values/query`,
+      { recordIds: [] },
+      "POST",
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(response.body, []);
+    response = await request(
+      `/pages/${ids.targetPage}/record-values/query`,
+      { recordIds: Array.from({ length: 501 }, (_, index) => index + 1) },
+      "POST",
+    );
+    assert.equal(response.status, 400);
     assert.equal(await pageValue(ids.targetPage, ids.one), undefined, "target formula projection must remain unpersisted");
     assert.equal(await pageValue(ids.sourcePage, ids.one), undefined, "formula projection must remain unpersisted");
 
@@ -1679,6 +1753,123 @@ test("page-local select mappings synchronize entity status atomically", async (t
     assert.equal((await record(ids.two)).statusId, ids.done);
     assert.equal(((await pageValue(ids.targetPage, ids.one))!.valuesJson as Record<string, unknown>).stage, "done");
     assert.equal(((await pageValue(ids.targetPage, ids.two))!.valuesJson as Record<string, unknown>).stage, "done");
+  });
+
+  await t.test("absence token 0 conflicts after another writer inserts version 1", async () => {
+    await reset([ids.one]);
+    let response = await request(
+      `/pages/${ids.targetPage}/record-values/query`,
+      { recordIds: [ids.one] },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    let readRow = (response.body as unknown as Array<{
+      version: number;
+      fieldVersions: Record<string, number>;
+    }>)[0]!;
+    assert.equal(readRow.version, 0);
+
+    response = await request(
+      `/pages/${ids.targetPage}/records/${ids.one}/values`,
+      {
+        valuesJson: { stage: "done" },
+        expectedVersions: { [String(ids.targetPage)]: 0 },
+      },
+      "PUT",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.version, 1);
+    response = await request(
+      `/pages/${ids.targetPage}/records/${ids.one}/values`,
+      {
+        valuesJson: {},
+        expectedVersions: { [String(ids.targetPage)]: 0 },
+      },
+      "PUT",
+    );
+    assert.equal(response.status, 409, JSON.stringify(response.body));
+    assert.equal(response.body.currentVersion, 1);
+    assert.equal(
+      ((await pageValue(ids.targetPage, ids.one))!.valuesJson as Record<string, unknown>).stage,
+      "done",
+      "a stale absence token must not replace the concurrently inserted local map",
+    );
+
+    await reset([ids.one]);
+    response = await request(
+      `/pages/${ids.targetPage}/record-values/query`,
+      { recordIds: [ids.one] },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    readRow = (response.body as unknown as Array<{
+      version: number;
+      fieldVersions: Record<string, number>;
+    }>)[0]!;
+    assert.equal(readRow.fieldVersions.source_stage, 0);
+    response = await request(
+      `/pages/${ids.targetPage}/records/${ids.one}/values`,
+      {
+        valuesJson: { source_stage: "done" },
+        expectedVersions: { [String(ids.sourcePage)]: 0 },
+      },
+      "PUT",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    response = await request(
+      `/pages/${ids.targetPage}/records/${ids.one}/values`,
+      {
+        valuesJson: { source_stage: null },
+        expectedVersions: { [String(ids.sourcePage)]: 0 },
+      },
+      "PUT",
+    );
+    assert.equal(response.status, 409, JSON.stringify(response.body));
+    assert.equal(response.body.currentVersion, 1);
+    assert.equal(
+      ((await pageValue(ids.sourcePage, ids.one))!.valuesJson as Record<string, unknown>).stage,
+      "done",
+      "a stale page_ref absence token must preserve the inserted source map",
+    );
+
+    await reset([ids.one]);
+    response = await request(
+      `/pages/${ids.targetPage}/record-values/query`,
+      { recordIds: [ids.one] },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    readRow = (response.body as unknown as Array<{
+      version: number;
+      fieldVersions: Record<string, number>;
+    }>)[0]!;
+    assert.equal(readRow.fieldVersions.source_stage, 0);
+    response = await request(
+      `/pages/${ids.targetPage}/records/${ids.one}/values`,
+      {
+        valuesJson: { source_stage: "done" },
+        expectedVersions: { [String(ids.sourcePage)]: 0 },
+      },
+      "PUT",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    response = await request(
+      `/pages/${ids.targetPage}/records/bulk-field-values`,
+      {
+        fieldKey: "source_stage",
+        value: null,
+        recordIds: [ids.one],
+        expectedVersions: { [String(ids.one)]: 0 },
+      },
+      "POST",
+    );
+    assert.equal(response.status, 409, JSON.stringify(response.body));
+    assert.equal(response.body.currentVersion, 1);
+    assert.equal(
+      ((await pageValue(ids.sourcePage, ids.one))!.valuesJson as Record<string, unknown>).stage,
+      "done",
+      "bulk page_ref CAS must preserve the concurrently inserted source map",
+    );
   });
 
   await t.test("page_ref writes only its authoritative source and source access denial has no side effects", async () => {

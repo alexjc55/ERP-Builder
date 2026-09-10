@@ -176,8 +176,49 @@ test("two sessions preserve conflicts, redact coordinates, and reconnect once", 
     await aliceInput.fill("alice draft");
     const bobInput = bob.getByTestId("cell-editor-input");
     await bobInput.fill("bob wins first");
+
+    // Keep Alice's collaboration-triggered refresh in flight until she submits.
+    // Otherwise that refresh can win the scheduling race, advance her cached
+    // version to Bob's version, and turn this intended stale-write scenario into
+    // a valid version-2 update before the test has a chance to exercise the 409.
+    const aliceRecordsQuery = `**/api/entities/${fixture.entityId}/records/query`;
+    let releaseAliceRefresh!: () => void;
+    const aliceRefreshGate = new Promise<void>((resolve) => {
+      releaseAliceRefresh = resolve;
+    });
+    let finishAliceRefresh!: () => void;
+    const aliceRefreshFinished = new Promise<void>((resolve) => {
+      finishAliceRefresh = resolve;
+    });
+    let aliceRefreshBlocked = false;
+    await alice.route(aliceRecordsQuery, async (route) => {
+      const isHeldRefresh = route.request().method() === "POST" && !aliceRefreshBlocked;
+      if (isHeldRefresh) {
+        aliceRefreshBlocked = true;
+        await aliceRefreshGate;
+      }
+      try {
+        await route.continue();
+      } catch (error) {
+        // A later authoritative reload can cancel the held fetch while it is
+        // paused. Playwright then reports the route as already handled; that is
+        // the expected browser cancellation, not a missing test request.
+        if (!(error instanceof Error) || !error.message.includes("Route is already handled")) throw error;
+      } finally {
+        if (isHeldRefresh) finishAliceRefresh();
+      }
+    });
+
+    const bobSaveResponse = bob.waitForResponse((response) =>
+      response.url().endsWith(`/api/records/${fixture.recordId}`) &&
+      response.request().method() === "PUT" &&
+      response.status() === 200,
+    );
     await bobInput.press("Enter");
+    const bobSave = await bobSaveResponse;
+    expect(bobSave.request().postDataJSON()).toMatchObject({ expectedVersion: 1 });
     await expect(bobCell).toContainText("bob wins first");
+    await expect.poll(() => aliceRefreshBlocked).toBe(true);
 
     await expect(aliceInput).toHaveValue("alice draft");
     const conflictResponse = alice.waitForResponse((response) =>
@@ -194,7 +235,12 @@ test("two sessions preserve conflicts, redact coordinates, and reconnect once", 
     const conflict = await conflictResponse;
     expect(conflict.request().postDataJSON()).toMatchObject({ expectedVersion: 1 });
     await expect(aliceInput).toHaveValue("alice draft");
+    // This cannot be the refresh held above, so it proves the 409 handler
+    // initiated its own authoritative reload.
     await conflictRefresh;
+    releaseAliceRefresh();
+    await aliceRefreshFinished;
+    await alice.unroute(aliceRecordsQuery);
     const retryResponse = alice.waitForResponse((response) =>
       response.url().endsWith(`/api/records/${fixture.recordId}`) &&
       response.request().method() === "PUT" &&

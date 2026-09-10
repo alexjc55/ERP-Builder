@@ -34,9 +34,8 @@ import {
   useUpdatePage,
   getListPagesQueryKey,
   useListPageFields,
-  useListPageRecordValues,
+  useQueryPageRecordValues,
   getListPageFieldsQueryKey,
-  getListPageRecordValuesQueryKey,
   useSetPageRecordValues,
   useReorderPageFields,
   useListColumnGroups,
@@ -52,6 +51,7 @@ import {
   useGetEntityRelatedCandidates,
   useSetEntityRelatedLink,
   type PageField,
+  type PageRecordValue,
   type PageRelatedColumn,
   type PageRelatedValue,
   type PageRelatedCandidate,
@@ -131,6 +131,13 @@ import {
 } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
 import { mergeFormulaInputValues } from "@/lib/formulaInputValues";
+import {
+  canWritePageValues,
+  idlePageValuesHydration,
+  pageValuesHydrationKey,
+  runPageValueWrite,
+  type PageValuesHydrationState,
+} from "@/lib/pageValuesHydration";
 import {
   directEntityFormulaResultType,
   directFormulaDisplayValue,
@@ -1959,9 +1966,14 @@ export function EntityRecords({
   const { data: allPageFields = [] } = useListPageFields(pageId ?? 0, {
     query: { enabled: hasPage, queryKey: getListPageFieldsQueryKey(pageId ?? 0) },
   });
-  const { data: pageRecordValues = [] } = useListPageRecordValues(pageId ?? 0, {
-    query: { enabled: hasPage, queryKey: getListPageRecordValuesQueryKey(pageId ?? 0) },
-  });
+  const queryPageValuesMutation = useQueryPageRecordValues();
+  const runPageValuesQuery = queryPageValuesMutation.mutateAsync;
+  const [pageRecordValues, setPageRecordValues] = useState<PageRecordValue[]>([]);
+  const pageValuesRequestIdRef = useRef(0);
+  const [pageValuesHydration, setPageValuesHydration] = useState<PageValuesHydrationState>(
+    idlePageValuesHydration,
+  );
+  const [pageValuesRetryTick, setPageValuesRetryTick] = useState(0);
   const pageFields = useMemo(
     () =>
       [...allPageFields]
@@ -2174,7 +2186,7 @@ export function EntityRecords({
   const [pageRequiredDialog, setPageRequiredDialog] = useState<{
     recordId: number;
     form: FormState;
-    expectedVersion?: number;
+    expectedVersion: number;
   } | null>(null);
 
   // Relation page-fields surface one field of a single linked record. Their
@@ -2779,7 +2791,14 @@ export function EntityRecords({
   // permission-scoped result in a layout effect so rows/related projections from
   // the previous page scope are never painted while the replacement request runs.
   useLayoutEffect(() => {
+    // Invalidate unresolved reads before clearing the old scope. Mutation
+    // requests cannot be aborted, so their completion handlers compare this
+    // token and cannot repopulate values from the previous mirror page.
+    pageValuesRequestIdRef.current += 1;
     setRecords([]);
+    setPageRecordValues([]);
+    setPageValuesHydration(idlePageValuesHydration());
+    setPageRequiredDialog(null);
     setTotal(0);
     setNumericTotals({});
     setPageFormulaValues({});
@@ -2792,7 +2811,7 @@ export function EntityRecords({
     setRelatedByRecord(new Map());
     setEntityRelatedColumns([]);
     setEntityRelatedByRecord(new Map());
-  }, [entityId, permPageId]);
+  }, [entityId, pageId, permPageId]);
 
   // Dynamic table height: cap the scroll container so the horizontal scrollbar
   // and the pagination below it stay inside the viewport without scrolling the
@@ -3897,6 +3916,81 @@ export function EntityRecords({
   // changes. The server applies the full RBAC boundary, so values here are safe
   // to render as-is.
   const recordIdsKey = records.map((r: EntityRecord) => r.id).join(",");
+  const pageValuesScopeKey = pageId == null
+    ? null
+    : pageValuesHydrationKey(pageId, records.map((record: EntityRecord) => record.id));
+  const pageLocalWritesReady = canWritePageValues(pageValuesHydration, pageValuesScopeKey);
+  const guardPageLocalWrite = (write: () => void): boolean => {
+    const written = runPageValueWrite(pageValuesHydration, pageValuesScopeKey, write);
+    if (!written) {
+      toast({
+        title: t("records.pageValuesNotReady", "Поля страницы ещё не загружены"),
+        description:
+          pageValuesHydration.status === "error"
+            ? pageValuesHydration.error
+            : t("records.pageValuesWait", "Дождитесь загрузки значений страницы и повторите попытку."),
+        variant: "destructive",
+      });
+    }
+    return written;
+  };
+  const hasWritablePageValueFields = pageFields.some((field: PageField) =>
+    field.fieldType !== "function" &&
+    field.fieldType !== "relation" &&
+    field.fieldType !== "lookup" &&
+    !pageFieldReadOnly(field) &&
+    (field.fieldType !== "page_ref" || pageRefEditable(field)));
+  const pageValuesSchemaKey = useMemo(
+    () =>
+      JSON.stringify(
+        pageFields.map((field: PageField) => [
+          field.id,
+          field.fieldKey,
+          field.fieldType,
+          field.isActive,
+          field.pageRefConfigJson,
+          field.formulaConfigJson,
+          field.permissionsJson,
+        ]),
+      ),
+    [pageFields],
+  );
+  useEffect(() => {
+    const requestId = ++pageValuesRequestIdRef.current;
+    if (pageId == null || pageValuesScopeKey == null) {
+      setPageRecordValues([]);
+      setPageValuesHydration(idlePageValuesHydration());
+      return;
+    }
+    const requestScopeKey = pageValuesScopeKey;
+    setPageRecordValues([]);
+    setPageRequiredDialog(null);
+    setPageValuesHydration({ status: "loading", key: requestScopeKey, error: null });
+    void runPageValuesQuery({
+      pageId,
+      data: { recordIds: records.map((record: EntityRecord) => record.id) },
+    })
+      .then((result) => {
+        if (requestId !== pageValuesRequestIdRef.current) return;
+        setPageRecordValues(result);
+        setPageValuesHydration({ status: "ready", key: requestScopeKey, error: null });
+      })
+      .catch((error: unknown) => {
+        if (requestId !== pageValuesRequestIdRef.current) return;
+        setPageRecordValues([]);
+        setPageValuesHydration({
+          status: "error",
+          key: requestScopeKey,
+          error: extractError(error) ?? t("records.pageValuesLoadError", "Не удалось загрузить значения полей страницы"),
+        });
+      });
+    return () => {
+      pageValuesRequestIdRef.current += 1;
+    };
+    // Generated mutation requests cannot be aborted. The request token prevents
+    // an old page/archive/filter response from replacing the current row page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageId, recordIdsKey, pageValuesSchemaKey, refreshTick, pageValuesRetryTick]);
   const relationFieldsKey = useMemo(
     () =>
       JSON.stringify(
@@ -4445,6 +4539,8 @@ export function EntityRecords({
   };
   const selectedBulkEditableField =
     bulkEditableFields.find((candidate) => candidate.token === bulkEditFieldToken) ?? null;
+  const selectedBulkPageWriteBlocked =
+    selectedBulkEditableField?.kind === "page" && !pageLocalWritesReady;
   const bulkFieldMutationPending =
     bulkEntityFieldMutation.isPending || bulkPageFieldMutation.isPending;
   const bulkFieldValueMissing =
@@ -4452,6 +4548,10 @@ export function EntityRecords({
     (bulkEditValue === "" || bulkEditValue === undefined || bulkEditValue === null);
   const submitBulkFieldUpdate = () => {
     if (!selectedBulkEditableField) return;
+    if (
+      selectedBulkEditableField.kind === "page" &&
+      !guardPageLocalWrite(() => {})
+    ) return;
     const nextValue = bulkEditClear
       ? null
       : cellValueForPayload(selectedBulkEditableField.field, bulkEditValue);
@@ -4471,25 +4571,34 @@ export function EntityRecords({
       return;
     }
     if (pageId == null) return;
+    const expectedVersions = Object.fromEntries(
+      [...selectedIds].flatMap((recordId) => {
+        const pageState = pageValuesByRecord.get(recordId);
+        const fieldKey =
+          selectedBulkEditableField.pageField?.fieldKey ??
+          selectedBulkEditableField.field.fieldKey;
+        const version =
+          selectedBulkEditableField.pageField?.fieldType === "page_ref"
+            ? pageState?.fieldVersions[fieldKey]
+            : pageState?.version;
+        return version == null ? [] : [[recordId, version]];
+      }),
+    );
+    if (Object.keys(expectedVersions).length !== selectedIds.size) {
+      toast({
+        title: t("records.pageValuesNotReady", "Поля страницы ещё не загружены"),
+        description: t("records.pageValuesMissingVersion", "Не удалось получить актуальную версию значений. Повторите загрузку."),
+        variant: "destructive",
+      });
+      return;
+    }
     bulkPageFieldMutation.mutate({
       pageId,
       data: {
         fieldKey: selectedBulkEditableField.pageField?.fieldKey ?? selectedBulkEditableField.field.fieldKey,
         value: nextValue,
         recordIds: [...selectedIds],
-        expectedVersions: Object.fromEntries(
-          [...selectedIds].flatMap((recordId) => {
-            const pageState = pageValuesByRecord.get(recordId);
-            const fieldKey =
-              selectedBulkEditableField.pageField?.fieldKey ??
-              selectedBulkEditableField.field.fieldKey;
-            const version =
-              selectedBulkEditableField.pageField?.fieldType === "page_ref"
-                ? pageState?.fieldVersions[fieldKey]
-                : pageState?.version;
-            return version == null ? [] : [[recordId, version]];
-          }),
-        ),
+        expectedVersions,
       },
     });
   };
@@ -4525,12 +4634,21 @@ export function EntityRecords({
   // the page map; page_ref uses an explicit single-alias source patch.
   const commitPageCell = (record: EntityRecord, field: PageField, raw: CellValue) => {
     if (pageId == null) { setEditingCell(null); return; }
+    if (!guardPageLocalWrite(() => {})) return;
     const pageState = pageValuesByRecord.get(record.id);
     const existingVersion =
       field.fieldType === "page_ref"
         ? pageState?.fieldVersions[field.fieldKey]
         : pageState?.version;
     const existing = pageState?.values ?? {};
+    if (pageState == null || existingVersion == null) {
+      toast({
+        title: t("records.pageValuesNotReady", "Поля страницы ещё не загружены"),
+        description: t("records.pageValuesMissingVersion", "Не удалось получить актуальную версию значений. Повторите загрузку."),
+        variant: "destructive",
+      });
+      return;
+    }
     const stored = existing[field.fieldKey];
     const effectiveField = field.fieldType === "page_ref" ? pageRefAsField(field) : field as unknown as Field;
     const next = cellValueForPayload(effectiveField, raw);
@@ -4542,13 +4660,20 @@ export function EntityRecords({
     // Keep the key present for clears because omission means "no change".
     if (field.fieldType === "page_ref") {
       const sourcePageId = (field.pageRefConfigJson as { sourcePageId?: number } | undefined)?.sourcePageId;
+      if (sourcePageId == null) {
+        toast({
+          title: t("records.pageValuesNotReady", "Поля страницы ещё не загружены"),
+          description: t("records.pageRefSourceMissing", "Источник поля страницы недоступен."),
+          variant: "destructive",
+        });
+        return;
+      }
       setPageValuesMutation.mutate({
         pageId,
         recordId: record.id,
         data: {
           valuesJson: { [field.fieldKey]: next === "" ? null : next },
-          expectedVersions:
-            sourcePageId != null && existingVersion != null ? { [String(sourcePageId)]: existingVersion } : undefined,
+          expectedVersions: { [String(sourcePageId)]: existingVersion },
         },
       }, {
         onSuccess: () => setEditingCell(null),
@@ -4595,7 +4720,7 @@ export function EntityRecords({
         recordId: record.id,
         data: {
           valuesJson: merged,
-          expectedVersions: existingVersion != null ? { [String(pageId)]: existingVersion } : undefined,
+          expectedVersions: { [String(pageId)]: existingVersion },
         },
       },
       {
@@ -4612,6 +4737,7 @@ export function EntityRecords({
   // empty). Save is only reachable when every required field is filled.
   const commitPageRequiredDialog = () => {
     if (pageId == null || pageRequiredDialog == null) return;
+    if (!guardPageLocalWrite(() => {})) return;
     const { recordId, form, expectedVersion } = pageRequiredDialog;
     const valuesJson: Record<string, unknown> = {};
     for (const pf of storablePageFields) {
@@ -4625,7 +4751,7 @@ export function EntityRecords({
         recordId,
         data: {
           valuesJson,
-          expectedVersions: expectedVersion != null ? { [String(pageId)]: expectedVersion } : undefined,
+          expectedVersions: { [String(pageId)]: expectedVersion },
         },
       },
       {
@@ -4681,6 +4807,7 @@ export function EntityRecords({
   };
 
   const startAddRow = () => {
+    if (hasWritablePageValueFields && !guardPageLocalWrite(() => {})) return;
     const initial: FormState = {};
     for (const f of fields) initial[f.fieldKey] = initialForField(f);
     setNewRow(initial);
@@ -4728,6 +4855,7 @@ export function EntityRecords({
   }, []);
 
   const commitNewRow = () => {
+    if (hasWritablePageValueFields && !guardPageLocalWrite(() => {})) return;
     const valuesJson = formToValues(
       visibleFormFields.filter((f: Field) => effFieldAccess(f) === "edit"),
       newRow,
@@ -6470,6 +6598,23 @@ export function EntityRecords({
         </Card>
       ) : (
       <>
+      {pageValuesHydration.status === "error" && pageValuesHydration.key === pageValuesScopeKey && (
+        <div role="alert" className="mb-2 flex items-center justify-between gap-3 border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <span>
+            {t("records.pageValuesLoadError", "Не удалось загрузить значения полей страницы")}:{" "}
+            {pageValuesHydration.error}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 border-red-300 bg-white text-red-700 hover:bg-red-100"
+            onClick={() => setPageValuesRetryTick((tick) => tick + 1)}
+          >
+            {t("records.retry", "Повторить")}
+          </Button>
+        </div>
+      )}
       <Card className="border-0 rounded-none shadow-none">
         <CardContent className="p-0">
           {recordsLoading && !hasLoadedRecords ? (
@@ -6988,13 +7133,14 @@ export function EntityRecords({
                       >
                         <button
                           type="button"
+                          disabled={hasWritablePageValueFields && !pageLocalWritesReady}
                           onClick={() => {
                             // The edit row appears at the top of tbody — bring
                             // it into view if the table was scrolled down.
                             tableScrollRef.current?.scrollTo({ top: 0 });
                             startAddRow();
                           }}
-                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition"
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-blue-600 hover:bg-blue-50 transition disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <Plus className="w-4 h-4" />
                           {t("records.addRow", "Добавить строку")}
@@ -7059,6 +7205,7 @@ export function EntityRecords({
                             ? pageRefAsField(pf)
                             : { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
                           const editable =
+                            pageLocalWritesReady &&
                             pf.fieldType !== "function" &&
                             pf.fieldType !== "relation" &&
                             pf.fieldType !== "lookup" &&
@@ -7213,7 +7360,11 @@ export function EntityRecords({
                             size="icon"
                             className="h-8 w-8 bg-blue-600 hover:bg-blue-700"
                             title={t("records.saveRow", "Сохранить строку")}
-                            disabled={createMutation.isPending || setPageValuesMutation.isPending}
+                            disabled={
+                              createMutation.isPending ||
+                              setPageValuesMutation.isPending ||
+                              (hasWritablePageValueFields && !pageLocalWritesReady)
+                            }
                             onClick={commitNewRow}
                           >
                             {createMutation.isPending || setPageValuesMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -7720,7 +7871,7 @@ export function EntityRecords({
                             // hint — the write route re-checks every boundary.
                             const refField = pageRefAsField(pf);
                             const v = pageValues[pf.fieldKey];
-                            const refEditable = inlineEditEnabled && pageRefEditable(pf);
+                            const refEditable = pageLocalWritesReady && inlineEditEnabled && pageRefEditable(pf);
                             if (isEditingThis) {
                               return (
                                 <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...colWidthStyle(`pf:${pf.id}`) }}>
@@ -7763,7 +7914,8 @@ export function EntityRecords({
                               </td>
                             );
                           }
-                          const cellEditable = inlineEditEnabled && !isFunction && !pageFieldReadOnly(pf);
+                          const cellEditable =
+                            pageLocalWritesReady && inlineEditEnabled && !isFunction && !pageFieldReadOnly(pf);
                           const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
                           if (isEditingThis) {
                             return (
@@ -8176,7 +8328,7 @@ export function EntityRecords({
                       setBulkEditValue(next);
                       setBulkEditClear(false);
                     }}
-                    disabled={bulkEditClear || bulkFieldMutationPending}
+                    disabled={bulkEditClear || bulkFieldMutationPending || selectedBulkPageWriteBlocked}
                     userOptions={userOptions}
                     entityId={entityId}
                     pageId={permPageId}
@@ -8187,7 +8339,7 @@ export function EntityRecords({
                     <Checkbox
                       checked={bulkEditClear}
                       onCheckedChange={(checked) => setBulkEditClear(checked === true)}
-                      disabled={bulkFieldMutationPending}
+                      disabled={bulkFieldMutationPending || selectedBulkPageWriteBlocked}
                     />
                     <span className="text-sm leading-4">
                       {t("records.bulkEditClear", "Очистить значение во всех выбранных записях")}
@@ -8211,6 +8363,7 @@ export function EntityRecords({
                 !selectedBulkEditableField ||
                 bulkFieldValueMissing ||
                 bulkFieldMutationPending ||
+                selectedBulkPageWriteBlocked ||
                 selectedIds.size === 0
               }
               className="bg-blue-600 hover:bg-blue-700"
@@ -8395,6 +8548,7 @@ export function EntityRecords({
                         value={pageRequiredDialog.form[pf.fieldKey]}
                         userOptions={userOptions}
                         rowValues={pageRequiredDialog.form}
+                        disabled={!pageLocalWritesReady}
                         onChange={(v) =>
                           setPageRequiredDialog((prev) =>
                             prev == null ? prev : { ...prev, form: { ...prev.form, [pf.fieldKey]: v } },
@@ -8419,6 +8573,7 @@ export function EntityRecords({
               onClick={commitPageRequiredDialog}
               disabled={
                 setPageValuesMutation.isPending ||
+                !pageLocalWritesReady ||
                 pageRequiredDialog == null ||
                 requiredPageFields.some((pf) => isPageValueEmpty(pageRequiredDialog.form[pf.fieldKey]))
               }

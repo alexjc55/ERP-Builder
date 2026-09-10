@@ -144,6 +144,7 @@ import type {
   PageInput,
   PageRecordValue,
   PageRecordValueInput,
+  PageRecordValuesQueryInput,
   PageRelatedCandidates,
   PageRelatedCandidatesInput,
   PageRelatedLinkInput,
@@ -6334,6 +6335,79 @@ export function useListPageRecordValues<TData = Awaited<ReturnType<typeof listPa
 
 
 
+
+export const getQueryPageRecordValuesUrl = (pageId: number,) => {
+
+
+
+
+  return `/api/pages/${pageId}/record-values/query`
+}
+
+/**
+ * Returns page-local values only for the requested record ids. The server re-applies page access, record view, row scope, and hidden-status boundaries; ids outside the viewer's record universe are silently omitted. Use this paged endpoint for record-table rendering. The unbounded GET is retained for backwards-compatible integrations.
+ * @summary List page-local values for a requested record page
+ */
+export const queryPageRecordValues = async (pageId: number,
+    pageRecordValuesQueryInput: PageRecordValuesQueryInput, options?: RequestInit): Promise<PageRecordValue[]> => {
+
+  return customFetch<PageRecordValue[]>(getQueryPageRecordValuesUrl(pageId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      pageRecordValuesQueryInput,)
+  }
+);}
+
+
+
+
+export const getQueryPageRecordValuesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof queryPageRecordValues>>, TError,{pageId: number;data: BodyType<PageRecordValuesQueryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof queryPageRecordValues>>, TError,{pageId: number;data: BodyType<PageRecordValuesQueryInput>}, TContext> => {
+
+const mutationKey = ['queryPageRecordValues'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof queryPageRecordValues>>, {pageId: number;data: BodyType<PageRecordValuesQueryInput>}> = (props) => {
+          const {pageId,data} = props ?? {};
+
+          return  queryPageRecordValues(pageId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type QueryPageRecordValuesMutationResult = NonNullable<Awaited<ReturnType<typeof queryPageRecordValues>>>
+    export type QueryPageRecordValuesMutationBody = BodyType<PageRecordValuesQueryInput>
+    export type QueryPageRecordValuesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary List page-local values for a requested record page
+ */
+export const useQueryPageRecordValues = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof queryPageRecordValues>>, TError,{pageId: number;data: BodyType<PageRecordValuesQueryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof queryPageRecordValues>>,
+        TError,
+        {pageId: number;data: BodyType<PageRecordValuesQueryInput>},
+        TContext
+      > => {
+      return useMutation(getQueryPageRecordValuesMutationOptions(options));
+    }
 
 export const getSetPageRecordValuesUrl = (pageId: number,
     recordId: number,) => {

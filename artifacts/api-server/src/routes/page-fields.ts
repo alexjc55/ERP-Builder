@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import {
   db,
   pageFieldsTable,
@@ -88,6 +88,7 @@ import {
   DeletePageFieldParams,
   ReorderPageFieldsBody,
   ListPageRecordValuesParams,
+  QueryPageRecordValuesBody,
   SetPageRecordValuesParams,
   SetPageRecordValuesBody,
   BulkSetPageRecordFieldValuesParams,
@@ -109,6 +110,7 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+const MISSING_PAGE_VALUE_VERSION = 0;
 
 const FIELD_KEY_RE = /^[a-z][a-z0-9_]*$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1135,7 +1137,11 @@ router.delete("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req
   res.json({ success: true, message: "Page field deleted" });
 });
 
-router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promise<void> => {
+async function sendPageRecordValues(
+  req: Request,
+  res: Response,
+  requestedRecordIds?: readonly number[],
+): Promise<void> {
   const params = ListPageRecordValuesParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -1159,6 +1165,13 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
   // Record-level view permission on the page's effective entity is required
   // (honoring a mirror-page override when this page mirrors that entity).
   if (!(await assertRecord(req, res, entityId, "view", params.data.pageId))) return;
+  const requested = requestedRecordIds == null
+    ? null
+    : [...new Set(requestedRecordIds)];
+  if (requested?.length === 0) {
+    res.json([]);
+    return;
+  }
   // Restrict the returned values to records the caller is actually allowed to
   // see: only rows of that entity, and only own rows under "own" scope.
   const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, params.data.pageId);
@@ -1166,6 +1179,7 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     eq(pageRecordValuesTable.pageId, params.data.pageId),
     eq(entityRecordsTable.entityId, entityId),
   ];
+  if (requested) where.push(idArrayAny(entityRecordsTable.id, requested));
   if (scope === "own") {
     const entityFields = await loadActiveEntityFields(entityId);
     where.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, entityFields));
@@ -1178,6 +1192,7 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
       valuesJson: pageRecordValuesTable.valuesJson,
       version: pageRecordValuesTable.version,
       entityValuesJson: entityRecordsTable.valuesJson,
+      entityArchivedAt: entityRecordsTable.archivedAt,
     })
     .from(pageRecordValuesTable)
     .innerJoin(entityRecordsTable, eq(entityRecordsTable.id, pageRecordValuesTable.recordId))
@@ -1227,18 +1242,23 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
   }
   // A page_ref is an alias over the same entity record and must not depend on a
   // target page_record_values row already existing. Build the authorized base
-  // record universe independently, then use version 1 for synthesized empty
+  // record universe independently, then use absence token 0 for synthesized empty
   // target/source page maps. This also lets entity-only source formulas resolve
   // without creating page-local storage as a side effect.
-  if (refFields.length > 0) {
+  if (refFields.length > 0 || requested != null) {
     const baseRecordWhere: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
+    if (requested) baseRecordWhere.push(idArrayAny(entityRecordsTable.id, requested));
     if (scope === "own") {
       const activeFields = await loadActiveEntityFields(entityId);
       baseRecordWhere.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, activeFields));
     }
     if (rvHiddenRowWhere) baseRecordWhere.push(rvHiddenRowWhere);
     const authorizedBaseRows = await db
-      .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+      .select({
+        id: entityRecordsTable.id,
+        valuesJson: entityRecordsTable.valuesJson,
+        archivedAt: entityRecordsTable.archivedAt,
+      })
       .from(entityRecordsTable)
       .where(and(...baseRecordWhere));
     const storedTargetById = new Map(rows.map((row) => [row.recordId, row]));
@@ -1247,12 +1267,26 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
         rows.push({
           recordId: record.id,
           valuesJson: {},
-          version: 1,
+          version: MISSING_PAGE_VALUE_VERSION,
           entityValuesJson: record.valuesJson,
+          entityArchivedAt: record.archivedAt,
         });
       }
     }
   }
+  // Keep active and archived formula base rows in separate cohorts. A mixed
+  // "all" response must not broaden the dependency universe of its active rows
+  // merely because an unrelated archived row was requested alongside them.
+  const archivedRecordIds = new Set(
+    rows.filter((row) => row.entityArchivedAt != null).map((row) => row.recordId),
+  );
+  const activeRecordIds = new Set(
+    rows.filter((row) => row.entityArchivedAt == null).map((row) => row.recordId),
+  );
+  const archiveCohorts = [
+    { ids: activeRecordIds, includeArchivedBaseRows: false },
+    { ids: archivedRecordIds, includeArchivedBaseRows: true },
+  ] as const;
   const visibleLocalFieldKeys = pageFieldCandidates
     .filter(
       (field) =>
@@ -1307,17 +1341,32 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     Map<number, { valuesJson: Record<string, unknown>; version: number }>
   >();
   for (const spid of sourcePageIds) {
-    const sourcePermissions = await interactiveFormulaPermissions(req, entityId, spid);
-    const sourceAllowedIds = await sourcePermissions.filterRows({
-      entityId,
-      pageId: spid,
-      recordIds: [...entityRows.keys()],
-    });
+    const sourceAllowedIds = new Set<number>();
+    for (const cohort of archiveCohorts) {
+      if (cohort.ids.size === 0) continue;
+      const sourcePermissions = await interactiveFormulaPermissions(
+        req,
+        entityId,
+        spid,
+        cohort.includeArchivedBaseRows,
+      );
+      const allowed = await sourcePermissions.filterRows({
+        entityId,
+        pageId: spid,
+        recordIds: [...cohort.ids],
+      });
+      for (const id of allowed) sourceAllowedIds.add(id);
+    }
+    if (sourceAllowedIds.size === 0) {
+      sourceRowsByPage.set(spid, new Map());
+      continue;
+    }
     // Same viewer boundary as the base query (entity rows + own scope +
     // hidden-row statuses), only the pageId differs.
     const srcWhere: SQL[] = [
       eq(pageRecordValuesTable.pageId, spid),
       eq(entityRecordsTable.entityId, entityId),
+      idArrayAny(entityRecordsTable.id, [...sourceAllowedIds]),
     ];
     if (scope === "own") {
       const entityFields = await loadActiveEntityFields(entityId);
@@ -1334,7 +1383,6 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
       .innerJoin(entityRecordsTable, eq(entityRecordsTable.id, pageRecordValuesTable.recordId))
       .where(and(...srcWhere));
     for (const sr of srcRows) {
-      if (!sourceAllowedIds.has(sr.recordId)) continue;
       const pageRows = sourceRowsByPage.get(spid) ?? new Map();
       pageRows.set(sr.recordId, {
         valuesJson: (sr.valuesJson as Record<string, unknown>) ?? {},
@@ -1342,12 +1390,14 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
       });
       sourceRowsByPage.set(spid, pageRows);
       // A source row can make a page_ref visible even when this page has no
-      // base value row. Synthesize that base row with the documented version 1.
+      // base value row. Version 0 is the absence token; persisted rows start at 1.
       if (!enrichedByRecord.has(sr.recordId)) {
         enrichedByRecord.set(sr.recordId, {
           valuesJson: {},
-          version: 1,
-          fieldVersions: Object.fromEntries(visibleLocalFieldKeys.map((fieldKey) => [fieldKey, 1])),
+          version: MISSING_PAGE_VALUE_VERSION,
+          fieldVersions: Object.fromEntries(
+            visibleLocalFieldKeys.map((fieldKey) => [fieldKey, MISSING_PAGE_VALUE_VERSION]),
+          ),
         });
       }
     }
@@ -1355,7 +1405,9 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     // empty input row so it can still be evaluated for this record.
     for (const recordId of sourceAllowedIds) {
       const pageRows = sourceRowsByPage.get(spid) ?? new Map();
-      if (!pageRows.has(recordId)) pageRows.set(recordId, { valuesJson: {}, version: 1 });
+      if (!pageRows.has(recordId)) {
+        pageRows.set(recordId, { valuesJson: {}, version: MISSING_PAGE_VALUE_VERSION });
+      }
       sourceRowsByPage.set(spid, pageRows);
     }
   }
@@ -1382,13 +1434,24 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     const sourceRows = sourceRowsByPage.get(spid);
     if (!sourceRows) continue;
     const sourceIds = [...sourceRows.keys()];
-    const sourceInputs = await mergeLinkedFormulaInputs({
-      entityId,
-      pageId: spid,
-      rows: sourceIds.map((id) => ({ id, values: entityRows.get(id) ?? {} })),
-      fields: [...entityFields.filter((field) => !entityHidden.has(field.fieldKey)), ...sourceFields.filter((field) => !sourceHidden.has(field.fieldKey))],
-      permissions: await interactiveFormulaPermissions(req, entityId, spid),
-    });
+    const sourceInputs = new Map<number, Record<string, unknown>>();
+    for (const cohort of archiveCohorts) {
+      const cohortSourceIds = sourceIds.filter((id) => cohort.ids.has(id));
+      if (cohortSourceIds.length === 0) continue;
+      const cohortInputs = await mergeLinkedFormulaInputs({
+        entityId,
+        pageId: spid,
+        rows: cohortSourceIds.map((id) => ({ id, values: entityRows.get(id) ?? {} })),
+        fields: [...entityFields.filter((field) => !entityHidden.has(field.fieldKey)), ...sourceFields.filter((field) => !sourceHidden.has(field.fieldKey))],
+        permissions: await interactiveFormulaPermissions(
+          req,
+          entityId,
+          spid,
+          cohort.includeArchivedBaseRows,
+        ),
+      });
+      for (const [id, values] of cohortInputs) sourceInputs.set(id, values);
+    }
     const computed = materializeVisiblePageFormulas({
       entityId,
       pageId: spid,
@@ -1413,10 +1476,10 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     for (const field of refFields) {
       const cfg = field.pageRefConfigJson as PageRefFieldConfig;
       const source = sourceRowsByPage.get(cfg.sourcePageId!)?.get(recordId);
-      // A missing source row has the same insert-CAS baseline as a missing base
-      // row. Crucially, this version is keyed by the visible alias field so a
+      // A missing source row has the same absence token as a missing base row.
+      // Crucially, this version is keyed by the visible alias field so a
       // client never confuses it with another page_ref's independent source row.
-      target.fieldVersions[field.fieldKey] = source?.version ?? 1;
+      target.fieldVersions[field.fieldKey] = source?.version ?? MISSING_PAGE_VALUE_VERSION;
       const value = source?.valuesJson[cfg.sourceFieldKey!];
       if (value !== undefined && value !== null) target.valuesJson[field.fieldKey] = value;
     }
@@ -1440,16 +1503,27 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
       entityFields.filter((field) => !entityHidden.has(field.fieldKey)),
     ),
   }));
-  const linkedInputs = await mergeLinkedFormulaInputs({
-    entityId,
-    pageId: params.data.pageId,
-    rows: formulaRows,
-    fields: [
-      ...entityFields.filter((field) => !entityHidden.has(field.fieldKey)),
-      ...pageFieldCandidates.filter((field) => !pageHidden.has(field.fieldKey)),
-    ],
-    permissions: await interactiveFormulaPermissions(req, entityId, params.data.pageId),
-  });
+  const linkedInputs = new Map<number, Record<string, unknown>>();
+  for (const cohort of archiveCohorts) {
+    const cohortFormulaRows = formulaRows.filter((row) => cohort.ids.has(row.id));
+    if (cohortFormulaRows.length === 0) continue;
+    const cohortInputs = await mergeLinkedFormulaInputs({
+      entityId,
+      pageId: params.data.pageId,
+      rows: cohortFormulaRows,
+      fields: [
+        ...entityFields.filter((field) => !entityHidden.has(field.fieldKey)),
+        ...pageFieldCandidates.filter((field) => !pageHidden.has(field.fieldKey)),
+      ],
+      permissions: await interactiveFormulaPermissions(
+        req,
+        entityId,
+        params.data.pageId,
+        cohort.includeArchivedBaseRows,
+      ),
+    });
+    for (const [id, values] of cohortInputs) linkedInputs.set(id, values);
+  }
   const pageFormulaValues = materializeVisiblePageFormulas({
     entityId,
     pageId: params.data.pageId,
@@ -1474,6 +1548,19 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
       ...value,
     })),
   );
+}
+
+router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promise<void> => {
+  await sendPageRecordValues(req, res);
+});
+
+router.post("/pages/:pageId/record-values/query", requireAuth, async (req, res): Promise<void> => {
+  const parsed = QueryPageRecordValuesBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  await sendPageRecordValues(req, res, parsed.data.recordIds);
 });
 
 router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, res): Promise<void> => {
@@ -1792,7 +1879,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
   const shouldWriteTarget = !aliasOnlyWrite && preliminaryTargetChangedKeys.length > 0;
   let writtenTargetPrevValues = prevValues;
   let writtenTargetValues = result.values;
-  let writtenTargetVersion = existing?.version ?? 1;
+  let writtenTargetVersion = existing?.version ?? MISSING_PAGE_VALUE_VERSION;
   const mappedTransitionState: { value: MappedStatusTransitionResult | null } = { value: null };
 
   class LockedPageValidationError extends Error {}
@@ -1883,9 +1970,10 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         lockedRowsByPage.set(lockPageId, lockedRow);
       }
       // Validate every row CAS before any INSERT/UPDATE. Missing rows use the
-      // established baseline 1 and are serialized by the advisory lock above.
+      // distinct absence token 0 and are serialized by the advisory lock above.
       for (const lockPageId of lockPageIds) {
-        const lockedVersion = lockedRowsByPage.get(lockPageId)?.version ?? 1;
+        const lockedVersion =
+          lockedRowsByPage.get(lockPageId)?.version ?? MISSING_PAGE_VALUE_VERSION;
         const expected =
           expectedVersions[String(lockPageId)] ??
           (parsed.data.expectedVersion != null && lockPageIds.length === 1 ? parsed.data.expectedVersion : undefined);
@@ -1915,7 +2003,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
             throw new LockedPageConflictError(
               `Page field "${fieldKey}" changed while this value was being saved`,
               pageId,
-              lockedTarget?.version ?? 1,
+              lockedTarget?.version ?? MISSING_PAGE_VALUE_VERSION,
             );
           }
         }
@@ -1955,7 +2043,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
             throw new LockedPageConflictError(
               `Source field "${fieldKey}" changed while this value was being saved`,
               sourceState.pageId,
-              lockedSource?.version ?? 1,
+              lockedSource?.version ?? MISSING_PAGE_VALUE_VERSION,
             );
           }
         }
@@ -2479,7 +2567,8 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
       // explicitly versions of the source page_record_values rows.
       for (const recordId of recordIds) {
         const expectedVersion = expectedVersions?.[String(recordId)];
-        const currentVersion = lockedByRecord.get(recordId)?.version ?? 1;
+        const currentVersion =
+          lockedByRecord.get(recordId)?.version ?? MISSING_PAGE_VALUE_VERSION;
         if (expectedVersion != null && currentVersion !== expectedVersion) {
           throw new BulkPageFieldUpdateError(
             409,
@@ -2568,7 +2657,13 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
           ? await db.select({ version: pageRecordValuesTable.version }).from(pageRecordValuesTable)
             .where(and(eq(pageRecordValuesTable.pageId, writePageId), eq(pageRecordValuesTable.recordId, err.recordId))).limit(1)
           : [];
-      res.status(err.status).json({ error: err.message, recordId: err.recordId, ...(err.status === 409 ? { currentVersion: current[0]?.version ?? 1 } : {}) });
+      res.status(err.status).json({
+        error: err.message,
+        recordId: err.recordId,
+        ...(err.status === 409
+          ? { currentVersion: current[0]?.version ?? MISSING_PAGE_VALUE_VERSION }
+          : {}),
+      });
       return;
     }
     throw err;
@@ -4212,25 +4307,155 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     editable: boolean;
   }[] = [];
 
-  for (const f of relationFields) {
-    const cfg = f.relationConfigJson as RelationFieldConfig | null;
-    const relationId = cfg?.relationId ?? null;
-    const relatedFieldKey = cfg?.relatedFieldKey ?? null;
-    if (relationId == null || !relatedFieldKey) continue;
+  // Shared relation columns commonly project many fields through the same link.
+  // Load relation metadata, links, projected-field metadata, and visible linked
+  // records once per request instead of repeating that dependency graph for
+  // every column (14 columns previously produced ~65 SQL statements).
+  const configuredRelationIds = [...new Set(relationFields.flatMap((field) => {
+    const relationId = (field.relationConfigJson as RelationFieldConfig | null)?.relationId;
+    return relationId == null ? [] : [relationId];
+  }))];
+  const configuredRelations = configuredRelationIds.length
+    ? await db.select().from(relationsTable).where(inArray(relationsTable.id, configuredRelationIds))
+    : [];
+  const relationById = new Map(configuredRelations.map((relation) => [relation.id, relation]));
+  const relationDescriptors = relationFields.flatMap((field) => {
+    const config = field.relationConfigJson as RelationFieldConfig | null;
+    const relation = config?.relationId == null ? undefined : relationById.get(config.relationId);
+    const direction = relation ? relationDirection(relation, entityId) : null;
+    const relatedFieldKey = config?.relatedFieldKey ?? null;
+    if (!relation || !direction || !relatedFieldKey) return [];
+    return [{
+      field,
+      config,
+      relation,
+      direction,
+      relatedEntityId: relatedEntityIdFor(relation, direction),
+      relatedFieldKey,
+      relatedPageId: config?.relatedPageId ?? null,
+    }];
+  });
+  const entityProjectionDescriptors = relationDescriptors.filter((item) => item.relatedPageId == null);
+  const pageProjectionDescriptors = relationDescriptors.filter((item) => item.relatedPageId != null);
+  const projectedEntityFields = entityProjectionDescriptors.length
+    ? await db.select().from(entityFieldsTable).where(and(
+        inArray(entityFieldsTable.entityId, [...new Set(entityProjectionDescriptors.map((item) => item.relatedEntityId))]),
+        inArray(entityFieldsTable.fieldKey, [...new Set(entityProjectionDescriptors.map((item) => item.relatedFieldKey))]),
+        eq(entityFieldsTable.isActive, true),
+      ))
+    : [];
+  const projectedPageFields = pageProjectionDescriptors.length
+    ? await db.select().from(pageFieldsTable).where(and(
+        inArray(pageFieldsTable.pageId, [...new Set(pageProjectionDescriptors.map((item) => item.relatedPageId!))]),
+        inArray(pageFieldsTable.fieldKey, [...new Set(pageProjectionDescriptors.map((item) => item.relatedFieldKey))]),
+        eq(pageFieldsTable.isActive, true),
+      ))
+    : [];
+  const projectedEntityFieldByPair = new Map(
+    projectedEntityFields.map((field) => [`${field.entityId}\u0000${field.fieldKey}`, field]),
+  );
+  const projectedPageFieldByPair = new Map(
+    projectedPageFields.map((field) => [`${field.pageId}\u0000${field.fieldKey}`, field]),
+  );
+
+  const allLinkRows = configuredRelationIds.length
+    ? await db
+        .select({
+          relationId: recordLinksTable.relationId,
+          sourceRecordId: recordLinksTable.sourceRecordId,
+          targetRecordId: recordLinksTable.targetRecordId,
+        })
+        .from(recordLinksTable)
+        .where(and(
+          inArray(recordLinksTable.relationId, configuredRelationIds),
+          or(
+            idArrayAny(recordLinksTable.sourceRecordId, allowedIds),
+            idArrayAny(recordLinksTable.targetRecordId, allowedIds),
+          ),
+        ))
+    : [];
+  const linkMapByRelation = new Map<number, Map<number, number>>();
+  for (const descriptor of relationDescriptors) {
+    const map = linkMapByRelation.get(descriptor.relation.id) ?? new Map<number, number>();
+    for (const link of allLinkRows) {
+      if (link.relationId !== descriptor.relation.id) continue;
+      const from = descriptor.direction === "source" ? link.sourceRecordId : link.targetRecordId;
+      const to = descriptor.direction === "source" ? link.targetRecordId : link.sourceRecordId;
+      if (allowedIds.includes(from)) map.set(from, to);
+    }
+    linkMapByRelation.set(descriptor.relation.id, map);
+  }
+
+  const linkedIdsByEntity = new Map<number, Set<number>>();
+  for (const descriptor of relationDescriptors) {
+    const ids = linkedIdsByEntity.get(descriptor.relatedEntityId) ?? new Set<number>();
+    for (const linkedId of linkMapByRelation.get(descriptor.relation.id)?.values() ?? []) ids.add(linkedId);
+    linkedIdsByEntity.set(descriptor.relatedEntityId, ids);
+  }
+  const linkedMapByEntity = new Map<number, Map<number, Record<string, unknown>>>();
+  for (const [relatedEntityId, linkedIdSet] of linkedIdsByEntity) {
+    const linkedIds = [...linkedIdSet];
+    const linkedMap = new Map<number, Record<string, unknown>>();
+    if (linkedIds.length > 0) {
+      const linkedConds: SQL[] = [
+        eq(entityRecordsTable.entityId, relatedEntityId),
+        idArrayAny(entityRecordsTable.id, linkedIds),
+      ];
+      const relHiddenRowWhere = hiddenRowStatusWhere(
+        effectiveStatusVisibility(perms, relatedEntityId).hiddenRowStatusIds,
+      );
+      if (relHiddenRowWhere) linkedConds.push(relHiddenRowWhere);
+      const relatedScope = effectiveScope(perms, relatedEntityId);
+      if (relatedScope.scope === "own") {
+        const relatedFields = await loadActiveEntityFields(relatedEntityId);
+        linkedConds.push(await ownScopeWhere(
+          relatedEntityId,
+          relatedScope.scopeFieldKeys,
+          userId,
+          relatedFields,
+        ));
+      }
+      const linkedRecords = await db
+        .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
+        .from(entityRecordsTable)
+        .where(and(...linkedConds));
+      for (const record of linkedRecords) {
+        linkedMap.set(record.id, (record.valuesJson as Record<string, unknown>) ?? {});
+      }
+    }
+    linkedMapByEntity.set(relatedEntityId, linkedMap);
+  }
+
+  const relatedPageIds = [...new Set(pageProjectionDescriptors.map((item) => item.relatedPageId!))];
+  const visibleLinkedIds = [...new Set([...linkedMapByEntity.values()].flatMap((map) => [...map.keys()]))];
+  const allProjectedPageValues =
+    relatedPageIds.length > 0 && visibleLinkedIds.length > 0
+      ? await db
+          .select({
+            pageId: pageRecordValuesTable.pageId,
+            recordId: pageRecordValuesTable.recordId,
+            valuesJson: pageRecordValuesTable.valuesJson,
+          })
+          .from(pageRecordValuesTable)
+          .where(and(
+            inArray(pageRecordValuesTable.pageId, relatedPageIds),
+            idArrayAny(pageRecordValuesTable.recordId, visibleLinkedIds),
+          ))
+      : [];
+  const projectedPageValuesByPage = new Map<number, Map<number, Record<string, unknown>>>();
+  for (const row of allProjectedPageValues) {
+    const pageValues = projectedPageValuesByPage.get(row.pageId) ?? new Map();
+    pageValues.set(row.recordId, (row.valuesJson as Record<string, unknown>) ?? {});
+    projectedPageValuesByPage.set(row.pageId, pageValues);
+  }
+
+  for (const descriptor of relationDescriptors) {
+    const { field: f, config: cfg, relation, relatedEntityId, relatedFieldKey, relatedPageId } = descriptor;
     // Page-source: project a PAGE-LOCAL field of the linked record from
     // page_record_values, not one of the linked entity record's own fields.
     // Applies to both relation and lookup entity fields.
-    const relatedPageId = cfg?.relatedPageId ?? null;
-
-    const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
-    if (!relation) continue;
-    const direction = relationDirection(relation, entityId);
-    if (!direction) continue;
-    const relatedEntityId = relatedEntityIdFor(relation, direction);
-
     const ownAccess = resolveFieldAccess(f, perms, roleIds, entityId);
     const canViewRelated = canRecord(perms, relatedEntityId, "view");
-    const relScope = effectiveScope(perms, relatedEntityId);
 
     // Resolve the projected field's metadata + visibility from the right source:
     // a page field (page-source lookup) or the linked entity's own field.
@@ -4239,20 +4464,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     let optionsJson: SelectOption[];
     let projectedChain = false;
     if (relatedPageId != null) {
-      const [relatedPageField] = await db
-        .select({
-          fieldType: pageFieldsTable.fieldType,
-          optionsJson: pageFieldsTable.optionsJson,
-          permissionsJson: pageFieldsTable.permissionsJson,
-        })
-        .from(pageFieldsTable)
-        .where(
-          and(
-            eq(pageFieldsTable.pageId, relatedPageId),
-            eq(pageFieldsTable.fieldKey, relatedFieldKey),
-            eq(pageFieldsTable.isActive, true),
-          ),
-        );
+      const relatedPageField = projectedPageFieldByPair.get(`${relatedPageId}\u0000${relatedFieldKey}`);
       if (!relatedPageField) continue;
       // Page-field visibility decides access; the related entity's record-view
       // boundary still gates whether anything is shown at all.
@@ -4269,16 +4481,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
       optionsJson = access === "hidden" ? [] : normalizeOptions(relatedPageField.optionsJson);
       if (relatedPageField.fieldType === "function") projectedChain = true;
     } else {
-      const [relatedField] = await db
-        .select()
-        .from(entityFieldsTable)
-        .where(
-          and(
-            eq(entityFieldsTable.entityId, relatedEntityId),
-            eq(entityFieldsTable.fieldKey, relatedFieldKey),
-            eq(entityFieldsTable.isActive, true),
-          ),
-        );
+      const relatedField = projectedEntityFieldByPair.get(`${relatedEntityId}\u0000${relatedFieldKey}`);
       if (!relatedField) continue;
       // Re-apply the related entity's RECORD-VIEW boundary first (resolveFieldAccess
       // defaults to "view" when no explicit perm exists, so treat no related-entity
@@ -4300,7 +4503,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
     // Resolve the chained value/metadata once per column (entity-source only).
     let chain: ChainResolution | null = null;
     if (projectedChain && access !== "hidden") {
-      chain = await resolveChainValues(entityId, allowedIds, relationId, relatedFieldKey, relatedPageId, { perms, roleIds, userId, req }, 0);
+      chain = await resolveChainValues(entityId, allowedIds, relation.id, relatedFieldKey, relatedPageId, { perms, roleIds, userId, req }, 0);
       relatedFieldType = chain.access === "hidden" ? null : chain.relatedFieldType;
       optionsJson = chain.optionsJson;
       if (chain.access === "hidden") access = "hidden";
@@ -4342,61 +4545,15 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
       writeThrough,
     });
 
-    const linkRows =
-      direction === "source"
-        ? await db
-            .select({ from: recordLinksTable.sourceRecordId, to: recordLinksTable.targetRecordId })
-            .from(recordLinksTable)
-            .where(and(eq(recordLinksTable.relationId, relationId), idArrayAny(recordLinksTable.sourceRecordId, allowedIds)))
-        : await db
-            .select({ from: recordLinksTable.targetRecordId, to: recordLinksTable.sourceRecordId })
-            .from(recordLinksTable)
-            .where(and(eq(recordLinksTable.relationId, relationId), idArrayAny(recordLinksTable.targetRecordId, allowedIds)));
-    const linkMap = new Map<number, number>();
-    for (const l of linkRows) linkMap.set(l.from, l.to);
-
-    const linkedIds = Array.from(new Set(linkRows.map((l) => l.to)));
-    // linkedMap gates which linked records are viewable (row-hidden status +
-    // related own-scope on the ENTITY record). For page-source lookups it carries
-    // no value, only membership; the projected value comes from pageValuesMap.
-    const linkedMap = new Map<number, Record<string, unknown>>();
-    const pageValuesMap = new Map<number, Record<string, unknown>>();
-    if (linkedIds.length > 0 && access !== "hidden") {
-      const relHiddenRowWhere = hiddenRowStatusWhere(
-        effectiveStatusVisibility(perms, relatedEntityId).hiddenRowStatusIds,
-      );
-      const linkedConds: SQL[] = [
-        eq(entityRecordsTable.entityId, relatedEntityId),
-        idArrayAny(entityRecordsTable.id, linkedIds),
-      ];
-      if (relHiddenRowWhere) linkedConds.push(relHiddenRowWhere);
-      // Related own-scope (relation-aware) applied in SQL; non-owned linked
-      // records never enter linkedMap, so their value/id stay hidden below.
-      if (relScope.scope === "own") {
-        const relatedFields = await loadActiveEntityFields(relatedEntityId);
-        linkedConds.push(await ownScopeWhere(relatedEntityId, relScope.scopeFieldKeys, userId, relatedFields));
-      }
-      const linkedRecords = await db
-        .select({ id: entityRecordsTable.id, valuesJson: entityRecordsTable.valuesJson })
-        .from(entityRecordsTable)
-        .where(and(...linkedConds));
-      for (const lr of linkedRecords) linkedMap.set(lr.id, (lr.valuesJson as Record<string, unknown>) ?? {});
-      if (relatedPageId != null) {
-        const allowedLinkedIds = Array.from(linkedMap.keys());
-        if (allowedLinkedIds.length > 0) {
-          const prv = await db
-            .select({ recordId: pageRecordValuesTable.recordId, valuesJson: pageRecordValuesTable.valuesJson })
-            .from(pageRecordValuesTable)
-            .where(
-              and(
-                eq(pageRecordValuesTable.pageId, relatedPageId),
-                idArrayAny(pageRecordValuesTable.recordId, allowedLinkedIds),
-              ),
-            );
-          for (const r of prv) pageValuesMap.set(r.recordId, (r.valuesJson as Record<string, unknown>) ?? {});
-        }
-      }
-    }
+    const linkMap = linkMapByRelation.get(relation.id) ?? new Map<number, number>();
+    // Membership in this map is the shared related-row visibility boundary
+    // (entity view, own/filter scope, and hidden-row status).
+    const linkedMap = access === "hidden"
+      ? new Map<number, Record<string, unknown>>()
+      : linkedMapByEntity.get(relatedEntityId) ?? new Map<number, Record<string, unknown>>();
+    const pageValuesMap = relatedPageId == null
+      ? new Map<number, Record<string, unknown>>()
+      : projectedPageValuesByPage.get(relatedPageId) ?? new Map<number, Record<string, unknown>>();
 
     for (const recordId of allowedIds) {
       const rawLinkedId = linkMap.get(recordId) ?? null;

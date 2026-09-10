@@ -52,6 +52,107 @@ type FormulaDependencyField = FormulaConfiguredField & {
   fieldKey: string;
   relationConfigJson?: unknown;
 };
+
+type FormulaInputMap = Map<number, Record<string, unknown>>;
+
+/**
+ * Request-owned dependency cache. Callers must create one inside a single HTTP
+ * handler and pass it only to formula passes sharing that request's permission
+ * adapter. The WeakMap identity partition prevents an accidentally shared cache
+ * from reusing results across different authorization contexts.
+ */
+export interface FormulaDependencyRequestCache {
+  readonly byPermissionContext: WeakMap<
+    LinkedFormulaPermissionContext,
+    Map<string, Promise<FormulaInputMap>>
+  >;
+}
+
+export function createFormulaDependencyRequestCache(): FormulaDependencyRequestCache {
+  return { byPermissionContext: new WeakMap() };
+}
+
+function cloneFormulaValue(value: unknown, seen = new WeakMap<object, unknown>()): unknown {
+  if (value == null || typeof value !== "object") return value;
+  const cached = seen.get(value);
+  if (cached !== undefined) return cached;
+  if (value instanceof Date) return new Date(value.getTime());
+  if (Array.isArray(value)) {
+    const clone: unknown[] = [];
+    seen.set(value, clone);
+    for (const item of value) clone.push(cloneFormulaValue(item, seen));
+    return clone;
+  }
+  const clone: Record<string, unknown> = {};
+  seen.set(value, clone);
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    clone[key] = cloneFormulaValue(item, seen);
+  }
+  for (const key of deniedKeys(value as Record<string, unknown>)) {
+    markDeniedFormulaProjection(clone, key);
+  }
+  return clone;
+}
+
+export function cloneFormulaDependencyInputs(
+  source: ReadonlyMap<number, Record<string, unknown>>,
+): Map<number, Record<string, unknown>> {
+  const clone: FormulaInputMap = new Map();
+  for (const [id, values] of source) {
+    clone.set(id, cloneFormulaValue(values) as Record<string, unknown>);
+  }
+  return clone;
+}
+
+function stableFormulaCacheValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableFormulaCacheValue);
+  if (value != null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => [key, stableFormulaCacheValue(item)]),
+    );
+  }
+  return value;
+}
+
+function formulaDependencyCacheKey(options: {
+  entityId: number;
+  pageId?: number;
+  rows: readonly { id: number; values: Record<string, unknown> }[];
+  fields: readonly FormulaDependencyField[];
+}): string {
+  // Duplicate identical metadata is semantically inert (some aggregate passes
+  // append the all-formulas list to the visible field list), so remove exact
+  // duplicates before sorting. Different definitions remain in the signature
+  // and continue to trigger formulaSourcesOf's ambiguity-neutral semantics.
+  const fields = [...new Set(options.fields.map((field) => JSON.stringify(stableFormulaCacheValue([
+    field.fieldKey,
+    field.fieldType,
+    field.formulaConfigJson ?? null,
+    field.relationConfigJson ?? null,
+  ]))))].sort();
+  const rows = options.rows
+    .map((row) => [row.id, stableFormulaCacheValue(row.values), deniedFormulaCachePaths(row.values)] as const)
+    .sort(([a], [b]) => a - b);
+  return JSON.stringify([options.entityId, options.pageId ?? null, fields, rows]);
+}
+
+function deniedFormulaCachePaths(
+  value: unknown,
+  path: readonly string[] = [],
+  out: string[][] = [],
+  seen = new WeakSet<object>(),
+): string[][] {
+  if (value == null || typeof value !== "object" || seen.has(value)) return out;
+  seen.add(value);
+  const record = value as Record<string, unknown>;
+  for (const key of [...deniedKeys(record)].sort()) out.push([...path, key]);
+  for (const [key, item] of Object.entries(record).sort(([left], [right]) => left.localeCompare(right))) {
+    deniedFormulaCachePaths(item, [...path, key], out, seen);
+  }
+  return out;
+}
 type LegacyRelationField = {
   fieldKey: string;
   fieldType: string;
@@ -647,6 +748,7 @@ export async function mergeLinkedFormulaInputs(options: {
   rows: readonly { id: number; values: Record<string, unknown> }[];
   fields: readonly FormulaDependencyField[];
   permissions: LinkedFormulaPermissionContext;
+  requestCache?: FormulaDependencyRequestCache;
 }, state: {
   depth: number;
   pageFormulaStack: ReadonlySet<string>;
@@ -655,6 +757,27 @@ export async function mergeLinkedFormulaInputs(options: {
   depth: 0,
   pageFormulaStack: new Set(),
 }): Promise<Map<number, Record<string, unknown>>> {
+  if (options.requestCache && state.depth === 0) {
+    const cacheKey = formulaDependencyCacheKey(options);
+    let entries = options.requestCache.byPermissionContext.get(options.permissions);
+    if (!entries) {
+      entries = new Map();
+      options.requestCache.byPermissionContext.set(options.permissions, entries);
+    }
+    const cached = entries.get(cacheKey);
+    if (cached) return cloneFormulaDependencyInputs(await cached);
+    const pending = mergeLinkedFormulaInputs(
+      { ...options, requestCache: undefined },
+      state,
+    );
+    entries.set(cacheKey, pending);
+    try {
+      return cloneFormulaDependencyInputs(await pending);
+    } catch (error) {
+      entries.delete(cacheKey);
+      throw error;
+    }
+  }
   const out = new Map(options.rows.map((row) => [row.id, { ...row.values }]));
   const configuredSources = formulaSourcesOf(options.fields).filter((source) =>
     // A canonical qualified reference to the current page is already resolved

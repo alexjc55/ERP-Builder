@@ -106,6 +106,7 @@ import {
   formulaSourcesOf,
   materializeVisibleEntityFormulas,
   canUseRecordPageFormulaContext,
+  createFormulaDependencyRequestCache,
   projectViewerFormulaValues,
   materializeVisiblePageFormulas,
   loadFormulaOptions,
@@ -1629,6 +1630,9 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     formulaPageId,
     archived !== "active",
   );
+  // Shared only by formula passes in this HTTP request. Permission adapter
+  // identity is part of the cache partition; nothing survives the response.
+  const formulaDependencyCache = createFormulaDependencyRequestCache();
 
   const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
   if (built.where) clauses.push(built.where);
@@ -2011,6 +2015,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       ...visibleDataPageFields,
     ],
     permissions: formulaPermissions,
+    requestCache: formulaDependencyCache,
   });
   let dataFormulaValues = materializeVisibleEntityFormulas({
     entityId,
@@ -2134,6 +2139,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       rows: formulaGroupRows.map((row) => ({ id: row.id, values: row.values })),
       fields: [...visibleFields, ...visibleDataPageFields],
       permissions: formulaPermissions,
+      requestCache: formulaDependencyCache,
     });
     const groupingEntityValues = materializeVisibleEntityFormulas({
       entityId,
@@ -2297,6 +2303,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       rows: allRows.map((r) => ({ id: r.id, values: projectViewerFormulaValues((r.values ?? {}) as Record<string, unknown>, visibleFields) })),
       fields: [...visibleFields, ...visibleDataPageFields],
       permissions: formulaPermissions,
+      requestCache: formulaDependencyCache,
     });
     const totalCurrentPageValues = new Map<number, Record<string, unknown>>();
     if (formulaPageId != null && allRows.length > 0) {
@@ -2459,6 +2466,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           ...visiblePageAllFormulaRows.map((r) => ({ ...r, fieldType: "function" })),
         ],
         permissions: formulaPermissions,
+        requestCache: formulaDependencyCache,
       });
       const ids = recRows.map((r) => r.id);
       const pvRows =
@@ -2710,6 +2718,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       rows: gRows.map((r) => ({ id: r.id, values: projectViewerFormulaValues((r.values ?? {}) as Record<string, unknown>, visibleFields) })),
       fields: [...visibleFields, ...gPfVisible],
       permissions: formulaPermissions,
+      requestCache: formulaDependencyCache,
     });
     const gPfSumFields = gPfVisible.filter(
       (pf) => pf.showColumnTotal && (pf.fieldType === "number" || pf.fieldType === "function"),

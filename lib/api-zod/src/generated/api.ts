@@ -5694,16 +5694,51 @@ export const ListPageRecordValuesParams = zod.object({
   "pageId": zod.coerce.number()
 })
 
+export const listPageRecordValuesResponseVersionMin = 0;
+
+export const listPageRecordValuesResponseFieldVersionsMinOne = 0;
 
 
 
 export const ListPageRecordValuesResponseItem = zod.object({
   "recordId": zod.number(),
   "valuesJson": zod.record(zod.string(), zod.unknown()),
-  "version": zod.number().describe('Version of this page\'s own page_record_values row; 1 for a synthesized missing row.'),
-  "fieldVersions": zod.record(zod.string(), zod.number().min(1)).optional().describe('Optional per-visible-field CAS versions keyed by the page field key. Ordinary page-local fields use the base row version. A page_ref field uses the version of its actual source page_record_values row.')
+  "version": zod.number().min(listPageRecordValuesResponseVersionMin).describe('Version of this page\'s own page_record_values row; 0 is the absence token for a synthesized missing row and persisted rows start at 1.'),
+  "fieldVersions": zod.record(zod.string(), zod.number().min(listPageRecordValuesResponseFieldVersionsMinOne)).optional().describe('Optional per-visible-field CAS versions keyed by the page field key. Ordinary page-local fields use the base row version. A page_ref field uses the version of its actual source page_record_values row.')
 }).describe('Page-local field values for one mirrored record.')
 export const ListPageRecordValuesResponse = zod.array(ListPageRecordValuesResponseItem)
+
+
+/**
+ * Returns page-local values only for the requested record ids. The server re-applies page access, record view, row scope, and hidden-status boundaries; ids outside the viewer's record universe are silently omitted. Use this paged endpoint for record-table rendering. The unbounded GET is retained for backwards-compatible integrations.
+ * @summary List page-local values for a requested record page
+ */
+export const QueryPageRecordValuesParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+
+export const queryPageRecordValuesBodyRecordIdsMax = 500;
+
+
+
+export const QueryPageRecordValuesBody = zod.object({
+  "recordIds": zod.array(zod.number().min(1)).max(queryPageRecordValuesBodyRecordIdsMax).describe('Current records-query page ids. Duplicates are accepted and de-duplicated server-side; unauthorized or non-page ids are omitted.')
+})
+
+export const queryPageRecordValuesResponseVersionMin = 0;
+
+export const queryPageRecordValuesResponseFieldVersionsMinOne = 0;
+
+
+
+export const QueryPageRecordValuesResponseItem = zod.object({
+  "recordId": zod.number(),
+  "valuesJson": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().min(queryPageRecordValuesResponseVersionMin).describe('Version of this page\'s own page_record_values row; 0 is the absence token for a synthesized missing row and persisted rows start at 1.'),
+  "fieldVersions": zod.record(zod.string(), zod.number().min(queryPageRecordValuesResponseFieldVersionsMinOne)).optional().describe('Optional per-visible-field CAS versions keyed by the page field key. Ordinary page-local fields use the base row version. A page_ref field uses the version of its actual source page_record_values row.')
+}).describe('Page-local field values for one mirrored record.')
+export const QueryPageRecordValuesResponse = zod.array(QueryPageRecordValuesResponseItem)
 
 
 /**
@@ -5714,24 +5749,29 @@ export const SetPageRecordValuesParams = zod.object({
   "recordId": zod.coerce.number()
 })
 
+export const setPageRecordValuesBodyExpectedVersionMin = 0;
 
+export const setPageRecordValuesBodyExpectedVersionsMinOne = 0;
 
 
 
 export const SetPageRecordValuesBody = zod.object({
   "valuesJson": zod.record(zod.string(), zod.unknown()),
-  "expectedVersion": zod.number().min(1).optional().describe('Legacy single-row CAS. Allowed only when the request touches exactly one distinct page_record_values row. A missing row has baseline 1.'),
-  "expectedVersions": zod.record(zod.string(), zod.number().min(1)).optional().describe('Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use baseline 1.')
+  "expectedVersion": zod.number().min(setPageRecordValuesBodyExpectedVersionMin).optional().describe('Legacy single-row CAS. Allowed only when the request touches exactly one distinct page_record_values row. A missing row has absence token 0.'),
+  "expectedVersions": zod.record(zod.string(), zod.number().min(setPageRecordValuesBodyExpectedVersionsMinOne)).optional().describe('Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use absence token 0.')
 })
 
+export const setPageRecordValuesResponseVersionMin = 0;
+
+export const setPageRecordValuesResponseFieldVersionsMinOne = 0;
 
 
 
 export const SetPageRecordValuesResponse = zod.object({
   "recordId": zod.number(),
   "valuesJson": zod.record(zod.string(), zod.unknown()),
-  "version": zod.number().describe('Version of this page\'s own page_record_values row; 1 for a synthesized missing row.'),
-  "fieldVersions": zod.record(zod.string(), zod.number().min(1)).optional().describe('Optional per-visible-field CAS versions keyed by the page field key. Ordinary page-local fields use the base row version. A page_ref field uses the version of its actual source page_record_values row.')
+  "version": zod.number().min(setPageRecordValuesResponseVersionMin).describe('Version of this page\'s own page_record_values row; 0 is the absence token for a synthesized missing row and persisted rows start at 1.'),
+  "fieldVersions": zod.record(zod.string(), zod.number().min(setPageRecordValuesResponseFieldVersionsMinOne)).optional().describe('Optional per-visible-field CAS versions keyed by the page field key. Ordinary page-local fields use the base row version. A page_ref field uses the version of its actual source page_record_values row.')
 }).describe('Page-local field values for one mirrored record.')
 
 
@@ -5744,6 +5784,7 @@ export const BulkSetPageRecordFieldValuesParams = zod.object({
 
 export const bulkSetPageRecordFieldValuesBodyRecordIdsMax = 500;
 
+export const bulkSetPageRecordFieldValuesBodyExpectedVersionsMinOne = 0;
 
 
 
@@ -5751,7 +5792,7 @@ export const BulkSetPageRecordFieldValuesBody = zod.object({
   "fieldKey": zod.string(),
   "value": zod.unknown(),
   "recordIds": zod.array(zod.number()).min(1).max(bulkSetPageRecordFieldValuesBodyRecordIdsMax),
-  "expectedVersions": zod.record(zod.string(), zod.number().min(1)).optional().describe('Expected versions keyed by record id. For page_ref, each value is the actual source page_record_values version from fieldVersions[fieldKey]; otherwise it is the base page row version.')
+  "expectedVersions": zod.record(zod.string(), zod.number().min(bulkSetPageRecordFieldValuesBodyExpectedVersionsMinOne)).optional().describe('Expected versions keyed by record id. For page_ref, each value is the actual source page_record_values version from fieldVersions[fieldKey]; otherwise it is the base page row version.')
 })
 
 export const BulkSetPageRecordFieldValuesResponse = zod.object({

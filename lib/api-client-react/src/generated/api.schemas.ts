@@ -612,7 +612,7 @@ export interface VersionConflictResponse {
   error: string;
   recordId?: number;
   pageId?: number;
-  /** @minimum 1 */
+  /** @minimum 0 */
   currentVersion?: number;
 }
 
@@ -3674,26 +3674,37 @@ export interface PageRecordValueFieldVersions {[key: string]: number}
 export interface PageRecordValue {
   recordId: number;
   valuesJson: PageRecordValueValuesJson;
-  /** Version of this page's own page_record_values row; 1 for a synthesized missing row. */
+  /**
+     * Version of this page's own page_record_values row; 0 is the absence token for a synthesized missing row and persisted rows start at 1.
+     * @minimum 0
+     */
   version: number;
   fieldVersions?: PageRecordValueFieldVersions;
+}
+
+export interface PageRecordValuesQueryInput {
+  /**
+     * Current records-query page ids. Duplicates are accepted and de-duplicated server-side; unauthorized or non-page ids are omitted.
+     * @maxItems 500
+     */
+  recordIds: number[];
 }
 
 export type PageRecordValueInputValuesJson = { [key: string]: unknown };
 
 /**
- * Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use baseline 1.
+ * Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use absence token 0.
  */
 export type PageRecordValueInputExpectedVersions = {[key: string]: number};
 
 export interface PageRecordValueInput {
   valuesJson: PageRecordValueInputValuesJson;
   /**
-     * Legacy single-row CAS. Allowed only when the request touches exactly one distinct page_record_values row. A missing row has baseline 1.
-     * @minimum 1
+     * Legacy single-row CAS. Allowed only when the request touches exactly one distinct page_record_values row. A missing row has absence token 0.
+     * @minimum 0
      */
   expectedVersion?: number;
-  /** Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use baseline 1. */
+  /** Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use absence token 0. */
   expectedVersions?: PageRecordValueInputExpectedVersions;
 }
 

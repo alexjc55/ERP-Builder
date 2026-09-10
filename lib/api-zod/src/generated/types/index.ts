@@ -312,6 +312,7 @@ export * from './pageRecordValueFieldVersions';
 export * from './pageRecordValueInput';
 export * from './pageRecordValueInputExpectedVersions';
 export * from './pageRecordValueInputValuesJson';
+export * from './pageRecordValuesQueryInput';
 export * from './pageRecordValueValuesJson';
 export * from './pageRefFieldConfig';
 export * from './pageRelatedCandidate';

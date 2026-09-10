@@ -7,6 +7,6 @@
  */
 
 /**
- * Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use baseline 1.
+ * Per-row CAS versions keyed by stringified pageId. Supply every touched existing row: the target page for local fields and each source page for page_ref aliases. Missing rows use absence token 0.
  */
 export type PageRecordValueInputExpectedVersions = {[key: string]: number};

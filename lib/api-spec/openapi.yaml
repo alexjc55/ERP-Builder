@@ -1763,6 +1763,39 @@ paths:
                 items:
                   $ref: "#/components/schemas/PageRecordValue"
 
+  /pages/{pageId}/record-values/query:
+    post:
+      operationId: queryPageRecordValues
+      tags: [pageFields]
+      summary: List page-local values for a requested record page
+      description: >-
+        Returns page-local values only for the requested record ids. The server
+        re-applies page access, record view, row scope, and hidden-status
+        boundaries; ids outside the viewer's record universe are silently
+        omitted. Use this paged endpoint for record-table rendering. The
+        unbounded GET is retained for backwards-compatible integrations.
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageRecordValuesQueryInput"
+      responses:
+        "200":
+          description: Page-local values for the requested visible records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PageRecordValue"
+
   /pages/{pageId}/records/{recordId}/values:
     put:
       operationId: setPageRecordValues
@@ -4956,7 +4989,7 @@ components:
           type: integer
         currentVersion:
           type: integer
-          minimum: 1
+          minimum: 0
 
     UploadUrlRequest:
       type: object
@@ -8344,9 +8377,24 @@ components:
           additionalProperties: true
         version:
           type: integer
-          description: Version of this page's own page_record_values row; 1 for a synthesized missing row.
+          minimum: 0
+          description: Version of this page's own page_record_values row; 0 is the absence token for a synthesized missing row and persisted rows start at 1.
         fieldVersions:
           $ref: "#/components/schemas/PageRecordValueFieldVersions"
+
+    PageRecordValuesQueryInput:
+      type: object
+      required: [recordIds]
+      properties:
+        recordIds:
+          type: array
+          maxItems: 500
+          items:
+            type: integer
+            minimum: 1
+          description: >-
+            Current records-query page ids. Duplicates are accepted and
+            de-duplicated server-side; unauthorized or non-page ids are omitted.
 
     PageRecordValueFieldVersions:
       type: object
@@ -8356,7 +8404,7 @@ components:
         uses the version of its actual source page_record_values row.
       additionalProperties:
         type: integer
-        minimum: 1
+        minimum: 0
 
     PageRecordValueInput:
       type: object
@@ -8367,19 +8415,19 @@ components:
           additionalProperties: true
         expectedVersion:
           type: integer
-          minimum: 1
+          minimum: 0
           description: >-
             Legacy single-row CAS. Allowed only when the request touches exactly
-            one distinct page_record_values row. A missing row has baseline 1.
+            one distinct page_record_values row. A missing row has absence token 0.
         expectedVersions:
           type: object
           description: >-
             Per-row CAS versions keyed by stringified pageId. Supply every
             touched existing row: the target page for local fields and each
-            source page for page_ref aliases. Missing rows use baseline 1.
+            source page for page_ref aliases. Missing rows use absence token 0.
           additionalProperties:
             type: integer
-            minimum: 1
+            minimum: 0
 
     BulkPageRecordFieldUpdate:
       type: object
@@ -8402,7 +8450,7 @@ components:
             otherwise it is the base page row version.
           additionalProperties:
             type: integer
-            minimum: 1
+            minimum: 0
 
     Status:
       type: object

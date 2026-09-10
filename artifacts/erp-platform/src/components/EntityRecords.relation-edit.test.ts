@@ -59,6 +59,37 @@ test("same-entity page changes refetch permission-scoped rows and relation value
   );
   assert.match(
     source,
-    /useLayoutEffect\(\(\) => \{[\s\S]*?setRecords\(\[\]\);[\s\S]*?setEntityRelatedByRecord\(new Map\(\)\);[\s\S]*?\}, \[entityId, permPageId\]\);/,
+    /useLayoutEffect\(\(\) => \{[\s\S]*?pageValuesRequestIdRef\.current \+= 1;[\s\S]*?setRecords\(\[\]\);[\s\S]*?setPageRecordValues\(\[\]\);[\s\S]*?setEntityRelatedByRecord\(new Map\(\)\);[\s\S]*?\}, \[entityId, pageId, permPageId\]\);/,
   );
+});
+
+test("same-record-id mirror navigation invalidates stale page-value responses", () => {
+  assert.match(source, /const requestId = \+\+pageValuesRequestIdRef\.current;/);
+  assert.match(
+    source,
+    /if \(requestId !== pageValuesRequestIdRef\.current\) return;\s*setPageRecordValues\(result\);\s*setPageValuesHydration\(\{ status: "ready", key: requestScopeKey, error: null \}\);/,
+  );
+  assert.match(
+    source,
+    /return \(\) => \{\s*pageValuesRequestIdRef\.current \+= 1;\s*\};/,
+  );
+  assert.match(source, /\[pageId, recordIdsKey, pageValuesSchemaKey, refreshTick, pageValuesRetryTick\]/);
+});
+
+test("page-local write surfaces use hydration readiness and authoritative CAS", () => {
+  assert.match(
+    source,
+    /const commitPageCell = [\s\S]*?if \(!guardPageLocalWrite\(\(\) => \{\}\)\) return;[\s\S]*?if \(pageState == null \|\| existingVersion == null\)/,
+  );
+  assert.match(source, /expectedVersions: \{ \[String\(pageId\)\]: existingVersion \}/);
+  assert.match(source, /selectedBulkPageWriteBlocked/);
+  assert.match(source, /role="alert"[\s\S]*?setPageValuesRetryTick\(\(tick\) => tick \+ 1\)/);
+});
+
+test("page-value refresh does not discard an active entity-cell editor", () => {
+  const hydrationEffect = source.match(
+    /useEffect\(\(\) => \{\s*const requestId = \+\+pageValuesRequestIdRef\.current;[\s\S]*?const relationFieldsKey = useMemo/,
+  )?.[0];
+  assert.ok(hydrationEffect);
+  assert.doesNotMatch(hydrationEffect, /setEditingCell\(null\)/);
 });

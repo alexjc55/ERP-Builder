@@ -98,9 +98,10 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     .catch(next);
 }
 
-/** Requests a guest token is allowed to make: any GET, or the POST records-query read. */
+/** Requests a guest token is allowed to make: any GET, or explicitly read-only POST queries. */
 function isGuestReadSafe(req: Request): boolean {
   if (req.method === "GET") return true;
   if (req.method === "POST" && /\/records\/query$/.test(req.path)) return true;
+  if (req.method === "POST" && /\/pages\/\d+\/record-values\/query$/.test(req.path)) return true;
   return false;
 }

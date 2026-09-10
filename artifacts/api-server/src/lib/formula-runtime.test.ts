@@ -3,13 +3,101 @@ import test from "node:test";
 import {
   canExportPageFieldToFormula,
   canUseRecordPageFormulaContext,
+  cloneFormulaDependencyInputs,
+  createFormulaDependencyRequestCache,
   formulaSourcesOf,
   isExportedFormulaBasePageResource,
   legacyFormulaSourcesFromFields,
+  isDeniedFormulaProjection,
+  markDeniedFormulaProjection,
   materializeVisibleEntityFormulas,
   materializeVisiblePageFormulas,
+  mergeLinkedFormulaInputs,
   mergeLinkedFormulaInputsBatched,
 } from "./formula-runtime";
+import type { LinkedFormulaPermissionContext } from "./linked-formula-resolver";
+
+test("formula dependency reuse is request-owned, permission-partitioned, and clone-safe", async () => {
+  const allowAll: LinkedFormulaPermissionContext = {
+    async authorizeResources(resources) {
+      return new Set(resources.map((resource) =>
+        resource.kind === "entity"
+          ? `entity:${resource.entityId}`
+          : resource.kind === "page"
+            ? `page:${resource.entityId}:${resource.pageId}`
+            : resource.scope === "entity"
+              ? `field:${resource.entityId}:entity:${resource.fieldKey}`
+              : `field:${resource.entityId}:page:${resource.pageId}:${resource.fieldKey}`,
+      ));
+    },
+    async filterRows(scope) {
+      return new Set(scope.recordIds);
+    },
+  };
+  const otherIdentity: LinkedFormulaPermissionContext = {
+    ...allowAll,
+    async filterRows(scope) {
+      return new Set(scope.recordIds);
+    },
+  };
+  const requestCache = createFormulaDependencyRequestCache();
+  const common = {
+    entityId: 72,
+    rows: [{ id: 1, values: { amount: 5, nested: { left: 1, right: 2 } } }],
+    fields: [] as const,
+  };
+
+  const first = await mergeLinkedFormulaInputs({
+    ...common,
+    permissions: allowAll,
+    requestCache,
+  });
+  first.get(1)!.amount = 99;
+  (first.get(1)!.nested as { left: number }).left = 99;
+  const second = await mergeLinkedFormulaInputs({
+    ...common,
+    permissions: allowAll,
+    requestCache,
+  });
+
+  assert.equal(second.get(1)!.amount, 5, "cached maps are cloned before each formula pass");
+  assert.deepEqual(
+    second.get(1)!.nested,
+    { left: 1, right: 2 },
+    "nested cached JSON is cloned before each formula pass",
+  );
+  await mergeLinkedFormulaInputs({
+    ...common,
+    rows: [{ id: 1, values: { nested: { right: 2, left: 1 }, amount: 5 } }],
+    permissions: allowAll,
+    requestCache,
+  });
+  assert.equal(requestCache.byPermissionContext.get(allowAll)?.size, 1);
+  await mergeLinkedFormulaInputs({
+    ...common,
+    permissions: otherIdentity,
+    requestCache,
+  });
+  assert.equal(requestCache.byPermissionContext.get(otherIdentity)?.size, 1);
+  assert.notEqual(
+    requestCache.byPermissionContext.get(allowAll),
+    requestCache.byPermissionContext.get(otherIdentity),
+  );
+});
+
+test("formula dependency clones preserve denied metadata at every JSON depth", () => {
+  const nested = { blockedChild: "secret", allowedChild: "visible" };
+  const values = { blocked: "secret", nested };
+  markDeniedFormulaProjection(values, "blocked");
+  markDeniedFormulaProjection(nested, "blockedChild");
+
+  const cloned = cloneFormulaDependencyInputs(new Map([[1, values]])).get(1)!;
+  const clonedNested = cloned.nested as Record<string, unknown>;
+  assert.equal(isDeniedFormulaProjection(cloned, "blocked"), true);
+  assert.equal(isDeniedFormulaProjection(clonedNested, "blockedChild"), true);
+  clonedNested.allowedChild = "changed";
+  assert.equal(nested.allowedChild, "visible");
+});
 
 test("cross-page formula export is field-wide and preserves ordinary read boundaries", () => {
   const base = {

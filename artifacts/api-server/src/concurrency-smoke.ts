@@ -835,7 +835,7 @@ async function main(): Promise<void> {
         const [locked] = await tx.select({ version: pageRecordValuesTable.version }).from(pageRecordValuesTable)
           .where(sql`${pageRecordValuesTable.pageId} = ${touchedPageId} AND ${pageRecordValuesTable.recordId} = ${record.id}`)
           .for("update");
-        const currentVersion = locked?.version ?? 1;
+        const currentVersion = locked?.version ?? 0;
         if (expectedVersions[String(touchedPageId)] !== currentVersion) {
           conflict = { pageId: touchedPageId, currentVersion };
         }

@@ -10,6 +10,6 @@ export interface VersionConflictResponse {
   error: string;
   recordId?: number;
   pageId?: number;
-  /** @minimum 1 */
+  /** @minimum 0 */
   currentVersion?: number;
 }

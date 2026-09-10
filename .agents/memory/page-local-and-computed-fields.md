@@ -226,3 +226,17 @@ without updating (the controlled input reverts) — never rewrite "1,5" to "15".
 - page_fields.permissions_json is enforced for ALL field types: list route strips hidden; PUT /pages/:id/records/:id/values rejects changes to view/hidden fields and PRESERVES stored values the caller can't edit (the PUT replaces the whole map — without preservation a viewer's resave wipes hidden values).
 - Client caveat: EntityRecords casts page fields to synthetic Field with `permissionsJson: {}` — entity-field UI perm checks do NOT apply; page cells use the dedicated `pageFieldReadOnly(pf)` mirror. Any new page-cell edit surface must call it.
 - Config dialog shows the roles block for every type (was relation/lookup only).
+
+## Record-table page values use a requested row universe
+
+**Rule:** Display-only page values may use the requested row subset, but totals
+and group winners must retain their full permission-filtered universe. Active
+and archived rows must not share an archive-broadened formula dependency scope.
+Existing-row page writes require an authoritative value scope and CAS token;
+absence must be distinguishable from every persisted row version.
+
+**Why:** A global archive flag made active formula results change merely because
+an unrelated archived row was included in the same response. Bounding display
+reads without preserving aggregate scope would instead produce plausible wrong
+totals. Reusing the first persisted version for absence lets a stale empty read
+overwrite the first real write without producing a conflict.

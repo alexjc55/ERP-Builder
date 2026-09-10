@@ -138,10 +138,11 @@ async function hasPrivilegedRole(userId: number, primaryRoleId: number): Promise
   });
 }
 
-/** Any GET, or the POST records-query read (same read shape as the guest guard). */
+/** Any GET, or an explicitly read-only POST query (same shape as the guest guard). */
 function isReadRequest(req: Request): boolean {
   if (req.method === "GET") return true;
   if (req.method === "POST" && /\/records\/query$/.test(req.path)) return true;
+  if (req.method === "POST" && /\/pages\/\d+\/record-values\/query$/.test(req.path)) return true;
   return false;
 }
 

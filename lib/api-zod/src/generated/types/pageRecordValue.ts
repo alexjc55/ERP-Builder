@@ -14,7 +14,10 @@ import type { PageRecordValueValuesJson } from './pageRecordValueValuesJson';
 export interface PageRecordValue {
   recordId: number;
   valuesJson: PageRecordValueValuesJson;
-  /** Version of this page's own page_record_values row; 1 for a synthesized missing row. */
+  /**
+     * Version of this page's own page_record_values row; 0 is the absence token for a synthesized missing row and persisted rows start at 1.
+     * @minimum 0
+     */
   version: number;
   fieldVersions?: PageRecordValueFieldVersions;
 }
