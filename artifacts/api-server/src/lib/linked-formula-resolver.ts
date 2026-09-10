@@ -70,6 +70,15 @@ export interface LinkedFormulaRowScope {
  */
 export interface LinkedFormulaPermissionContext {
   authorizeResources(resources: readonly LinkedFormulaResource[]): Promise<ReadonlySet<string>>;
+  /**
+   * Optional interactive-only capability check for exact page fields consumed
+   * as cross-page formula sources. It never authorizes ordinary page APIs.
+   */
+  authorizePageFormulaSourceFields?(
+    resources: readonly Extract<LinkedFormulaResource, { kind: "field"; scope: "page" }>[],
+  ): Promise<ReadonlySet<string>>;
+  /** Row boundary for an explicitly exported field on an inaccessible page. */
+  filterPageFormulaSourceRows?(scope: LinkedFormulaRowScope & { pageId: number }): Promise<ReadonlySet<number>>;
   filterRows(scope: LinkedFormulaRowScope): Promise<ReadonlySet<number>>;
   /** Interactive full-set reads may intentionally include archived base rows. */
   includeArchivedBaseRows?: boolean;
@@ -87,6 +96,7 @@ export interface ResolveLinkedFormulaOptions {
 
 export interface LinkedFormulaResolution {
   valuesByRecordId: Map<number, Record<string, unknown>>;
+  deniedSourceKeysByRecordId: Map<number, ReadonlySet<string>>;
   targetRecordsRead: number;
 }
 
@@ -603,12 +613,18 @@ export async function resolveLinkedFormulaData(
   const valuesByRecordId = new Map<number, Record<string, unknown>>(
     baseIds.map((id) => [id, {}]),
   );
+  const deniedSourceKeysByRecordId = new Map<number, Set<string>>(
+    baseIds.map((id) => [id, new Set()]),
+  );
   for (const source of options.sources) {
     if (source.kind === "pageLocal") {
       for (const id of baseIds) {
         valuesByRecordId.get(id)![source.key] = allowedPageLocalRows.get(source.pageId)?.has(id)
           ? loaded.get(id)?.pages.get(source.pageId)?.[source.fieldKey] ?? null
           : null;
+        if (!allowedPageLocalRows.get(source.pageId)?.has(id)) {
+          deniedSourceKeysByRecordId.get(id)!.add(source.key);
+        }
       }
       continue;
     }
@@ -628,8 +644,15 @@ export async function resolveLinkedFormulaData(
         if (link.relationId !== relation.id) continue;
         const baseId = source.join.baseSide === "source" ? link.sourceRecordId : link.targetRecordId;
         const targetId = source.join.baseSide === "source" ? link.targetRecordId : link.sourceRecordId;
+        if (!valuesByRecordId.has(baseId)) continue;
+        const candidateTarget = targetRows.find((row) =>
+          row.id === targetId && row.entityId === source.targetEntityId);
+        if (candidateTarget && !allowedTargets.has(targetId)) {
+          deniedSourceKeysByRecordId.get(baseId)!.add(source.key);
+          continue;
+        }
         const target = loaded.get(targetId);
-        if (!target || !allowedTargets.has(targetId) || !valuesByRecordId.has(baseId)) continue;
+        if (!target || !allowedTargets.has(targetId)) continue;
         const list = matches.get(baseId) ?? [];
         list.push(target);
         matches.set(baseId, list);
@@ -653,6 +676,25 @@ export async function resolveLinkedFormulaData(
           equalityCandidates(options.baseEntityId, pair.base, base)));
         for (const key of keys) for (const target of index.get(key) ?? []) found.set(target.id, target);
         matches.set(baseId, [...found.values()].sort((a, b) => a.id - b.id));
+        if (targetRows.some((record) =>
+          record.entityId === source.targetEntityId && !allowedTargets.has(record.id))) {
+          // Determining whether a denied equality target matches would itself
+          // require inspecting denied join values. Conservatively suppress the
+          // projection for every base row instead of creating that oracle.
+          deniedSourceKeysByRecordId.get(baseId)!.add(source.key);
+        }
+        const hasDeniedIntermediate = source.join.on.some((pair) => {
+          const entityId = relationLinkedEntity(options.baseEntityId, pair.base);
+          if (entityId == null) return false;
+          const candidates = intermediateIdsByEntity.get(entityId) ?? new Set<number>();
+          const allowed = allowedIntermediateByEntity.get(entityId) ?? new Set<number>();
+          return [...candidates].some((id) => !allowed.has(id));
+        });
+        if (hasDeniedIntermediate) {
+          // As with denied equality targets, matching on inaccessible
+          // intermediate relation rows would be an oracle. Suppress the source.
+          deniedSourceKeysByRecordId.get(baseId)!.add(source.key);
+        }
       }
     }
     for (const baseId of baseIds) {
@@ -661,5 +703,5 @@ export async function resolveLinkedFormulaData(
       valuesByRecordId.get(baseId)![source.key] = aggregateLinkedValues(source.aggregate, values, source.separator);
     }
   }
-  return { valuesByRecordId, targetRecordsRead: targetRows.length };
+  return { valuesByRecordId, deniedSourceKeysByRecordId, targetRecordsRead: targetRows.length };
 }

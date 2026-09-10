@@ -8146,6 +8146,14 @@ components:
           $ref: "#/components/schemas/PageRefFieldConfig"
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
+        formulaExportRoleIds:
+          type: array
+          items:
+            type: integer
+          description: >-
+            Role ids explicitly allowed to let a formula on another accessible
+            page consume this field while source-page membership remains denied.
+            Ordinary source field, record and row permissions still apply.
         showInTable:
           type: boolean
         isPinned:
@@ -8218,6 +8226,11 @@ components:
           $ref: "#/components/schemas/PageRefFieldConfig"
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
+        formulaExportRoleIds:
+          type: array
+          items:
+            type: integer
+          default: []
         showInTable:
           type: boolean
           default: true
@@ -8284,6 +8297,10 @@ components:
           $ref: "#/components/schemas/PageRefFieldConfig"
         permissionsJson:
           $ref: "#/components/schemas/FieldPermissions"
+        formulaExportRoleIds:
+          type: array
+          items:
+            type: integer
         showInTable:
           type: boolean
         isPinned:

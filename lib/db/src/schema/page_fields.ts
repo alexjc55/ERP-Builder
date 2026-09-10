@@ -51,6 +51,12 @@ export const pageFieldsTable = pgTable(
     fileConfigJson: jsonb("file_config_json").$type<FileFieldConfig>().notNull().default({}),
     pageRefConfigJson: jsonb("page_ref_config_json").$type<PageRefFieldConfig>().notNull().default({}),
     permissionsJson: jsonb("permissions_json").$type<FieldPermissions>().notNull().default({}),
+    /**
+     * Explicit, default-deny capability for formulas on another page to consume
+     * this exact field without granting membership in this field's page.
+     * Ordinary field/record/row permissions still apply.
+     */
+    formulaExportRoleIds: integer("formula_export_role_ids").array().notNull().default([]),
     showInTable: boolean("show_in_table").notNull().default(true),
     isPinned: boolean("is_pinned").notNull().default(false),
     showColumnTotal: boolean("show_column_total").notNull().default(false),

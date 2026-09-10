@@ -13,6 +13,16 @@ Structured linked-formula source tokens are server-only capabilities. Never seri
 
 ## Qualified page references
 
+**Explicit export exception:** a role-specific source-field export grant may bypass source page
+membership only when used by an authorized destination formula. It never grants direct page API
+access or exports sibling fields. Ordinary source field visibility and source mirror record,
+own/filter scope, and hidden-status restrictions still apply even without page membership.
+**Why:** operational pages need selected report values without opening the report; using ordinary
+membership-dependent permission helpers would silently drop the inaccessible mirror's restrictions.
+**How to apply:** evaluate exact source dependencies with export-aware source permissions. Propagate
+denied projections separately from legitimate nulls through recursive formulas and aliases; omit
+denied values from filter options and matches, including empty filters.
+
 **Rule:** A formula token shaped like `{page:<id>.<field>}` must automatically enter the same permission-aware `pageLocal` resolution path as an explicitly configured page source; parsing the token without loading its source is not valid support.
 
 **Why:** The editor's qualified syntax promises an unambiguous cross-page value, but a token without a separately persisted source used to evaluate as empty even when that same record had a value on the referenced page.

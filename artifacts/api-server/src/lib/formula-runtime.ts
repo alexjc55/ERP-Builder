@@ -3,6 +3,7 @@ import {
   db,
   entityFieldsTable,
   entityRecordsTable,
+  entitiesTable,
   pageFieldsTable,
   pageRecordValuesTable,
   pagesTable,
@@ -16,6 +17,8 @@ import { and, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import {
   effectiveRecordPerm,
   effectiveScopeFor,
+  effectiveFormulaExportRecordPerm,
+  effectiveFormulaExportScopeFor,
   getPermissions,
   getUserRoleIds,
   mostPermissiveFieldPerm,
@@ -58,6 +61,36 @@ type LegacyRelationField = {
   pageId?: number;
 };
 type RelationEndpoint = { id: number; sourceEntityId: number; targetEntityId: number };
+
+/** Default-deny, additive role capability for one exact page-field source. */
+export function canExportPageFieldToFormula(options: {
+  formulaExportRoleIds: readonly number[] | null | undefined;
+  roleIds: readonly number[];
+  ordinaryFieldAccess: "hidden" | "view" | "edit";
+  recordView: boolean;
+}): boolean {
+  return options.recordView
+    && options.ordinaryFieldAccess !== "hidden"
+    && (options.formulaExportRoleIds ?? []).some((roleId) => options.roleIds.includes(roleId));
+}
+
+const deniedFormulaProjectionKeys = new WeakMap<object, Set<string>>();
+
+/** Mark a temporary formula input/output as denied without serializing policy metadata. */
+export function markDeniedFormulaProjection(values: Record<string, unknown>, key: string): void {
+  const denied = deniedFormulaProjectionKeys.get(values) ?? new Set<string>();
+  denied.add(key);
+  deniedFormulaProjectionKeys.set(values, denied);
+}
+
+/** True only for permission-denied projections, never for legitimate nulls. */
+export function isDeniedFormulaProjection(values: Record<string, unknown> | undefined, key: string): boolean {
+  return values != null && deniedFormulaProjectionKeys.get(values)?.has(key) === true;
+}
+
+function deniedKeys(values: Record<string, unknown> | undefined): ReadonlySet<string> {
+  return values == null ? new Set() : deniedFormulaProjectionKeys.get(values) ?? new Set();
+}
 
 /** Field references are deliberately extracted without evaluating an expression.
  * Invalid expressions remain the evaluator's concern and simply contribute no
@@ -300,8 +333,9 @@ function localFormulaDependencyClosure(
 
   const visit = (field: FormulaDependencyField, scope: "entity" | "page") => {
     const id = `${scope}:${field.fieldKey}`;
-    if (out.has(id) || field.fieldType !== "function") return;
+    if (out.has(id)) return;
     out.set(id, field);
+    if (field.fieldType !== "function") return;
     const expression = (field.formulaConfigJson as { expression?: unknown } | null)?.expression;
     if (typeof expression !== "string") return;
     for (const match of expression.matchAll(/\{([^{}]+)\}/g)) {
@@ -364,6 +398,106 @@ export async function interactiveFormulaPermissions(
   const [perms, roleIds] = await Promise.all([getPermissions(req), getUserRoleIds(req)]);
   return {
     includeArchivedBaseRows,
+    async authorizePageFormulaSourceFields(resources) {
+      const unique = [...new Map(resources.map((resource) => [linkedFormulaResourceKey(resource), resource])).values()];
+      const pageIds = [...new Set(unique.map((resource) => resource.pageId))];
+      if (!pageIds.length) return new Set<string>();
+      const [fields, pages, boundEntities] = await Promise.all([
+        db.select().from(pageFieldsTable).where(and(
+          inArray(pageFieldsTable.pageId, pageIds),
+          eq(pageFieldsTable.isActive, true),
+        )),
+        db.select({ id: pagesTable.id, mirrorEntityId: pagesTable.mirrorEntityId })
+          .from(pagesTable)
+          .where(inArray(pagesTable.id, pageIds)),
+        db.select({ id: entitiesTable.id, pageId: entitiesTable.pageId })
+          .from(entitiesTable)
+          .where(inArray(entitiesTable.pageId, pageIds)),
+      ]);
+      const fieldByKey = new Map(fields.map((field) => [`${field.pageId}:${field.fieldKey}`, field]));
+      const boundEntityByPage = new Map(boundEntities.map((entity) => [entity.pageId, entity.id]));
+      const pageEntity = new Map(pages.map((page) => [
+        page.id,
+        page.mirrorEntityId ?? boundEntityByPage.get(page.id) ?? null,
+      ]));
+      const allowed = new Set<string>();
+      for (const resource of unique) {
+        const field = fieldByKey.get(`${resource.pageId}:${resource.fieldKey}`);
+        const page = pages.find((candidate) => candidate.id === resource.pageId);
+        const mirrorPageId = page?.mirrorEntityId === resource.entityId
+          ? resource.pageId
+          : undefined;
+        const recordPermission = await effectiveFormulaExportRecordPerm(
+          req,
+          perms,
+          resource.entityId,
+          resource.pageId,
+        );
+        if (
+          field
+          && pageEntity.get(resource.pageId) === resource.entityId
+          && canExportPageFieldToFormula({
+            formulaExportRoleIds: field.formulaExportRoleIds,
+            roleIds,
+            ordinaryFieldAccess: mostPermissiveFieldPerm(
+              field.permissionsJson,
+              roleIds,
+              "view",
+              perms,
+              resource.entityId,
+              mirrorPageId,
+            ),
+            recordView: perms.superAdmin || recordPermission?.view === true,
+          })
+        ) {
+          allowed.add(linkedFormulaResourceKey(resource));
+        }
+      }
+      return allowed;
+    },
+    async filterPageFormulaSourceRows(scope) {
+      const rp = await effectiveFormulaExportRecordPerm(
+        req,
+        perms,
+        scope.entityId,
+        scope.pageId,
+      );
+      if (!perms.superAdmin && rp?.view !== true) return new Set<number>();
+      const fields = await db.select().from(entityFieldsTable).where(and(
+        eq(entityFieldsTable.entityId, scope.entityId),
+        eq(entityFieldsTable.isActive, true),
+      ));
+      const effective = await effectiveFormulaExportScopeFor(
+        req,
+        perms,
+        scope.entityId,
+        scope.pageId,
+      );
+      const clauses = [
+        eq(entityRecordsTable.entityId, scope.entityId),
+        idArrayAny(entityRecordsTable.id, scope.recordIds),
+        ...(includeArchivedBaseRows ? [] : [isNull(entityRecordsTable.archivedAt)]),
+      ];
+      if (effective.scope === "own") {
+        clauses.push(await ownScopeWhere(
+          scope.entityId,
+          effective.scopeFieldKeys,
+          req.user!.userId,
+          fields,
+        ));
+      }
+      const hiddenStatuses = (rp?.hiddenRowStatusIds ?? []).filter(Number.isInteger);
+      if (hiddenStatuses.length) {
+        clauses.push(or(
+          isNull(entityRecordsTable.statusId),
+          notInArray(entityRecordsTable.statusId, hiddenStatuses),
+        )!);
+      }
+      const rows = await db.select({ id: entityRecordsTable.id })
+        .from(entityRecordsTable)
+        .where(and(...clauses));
+      return new Set(rows.map((row) => row.id));
+    },
     async authorizeResources(resources) {
       const allowed = new Set<string>();
       // Resolver calls this with the complete dependency graph.  Load its
@@ -605,16 +739,55 @@ export async function mergeLinkedFormulaInputs(options: {
     return { source, keys: [...new Set(resources.map(linkedFormulaResourceKey))], resources };
   });
   const sources: LinkedFormulaSource[] = [];
+  const exportedSourceFields = new Set<string>();
+  const deniedSourceKeys = new Set(sourcesToConsider.map((source) => source.key));
   try {
     const unique = new Map(sourceRequirements.flatMap(({ resources }) =>
       resources.map((resource) => [linkedFormulaResourceKey(resource), resource] as const),
     ));
     const allowed = await options.permissions.authorizeResources([...unique.values()]);
+    const pageSourceFields = options.pageId == null
+      ? []
+      : [...unique.values()].filter(
+          (resource): resource is Extract<LinkedFormulaResource, { kind: "field"; scope: "page" }> =>
+            resource.kind === "field" && resource.scope === "page" && resource.pageId !== options.pageId,
+        );
+    const exported = options.permissions.authorizePageFormulaSourceFields
+      ? await options.permissions.authorizePageFormulaSourceFields(pageSourceFields)
+      : new Set<string>();
     for (const requirement of sourceRequirements) {
-      if (requirement.keys.every((key) => allowed.has(key))) sources.push(requirement.source);
+      const sourcePageFields = requirement.resources.filter(
+        (resource): resource is Extract<LinkedFormulaResource, { kind: "field"; scope: "page" }> =>
+          resource.kind === "field" && resource.scope === "page" && resource.pageId !== options.pageId,
+      );
+      const sourcePages = new Map<number, typeof sourcePageFields>();
+      for (const field of sourcePageFields) {
+        sourcePages.set(field.pageId, [...(sourcePages.get(field.pageId) ?? []), field]);
+      }
+      const accepted = requirement.resources.every((resource) => {
+        const key = linkedFormulaResourceKey(resource);
+        if (allowed.has(key)) return true;
+        if (resource.kind === "field" && resource.scope === "page") return exported.has(key);
+        if (resource.kind === "page" && resource.pageId !== options.pageId) {
+          const fields = sourcePages.get(resource.pageId) ?? [];
+          return fields.length > 0 && fields.every((field) => exported.has(linkedFormulaResourceKey(field)));
+        }
+        return false;
+      });
+      if (accepted) {
+        sources.push(requirement.source);
+        deniedSourceKeys.delete(requirement.source.key);
+        for (const field of sourcePageFields) {
+          const key = linkedFormulaResourceKey(field);
+          if (exported.has(key)) exportedSourceFields.add(key);
+        }
+      }
     }
   } catch {
     // neutral
+  }
+  for (const values of out.values()) {
+    for (const key of deniedSourceKeys) markDeniedFormulaProjection(values, key);
   }
   if (!sources.length || !options.rows.length) return out;
   try {
@@ -625,15 +798,63 @@ export async function mergeLinkedFormulaInputs(options: {
       recordIds: requestedIds,
     });
     const eligibleIds = requestedIds.filter((id) => allowedBase.has(id));
+    for (const id of requestedIds) {
+      if (allowedBase.has(id)) continue;
+      for (const source of sources) markDeniedFormulaProjection(out.get(id)!, source.key);
+    }
     if (!eligibleIds.length) return out;
+    const exportedPageIds = new Set([...exportedSourceFields].flatMap((key) => {
+      const match = /^field:\d+:page:(\d+):/.exec(key);
+      return match ? [Number(match[1])] : [];
+    }));
+    const resolutionPermissions: LinkedFormulaPermissionContext = exportedSourceFields.size
+      ? {
+          ...options.permissions,
+          async authorizeResources(resources) {
+            const allowed = new Set(await options.permissions.authorizeResources(resources));
+            for (const resource of resources) {
+              const key = linkedFormulaResourceKey(resource);
+              if (
+                (resource.kind === "field" && exportedSourceFields.has(key))
+                || (
+                  resource.kind === "page"
+                  && resources.some((candidate) =>
+                    candidate.kind === "field"
+                    && candidate.scope === "page"
+                    && candidate.entityId === resource.entityId
+                    && candidate.pageId === resource.pageId
+                    && exportedSourceFields.has(linkedFormulaResourceKey(candidate)))
+                )
+              ) allowed.add(key);
+            }
+            return allowed;
+          },
+          async filterRows(scope) {
+            if (
+              scope.pageId != null
+              && exportedPageIds.has(scope.pageId)
+              && options.permissions.filterPageFormulaSourceRows
+            ) {
+              return options.permissions.filterPageFormulaSourceRows({
+                ...scope,
+                pageId: scope.pageId,
+              });
+            }
+            return options.permissions.filterRows(scope);
+          },
+        }
+      : options.permissions;
     const resolved = await resolveLinkedFormulaData({
       baseEntityId: options.entityId,
       basePageId: options.pageId,
       baseRecordIds: eligibleIds,
       sources,
-      permissions: options.permissions,
+      permissions: resolutionPermissions,
     });
     for (const [id, values] of resolved.valuesByRecordId) Object.assign(out.get(id)!, values);
+    for (const [id, keys] of resolved.deniedSourceKeysByRecordId) {
+      for (const key of keys) markDeniedFormulaProjection(out.get(id)!, key);
+    }
 
     // pageLocal may itself target a computed page field. Such a value has no
     // page_record_values scalar, so evaluate that page's authorized formula
@@ -681,6 +902,66 @@ export async function mergeLinkedFormulaInputs(options: {
           })),
         ];
         const allowedFields = await options.permissions.authorizeResources(fieldResources);
+        const requestedByPage = new Map<number, Extract<LinkedFormulaSource, { kind: "pageLocal" }>[]>();
+        for (const source of pageFormulaSources) {
+          requestedByPage.set(source.pageId, [...(requestedByPage.get(source.pageId) ?? []), source]);
+        }
+        const exportedDependencyFields = new Set<string>();
+        if (options.permissions.authorizePageFormulaSourceFields) {
+          const exactDependencies = sourcePageIds.flatMap((pageId) => {
+            const pageFields = allPageFields.filter((field) => field.pageId === pageId);
+            return (requestedByPage.get(pageId) ?? []).flatMap((source) => {
+              const target = pageFields.find((field) => field.fieldKey === source.fieldKey);
+              if (!target) return [];
+              return localFormulaDependencyClosure(
+                target,
+                options.entityId,
+                pageId,
+                allEntityFields,
+                pageFields,
+              ).filter((field) =>
+                pageFields.some((pageField) => pageField.fieldKey === field.fieldKey),
+              ).map((field) => ({
+                kind: "field" as const,
+                entityId: options.entityId,
+                scope: "page" as const,
+                pageId,
+                fieldKey: field.fieldKey,
+              }));
+            });
+          });
+          const exported = await options.permissions.authorizePageFormulaSourceFields(exactDependencies);
+          for (const key of exported) exportedDependencyFields.add(key);
+        }
+        const deniedComputedSources = new Set<string>();
+        for (const [pageId, requestedSources] of requestedByPage) {
+          const pageFields = allPageFields.filter((field) => field.pageId === pageId);
+          for (const source of requestedSources) {
+            const target = pageFields.find((field) =>
+              field.fieldKey === source.fieldKey && field.fieldType === "function");
+            if (!target) continue;
+            const dependencies = localFormulaDependencyClosure(
+              target,
+              options.entityId,
+              pageId,
+              allEntityFields,
+              pageFields,
+            ).filter((field) =>
+              pageFields.some((pageField) => pageField.fieldKey === field.fieldKey));
+            if (dependencies.some((field) => {
+              const key = linkedFormulaResourceKey({
+                kind: "field",
+                entityId: options.entityId,
+                scope: "page",
+                pageId,
+                fieldKey: field.fieldKey,
+              });
+              return !allowedFields.has(key) && !exportedDependencyFields.has(key);
+            })) {
+              deniedComputedSources.add(source.key);
+            }
+          }
+        }
         const visibleEntityFields = allEntityFields.filter((field) =>
           allowedFields.has(linkedFormulaResourceKey({
             kind: "field", entityId: options.entityId, scope: "entity", fieldKey: field.fieldKey,
@@ -694,27 +975,110 @@ export async function mergeLinkedFormulaInputs(options: {
           pageValues.set(`${row.pageId}:${row.recordId}`, (row.values as Record<string, unknown>) ?? {});
         }
         for (const pageId of sourcePageIds) {
-          const allowedPageRows = await options.permissions.filterRows({
-            entityId: options.entityId,
-            pageId,
-            recordIds: eligibleIds,
-          });
+          const useExportRows = allPageFields.some((field) =>
+            field.pageId === pageId
+            && exportedDependencyFields.has(linkedFormulaResourceKey({
+              kind: "field",
+              entityId: options.entityId,
+              scope: "page",
+              pageId,
+              fieldKey: field.fieldKey,
+            })));
+          const allowedPageRows = useExportRows && options.permissions.filterPageFormulaSourceRows
+            ? await options.permissions.filterPageFormulaSourceRows({
+                entityId: options.entityId,
+                pageId,
+                recordIds: eligibleIds,
+              })
+            : await options.permissions.filterRows({
+                entityId: options.entityId,
+                pageId,
+                recordIds: eligibleIds,
+              });
           const visiblePageFields = allPageFields.filter((field) =>
             field.pageId === pageId &&
-            allowedFields.has(linkedFormulaResourceKey({
-              kind: "field", entityId: options.entityId, scope: "page", pageId, fieldKey: field.fieldKey,
-            })) &&
+            (
+              allowedFields.has(linkedFormulaResourceKey({
+                kind: "field", entityId: options.entityId, scope: "page", pageId, fieldKey: field.fieldKey,
+              }))
+              || exportedDependencyFields.has(linkedFormulaResourceKey({
+                kind: "field", entityId: options.entityId, scope: "page", pageId, fieldKey: field.fieldKey,
+              }))
+            ) &&
             !(
               field.fieldType === "function" &&
               (field.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
             ));
           const requested = pageFormulaSources.filter((source) =>
             source.pageId === pageId &&
+            !deniedComputedSources.has(source.key) &&
             visiblePageFields.some((field) =>
               field.fieldKey === source.fieldKey &&
               field.fieldType === "function" &&
               !state.pageFormulaStack.has(`page:${pageId}.${source.fieldKey}`),
             ));
+          for (const source of pageFormulaSources.filter((candidate) =>
+            candidate.pageId === pageId && deniedComputedSources.has(candidate.key))) {
+            for (const id of eligibleIds) {
+              out.get(id)![source.key] = null;
+              markDeniedFormulaProjection(out.get(id)!, source.key);
+            }
+          }
+          const requestedPageRefs = pageFormulaSources.filter((source) =>
+            source.pageId === pageId &&
+            visiblePageFields.some((field) =>
+              field.fieldKey === source.fieldKey
+              && field.fieldType === "page_ref"
+              && !state.pageFormulaStack.has(`page:${pageId}.${source.fieldKey}`),
+            ));
+          for (const source of requestedPageRefs) {
+            const targetField = visiblePageFields.find((field) =>
+              field.fieldKey === source.fieldKey && field.fieldType === "page_ref");
+            // Older dependency shapes do not expose pageRefConfigJson here.
+            // The full DB row does; read it without widening the shared
+            // FormulaDependencyField type used by pure callers.
+            const pageRefConfig = (targetField as (typeof targetField & {
+              pageRefConfigJson?: { sourcePageId?: unknown; sourceFieldKey?: unknown };
+            }) | undefined)?.pageRefConfigJson;
+            const sourcePageId = pageRefConfig?.sourcePageId;
+            const sourceFieldKey = pageRefConfig?.sourceFieldKey;
+            if (
+              typeof sourcePageId !== "number"
+              || !Number.isInteger(sourcePageId)
+              || sourcePageId <= 0
+              || typeof sourceFieldKey !== "string"
+              || !sourceFieldKey
+            ) continue;
+            const token = `__page_ref_source:${pageId}.${source.fieldKey}`;
+            const nextStack = new Set(state.pageFormulaStack);
+            nextStack.add(`page:${pageId}.${source.fieldKey}`);
+            const nested = await mergeLinkedFormulaInputs({
+              entityId: options.entityId,
+              pageId: options.pageId,
+              rows: options.rows,
+              fields: [{
+                fieldKey: token,
+                fieldType: "function",
+                formulaConfigJson: {
+                  expression: `{${token}}`,
+                  sources: [{
+                    kind: "pageLocal",
+                    key: token,
+                    pageId: sourcePageId,
+                    fieldKey: sourceFieldKey,
+                  }],
+                },
+              }],
+              permissions: options.permissions,
+            }, { depth: state.depth + 1, pageFormulaStack: nextStack });
+            for (const id of allowedPageRows) {
+              const nestedValues = nested.get(id);
+              out.get(id)![source.key] = nestedValues?.[token] ?? null;
+              if (isDeniedFormulaProjection(nestedValues, token)) {
+                markDeniedFormulaProjection(out.get(id)!, source.key);
+              }
+            }
+          }
           if (!requested.length) continue;
           const pageRows = eligibleIds.filter((id) => allowedPageRows.has(id)).map((id) => ({
             id,
@@ -751,7 +1115,11 @@ export async function mergeLinkedFormulaInputs(options: {
               formulaOptions: await loadFormulaOptions(),
             });
             for (const id of allowedPageRows) {
-              out.get(id)![source.key] = computed.get(id)?.[source.fieldKey] ?? null;
+              const computedValues = computed.get(id);
+              out.get(id)![source.key] = computedValues?.[source.fieldKey] ?? null;
+              if (isDeniedFormulaProjection(computedValues, source.fieldKey)) {
+                markDeniedFormulaProjection(out.get(id)!, source.key);
+              }
             }
           }
         }
@@ -915,6 +1283,11 @@ export function materializeVisibleEntityFormulas(options: {
     (field) => !options.hiddenPage?.has(field.fieldKey),
   );
   for (const row of options.rows) {
+    const denied = new Set([
+      ...deniedKeys(options.linkedInputs?.get(row.id)),
+      ...deniedKeys(row.values),
+      ...deniedKeys(options.pageValues?.get(row.id)),
+    ]);
     const prepared = prepareMaterializationValues({
       rawEntityValues: row.values,
       rawPageValues: options.pageValues?.get(row.id) ?? {},
@@ -948,6 +1321,17 @@ export function materializeVisibleEntityFormulas(options: {
         ) {
           values[formula.key] = result;
         }
+      }
+      const deniedFormulas = formulaDeniedKeys(
+        options.entityId,
+        options.pageId,
+        formulas,
+        pageFormulas,
+        denied,
+      );
+      for (const key of deniedFormulas.entity) {
+        values[key] = null;
+        markDeniedFormulaProjection(values, key);
       }
     }
     out.set(row.id, values);
@@ -984,6 +1368,11 @@ export function materializeVisiblePageFormulas(options: {
   const visibleEntityFields = options.entityFields.filter((field) => !options.hiddenEntity.has(field.fieldKey));
   const visiblePageFields = options.pageFields.filter((field) => !options.hiddenPage.has(field.fieldKey));
   for (const row of options.rows) {
+    const denied = new Set([
+      ...deniedKeys(options.linkedInputs?.get(row.id)),
+      ...deniedKeys(row.entityValues),
+      ...deniedKeys(row.pageValues),
+    ]);
     const prepared = prepareMaterializationValues({
       rawEntityValues: row.entityValues,
       rawPageValues: row.pageValues,
@@ -1003,7 +1392,72 @@ export function materializeVisiblePageFormulas(options: {
         pageValues[formula.key] = result;
       }
     }
+    const deniedFormulas = formulaDeniedKeys(
+      options.entityId,
+      options.pageId,
+      entityFormulas,
+      pageFormulas,
+      denied,
+    );
+    for (const key of deniedFormulas.page) {
+      pageValues[key] = null;
+      markDeniedFormulaProjection(pageValues, key);
+    }
     out.set(row.id, pageValues);
   }
   return out;
+}
+
+function formulaDeniedKeys(
+  entityId: number,
+  pageId: number | undefined,
+  entityFormulas: readonly FormulaFieldDef[],
+  pageFormulas: readonly FormulaFieldDef[],
+  deniedInputs: ReadonlySet<string>,
+): { entity: Set<string>; page: Set<string> } {
+  const entityByKey = new Map(entityFormulas.map((formula) => [formula.key, formula]));
+  const pageByKey = new Map(pageFormulas.map((formula) => [formula.key, formula]));
+  const memo = new Map<string, boolean>();
+  const active = new Set<string>();
+  const visit = (scope: "entity" | "page", key: string): boolean => {
+    const id = `${scope}:${key}`;
+    const cached = memo.get(id);
+    if (cached != null) return cached;
+    if (active.has(id)) return false;
+    const formula = scope === "entity" ? entityByKey.get(key) : pageByKey.get(key);
+    if (!formula) return deniedInputs.has(key);
+    active.add(id);
+    let denied = false;
+    for (const match of formula.expression.matchAll(/\{([^{}]+)\}/g)) {
+      const token = match[1].trim();
+      if (deniedInputs.has(token)) {
+        denied = true;
+        break;
+      }
+      const entityRef = new RegExp(`^entity:${entityId}\\.(.+)$`).exec(token);
+      if (entityRef) {
+        if (visit("entity", entityRef[1])) { denied = true; break; }
+        continue;
+      }
+      const pageRef = pageId == null ? null : new RegExp(`^page:${pageId}\\.(.+)$`).exec(token);
+      if (pageRef) {
+        if (visit("page", pageRef[1])) { denied = true; break; }
+        continue;
+      }
+      if (!token.includes(":") && !token.includes(".")) {
+        if (pageByKey.has(token) ? visit("page", token) : visit("entity", token)) {
+          denied = true;
+          break;
+        }
+      }
+    }
+    active.delete(id);
+    memo.set(id, denied);
+    return denied;
+  };
+  const entity = new Set(entityFormulas.filter((formula) =>
+    visit("entity", formula.key)).map((formula) => formula.key));
+  const page = new Set(pageFormulas.filter((formula) =>
+    visit("page", formula.key)).map((formula) => formula.key));
+  return { entity, page };
 }

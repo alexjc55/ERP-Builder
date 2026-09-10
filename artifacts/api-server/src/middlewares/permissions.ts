@@ -343,6 +343,26 @@ export async function effectiveRecordPerm(
   return perms.records[String(entityId)];
 }
 
+/**
+ * Formula-export-only counterpart to effectiveRecordPerm. An explicit field
+ * export may cross an inaccessible source page, so page membership is
+ * deliberately not required here; canonical mirror ownership is still checked
+ * before applying the mirror override. Never use this for ordinary page APIs.
+ */
+export async function effectiveFormulaExportRecordPerm(
+  req: Request,
+  perms: RolePermissions,
+  entityId: number,
+  pageId: number,
+): Promise<RecordPermission | undefined> {
+  const mirrorEntityId = await getPageMirrorEntityId(req, pageId);
+  if (mirrorEntityId === entityId) {
+    const override = perms.records[mirrorPermKey(pageId)];
+    if (override) return override;
+  }
+  return perms.records[String(entityId)];
+}
+
 /** Extract an optional mirror-page context id from a request body. */
 export function pageIdFromBody(req: Request): number | undefined {
   const value = (req.body as { pageId?: unknown } | undefined)?.pageId;
@@ -459,6 +479,22 @@ export async function effectiveScopeFor(
         return resolveScopeEntry(override);
       }
     }
+  }
+  return effectiveScope(perms, entityId);
+}
+
+/** Formula-export-only row scope; see effectiveFormulaExportRecordPerm. */
+export async function effectiveFormulaExportScopeFor(
+  req: Request,
+  perms: RolePermissions,
+  entityId: number,
+  pageId: number,
+): Promise<{ scope: RecordScope; scopeFieldKeys: string[] }> {
+  if (perms.superAdmin) return { scope: "all", scopeFieldKeys: [] };
+  const mirrorEntityId = await getPageMirrorEntityId(req, pageId);
+  if (mirrorEntityId === entityId) {
+    const override = perms.records[mirrorPermKey(pageId)];
+    if (override) return resolveScopeEntry(override);
   }
   return effectiveScope(perms, entityId);
 }

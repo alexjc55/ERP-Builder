@@ -20,6 +20,7 @@ import {
   rolesTable,
   systemEventsTable,
   usersTable,
+  userRolesTable,
   mirrorPermKey,
   type RolePermissions,
 } from "@workspace/db";
@@ -210,9 +211,11 @@ async function setup() {
   const pages = await db.insert(pagesTable).values([
     { nameJson: { en: `${runId} target` }, mirrorEntityId: ids.entity },
     { nameJson: { en: `${runId} source` }, mirrorEntityId: ids.entity },
+    { nameJson: { en: `${runId} related source` }, mirrorEntityId: ids.relatedEntity },
   ]).returning({ id: pagesTable.id });
   ids.targetPage = pages[0]!.id;
   ids.sourcePage = pages[1]!.id;
+  ids.relatedPage = pages[2]!.id;
   const [role] = await db.insert(rolesTable).values({
     nameJson: { en: runId },
     permissionsJson: permissions([ids.targetPage, ids.sourcePage]),
@@ -233,6 +236,12 @@ async function setup() {
     fieldKey: "name",
     nameJson: { en: "Name" },
     fieldType: "text",
+  });
+  await db.insert(entityFieldsTable).values({
+    entityId: ids.relatedEntity,
+    fieldKey: "owner",
+    nameJson: { en: "Owner" },
+    fieldType: "user",
   });
   const statuses = await db.insert(entityStatusesTable).values([
     { entityId: ids.entity, statusKey: "base", nameJson: { en: "Base" }, isDefault: true, sortOrder: 0 },
@@ -259,6 +268,25 @@ async function setup() {
     {
       pageId: ids.sourcePage, fieldKey: "stage", nameJson: { en: "Stage" }, fieldType: "select",
       optionsJson: [{ value: "done", labelJson: { en: "Done" }, statusId: ids.done }],
+    },
+    {
+      pageId: ids.sourcePage,
+      fieldKey: "export_value",
+      nameJson: { en: "Export value" },
+      fieldType: "text",
+    },
+    {
+      pageId: ids.sourcePage,
+      fieldKey: "unrelated_value",
+      nameJson: { en: "Unrelated value" },
+      fieldType: "text",
+    },
+    {
+      pageId: ids.sourcePage,
+      fieldKey: "export_chain",
+      nameJson: { en: "Export chain" },
+      fieldType: "function",
+      formulaConfigJson: { expression: "{export_value}" },
     },
     {
       pageId: ids.sourcePage,
@@ -310,6 +338,29 @@ async function setup() {
       nameJson: { en: "Same page formula" },
       fieldType: "function",
       formulaConfigJson: { expression: "{stage}" },
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "external_formula",
+      nameJson: { en: "External formula" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{page:${ids.sourcePage}.export_value}` },
+      isFilterable: true,
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "unrelated_formula",
+      nameJson: { en: "Unrelated formula" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{page:${ids.sourcePage}.unrelated_value}` },
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "external_chain_formula",
+      nameJson: { en: "External chain formula" },
+      fieldType: "function",
+      isFilterable: true,
+      formulaConfigJson: { expression: `{page:${ids.sourcePage}.export_chain}` },
     },
     {
       pageId: ids.targetPage,
@@ -399,7 +450,7 @@ async function setup() {
   ids.one = records[0]!.id; ids.two = records[1]!.id;
   const [relatedRecord] = await db.insert(entityRecordsTable).values({
     entityId: ids.relatedEntity,
-    valuesJson: { name: "לקוח Договор" },
+    valuesJson: { name: "לקוח Договор", owner: ids.user },
   }).returning({ id: entityRecordsTable.id });
   ids.relatedRecord = relatedRecord!.id;
   const [relation] = await db.insert(relationsTable).values({
@@ -414,6 +465,34 @@ async function setup() {
   await db.update(pageFieldsTable)
     .set({ relationConfigJson: { relationId: ids.relation, relatedFieldKey: "name" } })
     .where(and(eq(pageFieldsTable.pageId, ids.targetPage), eq(pageFieldsTable.fieldKey, "customer")));
+  await db.insert(pageFieldsTable).values([
+    {
+      pageId: ids.relatedPage,
+      fieldKey: "related_cost",
+      nameJson: { en: "Related cost" },
+      fieldType: "number",
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "related_cost_formula",
+      nameJson: { en: "Related cost formula" },
+      fieldType: "function",
+      isFilterable: true,
+      formulaConfigJson: {
+        expression: "{source:related_cost}",
+        sources: [{
+          key: "source:related_cost",
+          kind: "aggregate",
+          targetEntityId: ids.relatedEntity,
+          targetPageId: ids.relatedPage,
+          value: { scope: "page", pageId: ids.relatedPage, fieldKey: "related_cost" },
+          join: { kind: "relation", relationId: ids.relation, baseSide: "source" },
+          aggregate: "min",
+          limit: 1,
+        }],
+      },
+    },
+  ]);
   await db.insert(recordLinksTable).values({
     relationId: ids.relation,
     relationType: "many_to_one",
@@ -462,6 +541,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
           fieldKey: "inherited_format_regression",
           nameJson: { en: "Inherited format regression" },
           fieldType: "text",
+          formulaExportRoleIds: [ids.role],
           formatRulesJson: [ownRule],
           formatInheritJson: [{ kind: "pageField", pageId: ids.sourcePage, fieldKey: "stage" }],
         },
@@ -472,6 +552,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
       assert.ok(Number.isInteger(createdId));
       assert.deepEqual(created.body.formatRulesJson, [ownRule]);
       assert.deepEqual(created.body.inheritedFormatRulesJson, [pageRule]);
+      assert.deepEqual(created.body.formulaExportRoleIds, [ids.role]);
 
       let reloaded = await read(`/pages/${ids.targetPage}/fields`);
       assert.equal(reloaded.status, 200);
@@ -480,24 +561,31 @@ test("page-local select mappings synchronize entity status atomically", async (t
       assert.deepEqual(field.formatRulesJson, [ownRule]);
       assert.deepEqual(field.formatInheritJson, [{ kind: "pageField", pageId: ids.sourcePage, fieldKey: "stage" }]);
       assert.deepEqual(field.inheritedFormatRulesJson, [pageRule]);
+      assert.deepEqual(field.formulaExportRoleIds, [ids.role]);
 
       const [storedAfterCreate] = await db.select({
         formatRulesJson: pageFieldsTable.formatRulesJson,
         formatInheritJson: pageFieldsTable.formatInheritJson,
+        formulaExportRoleIds: pageFieldsTable.formulaExportRoleIds,
       }).from(pageFieldsTable).where(eq(pageFieldsTable.id, createdId));
       assert.deepEqual(storedAfterCreate?.formatRulesJson, [ownRule]);
       assert.deepEqual(storedAfterCreate?.formatInheritJson, [
         { kind: "pageField", pageId: ids.sourcePage, fieldKey: "stage" },
       ]);
+      assert.deepEqual(storedAfterCreate?.formulaExportRoleIds, [ids.role]);
 
       const changed = await request(
         `/page-fields/${createdId}`,
-        { formatInheritJson: [{ kind: "field", entityId: ids.entity, fieldKey: "workflow_note" }] },
+        {
+          formatInheritJson: [{ kind: "field", entityId: ids.entity, fieldKey: "workflow_note" }],
+          formulaExportRoleIds: [],
+        },
         "PUT",
       );
       assert.equal(changed.status, 200);
       assert.deepEqual(changed.body.formatRulesJson, [ownRule]);
       assert.deepEqual(changed.body.inheritedFormatRulesJson, [entityRule]);
+      assert.deepEqual(changed.body.formulaExportRoleIds, []);
 
       const cleared = await request(`/page-fields/${createdId}`, { formatInheritJson: [] }, "PUT");
       assert.equal(cleared.status, 200);
@@ -833,6 +921,483 @@ test("page-local select mappings synchronize entity status atomically", async (t
     assert.equal(row.valuesJson.cycle_target, null);
     assert.equal(await pageValue(ids.targetPage, ids.one), undefined);
     assert.equal(await pageValue(ids.sourcePage, ids.one), undefined);
+  });
+  await t.test("an exact field export feeds destination formulas without opening its source page", async () => {
+    await reset([ids.one]);
+    await db.insert(pageRecordValuesTable).values({
+      pageId: ids.sourcePage,
+      recordId: ids.one,
+      valuesJson: { export_value: "exported", unrelated_value: "secret sibling" },
+    });
+    await db.insert(pageRecordValuesTable).values({
+      pageId: ids.targetPage,
+      recordId: ids.one,
+      valuesJson: {},
+    });
+    await db.insert(pageRecordValuesTable).values({
+      pageId: ids.relatedPage,
+      recordId: ids.relatedRecord,
+      valuesJson: { related_cost: 25 },
+    });
+    await db.update(rolesTable)
+      .set({ permissionsJson: permissions([ids.targetPage]) })
+      .where(eq(rolesTable.id, ids.role));
+    const [secondaryRole] = await db.insert(rolesTable).values({
+      nameJson: { en: `${runId} formula export` },
+      permissionsJson: permissions([ids.targetPage]),
+    }).returning({ id: rolesTable.id });
+    ids.formulaExportRole = secondaryRole!.id;
+    await db.insert(userRolesTable).values({
+      userId: ids.user,
+      roleId: ids.formulaExportRole,
+    });
+    const [aliasPage] = await db.insert(pagesTable).values({
+      nameJson: { en: `${runId} formula alias source` },
+      mirrorEntityId: ids.entity,
+    }).returning({ id: pagesTable.id });
+    ids.formulaAliasPage = aliasPage!.id;
+    await db.insert(pageFieldsTable).values([
+      {
+        pageId: ids.formulaAliasPage,
+        fieldKey: "export_alias",
+        nameJson: { en: "Export alias" },
+        fieldType: "page_ref",
+        pageRefConfigJson: { sourcePageId: ids.sourcePage, sourceFieldKey: "export_value" },
+        formulaExportRoleIds: [ids.formulaExportRole],
+      },
+      {
+        pageId: ids.targetPage,
+        fieldKey: "external_alias_formula",
+        nameJson: { en: "External alias formula" },
+        fieldType: "function",
+        isFilterable: true,
+        formulaConfigJson: { expression: `{page:${ids.formulaAliasPage}.export_alias}` },
+      },
+    ]);
+    const sourceFieldWhere = and(
+      eq(pageFieldsTable.pageId, ids.sourcePage),
+      eq(pageFieldsTable.fieldKey, "export_value"),
+    );
+    try {
+      let response = await read(`/pages/${ids.targetPage}/record-values`);
+      assert.equal(response.status, 200);
+      let row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal(row.valuesJson.external_formula, null, "the export is default-deny");
+      assert.equal(row.valuesJson.unrelated_formula, null);
+      assert.equal(row.valuesJson.external_alias_formula, null);
+      assert.equal(row.valuesJson.related_cost_formula, null);
+      let deniedOptions = await request(
+        `/entities/${ids.entity}/records/page-filter-values`,
+        { pageId: ids.targetPage, field: "external_formula" },
+        "POST",
+      );
+      assert.equal(deniedOptions.status, 200);
+      assert.deepEqual(deniedOptions.body.values, [], "denial must not appear as an empty option");
+      let deniedEmpty = await request(
+        `/entities/${ids.entity}/records/query`,
+        {
+          pageId: ids.targetPage,
+          page: 1,
+          pageSize: 10,
+          pageLocalFilters: [{ field: "external_formula", operator: "is_empty" }],
+        },
+        "POST",
+      );
+      assert.equal(deniedEmpty.status, 200);
+      assert.equal(deniedEmpty.body.total, 0, "denial must not match is_empty");
+
+      await db.update(pageFieldsTable)
+        .set({ formulaExportRoleIds: [ids.formulaExportRole] })
+        .where(sourceFieldWhere);
+      response = await read(`/pages/${ids.targetPage}/record-values`);
+      assert.equal(response.status, 200);
+      row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal(row.valuesJson.external_formula, "exported");
+      assert.equal(row.valuesJson.unrelated_formula, null, "a sibling field is not transitively exported");
+      assert.equal(row.valuesJson.external_chain_formula, null, "a formula source itself is not implicitly exported");
+      assert.equal(row.valuesJson.external_alias_formula, "exported", "page_ref sources resolve through both exact grants");
+
+      await db.update(pageFieldsTable)
+        .set({ formulaExportRoleIds: [ids.formulaExportRole] })
+        .where(and(
+          eq(pageFieldsTable.pageId, ids.sourcePage),
+          eq(pageFieldsTable.fieldKey, "export_chain"),
+        ));
+      await db.update(pageFieldsTable)
+        .set({ formulaExportRoleIds: [ids.formulaExportRole] })
+        .where(and(
+          eq(pageFieldsTable.pageId, ids.relatedPage),
+          eq(pageFieldsTable.fieldKey, "related_cost"),
+        ));
+      response = await read(`/pages/${ids.targetPage}/record-values`);
+      row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal(row.valuesJson.external_chain_formula, "exported");
+      assert.equal(row.valuesJson.related_cost_formula, 25);
+
+      const sourceRecordDenied = permissions([ids.targetPage]);
+      sourceRecordDenied.records[String(ids.relatedEntity)] = {
+        view: false, create: false, update: false, delete: false,
+      };
+      await db.update(rolesTable)
+        .set({ permissionsJson: sourceRecordDenied })
+        .where(inArray(rolesTable.id, [ids.role, ids.formulaExportRole]));
+      response = await read(`/pages/${ids.targetPage}/record-values`);
+      row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal(row.valuesJson.related_cost_formula, null, "source-record view remains required");
+      const deniedAggregateEmpty = await request(
+        `/entities/${ids.entity}/records/query`,
+        {
+          pageId: ids.targetPage,
+          page: 1,
+          pageSize: 10,
+          pageLocalFilters: [{ field: "related_cost_formula", operator: "is_empty" }],
+        },
+        "POST",
+      );
+      assert.equal(deniedAggregateEmpty.status, 200, JSON.stringify(deniedAggregateEmpty.body));
+      assert.deepEqual(
+        (deniedAggregateEmpty.body.data as { id: number }[]).map((candidate) => candidate.id),
+        [],
+        "a denied source record boundary must not become an empty aggregate",
+      );
+
+      const sourceOwn = permissions([ids.targetPage]);
+      sourceOwn.records[String(ids.relatedEntity)] = {
+        view: true,
+        create: false,
+        update: false,
+        delete: false,
+        scope: "own",
+        scopeFieldKeys: ["owner"],
+      };
+      await db.update(rolesTable)
+        .set({ permissionsJson: sourceOwn })
+        .where(inArray(rolesTable.id, [ids.role, ids.formulaExportRole]));
+      await db.update(entityRecordsTable)
+        .set({ valuesJson: { name: "לקוח Договор", owner: null } })
+        .where(eq(entityRecordsTable.id, ids.relatedRecord));
+      response = await read(`/pages/${ids.targetPage}/record-values`);
+      row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal(row.valuesJson.related_cost_formula, null, "source row scope remains required");
+      const deniedAggregateRowEmpty = await request(
+        `/entities/${ids.entity}/records/query`,
+        {
+          pageId: ids.targetPage,
+          page: 1,
+          pageSize: 10,
+          pageLocalFilters: [{ field: "related_cost_formula", operator: "is_empty" }],
+        },
+        "POST",
+      );
+      assert.equal(deniedAggregateRowEmpty.status, 200, JSON.stringify(deniedAggregateRowEmpty.body));
+      assert.deepEqual(
+        (deniedAggregateRowEmpty.body.data as { id: number }[]).map((candidate) => candidate.id),
+        [ids.two],
+        "only the linked base row is denied by source-own scope",
+      );
+      await db.update(entityRecordsTable)
+        .set({ valuesJson: { name: "לקוח Договор", owner: ids.user } })
+        .where(eq(entityRecordsTable.id, ids.relatedRecord));
+      await db.update(rolesTable)
+        .set({ permissionsJson: permissions([ids.targetPage]) })
+        .where(inArray(rolesTable.id, [ids.role, ids.formulaExportRole]));
+
+      const setSourceMirrorOverride = async (override: RolePermissions["records"][string]) => {
+        const configured = permissions([ids.targetPage]);
+        configured.records[mirrorPermKey(ids.sourcePage)] = override;
+        await db.update(rolesTable)
+          .set({ permissionsJson: configured })
+          .where(inArray(rolesTable.id, [ids.role, ids.formulaExportRole]));
+      };
+      await setSourceMirrorOverride({
+        view: false, create: false, update: false, delete: false,
+      });
+      response = await read(`/pages/${ids.targetPage}/record-values`);
+      row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal(row.valuesJson.external_formula, null, "source mirror view overrides entity view");
+
+      await setSourceMirrorOverride({
+        view: true,
+        create: false,
+        update: false,
+        delete: false,
+        scope: "own",
+        scopeFieldKeys: ["owner"],
+      });
+      await db.update(entityRecordsTable)
+        .set({ valuesJson: { name: "Ready", owner: null } })
+        .where(eq(entityRecordsTable.id, ids.one));
+      const mirrorOwnEmpty = await request(
+        `/entities/${ids.entity}/records/query`,
+        {
+          pageId: ids.targetPage,
+          page: 1,
+          pageSize: 10,
+          pageLocalFilters: [{ field: "external_formula", operator: "is_empty" }],
+        },
+        "POST",
+      );
+      assert.equal(mirrorOwnEmpty.status, 200);
+      assert.deepEqual(
+        (mirrorOwnEmpty.body.data as { id: number }[]).map((candidate) => candidate.id),
+        [ids.two],
+        "a source-own denial must not masquerade as an empty formula",
+      );
+      await db.update(entityRecordsTable)
+        .set({ valuesJson: { name: "Ready", owner: ids.user }, statusId: ids.base })
+        .where(eq(entityRecordsTable.id, ids.one));
+
+      await setSourceMirrorOverride({
+        view: true,
+        create: false,
+        update: false,
+        delete: false,
+        scope: "filter",
+        scopeFilters: [{
+          fieldKey: "export_value",
+          values: ["exported"],
+          pageId: ids.sourcePage,
+        }],
+      });
+      const mirrorPageFilterOptions = await request(
+        `/entities/${ids.entity}/records/page-filter-values`,
+        { pageId: ids.targetPage, field: "external_formula" },
+        "POST",
+      );
+      assert.deepEqual(
+        mirrorPageFilterOptions.body.values,
+        ["exported"],
+        "source mirror page-local filters apply without page membership",
+      );
+
+      await setSourceMirrorOverride({
+        view: true,
+        create: false,
+        update: false,
+        delete: false,
+        scope: "filter",
+        scopeFilters: [{ fieldKey: "name", values: ["never matches"] }],
+      });
+      deniedOptions = await request(
+        `/entities/${ids.entity}/records/page-filter-values`,
+        { pageId: ids.targetPage, field: "external_formula" },
+        "POST",
+      );
+      assert.deepEqual(deniedOptions.body.values, [], "source mirror filter scope remains authoritative");
+
+      await setSourceMirrorOverride({
+        view: true,
+        create: false,
+        update: false,
+        delete: false,
+        hiddenRowStatusIds: [ids.done],
+      });
+      await db.update(entityRecordsTable)
+        .set({ statusId: ids.done })
+        .where(eq(entityRecordsTable.id, ids.one));
+      const hiddenStatusOptions = await request(
+        `/entities/${ids.entity}/records/page-filter-values`,
+        { pageId: ids.targetPage, field: "external_formula" },
+        "POST",
+      );
+      assert.deepEqual(
+        hiddenStatusOptions.body.values,
+        ["__empty__"],
+        "a mirror-hidden source row is excluded while a legitimate null remains",
+      );
+      await db.update(entityRecordsTable)
+        .set({ valuesJson: { name: "Ready", owner: ids.user }, statusId: ids.base })
+        .where(eq(entityRecordsTable.id, ids.one));
+      await db.update(rolesTable)
+        .set({ permissionsJson: permissions([ids.targetPage]) })
+        .where(inArray(rolesTable.id, [ids.role, ids.formulaExportRole]));
+
+      const filterValues = await request(
+        `/entities/${ids.entity}/records/page-filter-values`,
+        { pageId: ids.targetPage, field: "external_formula" },
+        "POST",
+      );
+      assert.equal(filterValues.status, 200, JSON.stringify(filterValues.body));
+      assert.deepEqual(filterValues.body.values, ["__empty__", "exported"]);
+      assert.ok(!(filterValues.body.values as string[]).includes("secret sibling"));
+
+      const destinationFieldWhere = and(
+        eq(pageFieldsTable.pageId, ids.targetPage),
+        eq(pageFieldsTable.fieldKey, "external_formula"),
+      );
+      await db.update(pageFieldsTable).set({
+        permissionsJson: {
+          [String(ids.role)]: "hidden",
+          [String(ids.formulaExportRole)]: "hidden",
+        },
+      }).where(destinationFieldWhere);
+      response = await read(`/pages/${ids.targetPage}/record-values`);
+      row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal("external_formula" in row.valuesJson, false, "destination field visibility remains required");
+      await db.update(pageFieldsTable).set({ permissionsJson: {} }).where(destinationFieldWhere);
+
+      const directSourceRead = await read(`/pages/${ids.sourcePage}/record-values`);
+      assert.equal(directSourceRead.status, 403, "the grant must not open direct source-page APIs");
+      const directSourceFields = await read(`/pages/${ids.sourcePage}/fields`);
+      assert.equal(directSourceFields.status, 403, "the grant must not open source-field metadata APIs");
+
+      await db.delete(userRolesTable).where(and(
+        eq(userRolesTable.userId, ids.user),
+        eq(userRolesTable.roleId, ids.formulaExportRole),
+      ));
+      response = await read(`/pages/${ids.targetPage}/record-values`);
+      row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal(row.valuesJson.external_formula, null, "removing the granted role revokes immediately");
+      deniedOptions = await request(
+        `/entities/${ids.entity}/records/page-filter-values`,
+        { pageId: ids.targetPage, field: "external_formula" },
+        "POST",
+      );
+      assert.deepEqual(deniedOptions.body.values, []);
+      await db.insert(userRolesTable).values({
+        userId: ids.user,
+        roleId: ids.formulaExportRole,
+      });
+
+      await db.update(pageFieldsTable)
+        .set({
+          permissionsJson: {
+            [String(ids.role)]: "hidden",
+            [String(ids.formulaExportRole)]: "hidden",
+          },
+        })
+        .where(sourceFieldWhere);
+      response = await read(`/pages/${ids.targetPage}/record-values`);
+      row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal(row.valuesJson.external_formula, null, "ordinary source-field view still applies");
+      const deniedChainOptions = await request(
+        `/entities/${ids.entity}/records/page-filter-values`,
+        { pageId: ids.targetPage, field: "external_chain_formula" },
+        "POST",
+      );
+      assert.equal(deniedChainOptions.status, 200, JSON.stringify(deniedChainOptions.body));
+      assert.deepEqual(
+        deniedChainOptions.body.values,
+        [],
+        "denial propagates through only the exact recursive formula dependency",
+      );
+      const deniedAliasOptions = await request(
+        `/entities/${ids.entity}/records/page-filter-values`,
+        { pageId: ids.targetPage, field: "external_alias_formula" },
+        "POST",
+      );
+      assert.equal(deniedAliasOptions.status, 200, JSON.stringify(deniedAliasOptions.body));
+      assert.deepEqual(
+        deniedAliasOptions.body.values,
+        [],
+        "page_ref exports preserve denied state through their exact source",
+      );
+
+      await db.update(pageFieldsTable)
+        .set({ permissionsJson: {}, formulaExportRoleIds: [] })
+        .where(and(
+          eq(pageFieldsTable.pageId, ids.sourcePage),
+          inArray(pageFieldsTable.fieldKey, ["export_value", "export_chain"]),
+        ));
+      await db.update(pageFieldsTable)
+        .set({ permissionsJson: {}, formulaExportRoleIds: [] })
+        .where(and(
+          eq(pageFieldsTable.pageId, ids.relatedPage),
+          eq(pageFieldsTable.fieldKey, "related_cost"),
+        ));
+      await db.update(pageFieldsTable)
+        .set({ permissionsJson: {} })
+        .where(and(
+          eq(pageFieldsTable.pageId, ids.targetPage),
+          eq(pageFieldsTable.fieldKey, "external_formula"),
+        ));
+      response = await read(`/pages/${ids.targetPage}/record-values`);
+      row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal(row.valuesJson.external_formula, null, "revocation applies on the next request");
+      deniedOptions = await request(
+        `/entities/${ids.entity}/records/page-filter-values`,
+        { pageId: ids.targetPage, field: "external_formula" },
+        "POST",
+      );
+      assert.deepEqual(deniedOptions.body.values, [], "revoked exports must not emit __empty__");
+      deniedEmpty = await request(
+        `/entities/${ids.entity}/records/query`,
+        {
+          pageId: ids.targetPage,
+          page: 1,
+          pageSize: 10,
+          pageLocalFilters: [{ field: "external_formula", operator: "is_empty" }],
+        },
+        "POST",
+      );
+      assert.equal(deniedEmpty.body.total, 0);
+    } finally {
+      await db.update(pageFieldsTable)
+        .set({ permissionsJson: {}, formulaExportRoleIds: [] })
+        .where(and(
+          eq(pageFieldsTable.pageId, ids.sourcePage),
+          inArray(pageFieldsTable.fieldKey, ["export_value", "export_chain"]),
+        ));
+      await db.update(pageFieldsTable)
+        .set({ permissionsJson: {}, formulaExportRoleIds: [] })
+        .where(and(
+          eq(pageFieldsTable.pageId, ids.relatedPage),
+          eq(pageFieldsTable.fieldKey, "related_cost"),
+        ));
+      await db.update(pageFieldsTable)
+        .set({ permissionsJson: {} })
+        .where(and(
+          eq(pageFieldsTable.pageId, ids.targetPage),
+          eq(pageFieldsTable.fieldKey, "external_formula"),
+        ));
+      await db.update(rolesTable)
+        .set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) })
+        .where(eq(rolesTable.id, ids.role));
+      if (ids.formulaExportRole) {
+        await db.delete(userRolesTable).where(and(
+          eq(userRolesTable.userId, ids.user),
+          eq(userRolesTable.roleId, ids.formulaExportRole),
+        ));
+        await db.delete(rolesTable).where(eq(rolesTable.id, ids.formulaExportRole));
+        delete ids.formulaExportRole;
+      }
+      await db.delete(pageFieldsTable).where(and(
+        eq(pageFieldsTable.pageId, ids.targetPage),
+        eq(pageFieldsTable.fieldKey, "external_alias_formula"),
+      ));
+      if (ids.formulaAliasPage) {
+        await db.delete(pagesTable).where(eq(pagesTable.id, ids.formulaAliasPage));
+        delete ids.formulaAliasPage;
+      }
+      await db.delete(pageRecordValuesTable).where(and(
+        eq(pageRecordValuesTable.pageId, ids.relatedPage),
+        eq(pageRecordValuesTable.recordId, ids.relatedRecord),
+      ));
+      await db.update(entityRecordsTable)
+        .set({ valuesJson: { name: "לקוח Договор", owner: ids.user } })
+        .where(eq(entityRecordsTable.id, ids.relatedRecord));
+      await reset([ids.one]);
+    }
   });
   await t.test("single and bulk writes commit page values and mapped statuses", async () => {
     let response = await request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { stage: "done" } }, "PUT");

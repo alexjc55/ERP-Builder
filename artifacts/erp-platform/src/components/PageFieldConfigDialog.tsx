@@ -180,8 +180,7 @@ function extractError(err: unknown): string | undefined {
 /**
  * Create/edit dialog for a page-local field (a column that lives on a mirror
  * page, not on the source entity). Mirrors {@link FieldConfigDialog} but writes
- * to the page-fields endpoints and omits entity-only options (per-role access,
- * file/user config, filtering).
+ * to the page-fields endpoints and omits entity-only options.
  */
 export function PageFieldConfigDialog({
   open,
@@ -253,6 +252,7 @@ export function PageFieldConfigDialog({
   const [refSourcePageId, setRefSourcePageId] = useState<number | null>(null);
   const [refSourceFieldKey, setRefSourceFieldKey] = useState("");
   const [permissions, setPermissions] = useState<FieldPermissions>({});
+  const [formulaExportRoleIds, setFormulaExportRoleIds] = useState<number[]>([]);
   const [allowedSources, setAllowedSources] = useState<FileSource[]>(["server"]);
   const [driveFolderId, setDriveFolderId] = useState<string>("");
   const [localFolderId, setLocalFolderId] = useState<number | null>(null);
@@ -312,6 +312,7 @@ export function PageFieldConfigDialog({
       setRefSourcePageId(field.pageRefConfigJson?.sourcePageId ?? null);
       setRefSourceFieldKey(field.pageRefConfigJson?.sourceFieldKey ?? "");
       setPermissions(field.permissionsJson ? { ...field.permissionsJson } : {});
+      setFormulaExportRoleIds(field.formulaExportRoleIds ?? []);
       const src = field.fileConfigJson?.allowedSources;
       setAllowedSources(Array.isArray(src) && src.length > 0 ? (src as FileSource[]) : ["server"]);
       setDriveFolderId(field.fileConfigJson?.driveFolderId ?? "");
@@ -351,6 +352,7 @@ export function PageFieldConfigDialog({
       setRefSourcePageId(null);
       setRefSourceFieldKey("");
       setPermissions({});
+      setFormulaExportRoleIds([]);
       setAllowedSources(["server"]);
       setDriveFolderId("");
       setLocalFolderId(null);
@@ -611,6 +613,7 @@ export function PageFieldConfigDialog({
               : { relationId, relatedFieldKey: relatedFieldKey || null }
             : {},
       permissionsJson: permissions,
+      formulaExportRoleIds,
       fileConfigJson:
         fieldType === "file"
           ? {
@@ -1137,20 +1140,48 @@ export function PageFieldConfigDialog({
                 ) : (
                   <div className="space-y-2 pt-1">
                     {roles.map((role: Role) => (
-                      <div key={role.id} className="flex items-center justify-between gap-3">
-                        <span className="text-sm text-slate-700 truncate">{ml(role.nameJson)}</span>
-                        <Select
-                          value={permissions[String(role.id)] ?? "inherit"}
-                          onValueChange={(v) => setRoleAccess(role.id, v as FieldAccess | "inherit")}
-                        >
-                          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="inherit">{t("fields.inherit", "По умолчанию")}</SelectItem>
-                            {FIELD_ACCESS_OPTIONS.map((o) => (
-                              <SelectItem key={o.value} value={o.value}>{t(`fields.access.${o.value}`, o.label)}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <div key={role.id} className="space-y-2 rounded-md border border-slate-100 p-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-sm text-slate-700 truncate">{ml(role.nameJson)}</span>
+                          <Select
+                            value={permissions[String(role.id)] ?? "inherit"}
+                            onValueChange={(v) => setRoleAccess(role.id, v as FieldAccess | "inherit")}
+                          >
+                            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="inherit">{t("fields.inherit", "По умолчанию")}</SelectItem>
+                              {FIELD_ACCESS_OPTIONS.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>{t(`fields.access.${o.value}`, o.label)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-medium text-slate-600">
+                              {t(
+                                "pageFields.formulaExport",
+                                "Разрешить использование значения на других страницах",
+                              )}
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                              {t(
+                                "pageFields.formulaExportHint",
+                                "Только для формул; не открывает исходную страницу и не заменяет право просмотра поля.",
+                              )}
+                            </p>
+                          </div>
+                          <Switch
+                            checked={formulaExportRoleIds.includes(role.id)}
+                            onCheckedChange={(checked) =>
+                              setFormulaExportRoleIds((previous) =>
+                                checked
+                                  ? [...new Set([...previous, role.id])]
+                                  : previous.filter((id) => id !== role.id),
+                              )
+                            }
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>

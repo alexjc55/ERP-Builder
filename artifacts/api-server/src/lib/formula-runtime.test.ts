@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  canExportPageFieldToFormula,
   canUseRecordPageFormulaContext,
   formulaSourcesOf,
   legacyFormulaSourcesFromFields,
@@ -8,6 +9,28 @@ import {
   materializeVisiblePageFormulas,
   mergeLinkedFormulaInputsBatched,
 } from "./formula-runtime";
+
+test("cross-page formula export is explicit, additive, and preserves ordinary read boundaries", () => {
+  const base = {
+    roleIds: [7, 9],
+    ordinaryFieldAccess: "view" as const,
+    recordView: true,
+  };
+  assert.equal(canExportPageFieldToFormula({ ...base, formulaExportRoleIds: undefined }), false);
+  assert.equal(canExportPageFieldToFormula({ ...base, formulaExportRoleIds: [] }), false);
+  assert.equal(canExportPageFieldToFormula({ ...base, formulaExportRoleIds: [8] }), false);
+  assert.equal(canExportPageFieldToFormula({ ...base, formulaExportRoleIds: [9] }), true);
+  assert.equal(canExportPageFieldToFormula({
+    ...base,
+    formulaExportRoleIds: [7],
+    ordinaryFieldAccess: "hidden",
+  }), false);
+  assert.equal(canExportPageFieldToFormula({
+    ...base,
+    formulaExportRoleIds: [7],
+    recordView: false,
+  }), false);
+});
 
 test("qualified page references become permission-aware page-local sources automatically", () => {
   const fields = [{

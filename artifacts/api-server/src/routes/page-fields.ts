@@ -565,6 +565,11 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
     res.status(404).json({ error: "Page not found" });
     return;
   }
+  const perms = await getPermissions(req);
+  if (!(perms.superAdmin || perms.admin.pages || perms.pageIds.includes(params.data.pageId))) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
   // Page-field metadata mirrors record visibility: only callers who can view the
   // page's effective entity (mirrored or bound) may read its column definitions
   // (honoring a mirror-page view override for the page being read).
@@ -578,7 +583,6 @@ router.get("/pages/:pageId/fields", requireAuth, async (req, res): Promise<void>
   // permissionsJson marks the viewer's role "hidden" must not be returned at all
   // (not even its metadata/label/config). Admins who can edit pages still receive
   // every field so the column setup mode can configure hidden columns.
-  const perms = await getPermissions(req);
   const viewerRoleIds = perms.superAdmin ? [] : await getUserRoleIds(req);
   // page_ref fields carry response-only resolved metadata (the source field's
   // current type/options) so clients can render values without extra requests.
@@ -1029,6 +1033,9 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
     updateData.relationConfigJson = body.relationConfigJson ?? {};
   }
   if ("permissionsJson" in body) updateData.permissionsJson = body.permissionsJson ?? {};
+  if ("formulaExportRoleIds" in body) {
+    updateData.formulaExportRoleIds = [...new Set(body.formulaExportRoleIds ?? [])];
+  }
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
   if (body.showInTable != null) updateData.showInTable = body.showInTable;
@@ -1139,12 +1146,16 @@ router.get("/pages/:pageId/record-values", requireAuth, async (req, res): Promis
     return;
   }
   const entityId = eff.entityId;
+  const perms = await getPermissions(req);
+  if (!(perms.superAdmin || perms.admin.pages || perms.pageIds.includes(params.data.pageId))) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
   // Record-level view permission on the page's effective entity is required
   // (honoring a mirror-page override when this page mirrors that entity).
   if (!(await assertRecord(req, res, entityId, "view", params.data.pageId))) return;
   // Restrict the returned values to records the caller is actually allowed to
   // see: only rows of that entity, and only own rows under "own" scope.
-  const perms = await getPermissions(req);
   const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, params.data.pageId);
   const where: SQL[] = [
     eq(pageRecordValuesTable.pageId, params.data.pageId),

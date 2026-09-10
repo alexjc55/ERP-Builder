@@ -98,6 +98,8 @@ import {
 } from "../lib/authoritative-view";
 import {
   interactiveFormulaPermissions,
+  isDeniedFormulaProjection,
+  markDeniedFormulaProjection,
   mergeLinkedFormulaInputs,
   mergeLinkedFormulaInputsBatched,
   buildQualifiedFormulaScope,
@@ -803,6 +805,10 @@ async function materializeDerivedPageTargets(options: {
           const values = context.values.get(row.id) ?? {};
           values[ref.fieldKey] = value;
           context.values.set(row.id, values);
+        } else if (PAGE_DERIVED_FILTERABLE_TYPES.has(source.fieldType)) {
+          const values = context.values.get(row.id) ?? {};
+          markDeniedFormulaProjection(values, ref.fieldKey);
+          context.values.set(row.id, values);
         }
       }
     }
@@ -915,7 +921,12 @@ async function materializeDerivedPageTargets(options: {
     for (const target of pageTargets) {
       const values = new Map<number, unknown>();
       for (const row of pageScopedRows) {
-        const rawFormulaValue = pageValues.get(row.id)?.[target.field.fieldKey] ?? null;
+        const projectedValues = pageValues.get(row.id);
+        if (
+          target.effType === "function"
+          && isDeniedFormulaProjection(projectedValues, target.field.fieldKey)
+        ) continue;
+        const rawFormulaValue = projectedValues?.[target.field.fieldKey] ?? null;
         const inferredType = directFormulaTypes.get(target.field.id);
         const directUserId = inferredType === "user"
           ? (typeof rawFormulaValue === "number" ? rawFormulaValue : Number(rawFormulaValue))

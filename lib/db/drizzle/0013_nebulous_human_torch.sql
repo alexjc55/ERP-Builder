@@ -1,0 +1,1 @@
+ALTER TABLE "page_fields" ADD COLUMN "formula_export_role_ids" integer[] DEFAULT '{}' NOT NULL;

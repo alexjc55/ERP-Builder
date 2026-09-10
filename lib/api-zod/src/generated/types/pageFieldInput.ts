@@ -36,6 +36,7 @@ export interface PageFieldInput {
   fileConfigJson?: FileFieldConfig;
   pageRefConfigJson?: PageRefFieldConfig;
   permissionsJson?: FieldPermissions;
+  formulaExportRoleIds?: number[];
   showInTable?: boolean;
   isPinned?: boolean;
   showColumnTotal?: boolean;
