@@ -502,16 +502,87 @@ async function setup() {
 }
 
 async function cleanup() {
-  if (ids.entity) {
-    await db.delete(systemEventsTable).where(eq(systemEventsTable.entityId, ids.entity));
-    await db.delete(auditLogTable).where(eq(auditLogTable.entityId, ids.entity));
-    await db.delete(deletedFilesTable).where(eq(deletedFilesTable.entityId, ids.entity));
+  const entityIds = [ids.entity, ids.relatedEntity].filter((id): id is number => Number.isInteger(id));
+  const pageIds = [
+    ids.targetPage,
+    ids.sourcePage,
+    ids.relatedPage,
+    ids.formulaAliasPage,
+  ].filter((id): id is number => Number.isInteger(id));
+  const roleIds = [ids.role, ids.formulaExportRole].filter((id): id is number => Number.isInteger(id));
+
+  if (entityIds.length) {
+    await db.delete(systemEventsTable).where(inArray(systemEventsTable.entityId, entityIds));
+    await db.delete(auditLogTable).where(inArray(auditLogTable.entityId, entityIds));
+    await db.delete(deletedFilesTable).where(inArray(deletedFilesTable.entityId, entityIds));
   }
-  if (ids.relatedEntity) await db.delete(entitiesTable).where(eq(entitiesTable.id, ids.relatedEntity));
-  if (ids.targetPage || ids.sourcePage) await db.delete(pagesTable).where(inArray(pagesTable.id, [ids.targetPage, ids.sourcePage]));
-  if (ids.entity) await db.delete(entitiesTable).where(eq(entitiesTable.id, ids.entity));
+  if (ids.user && roleIds.length) {
+    await db.delete(userRolesTable).where(and(
+      eq(userRolesTable.userId, ids.user),
+      inArray(userRolesTable.roleId, roleIds),
+    ));
+  }
+  // Pages are not hard-linked to mirror entities, so every page created by this
+  // suite must be removed explicitly before its owning entity is deleted.
+  if (pageIds.length) await db.delete(pagesTable).where(inArray(pagesTable.id, pageIds));
+  if (entityIds.length) await db.delete(entitiesTable).where(inArray(entitiesTable.id, entityIds));
   if (ids.user) await db.delete(usersTable).where(eq(usersTable.id, ids.user));
-  if (ids.role) await db.delete(rolesTable).where(eq(rolesTable.id, ids.role));
+  if (roleIds.length) await db.delete(rolesTable).where(inArray(rolesTable.id, roleIds));
+
+  const [
+    remainingPages,
+    remainingPageFields,
+    remainingEntities,
+    remainingRecords,
+    remainingRoles,
+    remainingUsers,
+    remainingRelations,
+    remainingLinks,
+  ] = await Promise.all([
+    pageIds.length
+      ? db.select({ id: pagesTable.id }).from(pagesTable).where(inArray(pagesTable.id, pageIds))
+      : Promise.resolve([]),
+    pageIds.length
+      ? db.select({ id: pageFieldsTable.id }).from(pageFieldsTable).where(inArray(pageFieldsTable.pageId, pageIds))
+      : Promise.resolve([]),
+    entityIds.length
+      ? db.select({ id: entitiesTable.id }).from(entitiesTable).where(inArray(entitiesTable.id, entityIds))
+      : Promise.resolve([]),
+    entityIds.length
+      ? db.select({ id: entityRecordsTable.id }).from(entityRecordsTable).where(inArray(entityRecordsTable.entityId, entityIds))
+      : Promise.resolve([]),
+    roleIds.length
+      ? db.select({ id: rolesTable.id }).from(rolesTable).where(inArray(rolesTable.id, roleIds))
+      : Promise.resolve([]),
+    ids.user
+      ? db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, ids.user))
+      : Promise.resolve([]),
+    ids.relation
+      ? db.select({ id: relationsTable.id }).from(relationsTable).where(eq(relationsTable.id, ids.relation))
+      : Promise.resolve([]),
+    ids.relation
+      ? db.select({ id: recordLinksTable.id }).from(recordLinksTable).where(eq(recordLinksTable.relationId, ids.relation))
+      : Promise.resolve([]),
+  ]);
+  assert.deepEqual({
+    pages: remainingPages.length,
+    pageFields: remainingPageFields.length,
+    entities: remainingEntities.length,
+    records: remainingRecords.length,
+    roles: remainingRoles.length,
+    users: remainingUsers.length,
+    relations: remainingRelations.length,
+    recordLinks: remainingLinks.length,
+  }, {
+    pages: 0,
+    pageFields: 0,
+    entities: 0,
+    records: 0,
+    roles: 0,
+    users: 0,
+    relations: 0,
+    recordLinks: 0,
+  }, "suite cleanup must remove every fixture identified by its captured id");
 }
 
 after(async () => { await cleanup(); });
