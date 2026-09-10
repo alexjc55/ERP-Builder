@@ -191,7 +191,7 @@ import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCollaboration } from "@/lib/useCollaboration";
 import { useManualDataRefresh } from "@/lib/manualDataRefresh";
-import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown, ListChecks, Merge } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown, ListChecks, Merge, RefreshCw } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
@@ -1847,7 +1847,13 @@ export function EntityRecords({
     col.kind !== "status" &&
     (isMirror ? canAdmin("pages") : col.kind === "entity" ? canConfigureColumns : canAdmin("pages"));
 
-  const { data: rawAllFields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
+  const {
+    data: rawAllFields = [],
+    isLoading: fieldsLoading,
+    isError: fieldsError,
+    error: fieldsLoadError,
+    refetch: refetchFields,
+  } = useListEntityFields(entityId);
   // On a mirror page, apply display-only per-field label overrides at the source
   // so every downstream consumer (table header, filter bar, sort/view config,
   // record form, dependent pickers) shows the renamed label automatically. No-op
@@ -1859,11 +1865,32 @@ export function EntityRecords({
   );
   const { data: statuses = [] } = useListEntityStatuses(entityId);
   const { data: transitions = [] } = useListEntityTransitions(entityId);
-  const { data: mainViews = [], isLoading: mainViewsLoading } = useListMainEntityViews(entityId, { query: { enabled: !isMirror, queryKey: getListMainEntityViewsQueryKey(entityId) } });
-  const { data: pageViews = [], isLoading: pageViewsLoading } = useListPageViews(pageId ?? 0, { query: { enabled: isMirror && !!pageId, queryKey: getListPageViewsQueryKey(pageId ?? 0) } });
+  const {
+    data: mainViews = [],
+    isLoading: mainViewsLoading,
+    isError: mainViewsError,
+    error: mainViewsLoadError,
+    refetch: refetchMainViews,
+  } = useListMainEntityViews(entityId, { query: { enabled: !isMirror, queryKey: getListMainEntityViewsQueryKey(entityId) } });
+  const {
+    data: pageViews = [],
+    isLoading: pageViewsLoading,
+    isError: pageViewsError,
+    error: pageViewsLoadError,
+    refetch: refetchPageViews,
+  } = useListPageViews(pageId ?? 0, { query: { enabled: isMirror && !!pageId, queryKey: getListPageViewsQueryKey(pageId ?? 0) } });
   const views = isMirror ? pageViews : mainViews;
   const viewsLoading = isMirror ? pageViewsLoading : mainViewsLoading;
-  const { data: entity } = useGetEntity(entityId);
+  const viewsError = isMirror ? pageViewsError : mainViewsError;
+  const viewsLoadError = isMirror ? pageViewsLoadError : mainViewsLoadError;
+  const refetchViews = isMirror ? refetchPageViews : refetchMainViews;
+  const {
+    data: entity,
+    isLoading: entityLoading,
+    isError: entityError,
+    error: entityLoadError,
+    refetch: refetchEntity,
+  } = useGetEntity(entityId);
   const statusManualEditable = canManuallyEditStatus(entity, user?.id);
   const statusColumnName = ml(entity?.statusNameJson) || t("records.status", "Статус");
   const collabPageId = pageId ?? entity?.pageId;
@@ -1901,7 +1928,6 @@ export function EntityRecords({
   const [realtimeTick, setRealtimeTick] = useState(0);
   const [collabReconnectRefreshes, setCollabReconnectRefreshes] = useState(0);
   const [conflictCell, setConflictCell] = useState<{ recordId: number; fieldKey: string } | null>(null);
-  const collabWasConnectedRef = useRef(false);
 
   // Global records-table display style (cosmetic): plain | striped | striped_bold.
   const { data: appSettings } = useGetSettings();
@@ -1963,7 +1989,13 @@ export function EntityRecords({
   // entity. Available on any page (regular or mirror), loaded only when this
   // table is rendered inside a page (pageId set).
   const hasPage = pageId != null;
-  const { data: allPageFields = [] } = useListPageFields(pageId ?? 0, {
+  const {
+    data: allPageFields = [],
+    isLoading: pageFieldsLoading,
+    isError: pageFieldsError,
+    error: pageFieldsLoadError,
+    refetch: refetchPageFields,
+  } = useListPageFields(pageId ?? 0, {
     query: { enabled: hasPage, queryKey: getListPageFieldsQueryKey(pageId ?? 0) },
   });
   const queryPageValuesMutation = useQueryPageRecordValues();
@@ -2080,6 +2112,7 @@ export function EntityRecords({
   // buckets/totals) to re-run. Declared here (above the page-values mutation)
   // so the page-local edit path can trigger a group-header refresh too.
   const [refreshTick, setRefreshTick] = useState(0);
+  const [manualProjectionRefreshTick, setManualProjectionRefreshTick] = useState(0);
   // Inline editors guard against duplicate blur/Enter submits. A version
   // conflict releases that one-shot guard without remounting the editor, so its
   // local draft remains intact and can be retried against the refreshed version.
@@ -2200,6 +2233,7 @@ export function EntityRecords({
   const [relatedByRecord, setRelatedByRecord] = useState<Map<number, Map<string, PageRelatedValue>>>(
     new Map(),
   );
+  const [pageRelatedHydrationKey, setPageRelatedHydrationKey] = useState<string | null>(null);
   const relatedColMeta = useMemo(() => {
     const m = new Map<string, PageRelatedColumn>();
     for (const c of relatedColumns) m.set(c.fieldKey, c);
@@ -2219,6 +2253,7 @@ export function EntityRecords({
   const [entityRelatedByRecord, setEntityRelatedByRecord] = useState<
     Map<number, Map<string, PageRelatedValue>>
   >(new Map());
+  const [entityRelatedHydrationKey, setEntityRelatedHydrationKey] = useState<string | null>(null);
   const entityRelatedColMeta = useMemo(() => {
     const m = new Map<string, PageRelatedColumn>();
     for (const c of entityRelatedColumns) m.set(c.fieldKey, c);
@@ -2785,6 +2820,11 @@ export function EntityRecords({
   // fetch; later refetches (inline edit, group expand/collapse, filter change)
   // keep the previous table on screen so it never blinks out from under the user.
   const [hasLoadedRecords, setHasLoadedRecords] = useState(false);
+  // On the initial load, keep the cheap skeleton mounted until the row-dependent
+  // page/related projections are ready. Rendering the full wide table before
+  // those requests can even start blocks passive effects for several seconds and
+  // then renders the same rows again for every projection response.
+  const [hasPresentedHydratedRows, setHasPresentedHydratedRows] = useState(false);
 
   // A route can switch between the entity's data page and a mirror page without
   // unmounting this component when both render the same entity. Clear the prior
@@ -2806,11 +2846,14 @@ export function EntityRecords({
     setRowGroupMap({});
     setLoadedGroupSig(undefined);
     setHasLoadedRecords(false);
+    setHasPresentedHydratedRows(false);
     setRecordsLoading(true);
     setRelatedColumns([]);
     setRelatedByRecord(new Map());
+    setPageRelatedHydrationKey(null);
     setEntityRelatedColumns([]);
     setEntityRelatedByRecord(new Map());
+    setEntityRelatedHydrationKey(null);
   }, [entityId, pageId, permPageId]);
 
   // Dynamic table height: cap the scroll container so the horizontal scrollbar
@@ -2893,7 +2936,9 @@ export function EntityRecords({
   }, [pageSize]);
 
   // Reset all view/query state when switching entities so prior state never leaks.
-  const [viewInitialized, setViewInitialized] = useState(false);
+  const initializationScopeKey = `${entityId}:${pageId ?? "none"}`;
+  const [viewInitializedScope, setViewInitializedScope] = useState<string | null>(null);
+  const viewInitialized = viewInitializedScope === initializationScopeKey;
   useEffect(() => {
     setSelectedViewId(NO_VIEW);
     setSearch("");
@@ -2907,7 +2952,6 @@ export function EntityRecords({
     setPageFieldFilters({});
     setPageDateFilters({});
     setPage(1);
-    setViewInitialized(false);
     setExpandedGroupKey(undefined);
   }, [entityId, pageId]);
 
@@ -2923,13 +2967,13 @@ export function EntityRecords({
   // assigned views cannot fall back to "all records"; main pages keep that option
   // unless an explicit default exists.
   useEffect(() => {
-    if (viewInitialized || viewsLoading) return;
+    if (viewInitialized || viewsLoading || viewsError) return;
     const def = views.find((v: View) => v.isDefault);
     const first = [...views].sort((a: View, b: View) => a.sortOrder - b.sortOrder)[0];
     const initial = def ?? (isMirror ? first : undefined);
     setSelectedViewId(initial ? String(initial.id) : NO_VIEW);
-    setViewInitialized(true);
-  }, [views, viewsLoading, viewInitialized, isMirror]);
+    setViewInitializedScope(initializationScopeKey);
+  }, [views, viewsLoading, viewsError, viewInitialized, isMirror, initializationScopeKey]);
 
   const queryMutation = useQueryEntityRecords();
   const runQuery = queryMutation.mutateAsync;
@@ -3467,9 +3511,9 @@ export function EntityRecords({
   // defaults. Seeding runs once per (entity, page); after saving from setup mode
   // the invalidation refreshes the prop but the flag stays set, so the admin's
   // current selection is not clobbered.
-  const [quickFilterSeeded, setQuickFilterSeeded] = useState(false);
+  const [quickFilterSeededScope, setQuickFilterSeededScope] = useState<string | null>(null);
+  const quickFilterSeeded = quickFilterSeededScope === initializationScopeKey;
   useEffect(() => {
-    setQuickFilterSeeded(false);
     // Each page's exclusion default governs from a clean slate: don't carry a
     // prior page's "show hidden" choice across an entity/page switch.
     setShowHidden(false);
@@ -3478,7 +3522,7 @@ export function EntityRecords({
     setPageFilterSettingsOpen(false);
   }, [entityId, pageId]);
   useEffect(() => {
-    if (quickFilterSeeded) return;
+    if (quickFilterSeeded || fieldsError || (hasPage && pageFieldsError)) return;
     const dq = defaultQuickFilter;
     // Drop default-filter conditions the VIEWER cannot express: the server
     // whitelists query filters to fields visible for the role, so seeding a
@@ -3489,16 +3533,17 @@ export function EntityRecords({
     // hard scope; visibility here follows the SERVER rule (fieldAccess), not
     // the cosmetic display-only hide.
     const rawSeedFields = dq?.fieldFilters && Object.keys(dq.fieldFilters).length > 0 ? dq.fieldFilters : null;
-    // Field list still loading → we can't judge visibility yet; try again on the
-    // next render instead of wrongly dropping (or keeping) conditions.
-    if (rawSeedFields && fields.length === 0) return;
+    // Wait only while metadata is actually loading. A successful empty field
+    // list means every saved key is stale/hidden and must be discarded rather
+    // than leaving bootstrap permanently unseeded.
+    if (rawSeedFields && fieldsLoading) return;
     // PAGE-LOCAL default filter: same deal — wait for the page-field list when
     // a page-local seed is stored, then keep only conditions the viewer may
     // actually send (filterablePageFields already applies the isFilterable +
     // type + visibility gates the server enforces).
     const rawSeedPageFields =
       dq?.pageFieldFilters && Object.keys(dq.pageFieldFilters).length > 0 ? dq.pageFieldFilters : null;
-    if (rawSeedPageFields && hasPage && pageFields.length === 0) return;
+    if (rawSeedPageFields && hasPage && pageFieldsLoading) return;
     const seedPageFields = rawSeedPageFields
       ? Object.fromEntries(
           Object.entries(rawSeedPageFields).filter(([k]) =>
@@ -3532,9 +3577,20 @@ export function EntityRecords({
     setExcludePageFieldDraft(dq?.excludePageFieldFilters ? { ...dq.excludePageFieldFilters } : {});
     setExcludeEmptyPageFieldDraft(dq?.excludeEmptyPageFieldKeys ? [...dq.excludeEmptyPageFieldKeys] : []);
     setPage(1);
-    setQuickFilterSeeded(true);
+    setQuickFilterSeededScope(initializationScopeKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quickFilterSeeded, defaultQuickFilter, fields.length, pageFields.length]);
+  }, [
+    quickFilterSeeded,
+    defaultQuickFilter,
+    fields.length,
+    pageFields.length,
+    fieldsLoading,
+    pageFieldsLoading,
+    fieldsError,
+    pageFieldsError,
+    hasPage,
+    initializationScopeKey,
+  ]);
 
   const savePageDefaultFilterMutation = useUpdatePage({
     mutation: {
@@ -3811,8 +3867,12 @@ export function EntityRecords({
   }, [fieldFilters, pageFieldFilters, allFields, pageFields, fieldLabelOverrides, ml]);
 
   const queryKey = JSON.stringify(recordQuery);
-  const skipNextTickFetchRef = useRef(false);
+  const recordsScopeKey = `${entityId}:${pageId ?? "none"}:${permPageId ?? "none"}`;
   const recordsRequestIdRef = useRef(0);
+  const recordsStartedScopeRef = useRef<string | null>(null);
+  const recordsLoadSubscriptionKeyRef = useRef<string | null>(null);
+  const recordsLoadedSubscriptionKeyRef = useRef<string | null>(null);
+  const subscriptionRefreshKeyRef = useRef<string | null>(null);
   useEffect(
     () => () => {
       recordsRequestIdRef.current += 1;
@@ -3829,28 +3889,63 @@ export function EntityRecords({
   }, [realtimeTick]);
 
   useEffect(() => {
-    if (collab.connected && !collabWasConnectedRef.current) {
-      // SSE is not a durable replay log. Re-read once after every connection or
-      // reconnect so changes made during a network gap cannot remain invisible.
-      setRealtimeTick((tick) => tick + 1);
-      setCollabReconnectRefreshes((count) => count + 1);
+    const subscriptionKey = collab.subscriptionKey;
+    if (!subscriptionKey) return;
+    // A request that STARTED after this exact subscription became readable is
+    // already an authoritative post-gap snapshot. If the current-scope request
+    // started offline or under an older subscription, supersede it once. This
+    // closes both the initial subscribe gap and reconnect gaps without adding a
+    // duplicate query on the normal subscription-before-query path.
+    if (recordsStartedScopeRef.current !== recordsScopeKey) return;
+    if (
+      recordsLoadSubscriptionKeyRef.current === subscriptionKey ||
+      recordsLoadedSubscriptionKeyRef.current === subscriptionKey ||
+      subscriptionRefreshKeyRef.current === subscriptionKey
+    ) {
+      return;
     }
-    collabWasConnectedRef.current = collab.connected;
-  }, [collab.connected]);
+    subscriptionRefreshKeyRef.current = subscriptionKey;
+    setRefreshTick((tick) => tick + 1);
+    setCollabReconnectRefreshes((count) => count + 1);
+  }, [collab.subscriptionKey, recordsScopeKey]);
+
+  // Views, page fields, entity defaults, and the page's soft quick-filter all
+  // contribute to recordQuery. Wait for that local metadata bootstrap instead
+  // of issuing a throwaway broad query that is immediately superseded.
+  const recordMetadataError =
+    fieldsError || viewsError || entityError || (hasPage && pageFieldsError);
+  const recordMetadataErrorDetail =
+    fieldsLoadError ??
+    viewsLoadError ??
+    entityLoadError ??
+    (hasPage ? pageFieldsLoadError : null);
+  const recordsBootstrapReady =
+    !recordMetadataError &&
+    viewInitialized &&
+    quickFilterSeeded &&
+    !viewsLoading &&
+    !fieldsLoading &&
+    !pageFieldsLoading &&
+    !entityLoading &&
+    (hasLoadedRecords || !collab.subscriptionPending);
 
   const loadRecords = useCallback(async () => {
     const requestId = ++recordsRequestIdRef.current;
+    if (!recordsBootstrapReady) return false;
     if (!canView) {
       if (requestId === recordsRequestIdRef.current) setRecordsLoading(false);
-      return;
+      return false;
     }
+    const requestSubscriptionKey = collab.subscriptionKey;
+    recordsStartedScopeRef.current = recordsScopeKey;
+    recordsLoadSubscriptionKeyRef.current = requestSubscriptionKey;
     if (requestId === recordsRequestIdRef.current) setRecordsLoading(true);
     // Group signature this fetch is for, so the render can tell whether the rows
     // it holds match the currently-expanded group (see loadedGroupSig).
     const sigForFetch = expandAll ? "__all__" : (expandedGroupKey ?? "__none__");
     try {
       const res = await runQuery({ entityId, data: { ...recordQuery, pageId: permPageId } });
-      if (requestId !== recordsRequestIdRef.current) return;
+      if (requestId !== recordsRequestIdRef.current) return false;
       setRecords(res.data);
       setTotal(res.total);
       setNumericTotals(res.numericTotals ?? {});
@@ -3858,8 +3953,10 @@ export function EntityRecords({
       setGroups(res.groups ?? null);
       setRowGroupMap((res as { rowGroups?: Record<string, string | null> }).rowGroups ?? {});
       setLoadedGroupSig(sigForFetch);
+      recordsLoadedSubscriptionKeyRef.current = requestSubscriptionKey;
+      return true;
     } catch (err) {
-      if (requestId !== recordsRequestIdRef.current) return;
+      if (requestId !== recordsRequestIdRef.current) return false;
       setRecords([]);
       setTotal(0);
       setNumericTotals({});
@@ -3867,6 +3964,7 @@ export function EntityRecords({
       setGroups(null);
       setRowGroupMap({});
       toast({ title: t("records.loadError", "Ошибка загрузки записей"), description: extractError(err), variant: "destructive" });
+      return false;
     } finally {
       if (requestId === recordsRequestIdRef.current) {
         setRecordsLoading(false);
@@ -3874,21 +3972,17 @@ export function EntityRecords({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, entityId, queryKey, permPageId, runQuery]);
+  }, [canView, collab.subscriptionKey, entityId, queryKey, permPageId, recordsBootstrapReady, recordsScopeKey, runQuery]);
 
   useManualDataRefresh(async () => {
-    await loadRecords();
-    // The tick refreshes related-value and pivot mutation paths. Set it after
-    // the direct request settles so this effect's cleanup cannot cancel it.
-    skipNextTickFetchRef.current = true;
-    setRefreshTick((tick) => tick + 1);
+    const applied = await loadRecords();
+    // Keep manual projection refreshes separate from the records generation.
+    // A filter/page/archive change may supersede this request while it is in
+    // flight; a stale manual completion must never cancel that newer query.
+    if (applied) setManualProjectionRefreshTick((tick) => tick + 1);
   });
 
   useEffect(() => {
-    if (skipNextTickFetchRef.current) {
-      skipNextTickFetchRef.current = false;
-      return;
-    }
     void loadRecords();
     return () => {
       // Generated mutation requests cannot be aborted, so invalidate their
@@ -3896,7 +3990,7 @@ export function EntityRecords({
       recordsRequestIdRef.current += 1;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityId, queryKey, refreshTick, permPageId]);
+  }, [entityId, queryKey, refreshTick, permPageId, recordsBootstrapReady]);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/records`] });
@@ -3957,7 +4051,7 @@ export function EntityRecords({
   );
   useEffect(() => {
     const requestId = ++pageValuesRequestIdRef.current;
-    if (pageId == null || pageValuesScopeKey == null) {
+    if (pageId == null || pageValuesScopeKey == null || !hasLoadedRecords) {
       setPageRecordValues([]);
       setPageValuesHydration(idlePageValuesHydration());
       return;
@@ -3990,7 +4084,7 @@ export function EntityRecords({
     // Generated mutation requests cannot be aborted. The request token prevents
     // an old page/archive/filter response from replacing the current row page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageId, recordIdsKey, pageValuesSchemaKey, refreshTick, pageValuesRetryTick]);
+  }, [pageId, recordIdsKey, pageValuesSchemaKey, refreshTick, manualProjectionRefreshTick, pageValuesRetryTick, hasLoadedRecords]);
   const relationFieldsKey = useMemo(
     () =>
       JSON.stringify(
@@ -4000,13 +4094,17 @@ export function EntityRecords({
       ),
     [pageFields],
   );
+  const expectedPageRelatedHydrationKey = `${pageId ?? "none"}:${recordIdsKey}:${relationFieldsKey}`;
   useEffect(() => {
     if (pageId == null || !hasRelationFields || records.length === 0) {
       setRelatedColumns([]);
       setRelatedByRecord(new Map());
+      setPageRelatedHydrationKey(expectedPageRelatedHydrationKey);
       return;
     }
     let cancelled = false;
+    const requestHydrationKey = expectedPageRelatedHydrationKey;
+    setPageRelatedHydrationKey(null);
     const recordIds = records.map((r: EntityRecord) => r.id);
     fetchRelatedValues({ pageId, data: { recordIds } })
       .then((res) => {
@@ -4022,17 +4120,19 @@ export function EntityRecords({
           inner.set(v.fieldKey, v);
         }
         setRelatedByRecord(m);
+        setPageRelatedHydrationKey(requestHydrationKey);
       })
       .catch(() => {
         if (cancelled) return;
         setRelatedColumns([]);
         setRelatedByRecord(new Map());
+        setPageRelatedHydrationKey(requestHydrationKey);
       });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageId, hasRelationFields, recordIdsKey, relationFieldsKey, refreshTick]);
+  }, [pageId, hasRelationFields, recordIdsKey, relationFieldsKey, refreshTick, manualProjectionRefreshTick]);
 
   // Entity relation FIELDS: resolve their live values via the entity-keyed
   // endpoint (independent of the page-field relation fetch above).
@@ -4045,13 +4145,18 @@ export function EntityRecords({
       ),
     [allFields],
   );
+  const expectedEntityRelatedHydrationKey =
+    `${entityId}:${permPageId ?? "none"}:${recordIdsKey}:${entityRelationFieldsKey}`;
   useEffect(() => {
     if (!hasEntityRelationFields || records.length === 0) {
       setEntityRelatedColumns([]);
       setEntityRelatedByRecord(new Map());
+      setEntityRelatedHydrationKey(expectedEntityRelatedHydrationKey);
       return;
     }
     let cancelled = false;
+    const requestHydrationKey = expectedEntityRelatedHydrationKey;
+    setEntityRelatedHydrationKey(null);
     const recordIds = records.map((r: EntityRecord) => r.id);
     fetchEntityRelatedValues({ entityId, data: { recordIds, pageId: permPageId } })
       .then((res) => {
@@ -4067,17 +4172,35 @@ export function EntityRecords({
           inner.set(v.fieldKey, v);
         }
         setEntityRelatedByRecord(m);
+        setEntityRelatedHydrationKey(requestHydrationKey);
       })
       .catch(() => {
         if (cancelled) return;
         setEntityRelatedColumns([]);
         setEntityRelatedByRecord(new Map());
+        setEntityRelatedHydrationKey(requestHydrationKey);
       });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityId, hasEntityRelationFields, recordIdsKey, entityRelationFieldsKey, refreshTick, permPageId]);
+  }, [entityId, hasEntityRelationFields, recordIdsKey, entityRelationFieldsKey, refreshTick, manualProjectionRefreshTick, permPageId]);
+
+  const pageValuesHydrated =
+    pageId == null ||
+    (pageValuesHydration.key === pageValuesScopeKey &&
+      (pageValuesHydration.status === "ready" || pageValuesHydration.status === "error"));
+  const pageRelationsHydrated =
+    !hasRelationFields || records.length === 0 ||
+    pageRelatedHydrationKey === expectedPageRelatedHydrationKey;
+  const entityRelationsHydrated =
+    !hasEntityRelationFields || records.length === 0 ||
+    entityRelatedHydrationKey === expectedEntityRelatedHydrationKey;
+  const initialRowHydrationReady =
+    hasLoadedRecords && pageValuesHydrated && pageRelationsHydrated && entityRelationsHydrated;
+  useEffect(() => {
+    if (initialRowHydrationReady) setHasPresentedHydratedRows(true);
+  }, [initialRowHydrationReady]);
 
   const reorderFieldsMutation = useReorderFields({
     mutation: {
@@ -5189,6 +5312,37 @@ export function EntityRecords({
           <p className="text-sm text-slate-400 max-w-md">
             {t("records.noAccessDesc", "У вашей роли нет прав на просмотр данных этой сущности.")}
           </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (recordMetadataError) {
+    return (
+      <Card className="border-red-200 shadow-sm" role="alert" data-testid="records-metadata-error">
+        <CardContent className="flex flex-col items-center justify-center text-center py-16 gap-3">
+          <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+            <ShieldAlert className="w-6 h-6 text-red-500" />
+          </div>
+          <p className="text-slate-700 font-medium">
+            {t("records.metadataLoadError", "Не удалось загрузить настройки таблицы")}
+          </p>
+          <p className="text-sm text-slate-500 max-w-md">
+            {extractError(recordMetadataErrorDetail)}
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (fieldsError) void refetchFields();
+              if (viewsError) void refetchViews();
+              if (entityError) void refetchEntity();
+              if (hasPage && pageFieldsError) void refetchPageFields();
+            }}
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            {t("common.retry", "Повторить")}
+          </Button>
         </CardContent>
       </Card>
     );
@@ -6584,7 +6738,7 @@ export function EntityRecords({
               onRecordClick={openEdit}
               mode={calendarMode}
               onModeChange={setCalendarMode}
-              refreshTick={refreshTick}
+              refreshTick={refreshTick + manualProjectionRefreshTick}
               firstDayOfWeek={appSettings?.firstDayOfWeek ?? 7}
               ml={ml}
             />
@@ -6593,7 +6747,7 @@ export function EntityRecords({
       ) : showPivot ? (
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="p-3 sm:p-4">
-            <PivotView entityId={entityId} query={pivotQuery} refreshTick={refreshTick} />
+            <PivotView entityId={entityId} query={pivotQuery} refreshTick={refreshTick + manualProjectionRefreshTick} />
           </CardContent>
         </Card>
       ) : (
@@ -6617,7 +6771,7 @@ export function EntityRecords({
       )}
       <Card className="border-0 rounded-none shadow-none">
         <CardContent className="p-0">
-          {recordsLoading && !hasLoadedRecords ? (
+          {!hasPresentedHydratedRows ? (
             <div className="p-4 space-y-2">
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>

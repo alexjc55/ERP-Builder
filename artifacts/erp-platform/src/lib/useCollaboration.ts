@@ -37,6 +37,12 @@ export function useCollaboration(pageId?: number | null) {
   const userId = user?.id;
   const [users, setUsers] = useState<CollaborationPresence[]>([]);
   const [connected, setConnected] = useState(false);
+  const [connectedPageId, setConnectedPageId] = useState<number | null>(null);
+  const [subscriptionGeneration, setSubscriptionGeneration] = useState(0);
+  const [connectionAttempt, setConnectionAttempt] = useState<{
+    pageId: number | null;
+    state: "connecting" | "connected" | "unavailable";
+  }>({ pageId: null, state: "unavailable" });
   const clientId = useRef(getClientId());
   const [lastMessage, setLastMessage] = useState<CollaborationMessage | null>(null);
   const currentEditing = useRef<CollaborationEditing | null>(null);
@@ -66,6 +72,8 @@ export function useCollaboration(pageId?: number | null) {
     if (!pageId || userId == null || isGuest) {
       setUsers([]);
       setConnected(false);
+      setConnectedPageId(null);
+      setConnectionAttempt({ pageId: null, state: "unavailable" });
       return;
     }
 
@@ -73,7 +81,16 @@ export function useCollaboration(pageId?: number | null) {
     const id = clientId.current;
     let stopped = false;
     let reconnectTimer: number | undefined;
+    let connectionFallbackTimer: number | undefined;
     let retry = 0;
+    setConnectionAttempt({ pageId, state: "connecting" });
+    connectionFallbackTimer = window.setTimeout(() => {
+      setConnectionAttempt((current) =>
+        current.pageId === pageId && current.state === "connecting"
+          ? { pageId, state: "unavailable" }
+          : current,
+      );
+    }, 1_500);
 
     const handleEvent = (eventName: string, rawData: string) => {
       if (stopped || !rawData) return;
@@ -115,6 +132,9 @@ export function useCollaboration(pageId?: number | null) {
         );
         if (!response.ok || !response.body) throw new Error(`SSE request failed: ${response.status}`);
         if (stopped) return;
+        setConnectedPageId(pageId);
+        setSubscriptionGeneration((generation) => generation + 1);
+        setConnectionAttempt({ pageId, state: "connected" });
         setConnected(true);
         publishPresence(currentEditing.current);
 
@@ -143,6 +163,8 @@ export function useCollaboration(pageId?: number | null) {
       } catch (error) {
         if (stopped || controller.signal.aborted) return;
         setConnected(false);
+        setConnectedPageId(null);
+        setConnectionAttempt({ pageId, state: "unavailable" });
         const delay = Math.min(30_000, 1_000 * 2 ** retry++);
         reconnectTimer = window.setTimeout(() => void connect(), delay);
       }
@@ -158,8 +180,10 @@ export function useCollaboration(pageId?: number | null) {
       stopped = true;
       controller.abort();
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      if (connectionFallbackTimer !== undefined) window.clearTimeout(connectionFallbackTimer);
       window.clearInterval(heartbeatTimer);
       setConnected(false);
+      setConnectedPageId(null);
     };
   }, [isGuest, pageId, publishPresence, userId]);
 
@@ -167,6 +191,15 @@ export function useCollaboration(pageId?: number | null) {
     users,
     clientId: clientId.current,
     connected,
+    subscriptionKey:
+      connected && connectedPageId === pageId
+        ? `${connectedPageId}:${subscriptionGeneration}`
+        : null,
+    subscriptionPending:
+      pageId != null &&
+      userId != null &&
+      !isGuest &&
+      (connectionAttempt.pageId !== pageId || connectionAttempt.state === "connecting"),
     publishPresence,
     lastMessage,
   };
