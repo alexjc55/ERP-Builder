@@ -322,6 +322,24 @@ async function setup() {
     },
     {
       pageId: ids.targetPage,
+      fieldKey: "customer_formula",
+      nameJson: { en: "Customer formula" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{entity:${ids.entity}.owner}` },
+      isFilterable: true,
+      showInTable: false,
+    },
+    {
+      pageId: ids.targetPage,
+      fieldKey: "customer_math",
+      nameJson: { en: "Customer arithmetic" },
+      fieldType: "function",
+      formulaConfigJson: { expression: `{entity:${ids.entity}.owner} + 1` },
+      isFilterable: true,
+      showInTable: false,
+    },
+    {
+      pageId: ids.targetPage,
       fieldKey: "disabled_filter_formula",
       nameJson: { en: "Disabled filter formula" },
       fieldType: "function",
@@ -510,6 +528,62 @@ test("page-local select mappings synchronize entity status atomically", async (t
     assert.equal(response.status, 200, JSON.stringify(response.body));
     assert.equal(response.body.total, 1);
     await reset();
+  });
+  await t.test("direct user formulas use stable ids with directory labels while numeric formulas remain numeric", async () => {
+    await reset();
+    await db.update(usersTable).set({ firstName: "לקוח", lastName: "Клиент" }).where(eq(usersTable.id, ids.user));
+
+    let response = await request(
+      `/entities/${ids.entity}/records/page-filter-values`,
+      {
+        pageId: ids.targetPage,
+        field: "customer_formula",
+        valueSearch: "кли",
+      },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const values = response.body.values as string[];
+    assert.equal(values.length, 1);
+    const selected = values[0]!;
+    assert.ok(selected.startsWith(`__linked__:${ids.user}:`));
+    assert.equal(decodeURIComponent(selected.slice(selected.lastIndexOf(":") + 1)), "לקוח Клиент");
+
+    response = await request(
+      `/entities/${ids.entity}/records/query`,
+      {
+        pageId: ids.targetPage,
+        page: 1,
+        pageSize: 10,
+        pageLocalFilters: [{ field: "customer_formula", operator: "in", value: [selected] }],
+      },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.total, 2);
+
+    await db.update(usersTable).set({ firstName: "Renamed", lastName: "Customer" }).where(eq(usersTable.id, ids.user));
+    response = await request(
+      `/entities/${ids.entity}/records/query`,
+      {
+        pageId: ids.targetPage,
+        page: 1,
+        pageSize: 10,
+        pageLocalFilters: [{ field: "customer_formula", operator: "in", value: [selected] }],
+      },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.total, 2, "a renamed user must not invalidate an old selected token");
+
+    response = await request(
+      `/entities/${ids.entity}/records/page-filter-values`,
+      { pageId: ids.targetPage, field: "customer_math" },
+      "POST",
+    );
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.deepEqual(response.body.values, [String(ids.user + 1)]);
+    await db.update(usersTable).set({ firstName: "Page", lastName: "Writer" }).where(eq(usersTable.id, ids.user));
   });
   await t.test("page_ref filter reapplies source field boundary", async () => {
     await reset();

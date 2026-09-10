@@ -126,6 +126,7 @@ import {
   validateDerivedOperandType,
 } from "../lib/derived-page-filter";
 import { idArrayAny } from "../lib/sql-id-array";
+import { directEntityFormulaResultType } from "../lib/direct-formula-provenance";
 import {
   canonicalGdriveFileIdUnion,
   DriveFileTombstonedError,
@@ -876,16 +877,60 @@ async function materializeDerivedPageTargets(options: {
       }
       linkedIdentityValues.set(target.field.id, values);
     }
+    const directFormulaTypes = new Map<number, string>();
+    for (const target of pageTargets) {
+      if (target.effType !== "function") continue;
+      const inferred = directEntityFormulaResultType({
+        formula: target.field,
+        entityId: options.entityId,
+        entityFields: visibleEntityFields,
+        pageFields: visiblePageFields,
+      });
+      if (inferred) directFormulaTypes.set(target.field.id, inferred);
+    }
+    const directUserIds = new Set<number>();
+    for (const target of pageTargets) {
+      if (directFormulaTypes.get(target.field.id) !== "user") continue;
+      for (const row of pageScopedRows) {
+        const raw = pageValues.get(row.id)?.[target.field.fieldKey];
+        const id = typeof raw === "number" ? raw : Number(raw);
+        if (Number.isInteger(id) && id > 0) directUserIds.add(id);
+      }
+    }
+    const directUserNames = new Map<number, string>();
+    if (directUserIds.size > 0) {
+      // This is the same authenticated user-directory boundary as /users/options:
+      // expose only its display name, never additional user metadata.
+      const users = await db.select({
+        id: usersTable.id,
+        firstName: usersTable.firstName,
+        lastName: usersTable.lastName,
+        email: usersTable.email,
+      }).from(usersTable).where(idArrayAny(usersTable.id, [...directUserIds]));
+      for (const user of users) {
+        const name = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+        directUserNames.set(user.id, name || user.email);
+      }
+    }
     for (const target of pageTargets) {
       const values = new Map<number, unknown>();
       for (const row of pageScopedRows) {
+        const rawFormulaValue = pageValues.get(row.id)?.[target.field.fieldKey] ?? null;
+        const inferredType = directFormulaTypes.get(target.field.id);
+        const directUserId = inferredType === "user"
+          ? (typeof rawFormulaValue === "number" ? rawFormulaValue : Number(rawFormulaValue))
+          : null;
         values.set(
           row.id,
           target.effType === "function"
-            ? {
-                raw: pageValues.get(row.id)?.[target.field.fieldKey] ?? null,
-                fieldType: target.effType,
-              }
+            ? Number.isInteger(directUserId) && directUserId! > 0 && directUserNames.has(directUserId!)
+              ? {
+                  raw: rawFormulaValue,
+                  display: directUserNames.get(directUserId!),
+                  linkedId: directUserId!,
+                  fieldType: "user",
+                }
+              : { raw: rawFormulaValue, fieldType: inferredType ?? target.effType }
             : linkedIdentityValues.get(target.field.id)?.get(row.id)
               ?? { raw: null, fieldType: linkedTerminalTypes.get(target.field.id) ?? target.effType },
         );

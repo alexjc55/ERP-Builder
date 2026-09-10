@@ -187,6 +187,13 @@ The existing-values endpoint follows the same boundary and filterability gate. S
 direct distinct-value path; computed targets use the protected read-time materializer. Any capped
 option list must search before the limit, including Unicode labels.
 
+Formula filter labels may inherit user identity only from proven direct field references, never
+from a numeric result alone.
+**Why:** a customer-reference formula produces an ID, but arithmetic can produce the same number;
+guessing from the result would mislabel numeric reports as people.
+**How to apply:** preserve raw-ID comparisons while resolving display names through the existing
+user-directory boundary; name search must happen before the option limit.
+
 ## SELECT DISTINCT + ORDER BY gotcha (the bug that cost the most here)
 Building the distinct query as
 `db.selectDistinct({ v: valueExpr }).orderBy(asc(valueExpr))` FAILS at runtime in Postgres.
