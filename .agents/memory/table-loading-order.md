@@ -3,11 +3,11 @@ name: Table loading order
 description: Freshness and responsiveness constraints when reducing bootstrap requests and table renders.
 ---
 
-**Rule:** Avoid mounting the expensive full table before its row projections settle; show a lightweight loading state while keeping request effects active.
+**Rule:** Progressive rows may mount before projections settle only when their projection requests are dispatched before publishing the rows. Pending dependent cells and totals must not look like authoritative empty/zero values.
 
 **Why:** Browser profiling showed that rendering incomplete wide tables could block the main thread long enough to delay the passive effects that request their remaining data. Backend-only timing missed this delay.
 
-**How to apply:** Measure response-to-request and response-to-paint on one browser clock; distinguish initial presentation from write hydration and never unlock page writes after a failed read.
+**How to apply:** Measure response-to-request and response-to-paint on one browser clock; distinguish initial presentation from write hydration and never unlock page writes after a failed read. Keep dirty editors mounted during hydration, but a rejected not-ready commit must not consume the editor's exactly-once commit latch.
 
 **Rule:** A query started before an SSE subscription is established requires post-subscription reconciliation, even when its response arrives after the subscription.
 

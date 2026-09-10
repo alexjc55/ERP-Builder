@@ -55,7 +55,7 @@ test("same-entity page changes refetch permission-scoped rows and relation value
   );
   assert.match(
     source,
-    /\[entityId, hasEntityRelationFields, recordIdsKey, entityRelationFieldsKey, refreshTick, manualProjectionRefreshTick, permPageId\]/,
+    /launchEntityRelatedHydration\(res\.data, generationForFetch\);[\s\S]*?setRecords\(res\.data\);/,
   );
   assert.match(
     source,
@@ -75,22 +75,22 @@ test("same-record-id mirror navigation invalidates stale page-value responses", 
   );
   assert.match(
     source,
-    /return \(\) => \{\s*pageValuesRequestIdRef\.current \+= 1;\s*\};/,
+    /pageValuesRequestIdRef\.current \+= 1;[\s\S]*?pageRelatedRequestIdRef\.current \+= 1;[\s\S]*?entityRelatedRequestIdRef\.current \+= 1;/,
   );
   assert.match(
     source,
-    /\[pageId, recordIdsKey, pageValuesSchemaKey, refreshTick, manualProjectionRefreshTick, pageValuesRetryTick, hasLoadedRecords\]/,
+    /const requestKey = `\$\{requestScopeKey \?\? "none"\}:\$\{pageValuesSchemaKey\}:\$\{generation\}:\$\{pageValuesRetryTick\}`;/,
   );
   assert.match(
     source,
-    /pageValuesHydration\.key === pageValuesScopeKey[\s\S]*?pageRelatedHydrationKey === expectedPageRelatedHydrationKey[\s\S]*?entityRelatedHydrationKey === expectedEntityRelatedHydrationKey/,
+    /pageValuesHydration\.key !== pageValuesScopeKey[\s\S]*?pageRelatedHydrationKey !== expectedPageRelatedHydrationKey[\s\S]*?entityRelatedHydrationKey !== expectedEntityRelatedHydrationKey/,
   );
 });
 
 test("page-local write surfaces use hydration readiness and authoritative CAS", () => {
   assert.match(
     source,
-    /const commitPageCell = [\s\S]*?if \(!guardPageLocalWrite\(\(\) => \{\}\)\) return;[\s\S]*?if \(pageState == null \|\| existingVersion == null\)/,
+    /const commitPageCell = [\s\S]*?if \(!guardPageLocalWrite\(\(\) => \{\}\)\) return false;[\s\S]*?if \(pageState == null \|\| existingVersion == null\)/,
   );
   assert.match(source, /expectedVersions: \{ \[String\(pageId\)\]: existingVersion \}/);
   assert.match(source, /selectedBulkPageWriteBlocked/);
@@ -99,7 +99,7 @@ test("page-local write surfaces use hydration readiness and authoritative CAS", 
 
 test("page-value refresh does not discard an active entity-cell editor", () => {
   const hydrationEffect = source.match(
-    /useEffect\(\(\) => \{\s*const requestId = \+\+pageValuesRequestIdRef\.current;[\s\S]*?const relationFieldsKey = useMemo/,
+    /const launchPageValuesHydration = useCallback\([\s\S]*?const launchPageRelatedHydration = useCallback/,
   )?.[0];
   assert.ok(hydrationEffect);
   assert.doesNotMatch(hydrationEffect, /setEditingCell\(null\)/);
@@ -126,12 +126,12 @@ test("subscription gaps refresh only requests started before the active subscrip
 test("manual refresh cannot skip or invalidate a superseding scoped query", () => {
   assert.match(
     source,
-    /const applied = await loadRecords\(\);[\s\S]*?if \(applied\) setManualProjectionRefreshTick/,
+    /const applied = await loadRecords\(true\);[\s\S]*?if \(applied\) setManualProjectionRefreshTick/,
   );
   assert.doesNotMatch(source, /skipNextTickFetchRef/);
   assert.match(
     source,
-    /\[pageId, hasRelationFields, recordIdsKey, relationFieldsKey, refreshTick, manualProjectionRefreshTick\]/,
+    /launchPageRelatedHydration\(records, projectionGeneration\);/,
   );
 });
 

@@ -310,6 +310,12 @@ function isReadOnlyApiRequest(method: string, url: string) {
   );
 }
 
+function isProjectionRequest(method: string, url: string) {
+  if (method !== "POST") return false;
+  const path = new URL(url).pathname;
+  return path.endsWith("/record-values/query") || path.endsWith("/related-values");
+}
+
 test("actual cold loads for pages 119 and 65", async ({ browser }) => {
   test.setTimeout(180_000);
   const storageState = await authenticatedStorageState(browser);
@@ -533,6 +539,133 @@ test("actual cold loads for pages 119 and 65", async ({ browser }) => {
     body: Buffer.from(retainedReport),
     contentType: "application/json",
   });
+});
+
+test("records paint while projection hydration is held and reject stale completion", async ({ browser }) => {
+  test.setTimeout(150_000);
+  const storageState = await authenticatedStorageState(browser);
+  const context = await browser.newContext({ storageState });
+  const page = await context.newPage();
+  const page65 = fixture.pages.find((target) => target.id === 65);
+  const page119 = fixture.pages.find((target) => target.id === 119);
+  if (!page65 || !page119) throw new Error("Progressive-load fixture pages are unavailable");
+
+  const blockedWrites: string[] = [];
+  const recordQueries: Array<{
+    pageId?: number;
+    body: Record<string, unknown>;
+  }> = [];
+  let holdNextProjection = true;
+  let releaseHeldProjection!: () => void;
+  let projectionHeldResolve!: () => void;
+  let projectionHeld = new Promise<void>((resolve) => {
+    projectionHeldResolve = resolve;
+  });
+
+  const armProjectionHold = () => {
+    holdNextProjection = true;
+    projectionHeld = new Promise<void>((resolve) => {
+      projectionHeldResolve = resolve;
+    });
+    releaseHeldProjection = () => {
+      holdNextProjection = false;
+      releaseHeldProjection = () => undefined;
+      projectionHeldResolve();
+    };
+  };
+  armProjectionHold();
+
+  await page.route("**/api/**", async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (request.method() === "POST" && path.endsWith("/records/query")) {
+      const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
+      recordQueries.push({
+        pageId: typeof body.pageId === "number" ? body.pageId : undefined,
+        body,
+      });
+    }
+    if (holdNextProjection && isProjectionRequest(request.method(), request.url())) {
+      holdNextProjection = false;
+      projectionHeldResolve();
+      await new Promise<void>((resolve) => {
+        releaseHeldProjection = resolve;
+      });
+      await route.continue();
+      return;
+    }
+    if (isReadOnlyApiRequest(request.method(), request.url())) {
+      await route.continue();
+      return;
+    }
+    blockedWrites.push(`${request.method()} ${normalizedApiPath(request.url())}`);
+    await route.abort("blockedbyclient");
+  });
+
+  const rowSnapshot = () => page.locator("main table tbody tr").evaluateAll((rows) => rows.map((row) => row.textContent?.replace(/\s+/g, " ").trim() ?? ""));
+  const pendingProjectionCells = page.locator('[data-testid="record-projection-state"][data-state="pending"]');
+  const recordsForPage = (pageId: number) => recordQueries.filter((request) => request.pageId === pageId);
+
+  try {
+    const initialRecordsResponse = page.waitForResponse((response) => response.url().endsWith("/records/query") && response.request().method() === "POST" && response.request().postDataJSON()?.pageId === page65.id && response.status() === 200);
+    await page.goto(page65.path, { waitUntil: "domcontentloaded" });
+    await initialRecordsResponse;
+    await projectionHeld;
+
+    // The authoritative rows must mount while one projection response is still
+    // unresolved. This also proves the initial records query was not repeated
+    // just to make the projection columns paint.
+    await expect(page.locator("main table").first()).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect.poll(() => page.locator("main table tbody tr").count()).toBeGreaterThan(0);
+    await expect(pendingProjectionCells.first()).toBeVisible();
+    expect(recordsForPage(page65.id)).toHaveLength(1);
+    expect(blockedWrites).toEqual([]);
+
+    releaseHeldProjection();
+    await expect(pendingProjectionCells).toHaveCount(0, { timeout: 60_000 });
+    const initialResolvedRows = await rowSnapshot();
+    expect(initialResolvedRows.length).toBeGreaterThan(0);
+    expect(recordsForPage(page65.id)).toHaveLength(1);
+
+    // Hold a destination projection, navigate away before it resolves, then
+    // release it after the next page is visible. The old completion must not
+    // write into the destination table.
+    armProjectionHold();
+    const destinationRecordsResponse = page.waitForResponse((response) => response.url().endsWith("/records/query") && response.request().method() === "POST" && response.request().postDataJSON()?.pageId === page119.id && response.status() === 200);
+    await page.locator(`a[href="${page119.path}"]`).first().click();
+    await destinationRecordsResponse;
+    await projectionHeld;
+    await expect(page).toHaveURL(new RegExp(`${page119.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+    await expect(page.locator("main table").first()).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect.poll(() => page.locator("main table tbody tr").count()).toBeGreaterThan(0);
+
+    // Do not hold the return navigation's projection request. Release the
+    // held source-page response only after the destination has mounted.
+    holdNextProjection = false;
+    const returnRecordsResponse = page.waitForResponse((response) => response.url().endsWith("/records/query") && response.request().method() === "POST" && response.request().postDataJSON()?.pageId === page65.id && response.status() === 200);
+    await page.locator(`a[href="${page65.path}"]`).first().click();
+    await returnRecordsResponse;
+    await expect(page).toHaveURL(new RegExp(`${page65.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+    await expect(page.locator("main table").first()).toBeVisible({
+      timeout: 60_000,
+    });
+    await expect(pendingProjectionCells).toHaveCount(0, { timeout: 60_000 });
+    const returnRowsBeforeStaleRelease = await rowSnapshot();
+
+    releaseHeldProjection();
+    await page.waitForTimeout(500);
+    expect(await rowSnapshot()).toEqual(returnRowsBeforeStaleRelease);
+    expect(recordsForPage(page65.id)).toHaveLength(2);
+    expect(recordsForPage(page119.id)).toHaveLength(1);
+    expect(blockedWrites).toEqual([]);
+  } finally {
+    releaseHeldProjection?.();
+    await context.close();
+  }
 });
 
 test("same-entity mirror navigation rejects a late page-values response", async ({ browser }) => {

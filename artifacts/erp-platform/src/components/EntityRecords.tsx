@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, Fragment, cloneElement, type CSSProperties } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   useListEntityRecords,
   useGetRecord,
@@ -195,6 +195,7 @@ import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLef
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
+import { attemptInlineCommit } from "./inlineCommit.ts";
 import type { DateRange } from "react-day-picker";
 import {
   format as formatDate,
@@ -2002,6 +2003,10 @@ export function EntityRecords({
   const runPageValuesQuery = queryPageValuesMutation.mutateAsync;
   const [pageRecordValues, setPageRecordValues] = useState<PageRecordValue[]>([]);
   const pageValuesRequestIdRef = useRef(0);
+  // Projection reads are launched from the records response, before that response
+  // mounts the wide table. These refs de-duplicate the follow-up effects for the
+  // same exact row/config generation without turning a newer scope into a cache.
+  const pageValuesStartedRequestRef = useRef<string | null>(null);
   const [pageValuesHydration, setPageValuesHydration] = useState<PageValuesHydrationState>(
     idlePageValuesHydration,
   );
@@ -2113,6 +2118,28 @@ export function EntityRecords({
   // so the page-local edit path can trigger a group-header refresh too.
   const [refreshTick, setRefreshTick] = useState(0);
   const [manualProjectionRefreshTick, setManualProjectionRefreshTick] = useState(0);
+  // `loadRecords` is intentionally not recreated for every projection refresh:
+  // its request identity is tied to the records query, while manual projection
+  // reconciliation happens only after the winning response. Read the current
+  // tick through this ref when reserving that next manual generation.
+  const manualProjectionRefreshTickRef = useRef(manualProjectionRefreshTick);
+  manualProjectionRefreshTickRef.current = manualProjectionRefreshTick;
+  // A successful manual request reserves its next projection generation before
+  // its caller schedules the tick update. This closes the tiny render window
+  // between publishing rows and that update, in which an effect could otherwise
+  // launch the same projection generation twice.
+  const manualProjectionReservationRef = useRef<number | null>(null);
+  const reservedManualProjectionTick = manualProjectionReservationRef.current;
+  const projectionManualTick =
+    reservedManualProjectionTick != null && reservedManualProjectionTick > manualProjectionRefreshTick
+      ? reservedManualProjectionTick
+      : manualProjectionRefreshTick;
+  if (
+    reservedManualProjectionTick != null &&
+    reservedManualProjectionTick <= manualProjectionRefreshTick
+  ) {
+    manualProjectionReservationRef.current = null;
+  }
   // Inline editors guard against duplicate blur/Enter submits. A version
   // conflict releases that one-shot guard without remounting the editor, so its
   // local draft remains intact and can be retried against the refreshed version.
@@ -2234,6 +2261,9 @@ export function EntityRecords({
     new Map(),
   );
   const [pageRelatedHydrationKey, setPageRelatedHydrationKey] = useState<string | null>(null);
+  const [pageRelatedHydrationErrorKey, setPageRelatedHydrationErrorKey] = useState<string | null>(null);
+  const pageRelatedRequestIdRef = useRef(0);
+  const pageRelatedStartedRequestRef = useRef<string | null>(null);
   const relatedColMeta = useMemo(() => {
     const m = new Map<string, PageRelatedColumn>();
     for (const c of relatedColumns) m.set(c.fieldKey, c);
@@ -2254,6 +2284,9 @@ export function EntityRecords({
     Map<number, Map<string, PageRelatedValue>>
   >(new Map());
   const [entityRelatedHydrationKey, setEntityRelatedHydrationKey] = useState<string | null>(null);
+  const [entityRelatedHydrationErrorKey, setEntityRelatedHydrationErrorKey] = useState<string | null>(null);
+  const entityRelatedRequestIdRef = useRef(0);
+  const entityRelatedStartedRequestRef = useRef<string | null>(null);
   const entityRelatedColMeta = useMemo(() => {
     const m = new Map<string, PageRelatedColumn>();
     for (const c of entityRelatedColumns) m.set(c.fieldKey, c);
@@ -2286,6 +2319,45 @@ export function EntityRecords({
     });
   }, [entityRelatedColumns]);
   const fetchEntityRelatedValues = useGetEntityRelatedValues().mutateAsync;
+  const pageValuesSchemaKey = useMemo(
+    () =>
+      JSON.stringify(
+        pageFields.map((field: PageField) => [
+          field.id,
+          field.fieldKey,
+          field.fieldType,
+          field.isActive,
+          field.pageRefConfigJson,
+          field.formulaConfigJson,
+          field.permissionsJson,
+        ]),
+      ),
+    [pageFields],
+  );
+  const relationFieldsKey = useMemo(
+    () =>
+      JSON.stringify(
+        pageFields
+          .filter((pf: PageField) => pf.fieldType === "relation" || pf.fieldType === "lookup")
+          .map((pf: PageField) => [
+            pf.fieldType,
+            pf.fieldKey,
+            pf.relationConfigJson?.relationId,
+            pf.relationConfigJson?.relatedFieldKey,
+            pf.relationConfigJson?.relatedPageId,
+          ]),
+      ),
+    [pageFields],
+  );
+  const entityRelationFieldsKey = useMemo(
+    () =>
+      JSON.stringify(
+        allFields
+          .filter((f: Field) => f.fieldType === "relation" || f.fieldType === "lookup")
+          .map((f: Field) => [f.fieldKey, f.relationConfigJson?.relationId, f.relationConfigJson?.relatedFieldKey]),
+      ),
+    [allFields],
+  );
 
   // Optional mirror-page projection: restrict to a chosen subset of field keys.
   const mirrorKeySet =
@@ -2793,6 +2865,16 @@ export function EntityRecords({
   const [records, setRecords] = useState<EntityRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [numericTotals, setNumericTotals] = useState<Record<string, number>>({});
+  // Totals are only rendered for the exact query whose response supplied them.
+  // Keeping an old total visible during a newer filter/page request is worse
+  // than a pending indicator: it looks authoritative while belonging to a
+  // different row universe.
+  const [totalsResultKey, setTotalsResultKey] = useState<string | null>(null);
+  const [recordsLoadError, setRecordsLoadError] = useState<string | null>(null);
+  // Changes only when a records response wins the scoped request race. Projection
+  // effects use it to reconcile metadata/manual changes, never a merely-started
+  // records request that still shows the previous rows.
+  const [recordsProjectionGeneration, setRecordsProjectionGeneration] = useState(0);
   const [pageFormulaValues, setPageFormulaValues] = useState<Record<string, Record<string, unknown>>>({});
   const [recordsLoading, setRecordsLoading] = useState(true);
   // Mirror-page grouping: server-computed group buckets + which group is
@@ -2820,11 +2902,6 @@ export function EntityRecords({
   // fetch; later refetches (inline edit, group expand/collapse, filter change)
   // keep the previous table on screen so it never blinks out from under the user.
   const [hasLoadedRecords, setHasLoadedRecords] = useState(false);
-  // On the initial load, keep the cheap skeleton mounted until the row-dependent
-  // page/related projections are ready. Rendering the full wide table before
-  // those requests can even start blocks passive effects for several seconds and
-  // then renders the same rows again for every projection response.
-  const [hasPresentedHydratedRows, setHasPresentedHydratedRows] = useState(false);
 
   // A route can switch between the entity's data page and a mirror page without
   // unmounting this component when both render the same entity. Clear the prior
@@ -2835,25 +2912,35 @@ export function EntityRecords({
     // requests cannot be aborted, so their completion handlers compare this
     // token and cannot repopulate values from the previous mirror page.
     pageValuesRequestIdRef.current += 1;
+    pageRelatedRequestIdRef.current += 1;
+    entityRelatedRequestIdRef.current += 1;
+    pageValuesStartedRequestRef.current = null;
+    pageRelatedStartedRequestRef.current = null;
+    entityRelatedStartedRequestRef.current = null;
+    manualProjectionReservationRef.current = null;
     setRecords([]);
     setPageRecordValues([]);
     setPageValuesHydration(idlePageValuesHydration());
     setPageRequiredDialog(null);
     setTotal(0);
     setNumericTotals({});
+    setTotalsResultKey(null);
+    setRecordsLoadError(null);
+    setRecordsProjectionGeneration(0);
     setPageFormulaValues({});
     setGroups(null);
     setRowGroupMap({});
     setLoadedGroupSig(undefined);
     setHasLoadedRecords(false);
-    setHasPresentedHydratedRows(false);
     setRecordsLoading(true);
     setRelatedColumns([]);
     setRelatedByRecord(new Map());
     setPageRelatedHydrationKey(null);
+    setPageRelatedHydrationErrorKey(null);
     setEntityRelatedColumns([]);
     setEntityRelatedByRecord(new Map());
     setEntityRelatedHydrationKey(null);
+    setEntityRelatedHydrationErrorKey(null);
   }, [entityId, pageId, permPageId]);
 
   // Dynamic table height: cap the scroll container so the horizontal scrollbar
@@ -3873,9 +3960,139 @@ export function EntityRecords({
   const recordsLoadSubscriptionKeyRef = useRef<string | null>(null);
   const recordsLoadedSubscriptionKeyRef = useRef<string | null>(null);
   const subscriptionRefreshKeyRef = useRef<string | null>(null);
+  const recordsResultKey = `${recordsScopeKey}:${queryKey}`;
+  const projectionGeneration = `${recordsProjectionGeneration}:${projectionManualTick}`;
+
+  // Start each row-dependent read as soon as the authoritative records response
+  // arrives. Calling the generated mutations here starts network work before
+  // setRecords can mount the expensive table; the effects below only reconcile a
+  // changed projection schema/generation that did not require a records query.
+  const launchPageValuesHydration = useCallback(
+    (rows: readonly EntityRecord[], generation: string) => {
+      const recordIds = rows.map((record) => record.id);
+      const requestScopeKey = pageId == null ? null : pageValuesHydrationKey(pageId, recordIds);
+      const requestKey = `${requestScopeKey ?? "none"}:${pageValuesSchemaKey}:${generation}:${pageValuesRetryTick}`;
+      if (pageValuesStartedRequestRef.current === requestKey) return;
+      pageValuesStartedRequestRef.current = requestKey;
+      const requestId = ++pageValuesRequestIdRef.current;
+      if (pageId == null || requestScopeKey == null) {
+        setPageRecordValues([]);
+        setPageValuesHydration(idlePageValuesHydration());
+        return;
+      }
+      setPageRecordValues([]);
+      setPageRequiredDialog(null);
+      setPageValuesHydration({ status: "loading", key: requestScopeKey, error: null });
+      void runPageValuesQuery({ pageId, data: { recordIds } })
+        .then((result) => {
+          if (requestId !== pageValuesRequestIdRef.current) return;
+          setPageRecordValues(result);
+          setPageValuesHydration({ status: "ready", key: requestScopeKey, error: null });
+        })
+        .catch((error: unknown) => {
+          if (requestId !== pageValuesRequestIdRef.current) return;
+          setPageRecordValues([]);
+          setPageValuesHydration({
+            status: "error",
+            key: requestScopeKey,
+            error: extractError(error) ?? t("records.pageValuesLoadError", "Не удалось загрузить значения полей страницы"),
+          });
+        });
+    },
+    [pageId, pageValuesSchemaKey, pageValuesRetryTick, runPageValuesQuery, t],
+  );
+  const launchPageRelatedHydration = useCallback(
+    (rows: readonly EntityRecord[], generation: string) => {
+      const recordIds = rows.map((record) => record.id);
+      const hydrationKey = `${pageId ?? "none"}:${recordIds.join(",")}:${relationFieldsKey}`;
+      const requestKey = `${hydrationKey}:${generation}`;
+      if (pageRelatedStartedRequestRef.current === requestKey) return;
+      pageRelatedStartedRequestRef.current = requestKey;
+      const requestId = ++pageRelatedRequestIdRef.current;
+      if (pageId == null || !hasRelationFields || recordIds.length === 0) {
+        setRelatedColumns([]);
+        setRelatedByRecord(new Map());
+        setPageRelatedHydrationErrorKey(null);
+        setPageRelatedHydrationKey(hydrationKey);
+        return;
+      }
+      setPageRelatedHydrationKey(null);
+      setPageRelatedHydrationErrorKey(null);
+      void fetchRelatedValues({ pageId, data: { recordIds } })
+        .then((res) => {
+          if (requestId !== pageRelatedRequestIdRef.current) return;
+          setRelatedColumns(res.columns);
+          const valuesByRecord = new Map<number, Map<string, PageRelatedValue>>();
+          for (const value of res.values) {
+            let values = valuesByRecord.get(value.recordId);
+            if (!values) {
+              values = new Map();
+              valuesByRecord.set(value.recordId, values);
+            }
+            values.set(value.fieldKey, value);
+          }
+          setRelatedByRecord(valuesByRecord);
+          setPageRelatedHydrationKey(hydrationKey);
+        })
+        .catch(() => {
+          if (requestId !== pageRelatedRequestIdRef.current) return;
+          setRelatedColumns([]);
+          setRelatedByRecord(new Map());
+          setPageRelatedHydrationErrorKey(hydrationKey);
+          setPageRelatedHydrationKey(hydrationKey);
+        });
+    },
+    [fetchRelatedValues, hasRelationFields, pageId, relationFieldsKey],
+  );
+  const launchEntityRelatedHydration = useCallback(
+    (rows: readonly EntityRecord[], generation: string) => {
+      const recordIds = rows.map((record) => record.id);
+      const hydrationKey = `${entityId}:${permPageId ?? "none"}:${recordIds.join(",")}:${entityRelationFieldsKey}`;
+      const requestKey = `${hydrationKey}:${generation}`;
+      if (entityRelatedStartedRequestRef.current === requestKey) return;
+      entityRelatedStartedRequestRef.current = requestKey;
+      const requestId = ++entityRelatedRequestIdRef.current;
+      if (!hasEntityRelationFields || recordIds.length === 0) {
+        setEntityRelatedColumns([]);
+        setEntityRelatedByRecord(new Map());
+        setEntityRelatedHydrationErrorKey(null);
+        setEntityRelatedHydrationKey(hydrationKey);
+        return;
+      }
+      setEntityRelatedHydrationKey(null);
+      setEntityRelatedHydrationErrorKey(null);
+      void fetchEntityRelatedValues({ entityId, data: { recordIds, pageId: permPageId } })
+        .then((res) => {
+          if (requestId !== entityRelatedRequestIdRef.current) return;
+          setEntityRelatedColumns(res.columns);
+          const valuesByRecord = new Map<number, Map<string, PageRelatedValue>>();
+          for (const value of res.values) {
+            let values = valuesByRecord.get(value.recordId);
+            if (!values) {
+              values = new Map();
+              valuesByRecord.set(value.recordId, values);
+            }
+            values.set(value.fieldKey, value);
+          }
+          setEntityRelatedByRecord(valuesByRecord);
+          setEntityRelatedHydrationKey(hydrationKey);
+        })
+        .catch(() => {
+          if (requestId !== entityRelatedRequestIdRef.current) return;
+          setEntityRelatedColumns([]);
+          setEntityRelatedByRecord(new Map());
+          setEntityRelatedHydrationErrorKey(hydrationKey);
+          setEntityRelatedHydrationKey(hydrationKey);
+        });
+    },
+    [entityId, entityRelationFieldsKey, fetchEntityRelatedValues, hasEntityRelationFields, permPageId],
+  );
   useEffect(
     () => () => {
       recordsRequestIdRef.current += 1;
+      pageValuesRequestIdRef.current += 1;
+      pageRelatedRequestIdRef.current += 1;
+      entityRelatedRequestIdRef.current += 1;
     },
     [],
   );
@@ -3929,7 +4146,7 @@ export function EntityRecords({
     !entityLoading &&
     (hasLoadedRecords || !collab.subscriptionPending);
 
-  const loadRecords = useCallback(async () => {
+  const loadRecords = useCallback(async (manual = false) => {
     const requestId = ++recordsRequestIdRef.current;
     if (!recordsBootstrapReady) return false;
     if (!canView) {
@@ -3939,16 +4156,36 @@ export function EntityRecords({
     const requestSubscriptionKey = collab.subscriptionKey;
     recordsStartedScopeRef.current = recordsScopeKey;
     recordsLoadSubscriptionKeyRef.current = requestSubscriptionKey;
-    if (requestId === recordsRequestIdRef.current) setRecordsLoading(true);
+    if (requestId === recordsRequestIdRef.current) {
+      setRecordsLoading(true);
+      setTotalsResultKey(null);
+      setRecordsLoadError(null);
+    }
     // Group signature this fetch is for, so the render can tell whether the rows
     // it holds match the currently-expanded group (see loadedGroupSig).
     const sigForFetch = expandAll ? "__all__" : (expandedGroupKey ?? "__none__");
     try {
       const res = await runQuery({ entityId, data: { ...recordQuery, pageId: permPageId } });
       if (requestId !== recordsRequestIdRef.current) return false;
+      // Launch dependent page/relation reads before publishing rows. This preserves
+      // progressive rendering without making passive effects wait behind a costly
+      // first paint of a wide table.
+      // A successful manual refresh increments manualProjectionRefreshTick after
+      // this promise resolves. Reserve that next generation from the current ref,
+      // so the reconciliation effect de-duplicates this already-started fresh
+      // read without capturing an old tick or causing another records query.
+      const manualTickForFetch = manualProjectionRefreshTickRef.current + (manual ? 1 : 0);
+      if (manual) manualProjectionReservationRef.current = manualTickForFetch;
+      const generationForFetch = `${requestId}:${manualTickForFetch}`;
+      launchPageValuesHydration(res.data, generationForFetch);
+      launchPageRelatedHydration(res.data, generationForFetch);
+      launchEntityRelatedHydration(res.data, generationForFetch);
       setRecords(res.data);
+      setRecordsProjectionGeneration(requestId);
       setTotal(res.total);
       setNumericTotals(res.numericTotals ?? {});
+      setTotalsResultKey(recordsResultKey);
+      setRecordsLoadError(null);
       setPageFormulaValues(res.pageFormulaValues ?? {});
       setGroups(res.groups ?? null);
       setRowGroupMap((res as { rowGroups?: Record<string, string | null> }).rowGroups ?? {});
@@ -3960,10 +4197,13 @@ export function EntityRecords({
       setRecords([]);
       setTotal(0);
       setNumericTotals({});
+      setTotalsResultKey(null);
+      const errorMessage = extractError(err) ?? t("records.loadError", "Ошибка загрузки записей");
+      setRecordsLoadError(errorMessage);
       setPageFormulaValues({});
       setGroups(null);
       setRowGroupMap({});
-      toast({ title: t("records.loadError", "Ошибка загрузки записей"), description: extractError(err), variant: "destructive" });
+      toast({ title: t("records.loadError", "Ошибка загрузки записей"), description: errorMessage, variant: "destructive" });
       return false;
     } finally {
       if (requestId === recordsRequestIdRef.current) {
@@ -3972,10 +4212,23 @@ export function EntityRecords({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, collab.subscriptionKey, entityId, queryKey, permPageId, recordsBootstrapReady, recordsScopeKey, runQuery]);
+  }, [
+    canView,
+    collab.subscriptionKey,
+    entityId,
+    launchEntityRelatedHydration,
+    launchPageRelatedHydration,
+    launchPageValuesHydration,
+    queryKey,
+    permPageId,
+    recordsBootstrapReady,
+    recordsResultKey,
+    recordsScopeKey,
+    runQuery,
+  ]);
 
   useManualDataRefresh(async () => {
-    const applied = await loadRecords();
+    const applied = await loadRecords(true);
     // Keep manual projection refreshes separate from the records generation.
     // A filter/page/archive change may supersede this request while it is in
     // flight; a stale manual completion must never cancel that newer query.
@@ -4034,173 +4287,89 @@ export function EntityRecords({
     field.fieldType !== "lookup" &&
     !pageFieldReadOnly(field) &&
     (field.fieldType !== "page_ref" || pageRefEditable(field)));
-  const pageValuesSchemaKey = useMemo(
-    () =>
-      JSON.stringify(
-        pageFields.map((field: PageField) => [
-          field.id,
-          field.fieldKey,
-          field.fieldType,
-          field.isActive,
-          field.pageRefConfigJson,
-          field.formulaConfigJson,
-          field.permissionsJson,
-        ]),
-      ),
-    [pageFields],
-  );
   useEffect(() => {
-    const requestId = ++pageValuesRequestIdRef.current;
-    if (pageId == null || pageValuesScopeKey == null || !hasLoadedRecords) {
-      setPageRecordValues([]);
-      setPageValuesHydration(idlePageValuesHydration());
-      return;
-    }
-    const requestScopeKey = pageValuesScopeKey;
-    setPageRecordValues([]);
-    setPageRequiredDialog(null);
-    setPageValuesHydration({ status: "loading", key: requestScopeKey, error: null });
-    void runPageValuesQuery({
-      pageId,
-      data: { recordIds: records.map((record: EntityRecord) => record.id) },
-    })
-      .then((result) => {
-        if (requestId !== pageValuesRequestIdRef.current) return;
-        setPageRecordValues(result);
-        setPageValuesHydration({ status: "ready", key: requestScopeKey, error: null });
-      })
-      .catch((error: unknown) => {
-        if (requestId !== pageValuesRequestIdRef.current) return;
-        setPageRecordValues([]);
-        setPageValuesHydration({
-          status: "error",
-          key: requestScopeKey,
-          error: extractError(error) ?? t("records.pageValuesLoadError", "Не удалось загрузить значения полей страницы"),
-        });
-      });
-    return () => {
-      pageValuesRequestIdRef.current += 1;
-    };
-    // Generated mutation requests cannot be aborted. The request token prevents
-    // an old page/archive/filter response from replacing the current row page.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageId, recordIdsKey, pageValuesSchemaKey, refreshTick, manualProjectionRefreshTick, pageValuesRetryTick, hasLoadedRecords]);
-  const relationFieldsKey = useMemo(
-    () =>
-      JSON.stringify(
-        pageFields
-          .filter((pf: PageField) => pf.fieldType === "relation" || pf.fieldType === "lookup")
-          .map((pf: PageField) => [pf.fieldType, pf.fieldKey, pf.relationConfigJson?.relationId, pf.relationConfigJson?.relatedFieldKey, pf.relationConfigJson?.relatedPageId]),
-      ),
-    [pageFields],
-  );
+    if (!hasLoadedRecords) return;
+    launchPageValuesHydration(records, projectionGeneration);
+  }, [
+    hasLoadedRecords,
+    launchPageValuesHydration,
+    pageValuesSchemaKey,
+    pageValuesRetryTick,
+    projectionGeneration,
+    recordIdsKey,
+  ]);
   const expectedPageRelatedHydrationKey = `${pageId ?? "none"}:${recordIdsKey}:${relationFieldsKey}`;
   useEffect(() => {
-    if (pageId == null || !hasRelationFields || records.length === 0) {
-      setRelatedColumns([]);
-      setRelatedByRecord(new Map());
-      setPageRelatedHydrationKey(expectedPageRelatedHydrationKey);
-      return;
-    }
-    let cancelled = false;
-    const requestHydrationKey = expectedPageRelatedHydrationKey;
-    setPageRelatedHydrationKey(null);
-    const recordIds = records.map((r: EntityRecord) => r.id);
-    fetchRelatedValues({ pageId, data: { recordIds } })
-      .then((res) => {
-        if (cancelled) return;
-        setRelatedColumns(res.columns);
-        const m = new Map<number, Map<string, PageRelatedValue>>();
-        for (const v of res.values) {
-          let inner = m.get(v.recordId);
-          if (!inner) {
-            inner = new Map();
-            m.set(v.recordId, inner);
-          }
-          inner.set(v.fieldKey, v);
-        }
-        setRelatedByRecord(m);
-        setPageRelatedHydrationKey(requestHydrationKey);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setRelatedColumns([]);
-        setRelatedByRecord(new Map());
-        setPageRelatedHydrationKey(requestHydrationKey);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageId, hasRelationFields, recordIdsKey, relationFieldsKey, refreshTick, manualProjectionRefreshTick]);
+    if (!hasLoadedRecords) return;
+    launchPageRelatedHydration(records, projectionGeneration);
+  }, [
+    hasLoadedRecords,
+    launchPageRelatedHydration,
+    projectionGeneration,
+    recordIdsKey,
+    relationFieldsKey,
+  ]);
 
   // Entity relation FIELDS: resolve their live values via the entity-keyed
   // endpoint (independent of the page-field relation fetch above).
-  const entityRelationFieldsKey = useMemo(
-    () =>
-      JSON.stringify(
-        allFields
-          .filter((f: Field) => f.fieldType === "relation" || f.fieldType === "lookup")
-          .map((f: Field) => [f.fieldKey, f.relationConfigJson?.relationId, f.relationConfigJson?.relatedFieldKey]),
-      ),
-    [allFields],
-  );
   const expectedEntityRelatedHydrationKey =
     `${entityId}:${permPageId ?? "none"}:${recordIdsKey}:${entityRelationFieldsKey}`;
   useEffect(() => {
-    if (!hasEntityRelationFields || records.length === 0) {
-      setEntityRelatedColumns([]);
-      setEntityRelatedByRecord(new Map());
-      setEntityRelatedHydrationKey(expectedEntityRelatedHydrationKey);
-      return;
-    }
-    let cancelled = false;
-    const requestHydrationKey = expectedEntityRelatedHydrationKey;
-    setEntityRelatedHydrationKey(null);
-    const recordIds = records.map((r: EntityRecord) => r.id);
-    fetchEntityRelatedValues({ entityId, data: { recordIds, pageId: permPageId } })
-      .then((res) => {
-        if (cancelled) return;
-        setEntityRelatedColumns(res.columns);
-        const m = new Map<number, Map<string, PageRelatedValue>>();
-        for (const v of res.values) {
-          let inner = m.get(v.recordId);
-          if (!inner) {
-            inner = new Map();
-            m.set(v.recordId, inner);
-          }
-          inner.set(v.fieldKey, v);
-        }
-        setEntityRelatedByRecord(m);
-        setEntityRelatedHydrationKey(requestHydrationKey);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setEntityRelatedColumns([]);
-        setEntityRelatedByRecord(new Map());
-        setEntityRelatedHydrationKey(requestHydrationKey);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityId, hasEntityRelationFields, recordIdsKey, entityRelationFieldsKey, refreshTick, manualProjectionRefreshTick, permPageId]);
+    if (!hasLoadedRecords) return;
+    launchEntityRelatedHydration(records, projectionGeneration);
+  }, [
+    entityRelationFieldsKey,
+    hasLoadedRecords,
+    launchEntityRelatedHydration,
+    projectionGeneration,
+    recordIdsKey,
+  ]);
 
-  const pageValuesHydrated =
-    pageId == null ||
-    (pageValuesHydration.key === pageValuesScopeKey &&
-      (pageValuesHydration.status === "ready" || pageValuesHydration.status === "error"));
-  const pageRelationsHydrated =
-    !hasRelationFields || records.length === 0 ||
-    pageRelatedHydrationKey === expectedPageRelatedHydrationKey;
-  const entityRelationsHydrated =
-    !hasEntityRelationFields || records.length === 0 ||
-    entityRelatedHydrationKey === expectedEntityRelatedHydrationKey;
-  const initialRowHydrationReady =
-    hasLoadedRecords && pageValuesHydrated && pageRelationsHydrated && entityRelationsHydrated;
-  useEffect(() => {
-    if (initialRowHydrationReady) setHasPresentedHydratedRows(true);
-  }, [initialRowHydrationReady]);
+  const pageValuesPending =
+    pageId != null &&
+    (pageValuesHydration.key !== pageValuesScopeKey || pageValuesHydration.status === "loading");
+  const pageValuesUnavailable =
+    pageId != null &&
+    pageValuesHydration.key === pageValuesScopeKey &&
+    pageValuesHydration.status === "error";
+  const pageRelationsPending =
+    hasRelationFields &&
+    records.length > 0 &&
+    pageRelatedHydrationKey !== expectedPageRelatedHydrationKey;
+  const pageRelationsUnavailable = pageRelatedHydrationErrorKey === expectedPageRelatedHydrationKey;
+  const entityRelationsPending =
+    hasEntityRelationFields &&
+    records.length > 0 &&
+    entityRelatedHydrationKey !== expectedEntityRelatedHydrationKey;
+  const entityRelationsUnavailable = entityRelatedHydrationErrorKey === expectedEntityRelatedHydrationKey;
+  // Do not evaluate a formula from a partial page/relation snapshot. A formula
+  // can reference any projected field (including indirectly through another
+  // formula), so it is safer and faster to show its explicit pending state.
+  const rowProjectionsPending = pageValuesPending || pageRelationsPending || entityRelationsPending;
+  const rowProjectionsUnavailable =
+    pageValuesUnavailable || pageRelationsUnavailable || entityRelationsUnavailable;
+  const rowProjectionsReady = !rowProjectionsPending && !rowProjectionsUnavailable;
+  const totalsAuthoritative = totalsResultKey === recordsResultKey;
+  const renderProjectionState = (state: "pending" | "unavailable") => (
+    <span
+      data-testid="record-projection-state"
+      data-state={state}
+      className={cn(
+        "inline-flex items-center gap-1 text-xs",
+        state === "pending" ? "text-slate-400" : "text-amber-600",
+      )}
+      title={
+        state === "pending"
+          ? t("records.projectionLoading", "Загрузка…")
+          : t("records.projectionUnavailable", "Значение недоступно")
+      }
+    >
+      {state === "pending" && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}
+      {state === "pending"
+        ? t("records.projectionLoading", "Загрузка…")
+        : t("records.projectionUnavailable", "Значение недоступно")}
+    </span>
+  );
 
   const reorderFieldsMutation = useReorderFields({
     mutation: {
@@ -4755,9 +4924,15 @@ export function EntityRecords({
 
   // Inline commit for a page-local field value. Direct page values merge into
   // the page map; page_ref uses an explicit single-alias source patch.
-  const commitPageCell = (record: EntityRecord, field: PageField, raw: CellValue) => {
-    if (pageId == null) { setEditingCell(null); return; }
-    if (!guardPageLocalWrite(() => {})) return;
+  // Returns false only when the editor must remain eligible to retry (the page
+  // value scope/CAS token is not authoritative yet). InlineCellEditor's latch
+  // uses this acknowledgement so a pending attempt never consumes the draft.
+  const commitPageCell = (record: EntityRecord, field: PageField, raw: CellValue): boolean => {
+    if (pageId == null) {
+      setEditingCell(null);
+      return true;
+    }
+    if (!guardPageLocalWrite(() => {})) return false;
     const pageState = pageValuesByRecord.get(record.id);
     const existingVersion =
       field.fieldType === "page_ref"
@@ -4770,14 +4945,17 @@ export function EntityRecords({
         description: t("records.pageValuesMissingVersion", "Не удалось получить актуальную версию значений. Повторите загрузку."),
         variant: "destructive",
       });
-      return;
+      return false;
     }
     const stored = existing[field.fieldKey];
     const effectiveField = field.fieldType === "page_ref" ? pageRefAsField(field) : field as unknown as Field;
     const next = cellValueForPayload(effectiveField, raw);
     const normalizedStored =
       effectiveField.fieldType === "boolean" ? Boolean(stored) : stored === undefined || stored === null ? "" : stored;
-    if (next === normalizedStored) { setEditingCell(null); return; }
+    if (next === normalizedStored) {
+      setEditingCell(null);
+      return true;
+    }
     // A page_ref edits exactly one source alias. Sending the complete merged
     // map would resubmit unrelated aliases from a potentially stale render.
     // Keep the key present for clears because omission means "no change".
@@ -4789,7 +4967,7 @@ export function EntityRecords({
           description: t("records.pageRefSourceMissing", "Источник поля страницы недоступен."),
           variant: "destructive",
         });
-        return;
+        return false;
       }
       setPageValuesMutation.mutate({
         pageId,
@@ -4804,7 +4982,7 @@ export function EntityRecords({
           if ((err as { status?: number })?.status !== 409) setEditingCell(null);
         },
       });
-      return;
+      return true;
     }
     // Local saves must not resubmit page_ref aliases: each alias belongs to a
     // different source row with its own CAS version.
@@ -4835,7 +5013,7 @@ export function EntityRecords({
       }
       setEditingCell(null);
       setPageRequiredDialog({ recordId: record.id, form, expectedVersion: existingVersion });
-      return;
+      return true;
     }
     setPageValuesMutation.mutate(
       {
@@ -4853,6 +5031,7 @@ export function EntityRecords({
         },
       },
     );
+    return true;
   };
 
   // Commit the "fill all required page fields" dialog: rebuild the full page-value
@@ -5191,6 +5370,51 @@ export function EntityRecords({
     }
     return base;
   })();
+  // Format metadata is identical for every row. Memoizing it keeps the first
+  // progressive table paint focused on ordinary stored cells.
+  const rowFormatFields = useMemo<FormatField[]>(
+    () => [
+      ...displayFields.map((field: Field) => ({
+        fieldKey: field.fieldKey,
+        formatRulesJson: field.formatRulesJson,
+        inheritedFormatRulesJson: field.inheritedFormatRulesJson,
+      })),
+      ...displayedPageFields.map((field: PageField) => ({
+        fieldKey: field.fieldKey,
+        formatRulesJson: field.formatRulesJson,
+        inheritedFormatRulesJson: field.inheritedFormatRulesJson,
+      })),
+    ],
+    [displayFields, displayedPageFields],
+  );
+  const rowFormatFieldByKey = useMemo(
+    () =>
+      new Map<string, FormatValueField & { formulaConfigJson?: { expression?: string } | null }>([
+        ...displayFields.map(
+          (field: Field) =>
+            [
+              field.fieldKey,
+              {
+                fieldKey: field.fieldKey,
+                fieldType: field.fieldType,
+                formulaConfigJson: field.formulaConfigJson,
+              },
+            ] as const,
+        ),
+        ...displayedPageFields.map(
+          (field: PageField) =>
+            [
+              field.fieldKey,
+              {
+                fieldKey: field.fieldKey,
+                fieldType: field.fieldType,
+                formulaConfigJson: field.formulaConfigJson,
+              },
+            ] as const,
+        ),
+      ]),
+    [displayFields, displayedPageFields],
+  );
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // ── Pinned (frozen-left) columns ──────────────────────────────────────────
@@ -6752,6 +6976,26 @@ export function EntityRecords({
         </Card>
       ) : (
       <>
+      {recordsLoadError && (
+        <div
+          role="alert"
+          data-testid="records-load-error"
+          className="mb-2 flex items-center justify-between gap-3 border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+        >
+          <span>
+            {t("records.loadError", "Ошибка загрузки записей")}: {recordsLoadError}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 border-red-300 bg-white text-red-700 hover:bg-red-100"
+            onClick={() => setRefreshTick((tick) => tick + 1)}
+          >
+            {t("records.retry", "Повторить")}
+          </Button>
+        </div>
+      )}
       {pageValuesHydration.status === "error" && pageValuesHydration.key === pageValuesScopeKey && (
         <div role="alert" className="mb-2 flex items-center justify-between gap-3 border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           <span>
@@ -6771,7 +7015,7 @@ export function EntityRecords({
       )}
       <Card className="border-0 rounded-none shadow-none">
         <CardContent className="p-0">
-          {!hasPresentedHydratedRows ? (
+          {!hasLoadedRecords ? (
             <div className="p-4 space-y-2">
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
@@ -6782,7 +7026,7 @@ export function EntityRecords({
                 style={borderColor ? ({ "--erp-table-border": borderColor } as CSSProperties) : undefined}
               >
                 <thead className="sticky top-0 z-20">
-                  {Object.keys(numericTotals).length > 0 && (
+                  {totalsAuthoritative && Object.keys(numericTotals).length > 0 && (
                     <tr style={{ backgroundColor: "#F8FAFC" }}>
                       {showBulk && (
                         <th style={{ ...bulkColStyle("#F8FAFC", true), borderTop: "1px solid #F8FAFC", borderBottom: "none" }} />
@@ -7310,9 +7554,18 @@ export function EntityRecords({
                         colSpan={orderedColumns.length + (showBulk ? 1 : 0) + (showActionsColumn ? 1 : 0)}
                         className="text-center py-12 text-slate-400"
                       >
-                        {total === 0 && (search.trim() || (selectedConfig.filters?.length ?? 0) > 0)
-                          ? t("records.emptyFiltered", "Нет записей, удовлетворяющих условиям.")
-                          : t("records.emptyNone", "Записей пока нет. Нажмите «Добавить запись», чтобы создать первую.")}
+                        {recordsLoadError ? (
+                          t("records.loadError", "Ошибка загрузки записей")
+                        ) : !totalsAuthoritative ? (
+                          <span className="inline-flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            {t("records.loading", "Загрузка…")}
+                          </span>
+                        ) : total === 0 && (search.trim() || (selectedConfig.filters?.length ?? 0) > 0) ? (
+                          t("records.emptyFiltered", "Нет записей, удовлетворяющих условиям.")
+                        ) : (
+                          t("records.emptyNone", "Записей пока нет. Нажмите «Добавить запись», чтобы создать первую.")
+                        )}
                       </td>
                     </tr>
                   )}
@@ -7565,42 +7818,33 @@ export function EntityRecords({
                       relatedByRecord.get(record.id),
                       { entityId, pageId },
                     );
-                    const formulaValues = buildFormulaScope(allValues, formulaFieldDefs, formulaOptions);
+                    // A formula may depend on any page/relation projection. Avoid
+                    // both a false value and needless formula work while those
+                    // requests are in flight.
+                    const formulaValues = rowProjectionsReady
+                      ? buildFormulaScope(allValues, formulaFieldDefs, formulaOptions)
+                      : allValues;
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
-                    // Conditional formatting across both entity and page columns.
-                    const formatFields: FormatField[] = [
-                      // Own rules first, then rules inherited from the field's
-                      // formatInheritJson sources (first match wins overall).
-                      ...displayFields.map((f: Field) => ({
-                        fieldKey: f.fieldKey,
-                        formatRulesJson: f.formatRulesJson,
-                        inheritedFormatRulesJson: f.inheritedFormatRulesJson,
-                      })),
-                      ...displayedPageFields.map((pf: PageField) => ({
-                        fieldKey: pf.fieldKey,
-                        formatRulesJson: pf.formatRulesJson,
-                        inheritedFormatRulesJson: pf.inheritedFormatRulesJson,
-                      })),
-                    ];
-                    const formatFieldByKey = new Map<string, FormatValueField & { formulaConfigJson?: { expression?: string } | null }>([
-                      ...displayFields.map((f: Field) => [f.fieldKey, { fieldKey: f.fieldKey, fieldType: f.fieldType, formulaConfigJson: f.formulaConfigJson }] as const),
-                      ...displayedPageFields.map((pf: PageField) => [pf.fieldKey, { fieldKey: pf.fieldKey, fieldType: pf.fieldType, formulaConfigJson: pf.formulaConfigJson }] as const),
-                    ]);
-                    const formatting = computeRowFormatting(formatFields, (key) => {
-                      const def = formatFieldByKey.get(key);
-                      return resolveFormattingValue(def, {
-                        rawValues: allValues,
-                        // page_ref values are live aliases. This is the same map
-                        // read by their render branch, rather than a raw field key.
-                        displayedPageValues: pageValues,
-                        entityRelatedValues: entityRelatedByRecord.get(record.id),
-                        pageRelatedValues: relatedByRecord.get(record.id),
-                        resolveDefault: () =>
-                          def
-                            ? fieldRawValue(def, formulaValues)
-                            : formulaValues[key],
-                      });
-                    });
+                    // Formatting rules share the same dependencies as formula and
+                    // projected cells. Applying them to partial values can colour
+                    // a row incorrectly, so defer them along with that work.
+                    const formatting = rowProjectionsReady
+                      ? computeRowFormatting(rowFormatFields, (key) => {
+                          const def = rowFormatFieldByKey.get(key);
+                          return resolveFormattingValue(def, {
+                            rawValues: allValues,
+                            // page_ref values are live aliases. This is the same map
+                            // read by their render branch, rather than a raw field key.
+                            displayedPageValues: pageValues,
+                            entityRelatedValues: entityRelatedByRecord.get(record.id),
+                            pageRelatedValues: relatedByRecord.get(record.id),
+                            resolveDefault: () =>
+                              def
+                                ? fieldRawValue(def, formulaValues)
+                                : formulaValues[key],
+                          });
+                        })
+                      : { cellColors: {}, cellTextColors: {} };
                     // Resolve the row background once so pinned (sticky) cells and
                     // the non-pinned row stay consistent. Priority: conditional
                     // formatting > custom stripe colour > built-in striped grey >
@@ -7772,6 +8016,13 @@ export function EntityRecords({
                           const cellText = formatting.cellTextColors[f.fieldKey];
                           const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
                           if (f.fieldType === "relation" || f.fieldType === "lookup") {
+                            if (entityRelationsPending || entityRelationsUnavailable) {
+                              return (
+                                <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
+                                  {renderProjectionState(entityRelationsPending ? "pending" : "unavailable")}
+                                </td>
+                              );
+                            }
                             const meta = entityRelatedColMeta.get(f.fieldKey);
                             const rel = entityRelatedByRecord.get(record.id)?.get(f.fieldKey);
                             // Synthetic Field so the related value reuses the standard cell
@@ -7915,6 +8166,13 @@ export function EntityRecords({
                             );
                           }
                           if (isFunction) {
+                            if (rowProjectionsPending || rowProjectionsUnavailable) {
+                              return (
+                                <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
+                                  {renderProjectionState(rowProjectionsPending ? "pending" : "unavailable")}
+                                </td>
+                              );
+                            }
                             const computed = formatFormulaFieldResult(
                               f.fieldKey,
                               f.formulaConfigJson?.expression ?? "",
@@ -7963,6 +8221,13 @@ export function EntityRecords({
                           const isEditingThis =
                             editingCell?.recordId === record.id && editingCell?.fieldKey === pfKey;
                           if (pf.fieldType === "relation") {
+                            if (pageRelationsPending || pageRelationsUnavailable) {
+                              return (
+                                <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                                  {renderProjectionState(pageRelationsPending ? "pending" : "unavailable")}
+                                </td>
+                              );
+                            }
                             const meta = relatedColMeta.get(pf.fieldKey);
                             const rel = relatedByRecord.get(record.id)?.get(pf.fieldKey);
                             const relField = relationAsField(pf, meta);
@@ -8000,6 +8265,13 @@ export function EntityRecords({
                             );
                           }
                           if (pf.fieldType === "lookup") {
+                            if (pageRelationsPending || pageRelationsUnavailable) {
+                              return (
+                                <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                                  {renderProjectionState(pageRelationsPending ? "pending" : "unavailable")}
+                                </td>
+                              );
+                            }
                             // Page lookup is a read-only projection of the linked record's
                             // (entity- or page-source) field, resolved by the same page
                             // related-values endpoint as relation. It is never assignable.
@@ -8042,6 +8314,17 @@ export function EntityRecords({
                                 </td>
                               );
                             }
+                            // Keep a dirty editor mounted across a projection refresh
+                            // (including a 409 retry). `commitPageCell` still enforces
+                            // the exact hydration/CAS guard, so this does not unlock a
+                            // write from stale page values.
+                            if (pageValuesPending || pageValuesUnavailable) {
+                              return (
+                                <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                                  {renderProjectionState(pageValuesPending ? "pending" : "unavailable")}
+                                </td>
+                              );
+                            }
                             if (refField.fieldType === "boolean" && refEditable) {
                               return (
                                 <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
@@ -8068,6 +8351,13 @@ export function EntityRecords({
                               </td>
                             );
                           }
+                          if (isFunction && (rowProjectionsPending || rowProjectionsUnavailable)) {
+                            return (
+                              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                                {renderProjectionState(rowProjectionsPending ? "pending" : "unavailable")}
+                              </td>
+                            );
+                          }
                           const cellEditable =
                             pageLocalWritesReady && inlineEditEnabled && !isFunction && !pageFieldReadOnly(pf);
                           const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
@@ -8084,6 +8374,16 @@ export function EntityRecords({
                                   onCommit={(raw) => commitPageCell(record, pf, raw)}
                                   onCancel={() => setEditingCell(null)}
                                 />
+                              </td>
+                            );
+                          }
+                          // An editor's local draft is authoritative while it is
+                          // open. Keep it mounted during refresh/409 hydration;
+                          // its commit still goes through guardPageLocalWrite.
+                          if (pageValuesPending || pageValuesUnavailable) {
+                            return (
+                              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                                {renderProjectionState(pageValuesPending ? "pending" : "unavailable")}
                               </td>
                             );
                           }
@@ -8217,7 +8517,7 @@ export function EntityRecords({
         </CardContent>
       </Card>
 
-      {total > 0 && groupRowsReady && (!showGroups || expandedGroupIndex >= 0 || expandAll) && (
+      {totalsAuthoritative && total > 0 && groupRowsReady && (!showGroups || expandedGroupIndex >= 0 || expandAll) && (
         <div className="flex flex-col-reverse items-center gap-1.5 pb-4 sm:pb-0 sm:flex-row sm:justify-between text-sm text-slate-500">
           {/* Mobile: controls first, counter as a small line below; the counter
               text stays on ONE line instead of wrapping into a tall column. */}
@@ -10964,7 +11264,9 @@ function InlineCellEditor({
   userOptions: UserOption[];
   commitResetKey: number;
   onDirty: () => void;
-  onCommit: (raw: CellValue) => void;
+  // Returning false leaves the editor's draft armed for a later retry. This is
+  // used by page-local cells when their hydration/CAS scope is not ready.
+  onCommit: (raw: CellValue) => boolean | void;
   onCancel: () => void;
   allFields?: Field[];
   rowValues?: Record<string, unknown>;
@@ -10976,9 +11278,16 @@ function InlineCellEditor({
   const [draft, setDraft] = useState<CellValue>(initial);
   const cancelRef = useRef(false);
   const committedRef = useRef(false);
+  // Picker portals close immediately after selection. If the page-value guard
+  // rejects that selection, keep the editor (and its selected draft) alive
+  // rather than treating the portal close as a cancellation.
+  const retryPendingRef = useRef(false);
+  const [retryPending, setRetryPending] = useState(false);
 
   useEffect(() => {
     committedRef.current = false;
+    retryPendingRef.current = false;
+    setRetryPending(false);
   }, [commitResetKey]);
 
   useEffect(() => {
@@ -10986,27 +11295,56 @@ function InlineCellEditor({
   }, [draft, initial, onDirty]);
 
   const commitOnce = (raw: CellValue) => {
-    if (committedRef.current) return;
-    committedRef.current = true;
-    onCommit(raw);
+    const attempt = attemptInlineCommit(committedRef, onCommit, raw);
+    if (attempt === "rejected") {
+      retryPendingRef.current = true;
+      setRetryPending(true);
+      setDraft(raw);
+      return;
+    }
+    if (attempt === "already-committed") return;
+    retryPendingRef.current = false;
+    setRetryPending(false);
   };
+  const cancelRetry = () => {
+    retryPendingRef.current = false;
+    setRetryPending(false);
+    onCancel();
+  };
+  const cancelPickerOnEscape = (event: ReactKeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    cancelRetry();
+  };
+  const retryPickerControls = retryPending ? (
+    <div className="mt-1 flex items-center gap-1" data-testid="inline-picker-retry-controls">
+      <Button type="button" size="sm" className="h-7" onClick={() => commitOnce(draft)}>
+        {t("records.retry", "Повторить")}
+      </Button>
+      <Button type="button" size="sm" variant="ghost" className="h-7 text-slate-500" onClick={cancelRetry}>
+        {t("records.cancel", "Отмена")}
+      </Button>
+    </div>
+  ) : null;
 
   if (isDependentField(field) && allFields && rowValues && entityId != null) {
     return (
-      <DependentFieldCombobox
-        field={field}
-        allFields={allFields}
-        rowValues={rowValues}
-        entityId={entityId}
-        pageId={pageId}
-        value={typeof initial === "string" ? initial : initial == null ? "" : String(initial)}
-        onChange={(v) => commitOnce(v)}
-        triggerClassName="h-8 w-full text-sm"
-        autoOpen
-        onClose={(committed) => {
-          if (!committed && !committedRef.current) onCancel();
-        }}
-      />
+      <div onKeyDownCapture={cancelPickerOnEscape}>
+        <DependentFieldCombobox
+          field={field}
+          allFields={allFields}
+          rowValues={rowValues}
+          entityId={entityId}
+          pageId={pageId}
+          value={typeof draft === "string" ? draft : draft == null ? "" : String(draft)}
+          onChange={(v) => commitOnce(v)}
+          triggerClassName="h-8 w-full text-sm"
+          autoOpen
+          onClose={(committed) => {
+            if (!committed && !committedRef.current && !retryPendingRef.current) onCancel();
+          }}
+        />
+        {retryPickerControls}
+      </div>
     );
   }
 
@@ -11027,38 +11365,48 @@ function InlineCellEditor({
 
   if (field.fieldType === "user") {
     return (
-      <UserCombobox
-        options={filterUserOptionsByRoles(field, userOptions)}
-        value={draft != null && draft !== "" ? Number(draft) : null}
-        onChange={(id) => commitOnce(id)}
-        placeholder={t("records.selectUser", "Выберите пользователя")}
-        triggerClassName="h-8 w-full text-sm"
-        autoOpen
-        onClose={(committed) => { if (!committed && !committedRef.current) onCancel(); }}
-        allowCreate={field.userConfigJson?.allowCreate === true}
-        allowedRoleIds={field.userConfigJson?.allowedRoleIds}
-        fieldId={field.id}
-      />
+      <div onKeyDownCapture={cancelPickerOnEscape}>
+        <UserCombobox
+          options={filterUserOptionsByRoles(field, userOptions)}
+          value={draft != null && draft !== "" ? Number(draft) : null}
+          onChange={(id) => commitOnce(id)}
+          placeholder={t("records.selectUser", "Выберите пользователя")}
+          triggerClassName="h-8 w-full text-sm"
+          autoOpen
+          onClose={(committed) => {
+            if (!committed && !committedRef.current && !retryPendingRef.current) onCancel();
+          }}
+          allowCreate={field.userConfigJson?.allowCreate === true}
+          allowedRoleIds={field.userConfigJson?.allowedRoleIds}
+          fieldId={field.id}
+        />
+        {retryPickerControls}
+      </div>
     );
   }
 
   if (field.fieldType === "select") {
     const options = normalizeSelectOptions(field.optionsJson).map((o) => ({ value: o.value, label: ml(o.labelJson) || o.value }));
     return (
-      <Select
-        defaultOpen
-        value={draft == null || draft === "" ? "" : String(draft)}
-        onValueChange={(v) => commitOnce(v === CLEAR_SELECT_VALUE ? "" : v)}
-        onOpenChange={(o) => { if (!o && !committedRef.current) onCancel(); }}
-      >
-        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("records.selectValue", "Выберите значение")} /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value={CLEAR_SELECT_VALUE}>{t("records.notSelected", "Не выбрано")}</SelectItem>
-          {options.map((o) => (
-            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div onKeyDownCapture={cancelPickerOnEscape}>
+        <Select
+          defaultOpen
+          value={draft == null || draft === "" ? "" : String(draft)}
+          onValueChange={(v) => commitOnce(v === CLEAR_SELECT_VALUE ? "" : v)}
+          onOpenChange={(o) => {
+            if (!o && !committedRef.current && !retryPendingRef.current) onCancel();
+          }}
+        >
+          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("records.selectValue", "Выберите значение")} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={CLEAR_SELECT_VALUE}>{t("records.notSelected", "Не выбрано")}</SelectItem>
+            {options.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {retryPickerControls}
+      </div>
     );
   }
 
@@ -11080,20 +11428,25 @@ function InlineCellEditor({
   if (field.fieldType === "percent" && (field.percentConfigJson?.mode ?? "value") === "list") {
     const options = normalizeSelectOptions(field.optionsJson).map((o) => ({ value: o.value, label: ml(o.labelJson) || `${o.value}%` }));
     return (
-      <Select
-        defaultOpen
-        value={draft == null || draft === "" ? "" : String(draft)}
-        onValueChange={(v) => commitOnce(v === CLEAR_SELECT_VALUE ? "" : v)}
-        onOpenChange={(o) => { if (!o && !committedRef.current) onCancel(); }}
-      >
-        <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("records.selectValue", "Выберите значение")} /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value={CLEAR_SELECT_VALUE}>{t("records.notSelected", "Не выбрано")}</SelectItem>
-          {options.map((o) => (
-            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div onKeyDownCapture={cancelPickerOnEscape}>
+        <Select
+          defaultOpen
+          value={draft == null || draft === "" ? "" : String(draft)}
+          onValueChange={(v) => commitOnce(v === CLEAR_SELECT_VALUE ? "" : v)}
+          onOpenChange={(o) => {
+            if (!o && !committedRef.current && !retryPendingRef.current) onCancel();
+          }}
+        >
+          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("records.selectValue", "Выберите значение")} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={CLEAR_SELECT_VALUE}>{t("records.notSelected", "Не выбрано")}</SelectItem>
+            {options.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {retryPickerControls}
+      </div>
     );
   }
 
