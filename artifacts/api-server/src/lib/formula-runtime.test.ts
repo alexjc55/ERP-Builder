@@ -4,6 +4,7 @@ import {
   canExportPageFieldToFormula,
   canUseRecordPageFormulaContext,
   formulaSourcesOf,
+  isExportedFormulaBasePageResource,
   legacyFormulaSourcesFromFields,
   materializeVisibleEntityFormulas,
   materializeVisiblePageFormulas,
@@ -30,6 +31,34 @@ test("cross-page formula export is explicit, additive, and preserves ordinary re
     formulaExportRoleIds: [7],
     recordView: false,
   }), false);
+});
+
+test("exported formula context bypasses only its exact canonical base-page resource", () => {
+  const context = { entityId: 72, pageId: 119 };
+  assert.equal(isExportedFormulaBasePageResource(
+    { kind: "page", entityId: 72, pageId: 119 },
+    context,
+  ), true);
+  assert.equal(isExportedFormulaBasePageResource(
+    { kind: "page", entityId: 72, pageId: 120 },
+    context,
+  ), false);
+  assert.equal(isExportedFormulaBasePageResource(
+    { kind: "page", entityId: 74, pageId: 119 },
+    context,
+  ), false);
+  assert.equal(isExportedFormulaBasePageResource(
+    { kind: "field", entityId: 72, scope: "entity", fieldKey: "entry_date" },
+    context,
+  ), false);
+  assert.equal(isExportedFormulaBasePageResource(
+    { kind: "field", entityId: 72, scope: "page", pageId: 119, fieldKey: "dney_proizvodstva" },
+    context,
+  ), false);
+  assert.equal(isExportedFormulaBasePageResource(
+    { kind: "page", entityId: 72, pageId: 119 },
+    undefined,
+  ), false);
 });
 
 test("qualified page references become permission-aware page-local sources automatically", () => {

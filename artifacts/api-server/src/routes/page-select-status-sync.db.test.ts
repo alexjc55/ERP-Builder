@@ -993,6 +993,147 @@ test("page-local select mappings synchronize entity status atomically", async (t
     assert.equal(await pageValue(ids.targetPage, ids.one), undefined);
     assert.equal(await pageValue(ids.sourcePage, ids.one), undefined);
   });
+  await t.test("an inaccessible exported source formula resolves an entity lookup under its mirror row boundary", async () => {
+    await reset([ids.one]);
+    await db.insert(pageRecordValuesTable).values({
+      pageId: ids.targetPage,
+      recordId: ids.one,
+      valuesJson: {},
+    });
+    await db.update(entityRecordsTable)
+      .set({
+        valuesJson: {
+          name: "Ready",
+          owner: ids.user,
+          material_release_date: "2025-01-08",
+        },
+      })
+      .where(eq(entityRecordsTable.id, ids.one));
+    await db.update(entityRecordsTable)
+      .set({
+        valuesJson: {
+          name: "לקוח Договор",
+          owner: ids.user,
+          production_date: "2025-01-02",
+        },
+      })
+      .where(eq(entityRecordsTable.id, ids.relatedRecord));
+    await db.insert(entityFieldsTable).values([
+      {
+        entityId: ids.entity,
+        fieldKey: "entry_date",
+        nameJson: { en: "Entry date" },
+        fieldType: "lookup",
+        relationConfigJson: {
+          relationId: ids.relation,
+          relatedFieldKey: "production_date",
+        },
+      },
+      {
+        entityId: ids.entity,
+        fieldKey: "material_release_date",
+        nameJson: { en: "Material release date" },
+        fieldType: "date",
+      },
+      {
+        entityId: ids.relatedEntity,
+        fieldKey: "production_date",
+        nameJson: { en: "Production date" },
+        fieldType: "date",
+      },
+    ]);
+    await db.insert(pageFieldsTable).values([
+      {
+        pageId: ids.sourcePage,
+        fieldKey: "production_days",
+        nameJson: { en: "Production days" },
+        fieldType: "function",
+        permissionsJson: { [String(ids.role)]: "view" },
+        formulaExportRoleIds: [ids.role],
+        formulaConfigJson: {
+          expression: "if({entry_date} == '', '', daysBetween({entry_date},{material_release_date}))",
+        },
+      },
+      {
+        pageId: ids.targetPage,
+        fieldKey: "external_production_days",
+        nameJson: { en: "External production days" },
+        fieldType: "function",
+        formulaConfigJson: {
+          expression: `{page:${ids.sourcePage}.production_days}`,
+        },
+      },
+    ]);
+    const mirrorOnly = permissions([ids.targetPage]);
+    delete mirrorOnly.records[String(ids.entity)];
+    mirrorOnly.records[mirrorPermKey(ids.targetPage)] = {
+      view: true, create: false, update: false, delete: false, scope: "all",
+    };
+    mirrorOnly.records[mirrorPermKey(ids.sourcePage)] = {
+      view: true, create: false, update: false, delete: false, scope: "all",
+    };
+    try {
+      await db.update(rolesTable)
+        .set({ permissionsJson: mirrorOnly })
+        .where(eq(rolesTable.id, ids.role));
+
+      let response = await read(`/pages/${ids.targetPage}/record-values`);
+      assert.equal(response.status, 200);
+      let row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal(
+        row.valuesJson.external_production_days,
+        6,
+        "the exported formula must resolve its lookup without source-page membership",
+      );
+
+      let directSourceRead = await read(`/pages/${ids.sourcePage}/record-values`);
+      assert.equal(directSourceRead.status, 403, "formula export must not open the source page API");
+
+      const linkedTargetDenied: RolePermissions = {
+        ...mirrorOnly,
+        records: {
+          ...mirrorOnly.records,
+          [String(ids.relatedEntity)]: {
+            view: false, create: false, update: false, delete: false,
+          },
+        },
+      };
+      await db.update(rolesTable)
+        .set({ permissionsJson: linkedTargetDenied })
+        .where(eq(rolesTable.id, ids.role));
+      response = await read(`/pages/${ids.targetPage}/record-values`);
+      assert.equal(response.status, 200);
+      row = (response.body as Array<{ recordId: number; valuesJson: Record<string, unknown> }>)
+        .find((candidate) => candidate.recordId === ids.one);
+      assert.ok(row);
+      assert.equal(
+        row.valuesJson.external_production_days,
+        null,
+        "denying the lookup target must remain authoritative",
+      );
+
+      directSourceRead = await read(`/pages/${ids.sourcePage}/record-values`);
+      assert.equal(directSourceRead.status, 403, "linked-target denial must not change direct source-page access");
+    } finally {
+      await db.update(rolesTable)
+        .set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) })
+        .where(eq(rolesTable.id, ids.role));
+      await db.delete(pageFieldsTable).where(and(
+        inArray(pageFieldsTable.pageId, [ids.targetPage, ids.sourcePage]),
+        inArray(pageFieldsTable.fieldKey, ["production_days", "external_production_days"]),
+      ));
+      await db.delete(entityFieldsTable).where(and(
+        inArray(entityFieldsTable.entityId, [ids.entity, ids.relatedEntity]),
+        inArray(entityFieldsTable.fieldKey, ["entry_date", "material_release_date", "production_date"]),
+      ));
+      await db.update(entityRecordsTable)
+        .set({ valuesJson: { name: "לקוח Договор", owner: ids.user } })
+        .where(eq(entityRecordsTable.id, ids.relatedRecord));
+      await reset([ids.one]);
+    }
+  });
   await t.test("an exact field export feeds destination formulas without opening its source page", async () => {
     await reset([ids.one]);
     await db.insert(pageRecordValuesTable).values({

@@ -23,6 +23,13 @@ membership-dependent permission helpers would silently drop the inaccessible mir
 denied projections separately from legitimate nulls through recursive formulas and aliases; omit
 denied values from filter options and matches, including empty filters.
 
+An authorized exported formula also needs its canonical base-page context during recursive
+lookup resolution, without granting general membership.
+**Why:** otherwise the outer export succeeds but an entity lookup inside the source formula
+fails on the same inaccessible page and silently takes the formula's empty branch.
+**How to apply:** keep the exception scoped to the exact base entity/page resource, and retain
+independent authorization of every dependency field and linked target.
+
 **Rule:** A formula token shaped like `{page:<id>.<field>}` must automatically enter the same permission-aware `pageLocal` resolution path as an explicitly configured page source; parsing the token without loading its source is not valid support.
 
 **Why:** The editor's qualified syntax promises an unambiguous cross-page value, but a token without a separately persisted source used to evaluate as empty even when that same record had a value on the referenced page.

@@ -74,6 +74,27 @@ export function canExportPageFieldToFormula(options: {
     && (options.formulaExportRoleIds ?? []).some((roleId) => options.roleIds.includes(roleId));
 }
 
+type ExportedFormulaPageContext = {
+  entityId: number;
+  pageId: number;
+};
+
+/**
+ * An exact exported formula field may evaluate in its canonical source-page
+ * context without opening that page to the viewer. This exception applies only
+ * to the page resource itself; dependency fields and linked target resources
+ * still require their ordinary/export-aware authorization checks.
+ */
+export function isExportedFormulaBasePageResource(
+  resource: LinkedFormulaResource,
+  context: ExportedFormulaPageContext | undefined,
+): boolean {
+  return context != null
+    && resource.kind === "page"
+    && resource.entityId === context.entityId
+    && resource.pageId === context.pageId;
+}
+
 const deniedFormulaProjectionKeys = new WeakMap<object, Set<string>>();
 
 /** Mark a temporary formula input/output as denied without serializing policy metadata. */
@@ -628,7 +649,11 @@ export async function mergeLinkedFormulaInputs(options: {
   rows: readonly { id: number; values: Record<string, unknown> }[];
   fields: readonly FormulaDependencyField[];
   permissions: LinkedFormulaPermissionContext;
-}, state: { depth: number; pageFormulaStack: ReadonlySet<string> } = {
+}, state: {
+  depth: number;
+  pageFormulaStack: ReadonlySet<string>;
+  exportedBasePage?: ExportedFormulaPageContext;
+} = {
   depth: 0,
   pageFormulaStack: new Set(),
 }): Promise<Map<number, Record<string, unknown>>> {
@@ -767,6 +792,7 @@ export async function mergeLinkedFormulaInputs(options: {
       const accepted = requirement.resources.every((resource) => {
         const key = linkedFormulaResourceKey(resource);
         if (allowed.has(key)) return true;
+        if (isExportedFormulaBasePageResource(resource, state.exportedBasePage)) return true;
         if (resource.kind === "field" && resource.scope === "page") return exported.has(key);
         if (resource.kind === "page" && resource.pageId !== options.pageId) {
           const fields = sourcePages.get(resource.pageId) ?? [];
@@ -792,11 +818,23 @@ export async function mergeLinkedFormulaInputs(options: {
   if (!sources.length || !options.rows.length) return out;
   try {
     const requestedIds = options.rows.map((row) => row.id);
-    const allowedBase = await options.permissions.filterRows({
-      entityId: options.entityId,
-      pageId: options.pageId,
-      recordIds: requestedIds,
-    });
+    const exportedBasePage = state.exportedBasePage;
+    const usesExportedBasePage =
+      exportedBasePage?.entityId === options.entityId
+      && exportedBasePage.pageId === options.pageId
+      && options.pageId != null
+      && options.permissions.filterPageFormulaSourceRows != null;
+    const allowedBase = usesExportedBasePage
+      ? await options.permissions.filterPageFormulaSourceRows!({
+          entityId: options.entityId,
+          pageId: options.pageId!,
+          recordIds: requestedIds,
+        })
+      : await options.permissions.filterRows({
+          entityId: options.entityId,
+          pageId: options.pageId,
+          recordIds: requestedIds,
+        });
     const eligibleIds = requestedIds.filter((id) => allowedBase.has(id));
     for (const id of requestedIds) {
       if (allowedBase.has(id)) continue;
@@ -807,7 +845,8 @@ export async function mergeLinkedFormulaInputs(options: {
       const match = /^field:\d+:page:(\d+):/.exec(key);
       return match ? [Number(match[1])] : [];
     }));
-    const resolutionPermissions: LinkedFormulaPermissionContext = exportedSourceFields.size
+    const resolutionPermissions: LinkedFormulaPermissionContext =
+      exportedSourceFields.size || usesExportedBasePage
       ? {
           ...options.permissions,
           async authorizeResources(resources) {
@@ -815,6 +854,8 @@ export async function mergeLinkedFormulaInputs(options: {
             for (const resource of resources) {
               const key = linkedFormulaResourceKey(resource);
               if (
+                isExportedFormulaBasePageResource(resource, exportedBasePage)
+                ||
                 (resource.kind === "field" && exportedSourceFields.has(key))
                 || (
                   resource.kind === "page"
@@ -830,6 +871,17 @@ export async function mergeLinkedFormulaInputs(options: {
             return allowed;
           },
           async filterRows(scope) {
+            if (
+              exportedBasePage != null
+              && scope.entityId === exportedBasePage.entityId
+              && scope.pageId === exportedBasePage.pageId
+              && options.permissions.filterPageFormulaSourceRows
+            ) {
+              return options.permissions.filterPageFormulaSourceRows({
+                ...scope,
+                pageId: exportedBasePage.pageId,
+              });
+            }
             if (
               scope.pageId != null
               && exportedPageIds.has(scope.pageId)
@@ -1090,6 +1142,18 @@ export async function mergeLinkedFormulaInputs(options: {
             if (!targetField) continue;
             const nextStack = new Set(state.pageFormulaStack);
             nextStack.add(`page:${pageId}.${source.fieldKey}`);
+            const targetResource = {
+              kind: "field" as const,
+              entityId: options.entityId,
+              scope: "page" as const,
+              pageId,
+              fieldKey: source.fieldKey,
+            };
+            const exportedBasePage = exportedDependencyFields.has(
+              linkedFormulaResourceKey(targetResource),
+            )
+              ? { entityId: options.entityId, pageId }
+              : undefined;
             const nestedInputs = await mergeLinkedFormulaInputs({
               entityId: options.entityId,
               pageId,
@@ -1102,7 +1166,11 @@ export async function mergeLinkedFormulaInputs(options: {
                 visiblePageFields,
               ),
               permissions: options.permissions,
-            }, { depth: state.depth + 1, pageFormulaStack: nextStack });
+            }, {
+              depth: state.depth + 1,
+              pageFormulaStack: nextStack,
+              exportedBasePage,
+            });
             const computed = materializeVisiblePageFormulas({
               entityId: options.entityId,
               pageId,
