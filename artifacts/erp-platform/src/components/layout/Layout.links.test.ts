@@ -31,3 +31,13 @@ test("expanded and collapsed sidebar links keep styling on Link", () => {
     /flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors/,
   );
 });
+
+test("the sidebar has no standalone tags fallback outside the page registry", () => {
+  assert.doesNotMatch(
+    source,
+    /hasTagsPage|tagsCap|route="\/admin\/tags"/,
+    "Tags must be rendered from the DB-backed Pages registry under Administration",
+  );
+  assert.match(source, /const topPages = pages\.filter/);
+  assert.match(source, /const subPages = pages\.filter/);
+});

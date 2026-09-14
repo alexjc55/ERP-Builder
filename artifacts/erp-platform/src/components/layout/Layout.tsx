@@ -190,8 +190,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const pages = pagesData || [];
   const topPages = pages.filter((p: Page) => !p.parentPageId && p.isActive);
   const subPages = pages.filter((p: Page) => p.parentPageId && p.isActive);
-  const hasTagsPage = pages.some((page: Page) => page.path === "/admin/tags");
-  const tagsCap = adminCapForPath("/admin/tags");
 
   const getSubPages = (parentId: number) =>
     subPages
@@ -305,17 +303,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             />
           );
         })}
-        {/* Older installations may not yet have the Tags row in pages. Keep
-            the capability-gated admin entry reachable until their menu is
-            refreshed; installations with the row above do not duplicate it. */}
-        {!hasTagsPage && tagsCap && canAdmin(tagsCap) && (
-          <SidebarItem
-            name={t("tags.title", "Глобальные теги")}
-            icon="tags"
-            route="/admin/tags"
-            collapsed={collapsed}
-          />
-        )}
       </nav>
 
       <div className={cn("border-t border-slate-700/60", collapsed ? "px-2 py-4 flex justify-center" : "px-3 py-4")}>

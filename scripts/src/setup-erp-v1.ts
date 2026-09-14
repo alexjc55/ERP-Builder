@@ -222,6 +222,7 @@ async function main() {
       { name: ml("События", "Events", "אירועים"), icon: "activity", path: "/admin/events" },
       { name: ml("Модули", "Modules", "מודולים"), icon: "puzzle", path: "/admin/modules" },
       { name: ml("Группы колонок", "Column Groups", "קבוצות עמודות"), icon: "columns", path: "/admin/column-groups" },
+      { name: ml("Глобальные теги", "Global Tags", "תגיות גלובליות"), icon: "tags", path: "/admin/tags" },
       { name: ml("Импорт данных", "Data Import", "ייבוא נתונים"), icon: "upload", path: "/admin/import" },
       { name: ml("Корзина файлов", "File Trash", "סל קבצים"), icon: "trash", path: "/admin/file-trash" },
     ];
@@ -348,8 +349,8 @@ async function main() {
 
     // ── 8. Roles permissions ─────────────────────────────────────────────────
     const allPages = [mainPage.id, logisticsPage.id, productionPage.id];
-    const fullCaps = { pages: true, entities: true, roles: true, users: true, translations: true, events: true, modules: true, googleDrive: true, settings: true, automations: true, customFilters: true, columnGroups: true, dataImport: true };
-    const noCaps = { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, googleDrive: false, settings: false, automations: false, customFilters: false, columnGroups: false, dataImport: false };
+    const fullCaps = { pages: true, entities: true, roles: true, users: true, translations: true, events: true, modules: true, googleDrive: true, settings: true, automations: true, customFilters: true, columnGroups: true, dataImport: true, tags: true };
+    const noCaps = { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, googleDrive: false, settings: false, automations: false, customFilters: false, columnGroups: false, dataImport: false, tags: false };
 
     const adminPerms: RolePermissions = {
       superAdmin: true,
