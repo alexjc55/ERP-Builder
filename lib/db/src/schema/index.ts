@@ -17,6 +17,7 @@ export * from "./column_groups";
 export * from "./entities";
 export * from "./fields";
 export * from "./statuses";
+export * from "./tags";
 export * from "./records";
 export * from "./relations";
 export * from "./views";

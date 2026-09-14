@@ -9,6 +9,8 @@ import {
   entityFieldsTable,
   entityRecordsTable,
   entityStatusesTable,
+  tagsTable,
+  statusTagsTable,
   dashboardWidgetsTable,
   relationsTable,
   recordLinksTable,
@@ -29,6 +31,7 @@ import {
   type PivotResultShape,
 } from "./pivot-compute";
 import { requireAdmin, getPermissions, getUserRoleIds } from "../middlewares/permissions";
+import { lockStatusTagReferences } from "../lib/status-tag-lock";
 import {
   ListDashboardWidgetsParams,
   CreateDashboardWidgetParams,
@@ -99,6 +102,8 @@ interface WidgetMetricSpec {
   fieldKey?: string | null;
   relationId?: number | null;
   statusIds?: number[] | null;
+  /** OR match across status tags; combined with statusIds using AND. */
+  statusTagIds?: number[] | null;
   // Value source: "entity" (default) aggregates entity records; "page" aggregates
   // page-local field values stored in page_record_values for `pageId`. For page
   // source, `fieldKey` is a page-local field key and `relationId` is ignored.
@@ -118,6 +123,7 @@ interface ChartSpec {
   aggregation: "count" | "sum";
   fieldKey?: string | null;
   statusIds?: number[] | null;
+  statusTagIds?: number[] | null;
   showValues?: boolean | null;
   // Value source: "entity" (default) or "page" (page-local field values from
   // page_record_values for `pageId`). For page source, groupBy.fieldKey / fieldKey
@@ -131,6 +137,7 @@ interface TableSpec {
   fieldKeys: string[];
   relatedColumns?: TableRelatedColumnSpec[] | null;
   statusIds?: number[] | null;
+  statusTagIds?: number[] | null;
   limit?: number | null;
   // Page-local columns: `pageFieldKeys` are page-local field keys of `pageId`
   // (a page of the SAME entity — its bound page or a mirror page), appended
@@ -147,6 +154,7 @@ interface NoteCellSourceSpec {
   fieldKey?: string | null;
   relationId?: number | null;
   statusIds?: number[] | null;
+  statusTagIds?: number[] | null;
   recordId?: number | null;
 }
 
@@ -170,6 +178,7 @@ interface PivotSpec {
   entityId: number;
   pivot: PivotConfigInput;
   statusIds?: number[] | null;
+  statusTagIds?: number[] | null;
   // Page context enabling page-local (source=page) dims/measures. Must be a page
   // of the SAME entity (its bound page or a mirror page).
   pageId?: number | null;
@@ -205,6 +214,62 @@ const TABLE_MAX_LIMIT = 100;
 function clampTableLimit(limit: number | null | undefined): number {
   if (limit == null || !Number.isFinite(limit)) return TABLE_DEFAULT_LIMIT;
   return Math.min(Math.max(Math.trunc(limit), 1), TABLE_MAX_LIMIT);
+}
+
+const statusTagIds = (value: unknown): number[] =>
+  Array.isArray(value) ? [...new Set(value.filter((id): id is number => Number.isInteger(id)))] : [];
+
+/**
+ * Return a record-status condition for tags. Unlike an empty direct statusIds
+ * filter (which means "all"), a non-empty tag filter that currently matches no
+ * statuses must match no rows. This keeps membership dynamic without copying
+ * records and implements OR within tags / AND with a sibling statusIds clause.
+ */
+async function statusTagWhere(entityId: number, value: unknown): Promise<SQL | undefined> {
+  const tagIds = statusTagIds(value);
+  if (tagIds.length === 0) return undefined;
+  const rows = await db
+    .select({ statusId: entityStatusesTable.id })
+    .from(statusTagsTable)
+    .innerJoin(entityStatusesTable, eq(statusTagsTable.statusId, entityStatusesTable.id))
+    .where(and(eq(entityStatusesTable.entityId, entityId), inArray(statusTagsTable.tagId, tagIds)));
+  return rows.length > 0 ? inArray(entityRecordsTable.statusId, rows.map((row) => row.statusId)) : sql`false`;
+}
+
+type TagReader = Pick<typeof db, "select">;
+
+async function validateWidgetStatusTags(
+  config: WidgetConfigShape | undefined,
+  reader: TagReader = db,
+): Promise<string | null> {
+  const collected = new Set<number>();
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    const object = value as Record<string, unknown>;
+    if ("statusTagIds" in object) {
+      const ids = object.statusTagIds;
+      if (!Array.isArray(ids) || ids.some((id) => !Number.isInteger(id))) {
+        throw new Error("statusTagIds must be an array of integer tag ids");
+      }
+      for (const id of ids) collected.add(id);
+    }
+    Object.values(object).forEach(visit);
+  };
+  try {
+    visit(config);
+  } catch (error) {
+    return error instanceof Error ? error.message : "Invalid status tag ids";
+  }
+  if (collected.size === 0) return null;
+  const tags = await reader.select({ id: tagsTable.id, applicableTo: tagsTable.applicableTo })
+    .from(tagsTable).where(inArray(tagsTable.id, [...collected]));
+  return tags.length === collected.size && tags.every((tag) => tag.applicableTo.includes("statuses"))
+    ? null
+    : "One or more status filter tags do not exist or cannot be applied to statuses";
 }
 
 /** Resolve a multilingual JSON value with the platform ru → en → he fallback. */
@@ -850,6 +915,8 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
   ];
   const statusIds = (spec.statusIds ?? []).filter((n) => Number.isInteger(n));
   if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+  const tagCondition = await statusTagWhere(spec.entityId, spec.statusTagIds);
+  if (tagCondition) conds.push(tagCondition);
   const where = and(...conds)!;
   // Formula measures can consume structured linked sources. Resolve every
   // candidate row together under the dashboard's admin-authoritative identity;
@@ -881,7 +948,12 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
   return outcome.ok ? outcome.result : null;
 }
 
-async function validateConfig(config: WidgetConfigShape | undefined): Promise<string | null> {
+async function validateConfig(
+  config: WidgetConfigShape | undefined,
+  tagReader: TagReader = db,
+): Promise<string | null> {
+  const tagError = await validateWidgetStatusTags(config, tagReader);
+  if (tagError) return tagError;
   if (config?.widgetType === "online_users") {
     return null;
   }
@@ -918,7 +990,7 @@ async function validateConfig(config: WidgetConfigShape | undefined): Promise<st
  * row/field data permissions. Access to the metric is governed solely by which
  * roles the admin made the widget visible to.
  */
-async function computeMetric(m: WidgetMetricSpec): Promise<number> {
+export async function computeMetric(m: WidgetMetricSpec): Promise<number> {
   // Page-local field source: aggregate the page's page-local field value over the
   // page's (resolved) entity records via a LEFT JOIN on page_record_values. count =
   // records whose page-local value is non-empty; sum = numeric page-local values.
@@ -930,6 +1002,8 @@ async function computeMetric(m: WidgetMetricSpec): Promise<number> {
     const conds = [eq(entityRecordsTable.entityId, entityId), isNull(entityRecordsTable.archivedAt)];
     const statusIds = (m.statusIds ?? []).filter((n) => Number.isInteger(n));
     if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+    const tagCondition = await statusTagWhere(entityId, m.statusTagIds);
+    if (tagCondition) conds.push(tagCondition);
     const join = and(
       eq(pageRecordValuesTable.recordId, entityRecordsTable.id),
       eq(pageRecordValuesTable.pageId, pageId),
@@ -957,6 +1031,8 @@ async function computeMetric(m: WidgetMetricSpec): Promise<number> {
   const conds = [eq(entityRecordsTable.entityId, m.entityId), isNull(entityRecordsTable.archivedAt)];
   const statusIds = (m.statusIds ?? []).filter((n) => Number.isInteger(n));
   if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+  const tagCondition = await statusTagWhere(m.entityId, m.statusTagIds);
+  if (tagCondition) conds.push(tagCondition);
 
   // Related metric: walk single-link relation from each (filtered) base record to
   // its linked record, then count those linked records or sum the related field.
@@ -1053,6 +1129,8 @@ async function computeChartSeries(
     const conds = [eq(entityRecordsTable.entityId, entityId), isNull(entityRecordsTable.archivedAt)];
     const statusIds = (c.statusIds ?? []).filter((n) => Number.isInteger(n));
     if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+    const tagCondition = await statusTagWhere(entityId, c.statusTagIds);
+    if (tagCondition) conds.push(tagCondition);
     const join = and(
       eq(pageRecordValuesTable.recordId, entityRecordsTable.id),
       eq(pageRecordValuesTable.pageId, pageId),
@@ -1107,6 +1185,8 @@ async function computeChartSeries(
   const conds = [eq(entityRecordsTable.entityId, c.entityId), isNull(entityRecordsTable.archivedAt)];
   const statusIds = (c.statusIds ?? []).filter((n) => Number.isInteger(n));
   if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+  const tagCondition = await statusTagWhere(c.entityId, c.statusTagIds);
+  if (tagCondition) conds.push(tagCondition);
 
   const valueExpr =
     c.aggregation === "sum" && c.fieldKey
@@ -1204,6 +1284,8 @@ async function computeTableData(
   const conds = [eq(entityRecordsTable.entityId, t.entityId), isNull(entityRecordsTable.archivedAt)];
   const statusIds = (t.statusIds ?? []).filter((n) => Number.isInteger(n));
   if (statusIds.length > 0) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+  const tagCondition = await statusTagWhere(t.entityId, t.statusTagIds);
+  if (tagCondition) conds.push(tagCondition);
 
   let pageFields: Array<{
     fieldKey: string;
@@ -1541,6 +1623,7 @@ async function computeNotesData(notes: NotesSpec): Promise<{
                 fieldKey: s.fieldKey ?? null,
                 relationId: s.relationId ?? null,
                 statusIds: s.statusIds ?? null,
+                statusTagIds: s.statusTagIds ?? null,
               });
             }
           }
@@ -1674,26 +1757,32 @@ router.post("/pages/:id/dashboard/widgets", requireAuth, requireAdmin("pages"), 
     res.status(404).json({ error: "Page not found" });
     return;
   }
-  const configError = await validateConfig(parsed.data.config as WidgetConfigShape);
-  if (configError) {
-    res.status(400).json({ error: configError });
+  const body = parsed.data;
+  const outcome = await db.transaction(async (tx) => {
+    await lockStatusTagReferences(tx);
+    const configError = await validateConfig(body.config as WidgetConfigShape, tx);
+    if (configError) return { configError, widget: null };
+    const [widget] = await tx
+      .insert(dashboardWidgetsTable)
+      .values({
+        pageId: params.data.id,
+        titleJson: body.titleJson,
+        configJson: sanitizeWidgetConfig(body.config as WidgetConfigShape),
+        visibleRoleIdsJson: body.visibleRoleIds ?? null,
+        ...(body.icon != null ? { icon: body.icon } : {}),
+        ...(body.color != null ? { color: body.color } : {}),
+        ...(body.gridW != null ? { gridW: body.gridW } : {}),
+        ...(body.gridH != null ? { gridH: body.gridH } : {}),
+        ...(body.sortOrder != null ? { sortOrder: body.sortOrder } : {}),
+      })
+      .returning();
+    return { configError: null, widget };
+  });
+  if (outcome.configError) {
+    res.status(400).json({ error: outcome.configError });
     return;
   }
-  const body = parsed.data;
-  const [widget] = await db
-    .insert(dashboardWidgetsTable)
-    .values({
-      pageId: params.data.id,
-      titleJson: body.titleJson,
-      configJson: sanitizeWidgetConfig(body.config as WidgetConfigShape),
-      visibleRoleIdsJson: body.visibleRoleIds ?? null,
-      ...(body.icon != null ? { icon: body.icon } : {}),
-      ...(body.color != null ? { color: body.color } : {}),
-      ...(body.gridW != null ? { gridW: body.gridW } : {}),
-      ...(body.gridH != null ? { gridH: body.gridH } : {}),
-      ...(body.sortOrder != null ? { sortOrder: body.sortOrder } : {}),
-    })
-    .returning();
+  const widget = outcome.widget!;
   res.status(201).json(serializeWidget(widget));
 });
 
@@ -1708,11 +1797,6 @@ router.put("/dashboard/widgets/:wid", requireAuth, requireAdmin("pages"), async 
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const configError = await validateConfig(parsed.data.config as WidgetConfigShape);
-  if (configError) {
-    res.status(400).json({ error: configError });
-    return;
-  }
   const body = parsed.data;
   const updateData: Record<string, unknown> = {
     titleJson: body.titleJson,
@@ -1725,11 +1809,22 @@ router.put("/dashboard/widgets/:wid", requireAuth, requireAdmin("pages"), async 
   if (body.gridH != null) updateData.gridH = body.gridH;
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
 
-  const [widget] = await db
-    .update(dashboardWidgetsTable)
-    .set(updateData)
-    .where(eq(dashboardWidgetsTable.id, params.data.wid))
-    .returning();
+  const outcome = await db.transaction(async (tx) => {
+    await lockStatusTagReferences(tx);
+    const configError = await validateConfig(body.config as WidgetConfigShape, tx);
+    if (configError) return { configError, widget: null };
+    const [widget] = await tx
+      .update(dashboardWidgetsTable)
+      .set(updateData)
+      .where(eq(dashboardWidgetsTable.id, params.data.wid))
+      .returning();
+    return { configError: null, widget };
+  });
+  if (outcome.configError) {
+    res.status(400).json({ error: outcome.configError });
+    return;
+  }
+  const widget = outcome.widget;
   if (!widget) {
     res.status(404).json({ error: "Widget not found" });
     return;

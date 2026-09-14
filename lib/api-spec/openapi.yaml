@@ -20,6 +20,8 @@ tags:
     description: Page and menu management
   - name: transitions
     description: Workflow transitions between statuses
+  - name: tags
+    description: Global reusable status tags
   - name: translations
     description: System translations
   - name: dashboard
@@ -2067,6 +2069,67 @@ paths:
                 $ref: "#/components/schemas/VersionConflictResponse"
 
   # STATUSES
+  /tags:
+    get:
+      operationId: listTags
+      tags: [tags]
+      summary: List global reusable tags
+      responses:
+        "200":
+          description: Tags
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Tag" } }
+    post:
+      operationId: createTag
+      tags: [tags]
+      summary: Create a global tag (admin tags capability)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TagInput" }
+      responses:
+        "201":
+          description: Tag created
+          content: { application/json: { schema: { $ref: "#/components/schemas/Tag" } } }
+  /tags/{id}:
+    put:
+      operationId: updateTag
+      tags: [tags]
+      summary: Update a global tag (admin tags capability)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TagUpdate" }
+      responses:
+        "200":
+          description: Tag updated
+          content: { application/json: { schema: { $ref: "#/components/schemas/Tag" } } }
+    delete:
+      operationId: deleteTag
+      tags: [tags]
+      summary: Delete an unassigned, unreferenced global tag (admin tags capability)
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      responses:
+        "200": { description: Deleted, content: { application/json: { schema: { $ref: "#/components/schemas/SuccessResponse" } } } }
+        "409": { description: Tag is assigned to a status or referenced by a role/widget }
+  /tags/reorder:
+    post:
+      operationId: reorderTags
+      tags: [tags]
+      summary: Reorder global tags (admin tags capability)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TagsReorderInput" }
+      responses:
+        "200":
+          description: Reordered
+          content: { application/json: { schema: { $ref: "#/components/schemas/SuccessResponse" } } }
   /entities/{entityId}/statuses:
     get:
       operationId: listEntityStatuses
@@ -5810,6 +5873,16 @@ components:
           type: array
           items:
             type: integer
+        hiddenStatusTagIds:
+          type: array
+          items:
+            type: integer
+          description: Global status tags hidden in picker/write flows. Expanded to current status ids before multi-role intersection.
+        hiddenRowStatusTagIds:
+          type: array
+          items:
+            type: integer
+          description: Global status tags whose current rows are hidden. Expanded before multi-role intersection.
         hideStatusColumn:
           type: boolean
           description: >-
@@ -5854,6 +5927,8 @@ components:
         inboundIntegrations:
           type: boolean
         documentGeneration:
+          type: boolean
+        tags:
           type: boolean
 
     InboundIntegration:
@@ -6519,6 +6594,11 @@ components:
           items:
             type: integer
           description: Restrict to records in these statuses; empty/null = all statuses
+        statusTagIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+          description: Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.
         source:
           type: string
           enum: [entity, page]
@@ -6557,6 +6637,11 @@ components:
           items:
             type: integer
           description: Restrict to records in these statuses; empty/null = all statuses
+        statusTagIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+          description: Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.
         source:
           type: string
           enum: [entity, page]
@@ -6597,6 +6682,11 @@ components:
           items:
             type: integer
           description: Restrict to records in these statuses; empty/null = all statuses
+        statusTagIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+          description: Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.
         limit:
           type: ["integer", "null"]
           description: Max rows to show (clamped server-side); null = server default
@@ -6627,6 +6717,11 @@ components:
           items:
             type: integer
           description: Restrict to records in these statuses; empty/null = all statuses
+        statusTagIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+          description: Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.
 
     NoteCellSource:
       type: object
@@ -6656,6 +6751,11 @@ components:
           items:
             type: integer
           description: For sourceKind = metric — restrict to records in these statuses; empty/null = all statuses.
+        statusTagIds:
+          type: ["array", "null"]
+          items:
+            type: integer
+          description: For sourceKind = metric — selected global status tags (OR within tags, AND with statusIds).
         recordId:
           type: ["integer", "null"]
           description: For sourceKind = record — the specific record whose field value is shown.
@@ -8454,7 +8554,7 @@ components:
 
     Status:
       type: object
-      required: [id, entityId, statusKey, nameJson, color, isDefault, isFinal, isArchiveTrigger, archiveAfterDays, sortOrder, isActive, createdAt, updatedAt]
+      required: [id, entityId, statusKey, nameJson, color, tagIds, isDefault, isFinal, isArchiveTrigger, archiveAfterDays, sortOrder, isActive, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -8466,6 +8566,11 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         color:
           type: string
+        tagIds:
+          type: array
+          items:
+            type: integer
+          description: Global status tag ids assigned to this status.
         isDefault:
           type: boolean
         isFinal:
@@ -8495,6 +8600,12 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         color:
           type: string
+        tagIds:
+          type: array
+          items:
+            type: integer
+          default: []
+          description: Global tags to assign; assignment replaces the status's current tag set.
         isDefault:
           type: boolean
           default: false
@@ -8523,6 +8634,11 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         color:
           type: string
+        tagIds:
+          type: array
+          items:
+            type: integer
+          description: When supplied, replaces the status's current global tag set.
         isDefault:
           type: boolean
         isFinal:
@@ -8543,6 +8659,78 @@ components:
       properties:
         entityId:
           type: integer
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, sortOrder]
+            properties:
+              id:
+                type: integer
+              sortOrder:
+                type: integer
+
+    Tag:
+      type: object
+      required: [id, nameJson, color, sortOrder, applicableTo, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        color:
+          type: string
+        sortOrder:
+          type: integer
+        applicableTo:
+          type: array
+          items:
+            type: string
+            enum: [statuses]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    TagInput:
+      type: object
+      required: [nameJson]
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        color:
+          type: string
+          default: "#6b7280"
+        sortOrder:
+          type: integer
+        applicableTo:
+          type: array
+          items:
+            type: string
+            enum: [statuses]
+          default: [statuses]
+
+    TagUpdate:
+      type: object
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+        color:
+          type: string
+        sortOrder:
+          type: integer
+        applicableTo:
+          type: array
+          items:
+            type: string
+            enum: [statuses]
+
+    TagsReorderInput:
+      type: object
+      required: [items]
+      properties:
         items:
           type: array
           items:

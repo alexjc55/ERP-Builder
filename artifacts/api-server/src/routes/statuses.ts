@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, entityStatusesTable, entitiesTable } from "@workspace/db";
+import { db, entityStatusesTable, entitiesTable, tagsTable, statusTagsTable, type EntityStatus } from "@workspace/db";
 import { eq, asc, and, ne, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
@@ -53,6 +53,34 @@ async function statusKeyTaken(
   return Boolean(taken);
 }
 
+const intIds = (value: unknown): number[] =>
+  Array.isArray(value) ? value.filter((id): id is number => Number.isInteger(id)) : [];
+
+/** Tags are global, but this first release deliberately permits only status tags. */
+async function validateStatusTagIds(value: unknown): Promise<{ tagIds: number[] } | { error: string }> {
+  const tagIds = [...new Set(intIds(value))];
+  if (tagIds.length === 0) return { tagIds };
+  const tags = await db.select({ id: tagsTable.id, applicableTo: tagsTable.applicableTo })
+    .from(tagsTable).where(inArray(tagsTable.id, tagIds));
+  if (tags.length !== tagIds.length || tags.some((tag) => !tag.applicableTo.includes("statuses"))) {
+    return { error: "One or more tags do not exist or cannot be applied to statuses" };
+  }
+  return { tagIds };
+}
+
+async function withTagIds(statuses: EntityStatus[]): Promise<Array<EntityStatus & { tagIds: number[] }>> {
+  if (statuses.length === 0) return [];
+  const ids = statuses.map((status) => status.id);
+  const links = await db.select().from(statusTagsTable).where(inArray(statusTagsTable.statusId, ids));
+  const byStatus = new Map<number, number[]>();
+  for (const link of links) {
+    const tagIds = byStatus.get(link.statusId) ?? [];
+    tagIds.push(link.tagId);
+    byStatus.set(link.statusId, tagIds);
+  }
+  return statuses.map((status) => ({ ...status, tagIds: byStatus.get(status.id) ?? [] }));
+}
+
 router.get("/entities/:entityId/statuses", requireAuth, async (req, res): Promise<void> => {
   const params = ListEntityStatusesParams.safeParse(req.params);
   if (!params.success) {
@@ -71,7 +99,7 @@ router.get("/entities/:entityId/statuses", requireAuth, async (req, res): Promis
     .where(eq(entityStatusesTable.entityId, params.data.entityId))
     .orderBy(asc(entityStatusesTable.sortOrder));
 
-  res.json(statuses);
+  res.json(await withTagIds(statuses));
 });
 
 router.post("/entities/:entityId/statuses", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
@@ -105,6 +133,11 @@ router.post("/entities/:entityId/statuses", requireAuth, requireAdmin("entities"
     res.status(409).json({ error: "A status with this key already exists on this entity" });
     return;
   }
+  const tagCheck = await validateStatusTagIds(parsed.data.tagIds);
+  if ("error" in tagCheck) {
+    res.status(400).json({ error: tagCheck.error });
+    return;
+  }
 
   try {
     const status = await db.transaction(async (tx) => {
@@ -114,11 +147,15 @@ router.post("/entities/:entityId/statuses", requireAuth, requireAdmin("entities"
           .set({ isDefault: false })
           .where(eq(entityStatusesTable.entityId, entityId));
       }
+      const { tagIds: _tagIds, ...statusInput } = parsed.data;
       const [created] = await tx
         .insert(entityStatusesTable)
-        .values({ ...parsed.data, statusKey: key, entityId })
+        .values({ ...statusInput, statusKey: key, entityId })
         .returning();
-      return created;
+      if (tagCheck.tagIds.length > 0) {
+        await tx.insert(statusTagsTable).values(tagCheck.tagIds.map((tagId) => ({ statusId: created.id, tagId })));
+      }
+      return { ...created, tagIds: tagCheck.tagIds };
     });
     res.status(201).json(status);
   } catch (err) {
@@ -200,7 +237,7 @@ router.get("/statuses/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  res.json(status);
+  res.json((await withTagIds([status]))[0]);
 });
 
 router.put("/statuses/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
@@ -258,11 +295,21 @@ router.put("/statuses/:id", requireAuth, requireAdmin("entities"), async (req, r
   }
   if (body.sortOrder != null) updateData.sortOrder = body.sortOrder;
   if (body.isActive != null) updateData.isActive = body.isActive;
+  let tagIds: number[] | undefined;
+  if (body.tagIds != null) {
+    const tagCheck = await validateStatusTagIds(body.tagIds);
+    if ("error" in tagCheck) {
+      res.status(400).json({ error: tagCheck.error });
+      return;
+    }
+    tagIds = tagCheck.tagIds;
+  }
 
-  if (Object.keys(updateData).length === 0) {
+  if (Object.keys(updateData).length === 0 && tagIds === undefined) {
     res.status(400).json({ error: "No fields to update" });
     return;
   }
+  const existingTagIds = tagIds === undefined ? (await withTagIds([current]))[0].tagIds : tagIds;
 
   try {
     const status = await db.transaction(async (tx) => {
@@ -272,12 +319,20 @@ router.put("/statuses/:id", requireAuth, requireAdmin("entities"), async (req, r
           .set({ isDefault: false })
           .where(and(eq(entityStatusesTable.entityId, current.entityId), ne(entityStatusesTable.id, current.id)));
       }
-      const [updated] = await tx
-        .update(entityStatusesTable)
-        .set(updateData)
-        .where(eq(entityStatusesTable.id, params.data.id))
-        .returning();
-      return updated;
+      const updated = Object.keys(updateData).length > 0
+        ? (await tx
+            .update(entityStatusesTable)
+            .set(updateData)
+            .where(eq(entityStatusesTable.id, params.data.id))
+            .returning())[0]!
+        : current;
+      if (tagIds !== undefined) {
+        await tx.delete(statusTagsTable).where(eq(statusTagsTable.statusId, current.id));
+        if (tagIds.length > 0) {
+          await tx.insert(statusTagsTable).values(tagIds.map((tagId) => ({ statusId: current.id, tagId })));
+        }
+      }
+      return { ...updated, tagIds: existingTagIds };
     });
     res.json(status);
   } catch (err) {

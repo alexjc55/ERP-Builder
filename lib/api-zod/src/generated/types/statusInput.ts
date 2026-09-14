@@ -11,6 +11,8 @@ export interface StatusInput {
   statusKey: string;
   nameJson: MultilingualText;
   color?: string;
+  /** Global tags to assign; assignment replaces the status's current tag set. */
+  tagIds?: number[];
   isDefault?: boolean;
   isFinal?: boolean;
   isArchiveTrigger?: boolean;

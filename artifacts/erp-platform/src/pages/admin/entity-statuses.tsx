@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useLocation } from "wouter";
 import {
   useListEntityStatuses,
@@ -8,9 +8,13 @@ import {
   useReorderStatuses,
   useListEntities,
   useUpdateEntity,
+  getGetMeQueryKey,
+  getListTagsQueryKey,
+  useListTags,
   type Status,
   type Entity,
   type MultilingualText,
+  type Tag,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +44,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, CircleDot, Star, Flag, Archive, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, ArrowLeft, CircleDot, Star, Flag, Archive, ChevronUp, ChevronDown, AlertTriangle, Tags as TagsIcon } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 import { slugifyKey, uniqueKey } from "@/lib/keys";
 
@@ -69,6 +73,7 @@ export default function EntityStatusesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingStatus, setEditingStatus] = useState<Status | null>(null);
   const [deleteStatus, setDeleteStatus] = useState<Status | null>(null);
+  const [tagFilter, setTagFilter] = useState<number | null>(null);
 
   const [statusKey, setStatusKey] = useState("");
   const [nameJson, setNameJson] = useState<MLValue>({});
@@ -79,25 +84,45 @@ export default function EntityStatusesPage() {
   const [archiveAfterDays, setArchiveAfterDays] = useState(0);
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
+  const [tagIds, setTagIds] = useState<number[]>([]);
 
   const { data: entities = [] } = useListEntities();
   const entity = entities.find((e: Entity) => e.id === entityId);
 
   const { data: statuses = [], isLoading } = useListEntityStatuses(entityId);
+  const { data: tags = [], isError: isTagsError } = useListTags({
+    query: { queryKey: getListTagsQueryKey() },
+  });
+  const statusTags = useMemo(
+    () => tags.filter((tag: Tag) => tag.applicableTo.includes("statuses")),
+    [tags],
+  );
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/statuses`] });
 
   const createMutation = useCreateEntityStatus({
     mutation: {
-      onSuccess: () => { toast({ title: t("statuses.created", "Статус создан") }); setDialogOpen(false); invalidate(); },
+      onSuccess: () => {
+        toast({ title: t("statuses.created", "Статус создан") });
+        setDialogOpen(false);
+        invalidate();
+        // Tag assignments can change the concrete hidden status ids returned
+        // by /auth/me. Refresh the current session permissions immediately.
+        void queryClient.refetchQueries({ queryKey: getGetMeQueryKey(), type: "active" });
+      },
       onError: (err) => toast({ title: t("statuses.createError", "Ошибка создания статуса"), description: extractError(err), variant: "destructive" }),
     },
   });
 
   const updateMutation = useUpdateStatus({
     mutation: {
-      onSuccess: () => { toast({ title: t("statuses.updated", "Статус обновлён") }); setDialogOpen(false); invalidate(); },
+      onSuccess: () => {
+        toast({ title: t("statuses.updated", "Статус обновлён") });
+        setDialogOpen(false);
+        invalidate();
+        void queryClient.refetchQueries({ queryKey: getGetMeQueryKey(), type: "active" });
+      },
       onError: (err) => toast({ title: t("statuses.updateError", "Ошибка обновления"), description: extractError(err), variant: "destructive" }),
     },
   });
@@ -159,6 +184,7 @@ export default function EntityStatusesPage() {
     setArchiveAfterDays(0);
     setSortOrder(statuses.length + 1);
     setIsActive(true);
+    setTagIds([]);
     setDialogOpen(true);
   };
 
@@ -174,6 +200,7 @@ export default function EntityStatusesPage() {
     setArchiveAfterDays(status.archiveAfterDays);
     setSortOrder(status.sortOrder);
     setIsActive(status.isActive);
+    setTagIds(status.tagIds);
     setDialogOpen(true);
   };
 
@@ -193,6 +220,7 @@ export default function EntityStatusesPage() {
       archiveAfterDays: isArchiveTrigger ? Math.max(0, archiveAfterDays) : 0,
       sortOrder,
       isActive,
+      tagIds: [...new Set(tagIds)],
     };
     if (editingStatus) {
       updateMutation.mutate({ id: editingStatus.id, data: payload });
@@ -202,7 +230,11 @@ export default function EntityStatusesPage() {
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
-  const sorted = [...statuses].sort((a: Status, b: Status) => a.sortOrder - b.sortOrder);
+  const sorted = [...statuses]
+    .filter((status: Status) => tagFilter == null || status.tagIds.includes(tagFilter))
+    .sort((a: Status, b: Status) => a.sortOrder - b.sortOrder);
+  const tagById = new Map(statusTags.map((tag) => [tag.id, tag]));
+  const allStatusesCount = statuses.length;
 
   return (
     <div className="p-6 space-y-6">
@@ -252,6 +284,51 @@ export default function EntityStatusesPage() {
         </CardContent>
       </Card>
 
+      {statusTags.length > 0 && (
+        <Card className="border-slate-200 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-slate-600 inline-flex items-center gap-1.5 me-1">
+                <TagsIcon className="w-4 h-4 text-slate-400" />
+                {t("statuses.filterByTag", "Фильтр по тегу")}
+              </span>
+              <Button
+                type="button"
+                variant={tagFilter == null ? "default" : "outline"}
+                size="sm"
+                className={tagFilter == null ? "bg-slate-700 hover:bg-slate-800" : ""}
+                onClick={() => setTagFilter(null)}
+              >
+                {t("statuses.allTags", "Все")}
+              </Button>
+              {statusTags.map((tag) => (
+                <Button
+                  key={tag.id}
+                  type="button"
+                  variant={tagFilter === tag.id ? "default" : "outline"}
+                  size="sm"
+                  className={tagFilter === tag.id ? "bg-slate-700 hover:bg-slate-800" : ""}
+                  onClick={() => setTagFilter(tagFilter === tag.id ? null : tag.id)}
+                >
+                  <span className="w-2 h-2 rounded-full me-1.5" style={{ backgroundColor: tag.color }} />
+                  {ml(tag.nameJson)}
+                </Button>
+              ))}
+              {tagFilter != null && (
+                <span className="text-xs text-slate-400">
+                  {sorted.length} / {allStatusesCount}
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {isTagsError && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {t("statuses.tagsLoadError", "Не удалось загрузить теги статусов. Назначение тегов временно недоступно.")}
+        </div>
+      )}
+
       <Card className="border-slate-200 shadow-sm">
         <CardContent className="p-0">
           {isLoading ? (
@@ -263,6 +340,10 @@ export default function EntityStatusesPage() {
           ) : statuses.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
               {t("statuses.empty", "У этой сущности ещё нет статусов. Нажмите «Добавить статус», чтобы создать первый.")}
+            </div>
+          ) : sorted.length === 0 ? (
+            <div className="text-center py-16 text-slate-400">
+              {t("statuses.noTagMatches", "Нет статусов с выбранным тегом.")}
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -306,7 +387,16 @@ export default function EntityStatusesPage() {
                             {`${t("statuses.archive", "Архив")}${status.archiveAfterDays > 0 ? ` (${status.archiveAfterDays} ${t("statuses.daysShort", "дн.")})` : ""}`}
                           </span>
                         )}
-                        {!status.isDefault && !status.isFinal && !status.isArchiveTrigger && <span className="text-slate-300 text-xs">—</span>}
+                        {status.tagIds.map((id) => tagById.get(id)).filter(Boolean).map((tag) => (
+                          <Badge
+                            key={tag!.id}
+                            className="font-normal border-0 text-xs"
+                            style={{ backgroundColor: `${tag!.color}20`, color: tag!.color }}
+                          >
+                            {ml(tag!.nameJson)}
+                          </Badge>
+                        ))}
+                        {!status.isDefault && !status.isFinal && !status.isArchiveTrigger && status.tagIds.length === 0 && <span className="text-slate-300 text-xs">—</span>}
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -387,6 +477,33 @@ export default function EntityStatusesPage() {
               <Label>{t("statuses.order", "Порядок")}</Label>
               <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
             </div>
+            {statusTags.length > 0 && (
+              <div className="space-y-2">
+                <Label>{t("statuses.tags", "Теги")}</Label>
+                <div className="flex flex-wrap gap-2">
+                  {statusTags.map((tag) => {
+                    const selected = tagIds.includes(tag.id);
+                    return (
+                      <Button
+                        key={tag.id}
+                        type="button"
+                        variant={selected ? "default" : "outline"}
+                        size="sm"
+                        className={selected ? "bg-slate-700 hover:bg-slate-800" : ""}
+                        onClick={() => setTagIds((current) => selected ? current.filter((id) => id !== tag.id) : [...current, tag.id])}
+                      >
+                        <span className="w-2 h-2 rounded-full me-1.5" style={{ backgroundColor: tag.color }} />
+                        {ml(tag.nameJson)}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>{t("statuses.tagsWarning", "Изменение тегов может изменить ограничения доступа к статусу и состав показателей/виджетов.")}</span>
+                </div>
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
               <div className="flex items-center gap-2">
                 <Switch checked={isDefault} onCheckedChange={setIsDefault} id="status-default" />

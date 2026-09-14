@@ -25,6 +25,11 @@ export interface ChartConfig {
      * @nullable
      */
   statusIds?: number[] | null;
+  /**
+     * Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.
+     * @nullable
+     */
+  statusTagIds?: number[] | null;
   /** Value source — "entity" (entity records, the default) or "page" (page-local field values from page_record_values for pageId). When "page", groupBy.fieldKey / fieldKey refer to page-local fields of pageId. */
   source?: ChartConfigSource;
   /**

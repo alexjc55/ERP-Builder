@@ -22,4 +22,5 @@ export interface RoleAdminCaps {
   dataImport: boolean;
   inboundIntegrations?: boolean;
   documentGeneration?: boolean;
+  tags?: boolean;
 }

@@ -61,13 +61,18 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Shield, Loader2, Users, Crown, CornerDownRight } from "lucide-react";
 import { adminCapForPath } from "@/lib/permissions";
 import { useML, useT } from "@/lib/i18n";
+import { StatusTagMultiSelect, useStatusTags, type StatusTag } from "@/components/StatusTagMultiSelect";
 
 type MLValue = { ru?: string; en?: string; he?: string };
+type StatusTagRecordPermission = RecordPermission & {
+  hiddenStatusTagIds?: number[];
+  hiddenRowStatusTagIds?: number[];
+};
 
 function emptyPerms(): RolePermissions {
   return {
     superAdmin: false,
-    admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, columnGroups: false, googleDrive: false, settings: false, automations: false, customFilters: false, dataImport: false, inboundIntegrations: false, documentGeneration: false },
+    admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, columnGroups: false, googleDrive: false, settings: false, automations: false, customFilters: false, dataImport: false, inboundIntegrations: false, documentGeneration: false, tags: false },
     pageIds: [],
     records: {},
   };
@@ -76,6 +81,7 @@ function emptyPerms(): RolePermissions {
 const ADMIN_CAP_LABELS: { key: keyof RoleAdminCaps; label: string; help?: string }[] = [
   { key: "pages", label: "Страницы" },
   { key: "entities", label: "Сущности (поля, статусы, связи, виды)" },
+  { key: "tags", label: "Глобальные теги", help: "Manage global status tags and their order." },
   { key: "roles", label: "Роли" },
   { key: "users", label: "Пользователи" },
   { key: "translations", label: "Переводы" },
@@ -103,6 +109,7 @@ const RECORD_ACTIONS: { key: keyof RecordPermission; label: string }[] = [
 const CAP_SHORT: { key: keyof RoleAdminCaps; label: string }[] = [
   { key: "pages", label: "Страницы" },
   { key: "entities", label: "Сущности" },
+  { key: "tags", label: "Теги" },
   { key: "roles", label: "Роли" },
   { key: "users", label: "Пользователи" },
   { key: "translations", label: "Переводы" },
@@ -143,6 +150,7 @@ export default function RolesPage() {
   const { data: roles = [], isLoading } = useListRoles();
   const { data: pages = [] } = useListPages();
   const { data: entities = [] } = useListEntities();
+  const { data: statusTags = [] } = useStatusTags();
 
   // Dependent status options for the filter — only fetched once an entity is chosen.
   const filterEntityNum = filterEntityId === "all" ? 0 : Number(filterEntityId);
@@ -218,7 +226,9 @@ export default function RolesPage() {
           ([k, rp]) =>
             /^\d+$/.test(k) &&
             (((rp as RecordPermission).hiddenStatusIds?.length ?? 0) > 0 ||
-              ((rp as RecordPermission).hiddenRowStatusIds?.length ?? 0) > 0),
+              ((rp as RecordPermission).hiddenRowStatusIds?.length ?? 0) > 0 ||
+              ((rp as StatusTagRecordPermission).hiddenStatusTagIds?.length ?? 0) > 0 ||
+              ((rp as StatusTagRecordPermission).hiddenRowStatusTagIds?.length ?? 0) > 0),
         )
         .map(([k]) => Number(k)),
     );
@@ -389,6 +399,28 @@ export default function RolesPage() {
       return { ...prev, records: { ...prev.records, [key]: { ...current, [field]: next } } };
     });
 
+  const setStatusTagFlag = (
+    entityId: number,
+    field: "hiddenStatusTagIds" | "hiddenRowStatusTagIds",
+    tagId: number,
+    hidden: boolean,
+  ) =>
+    setPerms((prev) => {
+      const key = String(entityId);
+      const current = (prev.records[key] ?? {
+        view: false,
+        create: false,
+        update: false,
+        delete: false,
+      }) as StatusTagRecordPermission;
+      const list = current[field] ?? [];
+      const next = hidden ? [...new Set([...list, tagId])] : list.filter((id) => id !== tagId);
+      const updated: StatusTagRecordPermission = { ...current };
+      if (next.length > 0) updated[field] = next;
+      else delete updated[field];
+      return { ...prev, records: { ...prev.records, [key]: updated } };
+    });
+
   const addStatusEntity = () => {
     const id = Number(addStatusEntityId);
     if (!Number.isInteger(id)) return;
@@ -404,7 +436,13 @@ export default function RolesPage() {
       const key = String(entityId);
       const current = prev.records[key];
       if (!current) return prev;
-      const { hiddenStatusIds: _h, hiddenRowStatusIds: _r, ...rest } = current;
+      const {
+        hiddenStatusIds: _h,
+        hiddenRowStatusIds: _r,
+        hiddenStatusTagIds: _ht,
+        hiddenRowStatusTagIds: _hrt,
+        ...rest
+      } = current as StatusTagRecordPermission;
       return { ...prev, records: { ...prev.records, [key]: rest } };
     });
   };
@@ -429,13 +467,17 @@ export default function RolesPage() {
     role.permissionsJson?.records?.[String(entityId)];
   const roleHasEntityAccess = (role: Role, entityId: number) =>
     role.permissionsJson?.superAdmin === true || roleEntityPerm(role, entityId)?.view === true;
-  const roleHasStatusAccess = (role: Role, entityId: number, statusId: number) => {
+  const roleHasStatusAccess = (role: Role, entityId: number, statusId: number, status?: Status) => {
     if (role.permissionsJson?.superAdmin === true) return true;
     const rp = roleEntityPerm(role, entityId);
     if (rp?.view !== true) return false;
+    const statusTagIds = (status as (Status & { tagIds?: number[] }) | undefined)?.tagIds ?? [];
+    const hiddenTagIds = (rp as StatusTagRecordPermission).hiddenStatusTagIds ?? [];
+    const hiddenRowTagIds = (rp as StatusTagRecordPermission).hiddenRowStatusTagIds ?? [];
     return (
       !(rp.hiddenStatusIds ?? []).includes(statusId) &&
-      !(rp.hiddenRowStatusIds ?? []).includes(statusId)
+      !(rp.hiddenRowStatusIds ?? []).includes(statusId) &&
+      !statusTagIds.some((tagId) => hiddenTagIds.includes(tagId) || hiddenRowTagIds.includes(tagId))
     );
   };
 
@@ -444,7 +486,14 @@ export default function RolesPage() {
     if (filterPageId !== "all" && !roleHasPageAccess(role, Number(filterPageId))) return false;
     if (filterEntityNum > 0) {
       if (filterStatusId !== "all") {
-        if (!roleHasStatusAccess(role, filterEntityNum, Number(filterStatusId))) return false;
+         if (
+           !roleHasStatusAccess(
+             role,
+             filterEntityNum,
+             Number(filterStatusId),
+             filterStatuses.find((status: Status) => status.id === Number(filterStatusId)),
+           )
+         ) return false;
       } else if (!roleHasEntityAccess(role, filterEntityNum)) {
         return false;
       }
@@ -546,6 +595,9 @@ export default function RolesPage() {
                     entityId={Number(id)}
                     hiddenStatusIds={rp.hiddenStatusIds ?? []}
                     hiddenRowStatusIds={rp.hiddenRowStatusIds ?? []}
+                    hiddenStatusTagIds={(rp as StatusTagRecordPermission).hiddenStatusTagIds ?? []}
+                    hiddenRowStatusTagIds={(rp as StatusTagRecordPermission).hiddenRowStatusTagIds ?? []}
+                    statusTags={statusTags}
                   />
                 </div>
               ))}
@@ -1038,8 +1090,12 @@ export default function RolesPage() {
                           entity={entity}
                           hiddenStatusIds={rp.hiddenStatusIds ?? []}
                           hiddenRowStatusIds={rp.hiddenRowStatusIds ?? []}
+                          hiddenStatusTagIds={(rp as StatusTagRecordPermission).hiddenStatusTagIds ?? []}
+                          hiddenRowStatusTagIds={(rp as StatusTagRecordPermission).hiddenRowStatusTagIds ?? []}
                           onToggleShown={(sid, shown) => setStatusFlag(entityId, "hiddenStatusIds", sid, shown)}
                           onToggleRowsShown={(sid, shown) => setStatusFlag(entityId, "hiddenRowStatusIds", sid, shown)}
+                          onToggleTagHidden={(tagId, hidden) => setStatusTagFlag(entityId, "hiddenStatusTagIds", tagId, hidden)}
+                          onToggleRowTagHidden={(tagId, hidden) => setStatusTagFlag(entityId, "hiddenRowStatusTagIds", tagId, hidden)}
                           onRemove={() => removeStatusEntity(entityId)}
                         />
                       );
@@ -1112,14 +1168,24 @@ function EntityStatusChips({
   entityId,
   hiddenStatusIds,
   hiddenRowStatusIds,
+  hiddenStatusTagIds,
+  hiddenRowStatusTagIds,
+  statusTags,
 }: {
   entityId: number;
   hiddenStatusIds: number[];
   hiddenRowStatusIds: number[];
+  hiddenStatusTagIds: number[];
+  hiddenRowStatusTagIds: number[];
+  statusTags: StatusTag[];
 }) {
   const ml = useML();
   const t = useT();
-  const hasRestrictions = hiddenStatusIds.length > 0 || hiddenRowStatusIds.length > 0;
+  const hasRestrictions =
+    hiddenStatusIds.length > 0 ||
+    hiddenRowStatusIds.length > 0 ||
+    hiddenStatusTagIds.length > 0 ||
+    hiddenRowStatusTagIds.length > 0;
   const { data: statuses = [] } = useListEntityStatuses(entityId, {
     query: {
       enabled: hasRestrictions,
@@ -1133,6 +1199,10 @@ function EntityStatusChips({
   };
   const hiddenNames = hiddenStatusIds.map(nameOf);
   const hiddenRowNames = hiddenRowStatusIds.map(nameOf);
+  const tagNameOf = (id: number) => {
+    const tag = statusTags.find((candidate) => candidate.id === id);
+    return tag ? ml(tag.nameJson) || String(id) : `#${id}`;
+  };
   return (
     <div className="space-y-0.5">
       {hiddenNames.length > 0 && (
@@ -1143,6 +1213,16 @@ function EntityStatusChips({
       {hiddenRowNames.length > 0 && (
         <p className="text-[10px] text-slate-400">
           {t("roles.cardRowsHidden", "Строки скрыты")}: {hiddenRowNames.join(", ")}
+        </p>
+      )}
+      {hiddenStatusTagIds.length > 0 && (
+        <p className="text-[10px] text-slate-400">
+          {t("roles.cardStatusTagsHidden", "Теги статусов скрыты")}: {hiddenStatusTagIds.map(tagNameOf).join(", ")}
+        </p>
+      )}
+      {hiddenRowStatusTagIds.length > 0 && (
+        <p className="text-[10px] text-slate-400">
+          {t("roles.cardRowsTagsHidden", "Строки по тегам скрыты")}: {hiddenRowStatusTagIds.map(tagNameOf).join(", ")}
         </p>
       )}
     </div>
@@ -1561,15 +1641,23 @@ function EntityStatusPermsRow({
   entity,
   hiddenStatusIds,
   hiddenRowStatusIds,
+  hiddenStatusTagIds,
+  hiddenRowStatusTagIds,
   onToggleShown,
   onToggleRowsShown,
+  onToggleTagHidden,
+  onToggleRowTagHidden,
   onRemove,
 }: {
   entity: Entity;
   hiddenStatusIds: number[];
   hiddenRowStatusIds: number[];
+  hiddenStatusTagIds: number[];
+  hiddenRowStatusTagIds: number[];
   onToggleShown: (statusId: number, shown: boolean) => void;
   onToggleRowsShown: (statusId: number, shown: boolean) => void;
+  onToggleTagHidden: (tagId: number, hidden: boolean) => void;
+  onToggleRowTagHidden: (tagId: number, hidden: boolean) => void;
   onRemove: () => void;
 }) {
   const ml = useML();
@@ -1583,6 +1671,32 @@ function EntityStatusPermsRow({
         <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-red-600" onClick={onRemove}>
           <Trash2 className="w-4 h-4" />
         </Button>
+      </div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <StatusTagMultiSelect
+          value={hiddenStatusTagIds}
+          statuses={statuses}
+          onChange={(next) => {
+            const removed = hiddenStatusTagIds.filter((id) => !next.includes(id));
+            const added = next.filter((id) => !hiddenStatusTagIds.includes(id));
+            removed.forEach((id) => onToggleTagHidden(id, false));
+            added.forEach((id) => onToggleTagHidden(id, true));
+          }}
+          label={t("roles.statusTagChoiceHidden", "Скрыть статусы по тегам (выбор и фильтр)")}
+          placeholder={t("roles.statusTagChoicePlaceholder", "Все теги видимы")}
+        />
+        <StatusTagMultiSelect
+          value={hiddenRowStatusTagIds}
+          statuses={statuses}
+          onChange={(next) => {
+            const removed = hiddenRowStatusTagIds.filter((id) => !next.includes(id));
+            const added = next.filter((id) => !hiddenRowStatusTagIds.includes(id));
+            removed.forEach((id) => onToggleRowTagHidden(id, false));
+            added.forEach((id) => onToggleRowTagHidden(id, true));
+          }}
+          label={t("roles.statusTagRowsHidden", "Скрыть строки по тегам")}
+          placeholder={t("roles.statusTagRowsPlaceholder", "Все строки видимы")}
+        />
       </div>
       {statuses.length === 0 ? (
         <p className="text-xs text-slate-400">{t("roles.statusNone", "У сущности нет статусов.")}</p>

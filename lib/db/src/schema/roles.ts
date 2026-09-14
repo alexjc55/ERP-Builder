@@ -55,6 +55,14 @@ export interface RecordPermission {
   /** Status ids whose ROWS are excluded from list/query results for this role (hard boundary — also removes them from filters). */
   hiddenRowStatusIds?: number[];
   /**
+   * Global tag ids resolved to concrete statuses before role union. Sparse just
+   * like hiddenStatusIds; persisted configuration remains tag-id based so tag
+   * membership changes take effect immediately without copying records.
+   */
+  hiddenStatusTagIds?: number[];
+  /** Tag-based counterpart of hiddenRowStatusIds (the hard row-read boundary). */
+  hiddenRowStatusTagIds?: number[];
+  /**
    * Cosmetic per-role hide of the whole "Status" column in the records table.
    * SPARSE — only stored when true. superAdmin bypasses (always sees columns).
    */
@@ -93,6 +101,8 @@ export interface RoleAdminCaps {
   inboundIntegrations?: boolean;
   /** Manage and execute entity-bound document templates. */
   documentGeneration?: boolean;
+  /** Manage the global reusable status tags registry. Absent on older roles = denied. */
+  tags?: boolean;
 }
 
 /**
@@ -146,7 +156,7 @@ export interface RolePermissions {
 /** Default permissions for new/existing roles: no access until granted. */
 export const NO_ACCESS_PERMS: RolePermissions = {
   superAdmin: false,
-  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, automations: false, customFilters: false, columnGroups: false, googleDrive: false, settings: false, dataImport: false, inboundIntegrations: false, documentGeneration: false },
+  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, automations: false, customFilters: false, columnGroups: false, googleDrive: false, settings: false, dataImport: false, inboundIntegrations: false, documentGeneration: false, tags: false },
   pageIds: [],
   records: {},
 };

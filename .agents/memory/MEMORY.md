@@ -78,3 +78,4 @@
 - [Manual data refresh](manual-data-refresh.md) — global refresh refetches active queries plus registered mutation-backed readers; coalescing and unmount safety are mandatory.
 - [Automation folders](automation-folders.md) — folders are entity-scoped organization only; deleting one must preserve its automations as ungrouped.
 - [Table loading order](table-loading-order.md) — defer expensive incomplete rendering; preserve SSE snapshot coverage and generation-safe manual refresh.
+- [Global status tags](status-tags.md) — shared catalog; expand per-role restrictions before merging; serialize deletion with JSON-reference writes.

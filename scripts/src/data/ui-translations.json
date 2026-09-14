@@ -804,6 +804,12 @@
     "he": "סטטוסים (ריק = הכול)"
   },
   {
+    "key": "dash.statusTagFilter",
+    "ru": "Теги статусов (пусто = все)",
+    "en": "Status tags (empty = all)",
+    "he": "תגיות סטטוס (ריק = הכול)"
+  },
+  {
     "key": "dash.tableColumns",
     "ru": "Колонки (порядок выбора)",
     "en": "Columns (selection order)",
@@ -5424,6 +5430,18 @@
     "he": "שורות מוסתרות"
   },
   {
+    "key": "roles.cardStatusTagsHidden",
+    "ru": "Теги статусов скрыты",
+    "en": "Status tags hidden",
+    "he": "תגיות הסטטוסים מוסתרות"
+  },
+  {
+    "key": "roles.cardRowsTagsHidden",
+    "ru": "Строки по тегам скрыты",
+    "en": "Rows hidden by tags",
+    "he": "שורות המוסתרות לפי תגיות"
+  },
+  {
     "key": "roles.filterByPage",
     "ru": "Страница",
     "en": "Page",
@@ -5716,6 +5734,30 @@
     "ru": "Отображать строки",
     "en": "Show rows",
     "he": "הצג שורות"
+  },
+  {
+    "key": "roles.statusTagChoiceHidden",
+    "ru": "Скрыть статусы по тегам (выбор и фильтр)",
+    "en": "Hide statuses by tag (picker and filter)",
+    "he": "הסתר סטטוסים לפי תגית (בחירה וסינון)"
+  },
+  {
+    "key": "roles.statusTagChoicePlaceholder",
+    "ru": "Все теги видимы",
+    "en": "All tags visible",
+    "he": "כל התגיות גלויות"
+  },
+  {
+    "key": "roles.statusTagRowsHidden",
+    "ru": "Скрыть строки по тегам",
+    "en": "Hide rows by tag",
+    "he": "הסתר שורות לפי תגית"
+  },
+  {
+    "key": "roles.statusTagRowsPlaceholder",
+    "ru": "Все строки видимы",
+    "en": "All rows visible",
+    "he": "כל השורות גלויות"
   },
   {
     "key": "roles.subtitle",
@@ -11034,5 +11076,53 @@
   {"key":"auto.emptyGroup","ru":"В этой папке нет автоматизаций.","en":"No automations in this folder.","he":"אין אוטומציות בתיקייה זו."},
   {"key":"auto.collapseFolder","ru":"Свернуть папку","en":"Collapse folder","he":"כיווץ התיקייה"},
   {"key":"auto.expandFolder","ru":"Развернуть папку","en":"Expand folder","he":"הרחבת התיקייה"},
-  {"key":"auto.folderDialogDesc","ru":"Папка помогает организовать список и не изменяет работу автоматизаций.","en":"Folders organize the list without changing how automations run.","he":"תיקיות מארגנות את הרשימה בלי לשנות את אופן פעולת האוטומציות."}
+  {"key":"auto.folderDialogDesc","ru":"Папка помогает организовать список и не изменяет работу автоматизаций.","en":"Folders organize the list without changing how automations run.","he":"תיקיות מארגנות את הרשימה בלי לשנות את אופן פעולת האוטומציות."},
+  {"key":"tags.title","ru":"Глобальные теги","en":"Global tags","he":"תגיות גלובליות"},
+  {"key":"tags.subtitle","ru":"Метки для группировки статусов и настройки доступа","en":"Labels for grouping statuses and configuring access","he":"תוויות לקיבוץ סטטוסים ולהגדרת גישה"},
+  {"key":"tags.add","ru":"Добавить тег","en":"Add tag","he":"הוספת תגית"},
+  {"key":"tags.loadError","ru":"Не удалось загрузить теги","en":"Could not load tags","he":"לא ניתן לטעון תגיות"},
+  {"key":"tags.empty","ru":"Тегов пока нет. Нажмите «Добавить тег», чтобы создать первый.","en":"No tags yet. Select “Add tag” to create the first one.","he":"אין עדיין תגיות. בחרו «הוספת תגית» כדי ליצור את הראשונה."},
+  {"key":"tags.colName","ru":"Название","en":"Name","he":"שם"},
+  {"key":"tags.colColor","ru":"Цвет","en":"Color","he":"צבע"},
+  {"key":"tags.colAppliesTo","ru":"Применяется к","en":"Applies to","he":"חל על"},
+  {"key":"tags.colActions","ru":"Действия","en":"Actions","he":"פעולות"},
+  {"key":"tags.statuses","ru":"Статусы","en":"Statuses","he":"סטטוסים"},
+  {"key":"tags.moveUp","ru":"Переместить вверх","en":"Move up","he":"העברה למעלה"},
+  {"key":"tags.moveDown","ru":"Переместить вниз","en":"Move down","he":"העברה למטה"},
+  {"key":"tags.edit","ru":"Изменить","en":"Edit","he":"עריכה"},
+  {"key":"tags.delete","ru":"Удалить","en":"Delete","he":"מחיקה"},
+  {"key":"tags.editTitle","ru":"Редактировать тег","en":"Edit tag","he":"עריכת תגית"},
+  {"key":"tags.newTitle","ru":"Новый тег","en":"New tag","he":"תגית חדשה"},
+  {"key":"tags.dialogDesc","ru":"Тег доступен для назначения статусам сущностей.","en":"This tag can be assigned to entity statuses.","he":"ניתן להקצות תגית זו לסטטוסים של ישויות."},
+  {"key":"tags.name","ru":"Название","en":"Name","he":"שם"},
+  {"key":"tags.color","ru":"Цвет","en":"Color","he":"צבע"},
+  {"key":"tags.order","ru":"Порядок","en":"Order","he":"סדר"},
+  {"key":"tags.statusesOnly","ru":"Сейчас теги поддерживаются только для статусов.","en":"Tags currently support statuses only.","he":"תגיות נתמכות כרגע עבור סטטוסים בלבד."},
+  {"key":"tags.cancel","ru":"Отмена","en":"Cancel","he":"ביטול"},
+  {"key":"tags.save","ru":"Сохранить","en":"Save","he":"שמירה"},
+  {"key":"tags.create","ru":"Создать","en":"Create","he":"יצירה"},
+  {"key":"tags.created","ru":"Тег создан","en":"Tag created","he":"התגית נוצרה"},
+  {"key":"tags.updated","ru":"Тег обновлён","en":"Tag updated","he":"התגית עודכנה"},
+  {"key":"tags.deleted","ru":"Тег удалён","en":"Tag deleted","he":"התגית נמחקה"},
+  {"key":"tags.createError","ru":"Ошибка создания тега","en":"Could not create tag","he":"לא ניתן ליצור תגית"},
+  {"key":"tags.updateError","ru":"Ошибка обновления тега","en":"Could not update tag","he":"לא ניתן לעדכן תגית"},
+  {"key":"tags.deleteError","ru":"Ошибка удаления тега","en":"Could not delete tag","he":"לא ניתן למחוק תגית"},
+  {"key":"tags.reorderError","ru":"Ошибка изменения порядка","en":"Could not change order","he":"לא ניתן לשנות את הסדר"},
+  {"key":"tags.inUseError","ru":"Тег используется и не может быть удалён.","en":"This tag is in use and cannot be deleted.","he":"התגית נמצאת בשימוש ולא ניתן למחוק אותה."},
+  {"key":"tags.nameRequired","ru":"Укажите название тега","en":"Enter a tag name","he":"יש להזין שם תגית"},
+  {"key":"tags.deleteConfirmTitle","ru":"Удалить тег?","en":"Delete tag?","he":"למחוק את התגית?"},
+  {"key":"tags.deleteConfirmDesc","ru":"будет удалён безвозвратно. Если тег используется, сервер не позволит удалить его.","en":"will be deleted permanently. If it is in use, the server will prevent deletion.","he":"תימחק לצמיתות. אם היא בשימוש, השרת ימנע את המחיקה."},
+  {"key":"roles.cap.tags","ru":"Глобальные теги","en":"Global tags","he":"תגיות גלובליות"},
+  {"key":"roles.capShort.tags","ru":"Теги","en":"Tags","he":"תגיות"},
+  {"key":"roles.capHelp.tags","ru":"Управление глобальными тегами статусов и их порядком.","en":"Manage global status tags and their order.","he":"ניהול תגיות סטטוסים גלובליות וסידורן."},
+  {"key":"statuses.filterByTag","ru":"Фильтр по тегу","en":"Filter by tag","he":"סינון לפי תגית"},
+  {"key":"statuses.allTags","ru":"Все","en":"All","he":"הכול"},
+  {"key":"statuses.noTagMatches","ru":"Нет статусов с выбранным тегом.","en":"No statuses have the selected tag.","he":"אין סטטוסים עם התגית שנבחרה."},
+  {"key":"statuses.tags","ru":"Теги","en":"Tags","he":"תגיות"},
+  {"key":"statuses.tagsWarning","ru":"Изменение тегов может изменить ограничения доступа к статусу и состав показателей/виджетов.","en":"Changing tags can change status access restrictions and dashboard metric/widget results.","he":"שינוי תגיות עשוי לשנות את הגבלות הגישה לסטטוס ואת תוצאות המדדים והווידג'טים."},
+  {"key":"statuses.tagsLoadError","ru":"Не удалось загрузить теги статусов. Назначение тегов временно недоступно.","en":"Status tags could not be loaded. Tag assignment is temporarily unavailable.","he":"לא ניתן לטעון תגיות סטטוסים. הקצאת תגיות אינה זמינה זמנית."},
+  {"key":"statusTags.none","ru":"Не выбрано","en":"None selected","he":"לא נבחר"},
+  {"key":"statusTags.loading","ru":"Загрузка…","en":"Loading…","he":"טוען…"},
+  {"key":"statusTags.empty","ru":"Для статусов этой сущности нет тегов","en":"No tags are available for this entity's statuses","he":"אין תגיות זמינות לסטטוסים של ישות זו"},
+  {"key":"statusTags.clear","ru":"Очистить","en":"Clear","he":"ניקוי"}
 ]

@@ -6,21 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MultilingualText } from './multilingualText';
+import type { TagApplicableToItem } from './tagApplicableToItem';
 
-export interface Status {
+export interface Tag {
   id: number;
-  entityId: number;
-  statusKey: string;
   nameJson: MultilingualText;
   color: string;
-  /** Global status tag ids assigned to this status. */
-  tagIds: number[];
-  isDefault: boolean;
-  isFinal: boolean;
-  isArchiveTrigger: boolean;
-  archiveAfterDays: number;
   sortOrder: number;
-  isActive: boolean;
+  applicableTo: TagApplicableToItem[];
   createdAt: Date;
   updatedAt: Date;
 }

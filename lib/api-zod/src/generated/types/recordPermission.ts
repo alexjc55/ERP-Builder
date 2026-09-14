@@ -18,6 +18,10 @@ export interface RecordPermission {
   scopeFilters?: ScopeFilter[];
   hiddenStatusIds?: number[];
   hiddenRowStatusIds?: number[];
+  /** Global status tags hidden in picker/write flows. Expanded to current status ids before multi-role intersection. */
+  hiddenStatusTagIds?: number[];
+  /** Global status tags whose current rows are hidden. Expanded before multi-role intersection. */
+  hiddenRowStatusTagIds?: number[];
   /** Cosmetic per-role hide of the whole "Status" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses). */
   hideStatusColumn?: boolean;
   /** Cosmetic per-role hide of the whole "Actions" column (edit/history/ archive/delete) in the records table. superAdmin bypasses. */

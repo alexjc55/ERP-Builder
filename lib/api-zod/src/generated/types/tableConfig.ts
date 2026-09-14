@@ -32,6 +32,11 @@ export interface TableConfig {
      */
   statusIds?: number[] | null;
   /**
+     * Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.
+     * @nullable
+     */
+  statusTagIds?: number[] | null;
+  /**
      * Max rows to show (clamped server-side); null = server default
      * @nullable
      */

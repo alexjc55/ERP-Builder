@@ -25,6 +25,7 @@ import TranslationsPage from "@/pages/admin/translations";
 import EventsPage from "@/pages/admin/events";
 import ModulesPage from "@/pages/admin/modules";
 import ColumnGroupsPage from "@/pages/admin/column-groups";
+import TagsPage from "@/pages/admin/tags";
 import GoogleDrivePage from "@/pages/admin/google-drive";
 import AiAgentsPage from "@/pages/admin/ai-agents";
 import ImportPage from "@/pages/admin/import";
@@ -213,6 +214,12 @@ function Router() {
       <Route path="/admin/column-groups">
         <ProtectedRoute adminCap="columnGroups">
           <ColumnGroupsPage />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/admin/tags">
+        <ProtectedRoute adminCap="tags">
+          <TagsPage />
         </ProtectedRoute>
       </Route>
 

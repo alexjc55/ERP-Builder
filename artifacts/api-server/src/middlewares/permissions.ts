@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { db, rolesTable, userRolesTable, pagesTable, mirrorPermKey, NO_ACCESS_PERMS, type RolePermissions, type RoleAdminCaps, type RecordPermission, type RecordScope, type EntityField, type FieldAccess, type FieldPermissions } from "@workspace/db";
+import { db, rolesTable, usersTable, userRolesTable, pagesTable, entityStatusesTable, statusTagsTable, mirrorPermKey, NO_ACCESS_PERMS, type RolePermissions, type RoleAdminCaps, type RecordPermission, type RecordScope, type EntityField, type FieldAccess, type FieldPermissions } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import type { ScopeFilter } from "@workspace/db";
 import { encodeScopeFilters } from "../lib/scope-filter";
@@ -106,7 +106,7 @@ export function mergePermissions(list: RolePermissions[]): RolePermissions {
     pages: false, entities: false, roles: false, users: false, translations: false,
     events: false, modules: false, googleDrive: false, settings: false, automations: false,
     customFilters: false, columnGroups: false, dataImport: false, inboundIntegrations: false,
-    documentGeneration: false,
+    documentGeneration: false, tags: false,
   };
   const merged: RolePermissions = { superAdmin: false, admin, pageIds: [], records: {} };
   const pageIdSet = new Set<number>();
@@ -139,6 +139,77 @@ export function mergePermissions(list: RolePermissions[]): RolePermissions {
   return merged;
 }
 
+/**
+ * Materialize persisted tag restrictions to the statuses they currently match,
+ * before role union. This ordering is security-critical: intersecting tag ids
+ * would incorrectly hide nothing when two different tags overlap a status.
+ *
+ * The returned runtime permissions deliberately omit the tag-id arrays. Clients
+ * consume the canonical concrete status arrays used by server enforcement, while
+ * role CRUD continues to return/store the authored tag-id configuration.
+ */
+export async function expandStatusTagRestrictions(perms: RolePermissions): Promise<RolePermissions> {
+  const records = perms.records ?? {};
+  const tagIds = new Set<number>();
+  const mirrorPageIds = new Set<number>();
+  let hasTagConfig = false;
+  for (const [key, rp] of Object.entries(records)) {
+    for (const id of intIds(rp.hiddenStatusTagIds)) tagIds.add(id);
+    for (const id of intIds(rp.hiddenRowStatusTagIds)) tagIds.add(id);
+    hasTagConfig ||= Array.isArray(rp.hiddenStatusTagIds) || Array.isArray(rp.hiddenRowStatusTagIds);
+    const mirror = /^mirror:(\d+)$/.exec(key);
+    if (mirror) mirrorPageIds.add(Number(mirror[1]));
+  }
+  if (!hasTagConfig) return perms;
+
+  const mirrorEntity = new Map<number, number>();
+  if (mirrorPageIds.size > 0) {
+    const rows = await db.select({ id: pagesTable.id, entityId: pagesTable.mirrorEntityId })
+      .from(pagesTable).where(inArray(pagesTable.id, [...mirrorPageIds]));
+    for (const row of rows) if (row.entityId != null) mirrorEntity.set(row.id, row.entityId);
+  }
+  const matchingStatuses = new Map<string, number[]>();
+  if (tagIds.size > 0) {
+    const rows = await db
+      .select({ entityId: entityStatusesTable.entityId, statusId: entityStatusesTable.id, tagId: statusTagsTable.tagId })
+      .from(statusTagsTable)
+      .innerJoin(entityStatusesTable, eq(statusTagsTable.statusId, entityStatusesTable.id))
+      .where(inArray(statusTagsTable.tagId, [...tagIds]));
+    for (const row of rows) {
+      const key = `${row.entityId}:${row.tagId}`;
+      const values = matchingStatuses.get(key) ?? [];
+      values.push(row.statusId);
+      matchingStatuses.set(key, values);
+    }
+  }
+
+  const expandedRecords: Record<string, RecordPermission> = {};
+  for (const [key, rp] of Object.entries(records)) {
+    const directEntityId = Number(key);
+    const entityId = Number.isInteger(directEntityId) && directEntityId > 0
+      ? directEntityId
+      : (() => {
+          const mirror = /^mirror:(\d+)$/.exec(key);
+          return mirror ? mirrorEntity.get(Number(mirror[1])) : undefined;
+        })();
+    const pickerTagIds = intIds(rp.hiddenStatusTagIds);
+    const rowTagIds = intIds(rp.hiddenRowStatusTagIds);
+    const pickerIds = new Set(intIds(rp.hiddenStatusIds));
+    const rowIds = new Set(intIds(rp.hiddenRowStatusIds));
+    if (entityId != null) {
+      for (const tagId of pickerTagIds) for (const statusId of matchingStatuses.get(`${entityId}:${tagId}`) ?? []) pickerIds.add(statusId);
+      for (const tagId of rowTagIds) for (const statusId of matchingStatuses.get(`${entityId}:${tagId}`) ?? []) rowIds.add(statusId);
+    }
+    const { hiddenStatusTagIds: _pickerTags, hiddenRowStatusTagIds: _rowTags, ...withoutTagIds } = rp;
+    expandedRecords[key] = {
+      ...withoutTagIds,
+      ...(pickerIds.size > 0 ? { hiddenStatusIds: [...pickerIds] } : { hiddenStatusIds: undefined }),
+      ...(rowIds.size > 0 ? { hiddenRowStatusIds: [...rowIds] } : { hiddenRowStatusIds: undefined }),
+    };
+  }
+  return { ...perms, records: expandedRecords };
+}
+
 /** Load the permission specs for a set of role ids (order not guaranteed). */
 export async function loadPermissionsForRoles(roleIds: number[]): Promise<RolePermissions[]> {
   const ids = [...new Set(roleIds)];
@@ -147,7 +218,7 @@ export async function loadPermissionsForRoles(roleIds: number[]): Promise<RolePe
     .select({ permissionsJson: rolesTable.permissionsJson })
     .from(rolesTable)
     .where(inArray(rolesTable.id, ids));
-  return rows.map((r) => r.permissionsJson ?? NO_ACCESS_PERMS);
+  return Promise.all(rows.map((r) => expandStatusTagRestrictions(r.permissionsJson ?? NO_ACCESS_PERMS)));
 }
 
 /**
@@ -166,9 +237,10 @@ export async function loadMergedPermissions(roleIds: number[]): Promise<RolePerm
   // guarantee, and homePageId is resolved as "first non-null in list order".
   const byId = new Map(rows.map((r) => [r.id, r]));
   const ordered = ids.map((id) => byId.get(id)).filter((r): r is NonNullable<typeof r> => r != null);
-  const merged = mergePermissions(ordered.map((r) => r.permissionsJson ?? NO_ACCESS_PERMS));
+  const expanded = await Promise.all(ordered.map((r) => expandStatusTagRestrictions(r.permissionsJson ?? NO_ACCESS_PERMS)));
+  const merged = mergePermissions(expanded);
   if (ordered.length > 1) {
-    merged.perRole = Object.fromEntries(ordered.map((r) => [String(r.id), r.permissionsJson ?? NO_ACCESS_PERMS]));
+    merged.perRole = Object.fromEntries(ordered.map((r, index) => [String(r.id), expanded[index]]));
   }
   return merged;
 }
@@ -180,7 +252,7 @@ export async function loadPermissions(roleId: number): Promise<RolePermissions> 
     .from(rolesTable)
     .where(eq(rolesTable.id, roleId))
     .limit(1);
-  return role?.permissionsJson ?? NO_ACCESS_PERMS;
+  return expandStatusTagRestrictions(role?.permissionsJson ?? NO_ACCESS_PERMS);
 }
 
 /** All role ids assigned to a user (from the join table), excluding duplicates. */
@@ -208,8 +280,8 @@ export function primaryFirstRoleIds(roleIds: number[], primaryRoleId: number): n
 
 /**
  * Effective merged permissions for a user, by id. Loads ALL of the user's roles
- * (always including the primary `roleId` as a safety net for any backfill gap)
- * and merges them most-permissively. Used by auth/guest flows that build the
+ * (always including the current primary `roleId` as a safety net for any backfill
+ * gap) and merges them most-permissively. Used by auth/guest flows that build the
  * client-facing `permissions` payload outside of a request context.
  */
 export async function loadPermissionsForUser(userId: number, primaryRoleId: number): Promise<RolePermissions> {
@@ -231,16 +303,27 @@ export async function loadRoleContext(
 }
 
 /**
- * Resolve and cache the requester's full set of role ids on the request. Always
- * includes the JWT's primary `roleId` so a missing join-table backfill can never
- * silently drop access. Returns [] only for unauthenticated requests.
+ * Resolve and cache the requester's full set of role ids on the request. The
+ * primary role is read from the current user row rather than the JWT: a long-lived
+ * token must never re-grant a role after an administrator changes that user. The
+ * current primary role remains a safety net for a missing join-table backfill.
+ * Returns [] for unauthenticated or deleted users.
  */
 export async function getUserRoleIds(req: Request): Promise<number[]> {
   if (req._roleIds) return req._roleIds;
   if (!req.user) return [];
+  const [user] = await db
+    .select({ roleId: usersTable.roleId })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.user.userId))
+    .limit(1);
+  if (!user) {
+    req._roleIds = [];
+    return req._roleIds;
+  }
   req._roleIds = primaryFirstRoleIds(
     await loadUserRoleIds(req.user.userId),
-    req.user.roleId,
+    user.roleId,
   );
   return req._roleIds;
 }

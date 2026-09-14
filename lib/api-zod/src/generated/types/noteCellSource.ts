@@ -37,6 +37,11 @@ export interface NoteCellSource {
      */
   statusIds?: number[] | null;
   /**
+     * For sourceKind = metric — selected global status tags (OR within tags, AND with statusIds).
+     * @nullable
+     */
+  statusTagIds?: number[] | null;
+  /**
      * For sourceKind = record — the specific record whose field value is shown.
      * @nullable
      */

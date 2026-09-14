@@ -23,4 +23,9 @@ export interface WidgetPivotConfig {
      * @nullable
      */
   statusIds?: number[] | null;
+  /**
+     * Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.
+     * @nullable
+     */
+  statusTagIds?: number[] | null;
 }

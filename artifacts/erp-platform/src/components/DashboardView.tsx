@@ -140,6 +140,7 @@ import { addColorPreset, loadColorPresets, removeColorPreset } from "@/lib/color
 import { useLocation, Link } from "wouter";
 import { usePagePathLabel } from "@/lib/pagePath";
 import { useCollaboration } from "@/lib/useCollaboration";
+import { StatusTagMultiSelect, type TaggedStatus } from "@/components/StatusTagMultiSelect";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 
@@ -1660,6 +1661,11 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
 }
 
 type WidgetSource = "entity" | "page";
+type StatusTagFilter = { statusTagIds?: number[] | null };
+type StatusTagWidgetMetric = WidgetMetric & StatusTagFilter;
+type StatusTagWidgetConfig = NonNullable<DashboardWidget["config"]["chart"]> & StatusTagFilter;
+type StatusTagTableConfig = NonNullable<DashboardWidget["config"]["table"]> & StatusTagFilter;
+type StatusTagNoteCellSource = NoteCellSource & StatusTagFilter;
 
 type DraftMetric = {
   key: string;
@@ -1667,6 +1673,7 @@ type DraftMetric = {
   aggregation: "count" | "sum";
   fieldKey: string | null;
   statusIds: number[];
+  statusTagIds: number[];
   relationId: number | null;
   source: WidgetSource;
   pageId: number | null;
@@ -1680,6 +1687,7 @@ type ChartDraft = {
   aggregation: ChartConfigAggregation;
   fieldKey: string | null;
   statusIds: number[];
+  statusTagIds: number[];
   showValues: boolean;
   source: WidgetSource;
   pageId: number | null;
@@ -1691,6 +1699,7 @@ type TableDraft = {
   entityId: number | null;
   fieldKeys: string[];
   statusIds: number[];
+  statusTagIds: number[];
   limit: number;
   relatedColumns: TableRelatedColumnDraft[];
   // Page-local extra columns: a page of the same entity + its field keys.
@@ -1710,6 +1719,7 @@ type PivotDraft = {
   cols: PivotDraftDim;
   measures: DraftMeasure[];
   statusIds: number[];
+  statusTagIds: number[];
   // Page context enabling page-local dims/measures (a page of the same entity).
   pageId: number | null;
 };
@@ -1729,11 +1739,12 @@ function emptyPivotDraft(): PivotDraft {
     cols: { source: "status", fieldKey: "", datePeriod: null },
     measures: [newDraftMeasure()],
     statusIds: [],
+    statusTagIds: [],
     pageId: null,
   };
 }
 
-function pivotDraftFromConfig(spec: { entityId: number; pivot: PivotConfig; statusIds?: number[] | null; pageId?: number | null } | null | undefined): PivotDraft {
+function pivotDraftFromConfig(spec: { entityId: number; pivot: PivotConfig; statusIds?: number[] | null; statusTagIds?: number[] | null; pageId?: number | null } | null | undefined): PivotDraft {
   if (!spec) return emptyPivotDraft();
   const dimToDraft = (d: PivotDimension | undefined): PivotDraftDim =>
     d && (d.source === "entity" || d.source === "page")
@@ -1746,6 +1757,7 @@ function pivotDraftFromConfig(spec: { entityId: number; pivot: PivotConfig; stat
     cols: spec.pivot.cols ? dimToDraft(spec.pivot.cols) : { source: "status", fieldKey: "", datePeriod: null },
     measures: measuresFromConfig(spec.pivot),
     statusIds: spec.statusIds ?? [],
+    statusTagIds: spec.statusTagIds ?? [],
     pageId: spec.pageId ?? null,
   };
 }
@@ -1758,6 +1770,7 @@ type NoteSourceDraft = {
   fieldKey: string | null;
   relationId: number | null;
   statusIds: number[];
+  statusTagIds: number[];
   recordId: number | null;
 };
 
@@ -1843,11 +1856,12 @@ function WidgetEditorDialog({
           aggregation: m.aggregation,
           fieldKey: m.fieldKey ?? null,
           statusIds: m.statusIds ?? [],
+          statusTagIds: (m as WidgetMetric & StatusTagFilter).statusTagIds ?? [],
           relationId: m.relationId ?? null,
           source: m.source === "page" ? "page" : "entity",
           pageId: m.pageId ?? null,
         } satisfies DraftMetric))
-      : [{ key: "m1", entityId: null, aggregation: "count", fieldKey: null, statusIds: [], relationId: null, source: "entity", pageId: null }],
+      : [{ key: "m1", entityId: null, aggregation: "count", fieldKey: null, statusIds: [], statusTagIds: [], relationId: null, source: "entity", pageId: null }],
   );
   const [chart, setChart] = useState<ChartDraft>(() => {
     const c = widget?.config.chart;
@@ -1859,6 +1873,7 @@ function WidgetEditorDialog({
       aggregation: c?.aggregation ?? "count",
       fieldKey: c?.fieldKey ?? null,
       statusIds: c?.statusIds ?? [],
+      statusTagIds: (c as StatusTagFilter | undefined)?.statusTagIds ?? [],
       showValues: c?.showValues ?? false,
       source: c?.source === "page" ? "page" : "entity",
       pageId: c?.pageId ?? null,
@@ -1871,6 +1886,7 @@ function WidgetEditorDialog({
       entityId: tb?.entityId ?? null,
       fieldKeys: tb?.fieldKeys ?? [],
       statusIds: tb?.statusIds ?? [],
+      statusTagIds: (tb as StatusTagFilter | undefined)?.statusTagIds ?? [],
       limit: tb?.limit ?? 10,
       relatedColumns: (tb?.relatedColumns ?? []).map((rc) => ({ relationId: rc.relationId, relatedFieldKey: rc.relatedFieldKey })),
       pageId: tb?.pageId ?? null,
@@ -1895,6 +1911,7 @@ function WidgetEditorDialog({
             fieldKey: s.fieldKey ?? null,
             relationId: s.relationId ?? null,
             statusIds: s.statusIds ?? [],
+            statusTagIds: (s as NoteCellSource & StatusTagFilter).statusTagIds ?? [],
             recordId: s.recordId ?? null,
           })),
         })),
@@ -1921,7 +1938,7 @@ function WidgetEditorDialog({
     setMetrics((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
 
   const addMetric = () =>
-    setMetrics((prev) => [...prev, { key: `m${prev.length + 1}`, entityId: null, aggregation: "count", fieldKey: null, statusIds: [], relationId: null, source: "entity", pageId: null }]);
+    setMetrics((prev) => [...prev, { key: `m${prev.length + 1}`, entityId: null, aggregation: "count", fieldKey: null, statusIds: [], statusTagIds: [], relationId: null, source: "entity", pageId: null }]);
 
   const removeMetric = (i: number) => setMetrics((prev) => prev.filter((_, idx) => idx !== i));
 
@@ -1951,7 +1968,7 @@ function WidgetEditorDialog({
               continue;
             }
             const keys = new Set<string>();
-            const sources: NoteCellSource[] = [];
+            const sources: StatusTagNoteCellSource[] = [];
             for (const s of cell.sources) {
               if (!s.key || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s.key)) {
                 toast({ title: t("dash.invalidKey", "Некорректный ключ метрики (латиница/цифры/_)"), variant: "destructive" });
@@ -1991,6 +2008,7 @@ function WidgetEditorDialog({
                   fieldKey: s.aggregation === "sum" ? s.fieldKey : null,
                   relationId: s.relationId,
                   statusIds: s.statusIds.length > 0 ? s.statusIds : null,
+                  statusTagIds: s.statusTagIds.length > 0 ? s.statusTagIds : null,
                 });
               }
             }
@@ -2084,12 +2102,13 @@ function WidgetEditorDialog({
           widgetType: "pivot",
           colorStyle,
           textColor,
-          pivot: {
+           pivot: {
             entityId: pivot.entityId,
             pivot: pivotConfig,
             statusIds: pivot.statusIds.length > 0 ? pivot.statusIds : null,
+            statusTagIds: pivot.statusTagIds.length > 0 ? pivot.statusTagIds : null,
             pageId: usesPage ? pivot.pageId : null,
-          },
+           } as NonNullable<DashboardWidget["config"]["pivot"]> & StatusTagFilter,
         },
       };
     }
@@ -2125,7 +2144,7 @@ function WidgetEditorDialog({
           colorStyle,
           textColor,
           format: format as WidgetConfigFormat,
-          chart: {
+             chart: {
             type: chart.type,
             // entityId is ignored by the server for page source (it resolves the
             // page's entity), but the contract requires it — send 0 as a sentinel.
@@ -2138,11 +2157,12 @@ function WidgetEditorDialog({
             // Page source aggregates a specific field for count (non-empty) and sum
             // alike; entity source only needs a field for sum.
             fieldKey: chart.source === "page" ? chart.fieldKey : (chart.aggregation === "sum" ? chart.fieldKey : null),
-            statusIds: chart.source === "page" ? null : (chart.statusIds.length > 0 ? chart.statusIds : null),
+             statusIds: chart.source === "page" ? null : (chart.statusIds.length > 0 ? chart.statusIds : null),
+             statusTagIds: chart.source === "page" ? null : (chart.statusTagIds.length > 0 ? chart.statusTagIds : null),
             showValues: chart.showValues,
             source: chart.source,
-            pageId: chart.source === "page" ? chart.pageId : null,
-          },
+             pageId: chart.source === "page" ? chart.pageId : null,
+           } as StatusTagWidgetConfig,
         },
       };
     }
@@ -2166,15 +2186,16 @@ function WidgetEditorDialog({
           widgetType: "table",
           colorStyle,
           textColor,
-          table: {
+           table: {
             entityId: table.entityId,
             fieldKeys: table.fieldKeys,
-            statusIds: table.statusIds.length > 0 ? table.statusIds : null,
+             statusIds: table.statusIds.length > 0 ? table.statusIds : null,
+             statusTagIds: table.statusTagIds.length > 0 ? table.statusTagIds : null,
             limit: table.limit,
             relatedColumns: table.relatedColumns.length > 0 ? table.relatedColumns : null,
             pageId: table.pageFieldKeys.length > 0 ? table.pageId : null,
-            pageFieldKeys: table.pageFieldKeys.length > 0 ? table.pageFieldKeys : null,
-          },
+             pageFieldKeys: table.pageFieldKeys.length > 0 ? table.pageFieldKeys : null,
+           } as StatusTagTableConfig,
         },
       };
     }
@@ -2230,7 +2251,7 @@ function WidgetEditorDialog({
         widgetType: widgetType === "formula" ? "formula" : "metric",
         colorStyle,
         textColor,
-        metrics: metrics.map<WidgetMetric>((m) => ({
+         metrics: metrics.map<StatusTagWidgetMetric>((m) => ({
           key: m.key,
           // entityId is ignored by the server for page source (it resolves the
           // page's entity), but the contract requires it — send 0 as a sentinel.
@@ -2241,7 +2262,8 @@ function WidgetEditorDialog({
           // entity's numeric field (sum). For direct metrics it is the base
           // entity's numeric field on sum only.
           fieldKey: m.source === "page" ? m.fieldKey : (m.aggregation === "sum" ? m.fieldKey : null),
-          statusIds: m.source === "page" ? null : (m.statusIds.length > 0 ? m.statusIds : null),
+           statusIds: m.source === "page" ? null : (m.statusIds.length > 0 ? m.statusIds : null),
+           statusTagIds: m.source === "page" ? null : (m.statusTagIds.length > 0 ? m.statusTagIds : null),
           relationId: m.source === "page" ? null : (m.relationId ?? null),
           source: m.source,
           pageId: m.source === "page" ? m.pageId : null,
@@ -2615,6 +2637,7 @@ function PivotEditor({
               cols: { source: "status", fieldKey: "", datePeriod: null },
               measures: [newDraftMeasure()],
               statusIds: [],
+              statusTagIds: [],
               pageId: null,
             })
           }
@@ -2713,6 +2736,12 @@ function PivotEditor({
               </div>
             </div>
           )}
+          <StatusTagMultiSelect
+            value={pivot.statusTagIds}
+            statuses={statuses as TaggedStatus[]}
+            onChange={(statusTagIds) => onChange({ statusTagIds })}
+            label={t("dash.statusTagFilter", "Теги статусов (пусто = все)")}
+          />
         </>
       )}
     </div>
@@ -2797,7 +2826,7 @@ function ChartEditor({
           <Select
             value={chart.source}
             onValueChange={(v) =>
-              onChange({ source: v as WidgetSource, entityId: null, pageId: null, fieldKey: null, groupByFieldKey: null, statusIds: [] })
+              onChange({ source: v as WidgetSource, entityId: null, pageId: null, fieldKey: null, groupByFieldKey: null, statusIds: [], statusTagIds: [] })
             }
           >
             <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
@@ -2828,7 +2857,7 @@ function ChartEditor({
               <p className="text-xs text-slate-400">{t("dash.selectEntity", "Сущность")}</p>
               <Select
                 value={chart.entityId != null ? String(chart.entityId) : ""}
-                onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, groupByFieldKey: null, statusIds: [] })}
+                onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, groupByFieldKey: null, statusIds: [], statusTagIds: [] })}
               >
                 <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
                 <SelectContent>
@@ -2935,6 +2964,14 @@ function ChartEditor({
           </div>
         </div>
       )}
+      {chart.source === "entity" && chart.entityId != null && (
+        <StatusTagMultiSelect
+          value={chart.statusTagIds}
+          statuses={statuses as TaggedStatus[]}
+          onChange={(statusTagIds) => onChange({ statusTagIds })}
+          label={t("dash.statusTagFilter", "Теги статусов (пусто = все)")}
+        />
+      )}
 
       <label className="flex items-center gap-2 text-sm pt-1">
         <Checkbox checked={chart.showValues} onCheckedChange={(v) => onChange({ showValues: v === true })} />
@@ -3020,7 +3057,7 @@ function TableEditor({
         <p className="text-xs text-slate-400">{t("dash.selectEntity", "Сущность")}</p>
         <Select
           value={table.entityId != null ? String(table.entityId) : ""}
-          onValueChange={(v) => onChange({ entityId: Number(v), fieldKeys: [], statusIds: [], relatedColumns: [], pageId: null, pageFieldKeys: [] })}
+          onValueChange={(v) => onChange({ entityId: Number(v), fieldKeys: [], statusIds: [], statusTagIds: [], relatedColumns: [], pageId: null, pageFieldKeys: [] })}
         >
           <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
           <SelectContent>
@@ -3147,6 +3184,14 @@ function TableEditor({
           </div>
         </div>
       )}
+      {table.entityId != null && (
+        <StatusTagMultiSelect
+          value={table.statusTagIds}
+          statuses={statuses as TaggedStatus[]}
+          onChange={(statusTagIds) => onChange({ statusTagIds })}
+          label={t("dash.statusTagFilter", "Теги статусов (пусто = все)")}
+        />
+      )}
     </div>
   );
 }
@@ -3233,7 +3278,7 @@ function MetricEditor({
         <Select
           value={metric.source}
           onValueChange={(v) =>
-            onChange({ source: v as WidgetSource, entityId: null, pageId: null, fieldKey: null, statusIds: [], relationId: null })
+            onChange({ source: v as WidgetSource, entityId: null, pageId: null, fieldKey: null, statusIds: [], statusTagIds: [], relationId: null })
           }
         >
           <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
@@ -3257,7 +3302,7 @@ function MetricEditor({
         ) : (
           <Select
             value={metric.entityId != null ? String(metric.entityId) : ""}
-            onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, statusIds: [], relationId: null })}
+            onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, statusIds: [], statusTagIds: [], relationId: null })}
           >
             <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
             <SelectContent>
@@ -3363,6 +3408,14 @@ function MetricEditor({
             ))}
           </div>
         </div>
+      )}
+      {metric.source === "entity" && metric.entityId != null && (
+        <StatusTagMultiSelect
+          value={metric.statusTagIds}
+          statuses={statuses as TaggedStatus[]}
+          onChange={(statusTagIds) => onChange({ statusTagIds })}
+          label={t("dash.statusTagFilter", "Теги статусов (пусто = все)")}
+        />
       )}
     </div>
   );
@@ -3703,7 +3756,7 @@ function NoteSourceEditor({
           placeholder={t("dash.metricKey", "ключ")}
           className="h-8 w-24 font-mono text-xs"
         />
-        <Select value={source.sourceKind} onValueChange={(v) => onChange({ sourceKind: v as "metric" | "record", fieldKey: null, recordId: null, relationId: null, statusIds: [] })}>
+        <Select value={source.sourceKind} onValueChange={(v) => onChange({ sourceKind: v as "metric" | "record", fieldKey: null, recordId: null, relationId: null, statusIds: [], statusTagIds: [] })}>
           <SelectTrigger className="h-8 flex-1"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="metric">{t("dash.notesSourceMetric", "Агрегат сущности")}</SelectItem>
@@ -3718,7 +3771,7 @@ function NoteSourceEditor({
       </div>
       <Select
         value={source.entityId != null ? String(source.entityId) : ""}
-        onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, recordId: null, relationId: null, statusIds: [] })}
+        onValueChange={(v) => onChange({ entityId: Number(v), fieldKey: null, recordId: null, relationId: null, statusIds: [], statusTagIds: [] })}
       >
         <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectEntity", "Сущность")} /></SelectTrigger>
         <SelectContent>
@@ -3795,6 +3848,14 @@ function NoteSourceEditor({
               </div>
             </div>
           )}
+          {source.entityId != null && (
+            <StatusTagMultiSelect
+              value={source.statusTagIds}
+              statuses={statuses as TaggedStatus[]}
+              onChange={(statusTagIds) => onChange({ statusTagIds })}
+              label={t("dash.statusTagFilter", "Теги статусов (пусто = все)")}
+            />
+          )}
         </>
       )}
     </div>
@@ -3822,7 +3883,7 @@ function NoteCellDialog({
   const addSource = () =>
     setDraft((p) => ({
       ...p,
-      sources: [...p.sources, { key: `s${p.sources.length + 1}`, sourceKind: "metric", entityId: null, aggregation: "count", fieldKey: null, relationId: null, statusIds: [], recordId: null }],
+      sources: [...p.sources, { key: `s${p.sources.length + 1}`, sourceKind: "metric", entityId: null, aggregation: "count", fieldKey: null, relationId: null, statusIds: [], statusTagIds: [], recordId: null }],
     }));
   const updateSource = (i: number, patch: Partial<NoteSourceDraft>) =>
     setDraft((p) => ({ ...p, sources: p.sources.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) }));

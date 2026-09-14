@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { db, rolesTable, usersTable, pageFieldsTable } from "@workspace/db";
-import { and, eq, sql } from "drizzle-orm";
+import { db, rolesTable, usersTable, pageFieldsTable, tagsTable } from "@workspace/db";
+import { and, eq, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
+import { lockStatusTagReferences } from "../lib/status-tag-lock";
 import {
   CreateRoleBody,
   UpdateRoleBody,
@@ -76,6 +77,36 @@ async function validatePageScopeFilters(
   return null;
 }
 
+/**
+ * Reject dangling/non-status tag references at the permission write boundary.
+ * Runtime expansion is deny-safe, but persisting an unknown tag would make a
+ * later tag creation silently change an existing role's effective restriction.
+ */
+type TagReader = Pick<typeof db, "select">;
+
+async function validateStatusTagRestrictions(permissionsJson: unknown, reader: TagReader = db): Promise<string | null> {
+  const records = (permissionsJson as { records?: Record<string, unknown> } | null)?.records;
+  if (!records || typeof records !== "object") return null;
+  const tagIds = new Set<number>();
+  for (const permission of Object.values(records)) {
+    const entry = permission as { hiddenStatusTagIds?: unknown; hiddenRowStatusTagIds?: unknown } | null;
+    for (const id of [entry?.hiddenStatusTagIds, entry?.hiddenRowStatusTagIds]) {
+      if (!Array.isArray(id) || id.some((value) => !Number.isInteger(value))) {
+        if (id != null && !Array.isArray(id)) return "Status tag restrictions must be arrays of integer tag ids";
+        continue;
+      }
+      for (const tagId of id) tagIds.add(tagId);
+    }
+  }
+  if (tagIds.size === 0) return null;
+  const tags = await reader.select({ id: tagsTable.id, applicableTo: tagsTable.applicableTo })
+    .from(tagsTable).where(inArray(tagsTable.id, [...tagIds]));
+  if (tags.length !== tagIds.size || tags.some((tag) => !tag.applicableTo.includes("statuses"))) {
+    return "One or more status restriction tags do not exist or cannot be applied to statuses";
+  }
+  return null;
+}
+
 router.get("/roles", requireAuth, async (_req, res): Promise<void> => {
   const roles = await db.select().from(rolesTable).orderBy(rolesTable.createdAt);
 
@@ -105,8 +136,18 @@ router.post("/roles", requireAuth, requireAdmin("roles"), async (req, res): Prom
     res.status(400).json({ error: scopeErr });
     return;
   }
-
-  const [role] = await db.insert(rolesTable).values(parsed.data).returning();
+  const outcome = await db.transaction(async (tx) => {
+    await lockStatusTagReferences(tx);
+    const tagErr = await validateStatusTagRestrictions(parsed.data.permissionsJson, tx);
+    if (tagErr) return { tagErr, role: null };
+    const [role] = await tx.insert(rolesTable).values(parsed.data).returning();
+    return { tagErr: null, role };
+  });
+  if (outcome.tagErr) {
+    res.status(400).json({ error: outcome.tagErr });
+    return;
+  }
+  const role = outcome.role!;
   res.status(201).json({ ...role, userCount: 0 });
 });
 
@@ -160,11 +201,24 @@ router.put("/roles/:id", requireAuth, requireAdmin("roles"), async (req, res): P
     updateData.permissionsJson = parsed.data.permissionsJson;
   }
 
-  const [role] = await db
-    .update(rolesTable)
-    .set(updateData)
-    .where(eq(rolesTable.id, params.data.id))
-    .returning();
+  const outcome = await db.transaction(async (tx) => {
+    await lockStatusTagReferences(tx);
+    if (parsed.data.permissionsJson != null) {
+      const tagErr = await validateStatusTagRestrictions(parsed.data.permissionsJson, tx);
+      if (tagErr) return { tagErr, role: null };
+    }
+    const [role] = await tx
+      .update(rolesTable)
+      .set(updateData)
+      .where(eq(rolesTable.id, params.data.id))
+      .returning();
+    return { tagErr: null, role };
+  });
+  if (outcome.tagErr) {
+    res.status(400).json({ error: outcome.tagErr });
+    return;
+  }
+  const role = outcome.role;
 
   if (!role) {
     res.status(404).json({ error: "Role not found" });

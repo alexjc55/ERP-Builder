@@ -32,6 +32,7 @@ import agentApiSchemaRouter from "./agent-api-schema";
 import collaborationRouter from "./collaboration";
 import inboundIntegrationsRouter from "./inbound-integrations";
 import documentGenerationRouter from "./document-generation";
+import tagsRouter from "./tags";
 
 const router: IRouter = Router();
 
@@ -68,5 +69,6 @@ router.use(agentApiSchemaRouter);
 router.use(collaborationRouter);
 router.use(inboundIntegrationsRouter);
 router.use(documentGenerationRouter);
+router.use(tagsRouter);
 
 export default router;

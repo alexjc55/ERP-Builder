@@ -106,6 +106,13 @@
       "when": 1789048942357,
       "tag": "0014_abnormal_human_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1789414603306,
+      "tag": "0015_status_tags",
+      "breakpoints": true
     }
   ]
 }

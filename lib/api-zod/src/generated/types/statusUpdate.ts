@@ -11,6 +11,8 @@ export interface StatusUpdate {
   statusKey?: string;
   nameJson?: MultilingualText;
   color?: string;
+  /** When supplied, replaces the status's current global tag set. */
+  tagIds?: number[];
   isDefault?: boolean;
   isFinal?: boolean;
   isArchiveTrigger?: boolean;

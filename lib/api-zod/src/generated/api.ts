@@ -1178,7 +1178,8 @@ export const LoginResponse = zod.object({
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
   "inboundIntegrations": zod.boolean().optional(),
-  "documentGeneration": zod.boolean().optional()
+  "documentGeneration": zod.boolean().optional(),
+  "tags": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1195,6 +1196,8 @@ export const LoginResponse = zod.object({
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hiddenStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags hidden in picker\/write flows. Expanded to current status ids before multi-role intersection.'),
+  "hiddenRowStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags whose current rows are hidden. Expanded before multi-role intersection.'),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 })),
@@ -1255,7 +1258,8 @@ export const GetMeResponse = zod.object({
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
   "inboundIntegrations": zod.boolean().optional(),
-  "documentGeneration": zod.boolean().optional()
+  "documentGeneration": zod.boolean().optional(),
+  "tags": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1272,6 +1276,8 @@ export const GetMeResponse = zod.object({
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hiddenStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags hidden in picker\/write flows. Expanded to current status ids before multi-role intersection.'),
+  "hiddenRowStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags whose current rows are hidden. Expanded before multi-role intersection.'),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 })),
@@ -1330,7 +1336,8 @@ export const UpdateMeResponse = zod.object({
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
   "inboundIntegrations": zod.boolean().optional(),
-  "documentGeneration": zod.boolean().optional()
+  "documentGeneration": zod.boolean().optional(),
+  "tags": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1347,6 +1354,8 @@ export const UpdateMeResponse = zod.object({
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hiddenStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags hidden in picker\/write flows. Expanded to current status ids before multi-role intersection.'),
+  "hiddenRowStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags whose current rows are hidden. Expanded before multi-role intersection.'),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 })),
@@ -1403,7 +1412,8 @@ export const ImpersonateResponse = zod.object({
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
   "inboundIntegrations": zod.boolean().optional(),
-  "documentGeneration": zod.boolean().optional()
+  "documentGeneration": zod.boolean().optional(),
+  "tags": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1420,6 +1430,8 @@ export const ImpersonateResponse = zod.object({
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hiddenStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags hidden in picker\/write flows. Expanded to current status ids before multi-role intersection.'),
+  "hiddenRowStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags whose current rows are hidden. Expanded before multi-role intersection.'),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 })),
@@ -1473,7 +1485,8 @@ export const StopImpersonationResponse = zod.object({
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
   "inboundIntegrations": zod.boolean().optional(),
-  "documentGeneration": zod.boolean().optional()
+  "documentGeneration": zod.boolean().optional(),
+  "tags": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1490,6 +1503,8 @@ export const StopImpersonationResponse = zod.object({
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hiddenStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags hidden in picker\/write flows. Expanded to current status ids before multi-role intersection.'),
+  "hiddenRowStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags whose current rows are hidden. Expanded before multi-role intersection.'),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 })),
@@ -1547,7 +1562,8 @@ export const RedeemGuestLinkResponse = zod.object({
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
   "inboundIntegrations": zod.boolean().optional(),
-  "documentGeneration": zod.boolean().optional()
+  "documentGeneration": zod.boolean().optional(),
+  "tags": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -1564,6 +1580,8 @@ export const RedeemGuestLinkResponse = zod.object({
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hiddenStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags hidden in picker\/write flows. Expanded to current status ids before multi-role intersection.'),
+  "hiddenRowStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags whose current rows are hidden. Expanded before multi-role intersection.'),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 })),
@@ -1984,7 +2002,8 @@ export const ListRolesResponseItem = zod.object({
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
   "inboundIntegrations": zod.boolean().optional(),
-  "documentGeneration": zod.boolean().optional()
+  "documentGeneration": zod.boolean().optional(),
+  "tags": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -2001,6 +2020,8 @@ export const ListRolesResponseItem = zod.object({
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hiddenStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags hidden in picker\/write flows. Expanded to current status ids before multi-role intersection.'),
+  "hiddenRowStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags whose current rows are hidden. Expanded before multi-role intersection.'),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 })),
@@ -2045,7 +2066,8 @@ export const CreateRoleBody = zod.object({
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
   "inboundIntegrations": zod.boolean().optional(),
-  "documentGeneration": zod.boolean().optional()
+  "documentGeneration": zod.boolean().optional(),
+  "tags": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -2062,6 +2084,8 @@ export const CreateRoleBody = zod.object({
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hiddenStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags hidden in picker\/write flows. Expanded to current status ids before multi-role intersection.'),
+  "hiddenRowStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags whose current rows are hidden. Expanded before multi-role intersection.'),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 })),
@@ -2107,7 +2131,8 @@ export const GetRoleResponse = zod.object({
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
   "inboundIntegrations": zod.boolean().optional(),
-  "documentGeneration": zod.boolean().optional()
+  "documentGeneration": zod.boolean().optional(),
+  "tags": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -2124,6 +2149,8 @@ export const GetRoleResponse = zod.object({
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hiddenStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags hidden in picker\/write flows. Expanded to current status ids before multi-role intersection.'),
+  "hiddenRowStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags whose current rows are hidden. Expanded before multi-role intersection.'),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 })),
@@ -2171,7 +2198,8 @@ export const UpdateRoleBody = zod.object({
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
   "inboundIntegrations": zod.boolean().optional(),
-  "documentGeneration": zod.boolean().optional()
+  "documentGeneration": zod.boolean().optional(),
+  "tags": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -2188,6 +2216,8 @@ export const UpdateRoleBody = zod.object({
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hiddenStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags hidden in picker\/write flows. Expanded to current status ids before multi-role intersection.'),
+  "hiddenRowStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags whose current rows are hidden. Expanded before multi-role intersection.'),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 })),
@@ -2225,7 +2255,8 @@ export const UpdateRoleResponse = zod.object({
   "settings": zod.boolean(),
   "dataImport": zod.boolean(),
   "inboundIntegrations": zod.boolean().optional(),
-  "documentGeneration": zod.boolean().optional()
+  "documentGeneration": zod.boolean().optional(),
+  "tags": zod.boolean().optional()
 }),
   "pageIds": zod.array(zod.number()),
   "records": zod.record(zod.string(), zod.object({
@@ -2242,6 +2273,8 @@ export const UpdateRoleResponse = zod.object({
 })).optional(),
   "hiddenStatusIds": zod.array(zod.number()).optional(),
   "hiddenRowStatusIds": zod.array(zod.number()).optional(),
+  "hiddenStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags hidden in picker\/write flows. Expanded to current status ids before multi-role intersection.'),
+  "hiddenRowStatusTagIds": zod.array(zod.number()).optional().describe('Global status tags whose current rows are hidden. Expanded before multi-role intersection.'),
   "hideStatusColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Status\" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses).'),
   "hideActionsColumn": zod.boolean().optional().describe('Cosmetic per-role hide of the whole \"Actions\" column (edit\/history\/ archive\/delete) in the records table. superAdmin bypasses.')
 })),
@@ -2937,6 +2970,7 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
@@ -2955,6 +2989,7 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "fieldKey": zod.string().nullish().describe('For metric sum — the numeric field (related entity\'s field when relationId is set). For record source — the field whose stored value is shown.'),
   "relationId": zod.number().nullish().describe('For sourceKind = metric — compute over a related entity through this qualifying single-link relation.'),
   "statusIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — restrict to records in these statuses; empty\/null = all statuses.'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — selected global status tags (OR within tags, AND with statusIds).'),
   "recordId": zod.number().nullish().describe('For sourceKind = record — the specific record whose field value is shown.')
 }).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
   "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
@@ -2974,6 +3009,7 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.'),
   "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
@@ -2988,6 +3024,7 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "pageId": zod.number().nullish().describe('The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.'),
   "pageFieldKeys": zod.array(zod.string()).nullish().describe('Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
   "pivot": zod.object({
@@ -3040,7 +3077,8 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) pivot dimensions\/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension\/measure has source=page.'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
   "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
@@ -3079,6 +3117,7 @@ export const CreateDashboardWidgetBody = zod.object({
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
@@ -3097,6 +3136,7 @@ export const CreateDashboardWidgetBody = zod.object({
   "fieldKey": zod.string().nullish().describe('For metric sum — the numeric field (related entity\'s field when relationId is set). For record source — the field whose stored value is shown.'),
   "relationId": zod.number().nullish().describe('For sourceKind = metric — compute over a related entity through this qualifying single-link relation.'),
   "statusIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — restrict to records in these statuses; empty\/null = all statuses.'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — selected global status tags (OR within tags, AND with statusIds).'),
   "recordId": zod.number().nullish().describe('For sourceKind = record — the specific record whose field value is shown.')
 }).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
   "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
@@ -3116,6 +3156,7 @@ export const CreateDashboardWidgetBody = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.'),
   "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
@@ -3130,6 +3171,7 @@ export const CreateDashboardWidgetBody = zod.object({
   "pageId": zod.number().nullish().describe('The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.'),
   "pageFieldKeys": zod.array(zod.string()).nullish().describe('Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
   "pivot": zod.object({
@@ -3182,7 +3224,8 @@ export const CreateDashboardWidgetBody = zod.object({
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) pivot dimensions\/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension\/measure has source=page.'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
   "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
@@ -3212,6 +3255,7 @@ export const CreateDashboardWidgetResponse = zod.object({
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
@@ -3230,6 +3274,7 @@ export const CreateDashboardWidgetResponse = zod.object({
   "fieldKey": zod.string().nullish().describe('For metric sum — the numeric field (related entity\'s field when relationId is set). For record source — the field whose stored value is shown.'),
   "relationId": zod.number().nullish().describe('For sourceKind = metric — compute over a related entity through this qualifying single-link relation.'),
   "statusIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — restrict to records in these statuses; empty\/null = all statuses.'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — selected global status tags (OR within tags, AND with statusIds).'),
   "recordId": zod.number().nullish().describe('For sourceKind = record — the specific record whose field value is shown.')
 }).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
   "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
@@ -3249,6 +3294,7 @@ export const CreateDashboardWidgetResponse = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.'),
   "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
@@ -3263,6 +3309,7 @@ export const CreateDashboardWidgetResponse = zod.object({
   "pageId": zod.number().nullish().describe('The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.'),
   "pageFieldKeys": zod.array(zod.string()).nullish().describe('Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
   "pivot": zod.object({
@@ -3315,7 +3362,8 @@ export const CreateDashboardWidgetResponse = zod.object({
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) pivot dimensions\/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension\/measure has source=page.'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
   "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
@@ -3501,6 +3549,7 @@ export const UpdateDashboardWidgetBody = zod.object({
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
@@ -3519,6 +3568,7 @@ export const UpdateDashboardWidgetBody = zod.object({
   "fieldKey": zod.string().nullish().describe('For metric sum — the numeric field (related entity\'s field when relationId is set). For record source — the field whose stored value is shown.'),
   "relationId": zod.number().nullish().describe('For sourceKind = metric — compute over a related entity through this qualifying single-link relation.'),
   "statusIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — restrict to records in these statuses; empty\/null = all statuses.'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — selected global status tags (OR within tags, AND with statusIds).'),
   "recordId": zod.number().nullish().describe('For sourceKind = record — the specific record whose field value is shown.')
 }).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
   "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
@@ -3538,6 +3588,7 @@ export const UpdateDashboardWidgetBody = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.'),
   "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
@@ -3552,6 +3603,7 @@ export const UpdateDashboardWidgetBody = zod.object({
   "pageId": zod.number().nullish().describe('The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.'),
   "pageFieldKeys": zod.array(zod.string()).nullish().describe('Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
   "pivot": zod.object({
@@ -3604,7 +3656,8 @@ export const UpdateDashboardWidgetBody = zod.object({
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) pivot dimensions\/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension\/measure has source=page.'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
   "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
@@ -3634,6 +3687,7 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "fieldKey": zod.string().nullish().describe('Numeric field to sum (required when aggregation = sum). For related metrics this is the related entity\'s field key.'),
   "relationId": zod.number().nullish().describe('When set, the metric is computed over a related entity through this qualifying single-link relation (count of links, or sum of the related field).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
@@ -3652,6 +3706,7 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "fieldKey": zod.string().nullish().describe('For metric sum — the numeric field (related entity\'s field when relationId is set). For record source — the field whose stored value is shown.'),
   "relationId": zod.number().nullish().describe('For sourceKind = metric — compute over a related entity through this qualifying single-link relation.'),
   "statusIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — restrict to records in these statuses; empty\/null = all statuses.'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('For sourceKind = metric — selected global status tags (OR within tags, AND with statusIds).'),
   "recordId": zod.number().nullish().describe('For sourceKind = record — the specific record whose field value is shown.')
 }).describe('A live value referenced from a notes-table cell formula as {key}. Either an entity aggregate (sourceKind = metric) or a specific record\'s field value (sourceKind = record).')).nullish().describe('Live-value sources (kind = dynamic).'),
   "formula": zod.string().nullish().describe('Optional expression combining the cell\'s source keys as {key}; without it the first source value is shown.'),
@@ -3671,6 +3726,7 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "aggregation": zod.enum(['count', 'sum']),
   "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.'),
   "showValues": zod.boolean().nullish().describe('When true, render numeric value labels directly on the chart; when false\/null, values show only on hover')
@@ -3685,6 +3741,7 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "pageId": zod.number().nullish().describe('The page whose page-local field values provide the pageFieldKeys columns. Must belong to the same entity (its bound page or a mirror page). Required when pageFieldKeys is non-empty.'),
   "pageFieldKeys": zod.array(zod.string()).nullish().describe('Page-local field keys (of pageId) shown as extra columns, appended after the entity columns.'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "limit": zod.number().nullish().describe('Max rows to show (clamped server-side); null = server default')
 }).optional(),
   "pivot": zod.object({
@@ -3737,7 +3794,8 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "visibleRoleIds": zod.array(zod.number()).optional().describe('Roles allowed to use this pivot when it is an entity\'s DEFAULT pivot (entity.defaultPivotJson). Empty\/absent = everyone with record access. Only the default-view pivot honors this; named-view pivots are gated by the view\'s own visibleRoleIds.')
 }),
   "pageId": zod.number().nullish().describe('Page context enabling page-local (source=page) pivot dimensions\/measures. Must belong to the same entity (its bound page or a mirror page). Required when any dimension\/measure has source=page.'),
-  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses')
+  "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
+  "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.')
 }).optional().describe('Pivot (cross-tab) widget config. The pivot is computed admin-authoritatively over the entity\'s non-archived records (independent of the viewing role\'s data permissions); access is governed by the widget\'s role visibility. The entity must have pivot enabled and dimensions\/measures must reference pivot-enabled fields.'),
   "colorStyle": zod.union([zod.literal('icon'),zod.literal('border'),zod.literal('fill'),zod.literal(null)]).nullish().describe('How the widget color is applied — icon box (default), card border, or full fill.'),
   "textColor": zod.union([zod.literal('light'),zod.literal('dark'),zod.literal(null)]).nullish().describe('Font color when colorStyle is \"fill\" (light = white text, dark = dark text).')
@@ -6092,6 +6150,110 @@ export const SetEntityRelatedLinkResponse = zod.object({
 
 
 /**
+ * @summary List global reusable tags
+ */
+export const ListTagsResponseItem = zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "sortOrder": zod.number(),
+  "applicableTo": zod.array(zod.enum(['statuses'])),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListTagsResponse = zod.array(ListTagsResponseItem)
+
+
+/**
+ * @summary Create a global tag (admin tags capability)
+ */
+export const createTagBodyColorDefault = `#6b7280`;
+
+export const CreateTagBody = zod.object({
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string().default(createTagBodyColorDefault),
+  "sortOrder": zod.number().optional(),
+  "applicableTo": zod.array(zod.enum(['statuses'])).default([`statuses`])
+})
+
+
+/**
+ * @summary Update a global tag (admin tags capability)
+ */
+
+
+
+export const UpdateTagParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const UpdateTagBody = zod.object({
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "color": zod.string().optional(),
+  "sortOrder": zod.number().optional(),
+  "applicableTo": zod.array(zod.enum(['statuses'])).optional()
+})
+
+export const UpdateTagResponse = zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "sortOrder": zod.number(),
+  "applicableTo": zod.array(zod.enum(['statuses'])),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete an unassigned, unreferenced global tag (admin tags capability)
+ */
+
+
+
+export const DeleteTagParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const DeleteTagResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Reorder global tags (admin tags capability)
+ */
+export const ReorderTagsBody = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "sortOrder": zod.number()
+}))
+})
+
+export const ReorderTagsResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary List statuses for an entity
  */
 export const ListEntityStatusesParams = zod.object({
@@ -6108,6 +6270,7 @@ export const ListEntityStatusesResponseItem = zod.object({
   "he": zod.string().optional()
 }),
   "color": zod.string(),
+  "tagIds": zod.array(zod.number()).describe('Global status tag ids assigned to this status.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
   "isArchiveTrigger": zod.boolean(),
@@ -6127,6 +6290,7 @@ export const CreateEntityStatusParams = zod.object({
   "entityId": zod.coerce.number()
 })
 
+export const createEntityStatusBodyTagIdsDefault = [];
 export const createEntityStatusBodyIsDefaultDefault = false;
 export const createEntityStatusBodyIsFinalDefault = false;
 export const createEntityStatusBodyIsArchiveTriggerDefault = false;
@@ -6143,6 +6307,7 @@ export const CreateEntityStatusBody = zod.object({
   "he": zod.string().optional()
 }),
   "color": zod.string().optional(),
+  "tagIds": zod.array(zod.number()).default(createEntityStatusBodyTagIdsDefault).describe('Global tags to assign; assignment replaces the status\'s current tag set.'),
   "isDefault": zod.boolean().default(createEntityStatusBodyIsDefaultDefault),
   "isFinal": zod.boolean().default(createEntityStatusBodyIsFinalDefault),
   "isArchiveTrigger": zod.boolean().default(createEntityStatusBodyIsArchiveTriggerDefault),
@@ -6169,6 +6334,7 @@ export const GetStatusResponse = zod.object({
   "he": zod.string().optional()
 }),
   "color": zod.string(),
+  "tagIds": zod.array(zod.number()).describe('Global status tag ids assigned to this status.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
   "isArchiveTrigger": zod.boolean(),
@@ -6199,6 +6365,7 @@ export const UpdateStatusBody = zod.object({
   "he": zod.string().optional()
 }).optional(),
   "color": zod.string().optional(),
+  "tagIds": zod.array(zod.number()).optional().describe('When supplied, replaces the status\'s current global tag set.'),
   "isDefault": zod.boolean().optional(),
   "isFinal": zod.boolean().optional(),
   "isArchiveTrigger": zod.boolean().optional(),
@@ -6217,6 +6384,7 @@ export const UpdateStatusResponse = zod.object({
   "he": zod.string().optional()
 }),
   "color": zod.string(),
+  "tagIds": zod.array(zod.number()).describe('Global status tag ids assigned to this status.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
   "isArchiveTrigger": zod.boolean(),

@@ -824,6 +824,7 @@ export interface RoleAdminCaps {
   dataImport: boolean;
   inboundIntegrations?: boolean;
   documentGeneration?: boolean;
+  tags?: boolean;
 }
 
 export type RecordScope = typeof RecordScope[keyof typeof RecordScope];
@@ -852,6 +853,10 @@ export interface RecordPermission {
   scopeFilters?: ScopeFilter[];
   hiddenStatusIds?: number[];
   hiddenRowStatusIds?: number[];
+  /** Global status tags hidden in picker/write flows. Expanded to current status ids before multi-role intersection. */
+  hiddenStatusTagIds?: number[];
+  /** Global status tags whose current rows are hidden. Expanded before multi-role intersection. */
+  hiddenRowStatusTagIds?: number[];
   /** Cosmetic per-role hide of the whole "Status" column in the records table (mirrors hiddenStatusIds semantics: superAdmin bypasses). */
   hideStatusColumn?: boolean;
   /** Cosmetic per-role hide of the whole "Actions" column (edit/history/ archive/delete) in the records table. superAdmin bypasses. */
@@ -2178,6 +2183,11 @@ export interface WidgetMetric {
      * @nullable
      */
   statusIds?: number[] | null;
+  /**
+     * Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.
+     * @nullable
+     */
+  statusTagIds?: number[] | null;
   /** Value source — "entity" (entity records, the default) or "page" (page-local field values from page_record_values for pageId). When "page", fieldKey refers to a page-local field of pageId and relationId is ignored. */
   source?: WidgetMetricSource;
   /**
@@ -2249,6 +2259,11 @@ export interface ChartConfig {
      * @nullable
      */
   statusIds?: number[] | null;
+  /**
+     * Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.
+     * @nullable
+     */
+  statusTagIds?: number[] | null;
   /** Value source — "entity" (entity records, the default) or "page" (page-local field values from page_record_values for pageId). When "page", groupBy.fieldKey / fieldKey refer to page-local fields of pageId. */
   source?: ChartConfigSource;
   /**
@@ -2293,6 +2308,11 @@ export interface TableConfig {
      */
   statusIds?: number[] | null;
   /**
+     * Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.
+     * @nullable
+     */
+  statusTagIds?: number[] | null;
+  /**
      * Max rows to show (clamped server-side); null = server default
      * @nullable
      */
@@ -2315,6 +2335,11 @@ export interface WidgetPivotConfig {
      * @nullable
      */
   statusIds?: number[] | null;
+  /**
+     * Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.
+     * @nullable
+     */
+  statusTagIds?: number[] | null;
 }
 
 export type NoteCellSourceSourceKind = typeof NoteCellSourceSourceKind[keyof typeof NoteCellSourceSourceKind];
@@ -2365,6 +2390,11 @@ export interface NoteCellSource {
      * @nullable
      */
   statusIds?: number[] | null;
+  /**
+     * For sourceKind = metric — selected global status tags (OR within tags, AND with statusIds).
+     * @nullable
+     */
+  statusTagIds?: number[] | null;
   /**
      * For sourceKind = record — the specific record whose field value is shown.
      * @nullable
@@ -3731,6 +3761,8 @@ export interface Status {
   statusKey: string;
   nameJson: MultilingualText;
   color: string;
+  /** Global status tag ids assigned to this status. */
+  tagIds: number[];
   isDefault: boolean;
   isFinal: boolean;
   isArchiveTrigger: boolean;
@@ -3745,6 +3777,8 @@ export interface StatusInput {
   statusKey: string;
   nameJson: MultilingualText;
   color?: string;
+  /** Global tags to assign; assignment replaces the status's current tag set. */
+  tagIds?: number[];
   isDefault?: boolean;
   isFinal?: boolean;
   isArchiveTrigger?: boolean;
@@ -3758,6 +3792,8 @@ export interface StatusUpdate {
   statusKey?: string;
   nameJson?: MultilingualText;
   color?: string;
+  /** When supplied, replaces the status's current global tag set. */
+  tagIds?: number[];
   isDefault?: boolean;
   isFinal?: boolean;
   isArchiveTrigger?: boolean;
@@ -3775,6 +3811,60 @@ export type StatusesReorderInputItemsItem = {
 export interface StatusesReorderInput {
   entityId: number;
   items: StatusesReorderInputItemsItem[];
+}
+
+export type TagApplicableToItem = typeof TagApplicableToItem[keyof typeof TagApplicableToItem];
+
+
+export const TagApplicableToItem = {
+  statuses: 'statuses',
+} as const;
+
+export interface Tag {
+  id: number;
+  nameJson: MultilingualText;
+  color: string;
+  sortOrder: number;
+  applicableTo: TagApplicableToItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TagInputApplicableToItem = typeof TagInputApplicableToItem[keyof typeof TagInputApplicableToItem];
+
+
+export const TagInputApplicableToItem = {
+  statuses: 'statuses',
+} as const;
+
+export interface TagInput {
+  nameJson: MultilingualText;
+  color?: string;
+  sortOrder?: number;
+  applicableTo?: TagInputApplicableToItem[];
+}
+
+export type TagUpdateApplicableToItem = typeof TagUpdateApplicableToItem[keyof typeof TagUpdateApplicableToItem];
+
+
+export const TagUpdateApplicableToItem = {
+  statuses: 'statuses',
+} as const;
+
+export interface TagUpdate {
+  nameJson?: MultilingualText;
+  color?: string;
+  sortOrder?: number;
+  applicableTo?: TagUpdateApplicableToItem[];
+}
+
+export type TagsReorderInputItemsItem = {
+  id: number;
+  sortOrder: number;
+};
+
+export interface TagsReorderInput {
+  items: TagsReorderInputItemsItem[];
 }
 
 export type TransitionsReorderInputItemsItem = {
