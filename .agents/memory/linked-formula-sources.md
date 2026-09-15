@@ -56,6 +56,12 @@ independent authorization of every dependency field and linked target.
 
 ## Equality through a shared relation
 
+**Archived intermediates:** An archived intermediate is outside the active join universe, not an authorization denial. Exclude it from join candidates even when SYSTEM or an archived-row permission adapter returns its ID; only active unauthorized intermediates propagate denial.
+
+**Why:** Historical links to archived orders caused every equality aggregate in an otherwise fully authorized report to be marked denied, blanking downstream expenses and margin. Totals took a separate evaluation path and masked the problem. Reproducing the resolver against an isolated dump distinguished this from formula syntax or role configuration.
+
+**How to apply:** Keep archive exclusion separate from permission filtering and test both archived-but-allowed and active-but-denied cases. Do not fix blank denied formulas by replacing protected inputs with zero.
+
 **Rule:** Two relation fields may be used as an equality join only when both point to the same intermediate entity. Match by the intersection of permission-approved linked record IDs, never by relation IDs, labels, or display text.
 
 **Why:** Records from different entities can belong to the same order without being linked directly to each other. Matching displayed order numbers is unstable and can bypass the linked order's row boundary. The intermediate record may already be loaded for another formula source; loaded presence is not proof of authorization for this join.

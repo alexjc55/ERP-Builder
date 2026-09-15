@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   aggregateLinkedValues,
   filterLinkedFormulaTargetsByScope,
+  hasDeniedEqualityIntermediateRows,
+  isAllowedEqualityIntermediateRow,
   linkedFormulaEqualityKeys,
   linkedFormulaResourceKey,
 } from "./linked-formula-resolver";
@@ -63,4 +65,35 @@ test("target row permissions are filtered once for sources sharing a scope", asy
   assert.deepEqual(calls.find((call) => call.pageId === 11)?.recordIds, [101, 102]);
   assert.strictEqual(result.get("total"), result.get("count"));
   assert.deepEqual([...result.get("total")!], [101]);
+});
+
+test("archived equality intermediates do not suppress active authorized matches", () => {
+  assert.equal(
+    isAllowedEqualityIntermediateRow(11, new Set([11]), new Set([11])),
+    false,
+  );
+  assert.equal(
+    isAllowedEqualityIntermediateRow(10, new Set([10]), new Set()),
+    true,
+  );
+  assert.equal(
+    isAllowedEqualityIntermediateRow(12, new Set(), new Set()),
+    false,
+  );
+  assert.equal(
+    hasDeniedEqualityIntermediateRows(
+      new Set([10, 11]),
+      new Set([10]),
+      new Set([11]),
+    ),
+    false,
+  );
+  assert.equal(
+    hasDeniedEqualityIntermediateRows(
+      new Set([10, 11]),
+      new Set([10]),
+      new Set(),
+    ),
+    true,
+  );
 });

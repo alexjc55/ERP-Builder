@@ -264,6 +264,33 @@ export async function filterLinkedFormulaTargetsByScope(
 }
 
 /**
+ * Archive state is a row-set exclusion, not an authorization denial. Equality
+ * joins must therefore require an active row even when a system adapter (or an
+ * archived-row caller) returns the archived id from filterRows.
+ */
+export function isAllowedEqualityIntermediateRow(
+  id: number,
+  allowedIds: ReadonlySet<number>,
+  archivedIds: ReadonlySet<number>,
+): boolean {
+  return allowedIds.has(id) && !archivedIds.has(id);
+}
+
+/**
+ * Archived intermediate rows are outside the aggregate's row set by design.
+ * They must not turn an otherwise authorized equality aggregate into a denied
+ * projection merely because a stale relation link still points at one. Active
+ * rows omitted by the permission result remain a denial boundary.
+ */
+export function hasDeniedEqualityIntermediateRows(
+  candidateIds: ReadonlySet<number>,
+  allowedIds: ReadonlySet<number>,
+  archivedIds: ReadonlySet<number>,
+): boolean {
+  return [...candidateIds].some((id) => !archivedIds.has(id) && !allowedIds.has(id));
+}
+
+/**
  * Resolve all sources without an N+1 query per base row. Metadata, records,
  * page-value rows and relation links are loaded in set-based batches; joins and
  * permission-aware aggregation then happen in memory.
@@ -571,6 +598,25 @@ export async function resolveLinkedFormulaData(
       intermediateIdsByEntity.set(linkedEntityId, ids);
     }
   }
+  const intermediateRecordIds = [
+    ...new Set([...intermediateIdsByEntity.values()].flatMap((ids) => [...ids])),
+  ];
+  const archivedIntermediateByEntity = new Map<number, Set<number>>();
+  if (intermediateRecordIds.length) {
+    const intermediateRows = await db.select({
+      id: entityRecordsTable.id,
+      entityId: entityRecordsTable.entityId,
+      archivedAt: entityRecordsTable.archivedAt,
+    })
+      .from(entityRecordsTable)
+      .where(idArrayAny(entityRecordsTable.id, intermediateRecordIds));
+    for (const row of intermediateRows) {
+      if (row.archivedAt == null) continue;
+      const archived = archivedIntermediateByEntity.get(row.entityId) ?? new Set<number>();
+      archived.add(row.id);
+      archivedIntermediateByEntity.set(row.entityId, archived);
+    }
+  }
   const allowedIntermediateByEntity = new Map<number, ReadonlySet<number>>();
   await Promise.all([...intermediateIdsByEntity].map(async ([entityId, ids]) => {
     const allowed = await options.permissions.filterRows({ entityId, recordIds: [...ids] });
@@ -585,9 +631,18 @@ export async function resolveLinkedFormulaData(
     const relation = relationById.get(relationId)!;
     for (const link of links) {
       if (link.relationId !== relationId) continue;
-      const addLinked = (recordId: number, ownerEntityId: number, linkedId: number, linkedEntityId: number) => {
+      const addLinked = (
+        recordId: number,
+        ownerEntityId: number,
+        linkedId: number,
+        linkedEntityId: number,
+      ) => {
         if (loaded.get(recordId)?.entityId !== ownerEntityId) return;
-        if (!allowedIntermediateByEntity.get(linkedEntityId)?.has(linkedId)) return;
+        if (!isAllowedEqualityIntermediateRow(
+          linkedId,
+          allowedIntermediateByEntity.get(linkedEntityId) ?? new Set<number>(),
+          archivedIntermediateByEntity.get(linkedEntityId) ?? new Set<number>(),
+        )) return;
         const key = `${relationId}:${recordId}`;
         const ids = relationValues.get(key) ?? [];
         if (!ids.includes(linkedId)) ids.push(linkedId);
@@ -688,7 +743,11 @@ export async function resolveLinkedFormulaData(
           if (entityId == null) return false;
           const candidates = intermediateIdsByEntity.get(entityId) ?? new Set<number>();
           const allowed = allowedIntermediateByEntity.get(entityId) ?? new Set<number>();
-          return [...candidates].some((id) => !allowed.has(id));
+          return hasDeniedEqualityIntermediateRows(
+            candidates,
+            allowed,
+            archivedIntermediateByEntity.get(entityId) ?? new Set<number>(),
+          );
         });
         if (hasDeniedIntermediate) {
           // As with denied equality targets, matching on inaccessible
