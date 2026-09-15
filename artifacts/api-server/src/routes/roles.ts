@@ -4,6 +4,7 @@ import { and, eq, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import { lockStatusTagReferences } from "../lib/status-tag-lock";
+import { invalidateAgentCache } from "../lib/aiAgentAuth";
 import {
   CreateRoleBody,
   UpdateRoleBody,
@@ -148,6 +149,7 @@ router.post("/roles", requireAuth, requireAdmin("roles"), async (req, res): Prom
     return;
   }
   const role = outcome.role!;
+  invalidateAgentCache();
   res.status(201).json({ ...role, userCount: 0 });
 });
 
@@ -224,6 +226,7 @@ router.put("/roles/:id", requireAuth, requireAdmin("roles"), async (req, res): P
     res.status(404).json({ error: "Role not found" });
     return;
   }
+  invalidateAgentCache();
 
   const [count] = await db
     .select({ count: sql<number>`count(*)::int` })
@@ -250,6 +253,7 @@ router.delete("/roles/:id", requireAuth, requireAdmin("roles"), async (req, res)
     return;
   }
 
+  invalidateAgentCache();
   res.json({ success: true, message: "Role deleted" });
 });
 

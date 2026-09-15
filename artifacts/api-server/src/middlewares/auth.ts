@@ -3,6 +3,7 @@ import { verifyToken, type JwtPayload } from "../lib/jwt";
 import { AI_AGENT_KEY_PREFIX, resolveAgentKey, isAllowedByMask } from "../lib/aiAgentAuth";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { BoundedTtlCache } from "../lib/bounded-ttl-cache";
 
 /**
  * A JWT stays valid for days, but the account behind it can be deleted (e.g.
@@ -11,25 +12,30 @@ import { eq } from "drizzle-orm";
  * DB read per user per minute, not per request.
  */
 const USER_ALIVE_TTL_MS = 60_000;
-const userAliveCache = new Map<number, { ok: boolean; ts: number }>();
+// A high cap contains a token-spray workload without shortening the one-minute
+// authorization freshness window for entries that remain cached.
+const userAliveCache = new BoundedTtlCache<number, boolean>({
+  ttlMs: USER_ALIVE_TTL_MS,
+  maxEntries: 10_000,
+});
 
 async function isUserAlive(userId: number): Promise<boolean> {
   const cached = userAliveCache.get(userId);
-  const now = Date.now();
-  if (cached && now - cached.ts < USER_ALIVE_TTL_MS) return cached.ok;
+  if (cached !== undefined) return cached;
+  const generation = userAliveCache.generation;
   const [row] = await db
     .select({ isActive: usersTable.isActive })
     .from(usersTable)
     .where(eq(usersTable.id, userId))
     .limit(1);
   const ok = row?.isActive === true;
-  userAliveCache.set(userId, { ok, ts: now });
+  userAliveCache.setIfCurrent(generation, userId, ok);
   return ok;
 }
 
 /** Drop the cached "alive" verdict for a user (call after delete/block/merge). */
 export function invalidateUserAliveCache(userId: number): void {
-  userAliveCache.delete(userId);
+  userAliveCache.invalidate(userId);
 }
 
 declare global {

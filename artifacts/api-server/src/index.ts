@@ -3,6 +3,10 @@ import { logger } from "./lib/logger";
 import { migrateLegacyUploads, UPLOADS_ROOT } from "./lib/localStorage";
 import { ensureAiAgentsModule } from "./routes/ai-agents";
 import { ensureInboundIntegrationsModule, recoverInboundDeliveries } from "./routes/inbound-integrations";
+import { activeRequestTracker } from "./app";
+import { startMemoryDiagnostics } from "./lib/memory-diagnostics";
+import { disposeCollaboration } from "./lib/collaboration";
+import { createGracefulShutdown, type GracefulShutdownOwner } from "./lib/server-lifecycle";
 
 const rawPort = process.env["PORT"];
 
@@ -18,6 +22,9 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+let httpServer: ReturnType<typeof app.listen> | undefined;
+let shutdownOwner: GracefulShutdownOwner | undefined;
+
 async function start(): Promise<void> {
   try {
     const movedFiles = await migrateLegacyUploads();
@@ -32,15 +39,29 @@ async function start(): Promise<void> {
   // Durable delivery rows are reclaimed on startup and periodically; the
   // webhook handler only persists and returns 202.
   recoverInboundDeliveries().catch((err) => logger.error({ err }, "Failed to recover inbound deliveries"));
-  setInterval(() => void recoverInboundDeliveries().catch((err) => logger.error({ err }, "Failed to poll inbound deliveries")), 15_000).unref();
+  const recoveryTimer = setInterval(() => void recoverInboundDeliveries().catch((err) => logger.error({ err }, "Failed to poll inbound deliveries")), 15_000);
+  recoveryTimer.unref();
 
-  app.listen(port, (err) => {
+  httpServer = app.listen(port, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");
       process.exit(1);
     }
 
     logger.info({ port }, "Server listening");
+    const stopMemoryDiagnostics = startMemoryDiagnostics({
+      logger,
+      getActiveRequests: () => activeRequestTracker.getActiveRequests(),
+    });
+    shutdownOwner ??= createGracefulShutdown({
+      server: httpServer!,
+      stopMemoryDiagnostics,
+      disposeCollaboration,
+      disposeBackgroundWork: () => clearInterval(recoveryTimer),
+      logger,
+      exit: (code) => process.exit(code),
+    });
+    shutdownOwner.install();
   });
 }
 

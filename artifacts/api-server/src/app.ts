@@ -5,10 +5,19 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { initAutomations } from "./lib/automations-engine";
 import { inboundWebhookRouter } from "./routes/inbound-integrations";
+import {
+  ActiveRequestTracker,
+  isMemoryDiagnosticsEnabled,
+} from "./lib/memory-diagnostics";
 
 const app: Express = express();
+export const activeRequestTracker = new ActiveRequestTracker();
 
 initAutomations();
+
+if (isMemoryDiagnosticsEnabled()) {
+  app.use(activeRequestTracker.middleware);
+}
 
 app.use(
   pinoHttp({

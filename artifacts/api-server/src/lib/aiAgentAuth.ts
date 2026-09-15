@@ -3,6 +3,7 @@ import type { Request } from "express";
 import { db, aiAgentsTable, usersTable, userRolesTable, rolesTable, modulesTable, type AiAgentMask, type RolePermissions } from "@workspace/db";
 import { eq, inArray } from "drizzle-orm";
 import type { JwtPayload } from "./jwt";
+import { BoundedTtlCache } from "./bounded-ttl-cache";
 
 /** AI-agent API keys are opaque bearer tokens with this prefix (never JWTs). */
 export const AI_AGENT_KEY_PREFIX = "agk_";
@@ -20,7 +21,6 @@ export function generateAgentKey(): { plainKey: string; tokenHash: string; token
 interface CachedAgent {
   payload: JwtPayload | null;
   mask: AiAgentMask;
-  ts: number;
 }
 
 /**
@@ -30,7 +30,12 @@ interface CachedAgent {
  * admin changes makes it immediate in the common case.
  */
 const AGENT_CACHE_TTL_MS = 60_000;
-const agentCache = new Map<string, CachedAgent>();
+// Token hashes are attacker-controlled cardinality. This cap only causes a
+// revalidation and never extends a revoked key's acceptance window.
+const agentCache = new BoundedTtlCache<string, CachedAgent>({
+  ttlMs: AGENT_CACHE_TTL_MS,
+  maxEntries: 10_000,
+});
 
 export function invalidateAgentCache(): void {
   agentCache.clear();
@@ -53,10 +58,10 @@ async function isAiAgentsModuleEnabled(): Promise<boolean> {
 export async function resolveAgentKey(plainKey: string): Promise<{ payload: JwtPayload; mask: AiAgentMask } | null> {
   const tokenHash = hashAgentKey(plainKey);
   const cached = agentCache.get(tokenHash);
-  const now = Date.now();
-  if (cached && now - cached.ts < AGENT_CACHE_TTL_MS) {
+  if (cached) {
     return cached.payload ? { payload: cached.payload, mask: cached.mask } : null;
   }
+  const generation = agentCache.generation;
 
   let payload: JwtPayload | null = null;
   let mask: AiAgentMask = "read";
@@ -102,7 +107,7 @@ export async function resolveAgentKey(plainKey: string): Promise<{ payload: JwtP
         payload = { userId: effectiveUserId, roleId: effectiveRoleId, agentId: row.agentId };
         mask = row.capabilityMask as AiAgentMask;
       }
-      // Best-effort usage timestamp, at most once per cache window.
+      // Best-effort usage timestamp, once while this key remains cached.
       void db
         .update(aiAgentsTable)
         .set({ lastUsedAt: new Date() })
@@ -111,7 +116,7 @@ export async function resolveAgentKey(plainKey: string): Promise<{ payload: JwtP
     }
   }
 
-  agentCache.set(tokenHash, { payload, mask, ts: now });
+  agentCache.setIfCurrent(generation, tokenHash, { payload, mask });
   return payload ? { payload, mask } : null;
 }
 

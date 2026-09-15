@@ -79,3 +79,4 @@
 - [Automation folders](automation-folders.md) — folders are entity-scoped organization only; deleting one must preserve its automations as ungrouped.
 - [Table loading order](table-loading-order.md) — defer expensive incomplete rendering; preserve SSE snapshot coverage and generation-safe manual refresh.
 - [Global status tags](status-tags.md) — shared catalog; expand per-role restrictions before merging; serialize deletion with JSON-reference writes.
+- [API memory lifecycle](api-memory-lifecycle.md) — bounded expiry, invalidation-safe cache fills, explicit SSE cleanup, and cautious RSS attribution.

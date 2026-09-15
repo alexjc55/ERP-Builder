@@ -32,15 +32,23 @@ export type GlobalUserPresence = {
   lastActiveAt: number;
   sessionCount: number;
 };
-type StreamEntry = { res: Response; canSeeEditing: boolean };
+type StreamEntry = {
+  res: Response;
+  canSeeEditing: boolean;
+  userId?: number;
+  ping?: ReturnType<typeof setInterval>;
+};
 
 export const PRESENCE_TTL_MS = 45_000;
+const PRESENCE_CLEANUP_INTERVAL_MS = 5_000;
 const rooms = new Map<number, Map<string, Entry>>();
 // Ephemeral process-local registry. A user/client pair represents one browser
 // tab and is independent of page rooms so the dashboard can aggregate globally.
 const globalPresence = new Map<string, GlobalEntry>();
 let globalActivityOrder = 0;
 const streams = new Map<number, Map<string, StreamEntry>>();
+let presenceCleanupTimer: ReturnType<typeof setInterval> | undefined;
+let stopBridge: (() => void) | undefined;
 
 export function deterministicPresenceColor(userId: number): string {
   const palette = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#16a34a", "#0891b2", "#4f46e5", "#ca8a04"];
@@ -66,20 +74,67 @@ export function isUnrestrictedVisibilityProfile(profile: {
     profile.visiblePageFieldCount === profile.activePageFieldCount;
 }
 
-function clean(pageId: number, now = Date.now()): void {
+function clean(pageId: number, now = Date.now()): boolean {
   const room = rooms.get(pageId);
-  if (!room) return;
-  for (const [key, value] of room) if (value.expiresAt <= now) room.delete(key);
+  if (!room) return false;
+  let changed = false;
+  for (const [key, value] of room) {
+    if (value.expiresAt <= now) {
+      room.delete(key);
+      changed = true;
+    }
+  }
   if (room.size === 0) rooms.delete(pageId);
+  stopPresenceCleanupIfIdle();
+  return changed;
 }
 
 function globalKey(userId: number, clientId: string): string {
   return `${userId}:${clientId}`;
 }
 
-function cleanGlobal(now = Date.now()): void {
+function cleanGlobal(now = Date.now()): boolean {
+  let changed = false;
   for (const [key, value] of globalPresence) {
-    if (value.expiresAt <= now) globalPresence.delete(key);
+    if (value.expiresAt <= now) {
+      globalPresence.delete(key);
+      changed = true;
+    }
+  }
+  stopPresenceCleanupIfIdle();
+  return changed;
+}
+
+function cleanAllPresence(now = Date.now()): number[] {
+  const changedPages: number[] = [];
+  for (const [pageId, room] of rooms) {
+    let changed = false;
+    for (const [key, value] of room) {
+      if (value.expiresAt <= now) {
+        room.delete(key);
+        changed = true;
+      }
+    }
+    if (room.size === 0) rooms.delete(pageId);
+    if (changed) changedPages.push(pageId);
+  }
+  cleanGlobal(now);
+  stopPresenceCleanupIfIdle();
+  return changedPages;
+}
+
+function ensurePresenceCleanup(): void {
+  if (presenceCleanupTimer) return;
+  presenceCleanupTimer = setInterval(() => {
+    for (const pageId of cleanAllPresence()) broadcastPresence(pageId);
+  }, PRESENCE_CLEANUP_INTERVAL_MS);
+  presenceCleanupTimer.unref?.();
+}
+
+function stopPresenceCleanupIfIdle(): void {
+  if (presenceCleanupTimer && rooms.size === 0 && globalPresence.size === 0) {
+    clearInterval(presenceCleanupTimer);
+    presenceCleanupTimer = undefined;
   }
 }
 
@@ -140,6 +195,7 @@ export function putPresence(pageId: number, clientId: string, user: { id: number
     activityOrder: ++globalActivityOrder,
     expiresAt: now + PRESENCE_TTL_MS,
   });
+  ensurePresenceCleanup();
   broadcastPresence(pageId);
 }
 
@@ -149,49 +205,112 @@ export function removePresence(pageId: number, clientId: string, userId?: number
     if (entry?.pageId === pageId) globalPresence.delete(globalKey(userId, clientId));
   }
   const room = rooms.get(pageId);
-  if (!room || !room.delete(clientId)) return;
+  if (!room || !room.delete(clientId)) {
+    stopPresenceCleanupIfIdle();
+    return;
+  }
   if (room.size === 0) rooms.delete(pageId);
+  stopPresenceCleanupIfIdle();
   broadcastPresence(pageId);
 }
 
-function write(res: Response, event: string, data: unknown): void {
-  if (!res.writableEnded) res.write(`event:${event}\ndata:${JSON.stringify(data)}\n\n`);
+function closeStream(pageId: number, clientId: string, stream: StreamEntry, removeClientPresence: boolean): void {
+  stream.ping && clearInterval(stream.ping);
+  stream.ping = undefined;
+  const room = streams.get(pageId);
+  // Generation check: a late close from a replaced socket cannot remove the
+  // new stream or its presence.
+  if (room?.get(clientId) !== stream) return;
+  room.delete(clientId);
+  if (room.size === 0) streams.delete(pageId);
+  if (removeClientPresence) removePresence(pageId, clientId, stream.userId);
+  if (!stream.res.writableEnded) stream.res.end();
+}
+
+function writeStream(pageId: number, clientId: string, stream: StreamEntry, frame: string): void {
+  if (stream.res.writableEnded) {
+    closeStream(pageId, clientId, stream, true);
+    return;
+  }
+  try {
+    // A false result means the HTTP response's finite high-water buffer is
+    // full. SSE reconnects receive a snapshot, so close rather than queueing
+    // an unbounded per-client backlog.
+    if (!stream.res.write(frame)) closeStream(pageId, clientId, stream, true);
+  } catch {
+    closeStream(pageId, clientId, stream, true);
+  }
+}
+
+function writeEvent(pageId: number, clientId: string, stream: StreamEntry, event: string, data: unknown): void {
+  writeStream(pageId, clientId, stream, `event:${event}\ndata:${JSON.stringify(data)}\n\n`);
 }
 export function addStream(pageId: number, clientId: string, res: Response, canSeeEditing: boolean, userId?: number): () => void {
   const room = streams.get(pageId) ?? new Map<string, StreamEntry>();
   streams.set(pageId, room);
   const previous = room.get(clientId);
-  if (previous && previous.res !== res && !previous.res.writableEnded) previous.res.end();
-  room.set(clientId, { res, canSeeEditing });
-  write(res, "snapshot", { presence: presenceSnapshot(pageId, canSeeEditing) });
-  const ping = setInterval(() => { if (!res.writableEnded) res.write(":ping\n\n"); }, 20_000);
-  return () => {
-    clearInterval(ping);
-    // A StrictMode remount or fast reconnect can replace this response before
-    // the old socket's close callback runs. Never let that stale callback
-    // remove the replacement stream or its freshly-published presence.
-    if (room.get(clientId)?.res !== res) return;
-    room.delete(clientId);
-    if (room.size === 0) streams.delete(pageId);
-    removePresence(pageId, clientId, userId);
-  };
+  if (previous && previous.res !== res) closeStream(pageId, clientId, previous, false);
+  const activeRoom = streams.get(pageId) ?? new Map<string, StreamEntry>();
+  streams.set(pageId, activeRoom);
+  const stream: StreamEntry = { res, canSeeEditing, userId };
+  activeRoom.set(clientId, stream);
+  writeEvent(pageId, clientId, stream, "snapshot", { presence: presenceSnapshot(pageId, canSeeEditing) });
+  if (activeRoom.get(clientId) === stream) {
+    stream.ping = setInterval(() => writeStream(pageId, clientId, stream, ":ping\n\n"), 20_000);
+    stream.ping.unref?.();
+  }
+  return () => closeStream(pageId, clientId, stream, true);
 }
+
 export function broadcast(pageId: number, event: string, data: unknown): void {
-  for (const { res } of streams.get(pageId)?.values() ?? []) write(res, event, data);
+  for (const [clientId, stream] of [...(streams.get(pageId) ?? [])]) {
+    writeEvent(pageId, clientId, stream, event, data);
+  }
 }
 function broadcastPresence(pageId: number): void {
-  for (const { res, canSeeEditing } of streams.get(pageId)?.values() ?? []) {
-    write(res, "presence", { presence: presenceSnapshot(pageId, canSeeEditing) });
+  for (const [clientId, stream] of [...(streams.get(pageId) ?? [])]) {
+    writeEvent(pageId, clientId, stream, "presence", { presence: presenceSnapshot(pageId, stream.canSeeEditing) });
   }
 }
 
 let bridgeStarted = false;
+/**
+ * Release process-local collaboration resources. The application entrypoint
+ * owns this during graceful shutdown; it is safe to invoke more than once.
+ */
+export function disposeCollaboration(): void {
+  if (presenceCleanupTimer) {
+    clearInterval(presenceCleanupTimer);
+    presenceCleanupTimer = undefined;
+  }
+  for (const room of streams.values()) {
+    for (const stream of room.values()) {
+      if (stream.ping) clearInterval(stream.ping);
+      stream.ping = undefined;
+      try {
+        if (!stream.res.writableEnded) stream.res.end();
+      } catch (err) {
+        // A broken response must not prevent the remaining streams and
+        // process-local registries from being released.
+        logger.error({ err }, "Failed to close collaboration stream during shutdown");
+      }
+    }
+  }
+  streams.clear();
+  rooms.clear();
+  globalPresence.clear();
+  globalActivityOrder = 0;
+  stopBridge?.();
+  stopBridge = undefined;
+  bridgeStarted = false;
+}
+
 /** Internal events are intentionally fanned out asynchronously: collaboration
  * must never add latency to a mutation or automation cascade. */
 export function initCollaborationBridge(): void {
   if (bridgeStarted) return;
   bridgeStarted = true;
-  subscribe("*", (event) => { void bridge(event); });
+  stopBridge = subscribe("*", (event) => { void bridge(event); });
 }
 async function bridge(event: SystemEvent): Promise<void> {
   try {
