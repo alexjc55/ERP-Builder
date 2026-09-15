@@ -11,7 +11,7 @@ description: Retention and measurement rules for auth caches, SSE, and formula r
 
 **Rule:** Presence expiry, replaced SSE streams, slow readers, and shutdown all require explicit resource ownership and cleanup.
 
-**Why:** Request-close cleanup alone misses inactive presence and replacement timing; ignoring response backpressure can retain outbound buffers.
+**Why:** Request-close cleanup alone misses inactive presence and replacement timing; ignoring response backpressure can retain outbound buffers. The user confirmed materially lower remote-server memory consumption after lifecycle hardening; retain this approach, without attributing the improvement to any single change or treating it as proof of long-term stability.
 
 **How to apply:** Keep sweeps unref'd/self-stopping, close slow streams using the reconnect/snapshot protocol, and ensure stale close handlers cannot remove replacements.
 
