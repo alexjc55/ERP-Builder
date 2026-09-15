@@ -57,6 +57,12 @@ If `.env` changed, source it before restarting: `set -a; source .env; set +a;` t
 **How to apply:** for each future schema change, generate the normal Drizzle migration. Before deploying it, verify production's migration ledger and schema; if a manual SQL handover is explicitly needed, agree on one temporary path and remove the file after production is verified.
 
 ## Build/install quirks on that server
+**Rule:** Build frontend releases outside nginx's live document root; preserve web-readable directory permissions when promoting staged files.
+
+**Why:** Interrupted Vite builds can leave the live output empty. A staging directory created by `mktemp -d` has mode 700; copying its root with `cp -a staging/. public/` transfers that mode and blocks nginx even when the build succeeded.
+
+**How to apply:** Verify the staged index before promotion, ensure the public directory is traversable by nginx (755), and check HTTP afterward. Never recursively relax permissions on the project or private files.
+
 - Do not rely on the server's global npmmirror registry: pnpm 11 checks explicit lockfile tarball hosts against the active registry and rejects a mismatch. Keep a project-owned npmjs registry compatible with the committed frozen lockfile; never rewrite or sed-patch the lockfile on production.
 - Invoke pnpm through `corepack pnpm --config.registry=https://registry.npmjs.org/`: Corepack honors the exact repository-pinned version, and the CLI registry overrides even pnpm globalconfig. pnpm 11 ignores legacy `onlyBuiltDependencies`; approved scripts must be committed as `allowBuilds` (at least `esbuild`) before deployment. A production-only `pnpm approve-builds` dirties `pnpm-workspace.yaml`; restoring it before later pnpm commands makes the dependency status check rerun installation and fail again.
 - Root `pnpm build` fails on mockup-sandbox — build api-server and erp-platform with `--filter` instead.
