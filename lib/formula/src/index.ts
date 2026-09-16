@@ -53,14 +53,54 @@ export interface FormulaEvaluationOptions {
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const ISO_DATE_OR_DATETIME_RE =
   /^(\d{4})-(\d{2})-(\d{2})(?:T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,9})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?)?$/;
+const TIME_ZONE_CACHE_LIMIT = 128;
+const DAY_FORMATTER_OPTIONS = {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+} as const;
+const timeZoneValidity = new Map<string, boolean>();
 const dayFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function readLru<K, V>(cache: Map<K, V>, key: K): V | undefined {
+  const value = cache.get(key);
+  if (value === undefined) return undefined;
+  cache.delete(key);
+  cache.set(key, value);
+  return value;
+}
+
+function writeLru<K, V>(cache: Map<K, V>, key: K, value: V): void {
+  cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > TIME_ZONE_CACHE_LIMIT) {
+    const oldest = cache.keys().next();
+    if (oldest.done) break;
+    cache.delete(oldest.value);
+  }
+}
+
+function createDayFormatter(timeZone: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    ...DAY_FORMATTER_OPTIONS,
+  });
+}
 
 export function isValidFormulaTimeZone(timeZone: string): boolean {
   if (!timeZone || timeZone.length > 100) return false;
+  const cached = readLru(timeZoneValidity, timeZone);
+  if (cached !== undefined) return cached;
   try {
-    new Intl.DateTimeFormat("en-US", { timeZone }).format();
+    // Use the same formatter shape as todayInTimeZone so validation and
+    // rendering share one ICU allocation on a new valid timezone.
+    const formatter = createDayFormatter(timeZone);
+    formatter.format();
+    writeLru(timeZoneValidity, timeZone, true);
+    writeLru(dayFormatters, timeZone, formatter);
     return true;
   } catch {
+    writeLru(timeZoneValidity, timeZone, false);
     return false;
   }
 }
@@ -93,15 +133,10 @@ function toCalendarDay(value: FormulaValue): number | null {
 function todayInTimeZone(options?: FormulaEvaluationOptions): string {
   const requested = options?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE;
   const timeZone = isValidFormulaTimeZone(requested) ? requested : DEFAULT_FORMULA_TIME_ZONE;
-  let formatter = dayFormatters.get(timeZone);
+  let formatter = readLru(dayFormatters, timeZone);
   if (!formatter) {
-    formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-    dayFormatters.set(timeZone, formatter);
+    formatter = createDayFormatter(timeZone);
+    writeLru(dayFormatters, timeZone, formatter);
   }
   const parts = formatter.formatToParts(options?.now ?? new Date());
   const year = parts.find((part) => part.type === "year")?.value ?? "";

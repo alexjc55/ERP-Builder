@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildFormulaScope,
+  DEFAULT_FORMULA_TIME_ZONE,
   DEFAULT_WORKING_DAYS,
   evaluateFormula,
   formatFormulaFieldResult,
@@ -27,6 +28,96 @@ test("marks only numeric formula results as numeric for display formatting", () 
   assert.equal(formatFormulaResult("1 / 4", {}, 2).numeric, true);
   assert.equal(formatFormulaResult('"25"', {}, 2).numeric, undefined);
   assert.equal(formatFormulaResult("true", {}, 2).numeric, undefined);
+});
+
+test("time-zone validity and formatter caches bound ICU constructors", { concurrency: false }, () => {
+  const originalDateTimeFormat = Intl.DateTimeFormat;
+  let constructorCount = 0;
+  const CountedDateTimeFormat = function (
+    this: unknown,
+    ...args: ConstructorParameters<typeof Intl.DateTimeFormat>
+  ) {
+    constructorCount++;
+    return new originalDateTimeFormat(...args);
+  } as unknown as typeof Intl.DateTimeFormat;
+  Object.defineProperty(CountedDateTimeFormat, "prototype", {
+    value: originalDateTimeFormat.prototype,
+  });
+  Object.defineProperty(Intl, "DateTimeFormat", {
+    value: CountedDateTimeFormat,
+    writable: true,
+    configurable: true,
+  });
+
+  try {
+    const supportedValuesOf = (
+      Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] }
+    ).supportedValuesOf;
+    assert.ok(supportedValuesOf, "the runtime must expose IANA timezone names");
+    const validZones = supportedValuesOf("timeZone").slice(0, 129);
+    assert.equal(validZones.length, 129);
+    const fixedNow = new Date("2024-01-10T12:00:00Z");
+
+    const validStart = constructorCount;
+    for (const timeZone of validZones) {
+      evaluateFormula("today()", {}, { timeZone, now: fixedNow });
+    }
+    assert.equal(
+      constructorCount - validStart,
+      validZones.length,
+      "a new valid timezone should allocate one shared validation/day formatter",
+    );
+
+    const warmStart = constructorCount;
+    const stableOptions = { timeZone: validZones[validZones.length - 1], now: fixedNow };
+    for (let i = 0; i < 100; i++) {
+      evaluateFormula("today()", {}, stableOptions);
+      evaluateFormula("daysSince('2024-01-07')", {}, stableOptions);
+      evaluateFormula("daysUntil('2024-01-14')", {}, stableOptions);
+    }
+    assert.equal(
+      constructorCount - warmStart,
+      0,
+      "today/daysSince/daysUntil must reuse the cached timezone formatter",
+    );
+
+    const lastZoneStart = constructorCount;
+    evaluateFormula("today()", {}, { timeZone: validZones[128], now: fixedNow });
+    assert.equal(constructorCount - lastZoneStart, 0, "the newest valid timezone stays hot");
+
+    const firstZoneStart = constructorCount;
+    evaluateFormula("today()", {}, { timeZone: validZones[0], now: fixedNow });
+    assert.equal(
+      constructorCount - firstZoneStart,
+      1,
+      "the oldest valid timezone is evicted at the bounded cache limit",
+    );
+
+    const invalidZones = Array.from({ length: 129 }, (_, index) => `Invalid/Zone-${index}`);
+    for (const timeZone of invalidZones) {
+      assert.equal(
+        evaluateFormula("today()", {}, { timeZone, now: fixedNow }),
+        evaluateFormula("today()", {}, { timeZone: DEFAULT_FORMULA_TIME_ZONE, now: fixedNow }),
+        "invalid timezone input must retain the default timezone fallback",
+      );
+    }
+    const newestInvalidStart = constructorCount;
+    evaluateFormula("today()", {}, { timeZone: invalidZones[128], now: fixedNow });
+    assert.equal(constructorCount - newestInvalidStart, 0, "newest invalid entries stay cached");
+    const oldestInvalidStart = constructorCount;
+    evaluateFormula("today()", {}, { timeZone: invalidZones[0], now: fixedNow });
+    assert.equal(
+      constructorCount - oldestInvalidStart,
+      1,
+      "oldest invalid entries are evicted at the bounded cache limit",
+    );
+  } finally {
+    Object.defineProperty(Intl, "DateTimeFormat", {
+      value: originalDateTimeFormat,
+      writable: true,
+      configurable: true,
+    });
+  }
 });
 
 test("uses a server-materialized field value without re-evaluating protected sources", () => {
@@ -119,6 +210,27 @@ test("daysSince and daysUntil retain their existing calendar semantics", () => {
   };
   assert.equal(evaluateFormula("daysSince('2024-01-07')", {}, options), 3);
   assert.equal(evaluateFormula("daysUntil('2024-01-14')", {}, options), 4);
+});
+
+test("today and relative helpers preserve calendar dates across DST transitions", () => {
+  const beforeTransition = {
+    timeZone: "America/New_York",
+    now: new Date("2024-03-10T04:30:00Z"),
+  };
+  const afterTransition = {
+    timeZone: "America/New_York",
+    now: new Date("2024-03-10T07:30:00Z"),
+  };
+  assert.equal(evaluateFormula("today()", {}, beforeTransition), "2024-03-09");
+  assert.equal(evaluateFormula("today()", {}, afterTransition), "2024-03-10");
+  assert.equal(
+    evaluateFormula("daysSince('2024-03-09')", {}, afterTransition),
+    1,
+  );
+  assert.equal(
+    evaluateFormula("daysUntil('2024-03-11')", {}, afterTransition),
+    1,
+  );
 });
 
 test("working days flow through lazy formula scopes used by related and page-local formulas", () => {

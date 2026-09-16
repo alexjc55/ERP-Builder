@@ -7,7 +7,8 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "tsx --test src/index.test.ts"
+    "test": "tsx --test src/index.test.ts",
+    "diagnostics:timezone-memory": "tsx diagnostics/timezone-memory-repro.mts"
   },
   "devDependencies": {
     "@types/node": "catalog:",
