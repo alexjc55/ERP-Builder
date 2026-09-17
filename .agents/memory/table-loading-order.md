@@ -26,3 +26,9 @@ description: Freshness and responsiveness constraints when reducing bootstrap re
 **Why:** Replacing populated cells with loading indicators caused columns to shrink and redirected users' next clicks. Retaining projections independently also mixed old and new formula inputs.
 
 **How to apply:** Stage replacement responses by generation, abort staging on failure/supersession, expose stale errors with retry, and keep write readiness separate from display readiness. Preserve open picker/editor trees during refresh while guarding writes; clear transient editing state on scope changes. Manual refresh must dispatch only one projection generation.
+
+**Rule:** An acknowledged inline write must not wait for unrelated background projections before showing its saved scalar. The write's identity and editor lifetime are distinct from read request generations.
+
+**Why:** Complete background snapshot staging can delay the writer's own feedback. Reusing read generations for write ownership lets an intervening refresh discard a valid acknowledgement; scope equality alone cannot reject a response after navigating away and back.
+
+**How to apply:** Retain explicit saving feedback until acknowledgement, publish only server-confirmed values/versions, reject stale callbacks by captured invocation identity, and close only the initiating editor lifetime. Preserve source-page invalidation and automation follow-up for every save surface when relocating mutation callbacks.

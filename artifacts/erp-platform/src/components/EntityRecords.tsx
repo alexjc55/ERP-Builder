@@ -227,6 +227,7 @@ const DEFAULT_PAGE_SIZE = 50;
  * NUL-prefixed so it can never collide with a real stored value.
  */
 const NULL_GROUP_KEY = "\u0000__null__";
+const EMPTY_ROW_VALUES: Record<string, unknown> = {};
 
 // The status cell background is the status color at ~12% over white (very light),
 // so light-colored statuses (yellow, light green) become unreadable if the text
@@ -2010,6 +2011,16 @@ export function EntityRecords({
   // A matching key may be displayed while its replacement request is pending;
   // a different key must be blanked before paint so values cannot cross scopes.
   const pageValuesSnapshotKeyRef = useRef<string | null>(null);
+  // The last acknowledged inline page-value patch wins over an in-flight
+  // projection response for the same snapshot. This is one bounded descriptor,
+  // not a per-row queue.
+  const acknowledgedPageValuesRef = useRef<{
+    snapshotKey: string | null;
+    recordId: number;
+    valuesJson: Record<string, unknown>;
+    version: number;
+    fieldVersions?: Record<string, number>;
+  } | null>(null);
   // Projection reads are launched from the records response, before that response
   // mounts the wide table. These refs de-duplicate the follow-up effects for the
   // same exact row/config generation without turning a newer scope into a cache.
@@ -2166,40 +2177,8 @@ export function EntityRecords({
     }
   };
   const setPageValuesMutation = useSetPageRecordValues({
-    mutation: {
-      onSuccess: () => {
-        if (pageId != null) {
-          queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/record-values`] });
-        }
-        for (const sourcePageId of pageRefSourcePageIds) {
-          queryClient.invalidateQueries({ queryKey: [`/api/pages/${sourcePageId}/record-values`] });
-        }
-        // A page-local edit also changes what the grouped-mirror header shows
-        // for that column (its server-computed group-common value / totals), so
-        // re-run the main records query — otherwise the header stays stale until
-        // the group is collapsed. Mirrors the entity-field path's invalidate().
-        setRefreshTick((x) => x + 1);
-        // A page-local edit can trigger page_field_changed automations (including
-        // an action that writes another page-local field on this same row).
-        scheduleAutomationRefresh();
-      },
-      onError: (err) => {
-        if ((err as { status?: number })?.status === 409) {
-          // Refresh the server version while the inline editor stays mounted;
-          // its local input state is intentionally not reset by new props.
-          queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/record-values`] });
-          setRefreshTick((tick) => tick + 1);
-          setInlineCommitResetKey((key) => key + 1);
-        }
-        toast({
-          title: (err as { status?: number })?.status === 409
-            ? t("collaboration.conflict", "Данные изменились на сервере")
-            : t("records.saveError", "Не удалось сохранить значение"),
-          description: extractError(err),
-          variant: "destructive",
-        });
-      },
-    },
+    // Inline callbacks use mutateAsync with a captured descriptor, so a
+    // remount/navigation cannot route another request's error into this scope.
   });
 
   // Storable page-local fields (function/relation/lookup are derived, never stored)
@@ -2645,6 +2624,20 @@ export function EntityRecords({
   const editingCellRef = useRef(editingCell);
   const activeCellDirtyRef = useRef(false);
   const deferredRemoteRefreshRef = useRef(false);
+  type InlinePendingWrite = {
+    key: string;
+    scopeKey: string;
+    requestId: number;
+    recordId: number;
+    editorEpoch: number;
+  };
+  // Inline writes are deliberately serialized. Editors may be opened while a
+  // write is pending, but a second commit waits for the acknowledged CAS
+  // version instead of maintaining an optimistic queue.
+  const pendingInlineWriteRef = useRef<InlinePendingWrite | null>(null);
+  const inlineEditorEpochRef = useRef(0);
+  const [pendingInlineWriteKey, setPendingInlineWriteKey] = useState<string | null>(null);
+  const [pendingInlineDraft, setPendingInlineDraft] = useState<CellValue | null>(null);
   // Write-through lookup: the linked record (in the related entity) currently open
   // for full editing from a lookup cell.
   const [writeThroughEdit, setWriteThroughEdit] = useState<{ entityId: number; recordId: number } | null>(null);
@@ -2910,6 +2903,7 @@ export function EntityRecords({
       | { pageRelated: { columns: PageRelatedColumn[]; values: PageRelatedValue[] } }
       | { entityRelated: { columns: PageRelatedColumn[]; values: PageRelatedValue[] } },
   ): boolean => {
+    if (pendingInlineWriteRef.current) return false;
     const pending = pendingRecordsPublicationRef.current;
     if (!pending || pending.projectionGeneration !== generation) return false;
     Object.assign(pending.staged, projection);
@@ -4086,6 +4080,13 @@ export function EntityRecords({
       recordsPermissionKeyRef.current !== recordsPermissionScopeKey;
     recordsRenderKeyRef.current = recordsRenderKey;
     recordsPermissionKeyRef.current = recordsPermissionScopeKey;
+    if (pendingInlineWriteRef.current && pendingInlineWriteRef.current.scopeKey !== recordsRenderKey) {
+      // The mutation cannot be aborted, but its response is no longer allowed
+      // to touch the new page/filter/permission scope.
+      pendingInlineWriteRef.current = null;
+      setPendingInlineWriteKey(null);
+      setPendingInlineDraft(null);
+    }
     // Filter, pagination, sort, and view changes define a new row universe.
     // Unlike a same-query background refresh, the old rows must be withheld
     // before paint so a click cannot target a cell from the previous query.
@@ -4154,14 +4155,33 @@ export function EntityRecords({
       setPageValuesHydration({ status: "loading", key: requestScopeKey, error: null });
       void runPageValuesQuery({ pageId, data: { recordIds } })
         .then((result) => {
-          if (requestId !== pageValuesRequestIdRef.current) return;
-          if (stagePendingProjection(generation, { pageValues: result })) return;
-          setPageRecordValues(result);
+          if (requestId !== pageValuesRequestIdRef.current || pendingInlineWriteRef.current) return;
+          const acknowledged = acknowledgedPageValuesRef.current;
+          let authoritative = result;
+          if (acknowledged?.snapshotKey === snapshotKey) {
+            const incoming = result.find((row) => row.recordId === acknowledged.recordId);
+            if (incoming && acknowledged.version >= incoming.version) {
+              authoritative = result.map((row) =>
+                row.recordId === acknowledged.recordId
+                  ? {
+                      ...row,
+                      valuesJson: { ...(row.valuesJson ?? {}), ...acknowledged.valuesJson },
+                      version: acknowledged.version,
+                      fieldVersions: { ...row.fieldVersions, ...(acknowledged.fieldVersions ?? {}) },
+                    }
+                  : row,
+              );
+            } else if (incoming && incoming.version > acknowledged.version) {
+              acknowledgedPageValuesRef.current = null;
+            }
+          }
+          if (stagePendingProjection(generation, { pageValues: authoritative })) return;
+          setPageRecordValues(authoritative);
           setPageValuesHydration({ status: "ready", key: requestScopeKey, error: null });
           pageValuesSnapshotKeyRef.current = snapshotKey;
         })
         .catch((error: unknown) => {
-          if (requestId !== pageValuesRequestIdRef.current) return;
+          if (requestId !== pageValuesRequestIdRef.current || pendingInlineWriteRef.current) return;
           if (abandonPendingProjection(generation, "pageValues")) return;
           // Keep the last successful same-scope values visible. The error
           // state remains explicit and blocks writes until a retry succeeds.
@@ -4206,7 +4226,7 @@ export function EntityRecords({
       setPageRelatedHydrationErrorKey(null);
       void fetchRelatedValues({ pageId, data: { recordIds } })
         .then((res) => {
-          if (requestId !== pageRelatedRequestIdRef.current) return;
+          if (requestId !== pageRelatedRequestIdRef.current || pendingInlineWriteRef.current) return;
           if (
             stagePendingProjection(generation, {
               pageRelated: { columns: res.columns, values: res.values },
@@ -4230,7 +4250,7 @@ export function EntityRecords({
           setPageRelatedHydrationKey(hydrationKey);
         })
         .catch(() => {
-          if (requestId !== pageRelatedRequestIdRef.current) return;
+          if (requestId !== pageRelatedRequestIdRef.current || pendingInlineWriteRef.current) return;
           if (abandonPendingProjection(generation, "pageRelated")) return;
           if (!keepSnapshot) {
             setRelatedColumns([]);
@@ -4272,7 +4292,7 @@ export function EntityRecords({
       setEntityRelatedHydrationErrorKey(null);
       void fetchEntityRelatedValues({ entityId, data: { recordIds, pageId: permPageId } })
         .then((res) => {
-          if (requestId !== entityRelatedRequestIdRef.current) return;
+          if (requestId !== entityRelatedRequestIdRef.current || pendingInlineWriteRef.current) return;
           if (
             stagePendingProjection(generation, {
               entityRelated: { columns: res.columns, values: res.values },
@@ -4296,7 +4316,7 @@ export function EntityRecords({
           setEntityRelatedHydrationKey(hydrationKey);
         })
         .catch(() => {
-          if (requestId !== entityRelatedRequestIdRef.current) return;
+          if (requestId !== entityRelatedRequestIdRef.current || pendingInlineWriteRef.current) return;
           if (abandonPendingProjection(generation, "entityRelated")) return;
           if (!keepSnapshot) {
             setEntityRelatedColumns([]);
@@ -4370,15 +4390,23 @@ export function EntityRecords({
     (hasLoadedRecords || !collab.subscriptionPending);
 
   const loadRecords = useCallback(async (manual = false) => {
-    const requestId = ++recordsRequestIdRef.current;
+    // A refresh triggered by the editor blur may race with the write start.
+    // Let that read begin so its projection requests can be observed, but do
+    // not advance any generation while a write owns the current snapshot.
+    const writePendingAtStart = pendingInlineWriteRef.current != null;
+    const requestId = writePendingAtStart
+      ? recordsRequestIdRef.current
+      : ++recordsRequestIdRef.current;
     // A newer records response supersedes any staged bundle and all of its
     // dependent reads. Retained snapshots stay mounted until the replacement
     // bundle settles; late responses from the superseded generation are ignored.
-    pendingRecordsPublicationRef.current = null;
-    setPendingRecordsPublicationId(null);
-    pageValuesRequestIdRef.current += 1;
-    pageRelatedRequestIdRef.current += 1;
-    entityRelatedRequestIdRef.current += 1;
+    if (!writePendingAtStart) {
+      pendingRecordsPublicationRef.current = null;
+      setPendingRecordsPublicationId(null);
+      pageValuesRequestIdRef.current += 1;
+      pageRelatedRequestIdRef.current += 1;
+      entityRelatedRequestIdRef.current += 1;
+    }
     if (!recordsBootstrapReady) return false;
     if (!canView) {
       if (requestId === recordsRequestIdRef.current) setRecordsLoading(false);
@@ -4398,6 +4426,7 @@ export function EntityRecords({
     try {
       const res = await runQuery({ entityId, data: { ...recordQuery, pageId: permPageId } });
       if (requestId !== recordsRequestIdRef.current) return false;
+      if (!writePendingAtStart && pendingInlineWriteRef.current) return false;
       // Launch dependent page/relation reads before publishing rows. This preserves
       // progressive rendering without making passive effects wait behind a costly
       // first paint of a wide table.
@@ -4424,6 +4453,7 @@ export function EntityRecords({
       // mounted until all replacement projections resolve. This prevents a
       // new record value from being combined with an old relation/lookup value.
       const deferPublication =
+        !writePendingAtStart &&
         sameRecordScope &&
         (pageId != null || hasRelationFields || hasEntityRelationFields) &&
         pageValuesSnapshotRetained &&
@@ -4449,6 +4479,7 @@ export function EntityRecords({
       launchPageValuesHydration(res.data, generationForFetch);
       launchPageRelatedHydration(res.data, generationForFetch);
       launchEntityRelatedHydration(res.data, generationForFetch);
+      if (writePendingAtStart || pendingInlineWriteRef.current) return false;
       if (deferPublication) {
         return true;
       }
@@ -4542,8 +4573,21 @@ export function EntityRecords({
   const pageValuesScopeKey = pageId == null
     ? null
     : pageValuesHydrationKey(pageId, records.map((record: EntityRecord) => record.id));
-  const pageLocalWritesReady = canWritePageValues(pageValuesHydration, pageValuesScopeKey);
+  // A same-scope refresh keeps the last successful page-value snapshot mounted.
+  // It remains a valid CAS base while the replacement request is loading; only
+  // an initial/unknown scope or an explicit failure blocks scalar writes.
+  const retainedPageValuesSnapshotReady =
+    pageValuesScopeKey != null &&
+    pageValuesHydration.status === "loading" &&
+    pageValuesHydration.key === pageValuesScopeKey &&
+    pageValuesSnapshotKeyRef.current === `${pageValuesScopeKey}:${pageValuesSchemaKey}`;
+  const pageLocalWritesReady =
+    canWritePageValues(pageValuesHydration, pageValuesScopeKey) || retainedPageValuesSnapshotReady;
   const guardPageLocalWrite = (write: () => void): boolean => {
+    if (retainedPageValuesSnapshotReady) {
+      write();
+      return true;
+    }
     const written = runPageValueWrite(pageValuesHydration, pageValuesScopeKey, write);
     if (!written) {
       toast({
@@ -4668,6 +4712,7 @@ export function EntityRecords({
   // normal progressive loading state.
   useEffect(() => {
     const pending = pendingRecordsPublicationRef.current;
+    if (pendingInlineWriteRef.current) return;
     if (!pending || pendingRecordsPublicationId !== pending.requestId) return;
     if (pending.requestId !== recordsRequestIdRef.current || !projectionBundleReady) return;
     pendingRecordsPublicationRef.current = null;
@@ -4876,50 +4921,11 @@ export function EntityRecords({
     },
   });
   // Dedicated mutation for inline cell/status edits — quietly refreshes (no success toast spam).
-  const cellUpdateMutation = useUpdateRecord({
-    mutation: {
-      onSuccess: () => { setEditingCell(null); invalidate(); },
-      onError: (err) => {
-        const conflict = (err as { status?: number })?.status === 409;
-        if (conflict) {
-          invalidate();
-          setInlineCommitResetKey((key) => key + 1);
-        }
-        else setEditingCell(null);
-        toast({
-          title: conflict
-            ? t("collaboration.conflict", "Данные изменились на сервере")
-            : t("records.updateError", "Ошибка обновления"),
-          description: extractError(err),
-          variant: "destructive",
-        });
-      },
-    },
-  });
+  const cellUpdateMutation = useUpdateRecord();
   // Status changes can trigger background automations that write additional
   // fields. Keep their mutation separate so ordinary inline edits do not incur
   // the delayed refetches needed to observe those automation results.
-  const statusUpdateMutation = useUpdateRecord({
-    mutation: {
-      onSuccess: () => {
-        setEditingCell(null);
-        invalidate();
-        scheduleAutomationRefresh();
-      },
-      onError: (err) => {
-        const conflict = (err as { status?: number })?.status === 409;
-        if (conflict) invalidate();
-        else setEditingCell(null);
-        toast({
-          title: conflict
-            ? t("collaboration.conflict", "Данные изменились на сервере")
-            : t("records.updateError", "Ошибка обновления"),
-          description: extractError(err),
-          variant: "destructive",
-        });
-      },
-    },
-  });
+  const statusUpdateMutation = useUpdateRecord();
   const updateMutation = useUpdateRecord({
     mutation: {
       onSuccess: () => { toast({ title: t("records.updated", "Запись обновлена") }); setDialogOpen(false); invalidate(); },
@@ -5291,31 +5297,158 @@ export function EntityRecords({
     });
   };
 
-  const commitCell = (record: EntityRecord, field: Field, raw: CellValue) => {
+  const beginInlineWrite = (key: string, recordId: number): InlinePendingWrite | null => {
+    if (pendingInlineWriteRef.current) {
+      toast({
+        title: t("records.saveInProgress", "Сохранение ещё выполняется"),
+        description: t("records.saveInProgressWait", "Дождитесь ответа сервера перед следующим изменением."),
+        variant: "destructive",
+      });
+      return null;
+    }
+    // Supersede every pre-write records/projection request. Its response must
+    // not publish an old row over the value currently being acknowledged.
+    recordsRequestIdRef.current += 1;
+    pageValuesRequestIdRef.current += 1;
+    pageRelatedRequestIdRef.current += 1;
+    entityRelatedRequestIdRef.current += 1;
+    pendingRecordsPublicationRef.current = null;
+    setPendingRecordsPublicationId(null);
+    const pending: InlinePendingWrite = {
+      key,
+      scopeKey: recordsRenderKey,
+      requestId: recordsRequestIdRef.current,
+      recordId,
+      editorEpoch: inlineEditorEpochRef.current,
+    };
+    pendingInlineWriteRef.current = pending;
+    setPendingInlineWriteKey(key);
+    return pending;
+  };
+  const isCurrentInlineWrite = (pending: InlinePendingWrite): boolean =>
+    pendingInlineWriteRef.current === pending &&
+    pending.requestId === recordsRequestIdRef.current &&
+    pending.scopeKey === recordsRenderKey;
+  const isPendingEditor = (pending: InlinePendingWrite): boolean =>
+    isCurrentInlineWrite(pending) &&
+    pending.editorEpoch === inlineEditorEpochRef.current &&
+    editingCellRef.current?.recordId === pending.recordId;
+  const finishInlineWrite = (pending: InlinePendingWrite): boolean => {
+    if (pendingInlineWriteRef.current !== pending) return false;
+    const sameScope = isCurrentInlineWrite(pending);
+    pendingInlineWriteRef.current = null;
+    setPendingInlineWriteKey(null);
+    setPendingInlineDraft(null);
+    return sameScope;
+  };
+  const refreshAfterInlineWrite = (pending: InlinePendingWrite) => {
+    if (finishInlineWrite(pending)) setRefreshTick((tick) => tick + 1);
+  };
+  const handleEntityInlineSuccess = (pending: InlinePendingWrite, saved: EntityRecord) => {
+    if (!isCurrentInlineWrite(pending)) {
+      if (pendingInlineWriteRef.current === pending) finishInlineWrite(pending);
+      return;
+    }
+    const editorIsCurrent = isPendingEditor(pending);
+    setRecords((current) => current.map((row) => row.id === pending.recordId ? saved : row));
+    if (pending.key.endsWith(`:${STATUS_COLUMN_KEY}`)) scheduleAutomationRefresh();
+    refreshAfterInlineWrite(pending);
+    if (editorIsCurrent) setEditingCell(null);
+  };
+  const handleEntityInlineError = (pending: InlinePendingWrite, err: unknown) => {
+    if (!isCurrentInlineWrite(pending)) {
+      if (pendingInlineWriteRef.current === pending) finishInlineWrite(pending);
+      return;
+    }
+    const conflict = (err as { status?: number })?.status === 409;
+    const editorIsCurrent = isPendingEditor(pending);
+    finishInlineWrite(pending);
+    if (conflict && editorIsCurrent) setInlineCommitResetKey((key) => key + 1);
+    else if (editorIsCurrent) setEditingCell(null);
+    setRefreshTick((tick) => tick + 1);
+    toast({
+      title: conflict
+        ? t("collaboration.conflict", "Данные изменились на сервере")
+        : t("records.updateError", "Ошибка обновления"),
+      description: extractError(err),
+      variant: "destructive",
+    });
+  };
+  const handlePageInlineError = (pending: InlinePendingWrite, err: unknown) => {
+    if (!isCurrentInlineWrite(pending)) {
+      if (pendingInlineWriteRef.current === pending) finishInlineWrite(pending);
+      return;
+    }
+    const conflict = (err as { status?: number })?.status === 409;
+    const editorIsCurrent = isPendingEditor(pending);
+    finishInlineWrite(pending);
+    if (editorIsCurrent) {
+      if (conflict) setInlineCommitResetKey((key) => key + 1);
+      else setEditingCell(null);
+    }
+    setRefreshTick((tick) => tick + 1);
+    toast({
+      title: conflict
+        ? t("collaboration.conflict", "Данные изменились на сервере")
+        : t("records.saveError", "Не удалось сохранить значение"),
+      description: extractError(err),
+      variant: "destructive",
+    });
+  };
+  const finishPageInlineAck = (pending: InlinePendingWrite): boolean => {
+    if (!isCurrentInlineWrite(pending)) {
+      if (pendingInlineWriteRef.current === pending) finishInlineWrite(pending);
+      return false;
+    }
+    if (pageId != null) {
+      queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/record-values`] });
+    }
+    for (const sourcePageId of pageRefSourcePageIds) {
+      queryClient.invalidateQueries({ queryKey: [`/api/pages/${sourcePageId}/record-values`] });
+    }
+    scheduleAutomationRefresh();
+    refreshAfterInlineWrite(pending);
+    return true;
+  };
+
+  const commitCell = (record: EntityRecord, field: Field, raw: CellValue): boolean => {
     const stored = (record.valuesJson ?? {})[field.fieldKey];
     const next = cellValueForPayload(field, raw);
     const normalizedStored =
       field.fieldType === "boolean" ? Boolean(stored) : stored === undefined || stored === null ? "" : stored;
-    if (next === normalizedStored) { setEditingCell(null); return; }
+    if (next === normalizedStored) { setEditingCell(null); return true; }
     const current = (record.valuesJson ?? {}) as Record<string, unknown>;
     const cleared = clearDependentDescendants({ ...current, [field.fieldKey]: next }, field.fieldKey, fields);
     const payload: Record<string, unknown> = { [field.fieldKey]: next };
     for (const f of fields) {
       if (isDependentField(f) && current[f.fieldKey] !== cleared[f.fieldKey]) payload[f.fieldKey] = "";
     }
-    cellUpdateMutation.mutate({
+    const pending = beginInlineWrite(`entity:${record.id}:${field.fieldKey}`, record.id);
+    if (!pending) return false;
+    void cellUpdateMutation.mutateAsync({
       id: record.id,
       data: { valuesJson: payload, pageId: permPageId, expectedVersion: record.version },
-    });
+    }).then(
+      (saved) => handleEntityInlineSuccess(pending, saved),
+      (err) => handleEntityInlineError(pending, err),
+    );
+    return true;
   };
 
-  const commitStatus = (record: EntityRecord, value: string) => {
+  const commitStatus = (record: EntityRecord, value: string): boolean => {
     const next = value === NO_STATUS ? null : Number(value);
-    if (next === (record.statusId ?? null)) { setEditingCell(null); return; }
-    statusUpdateMutation.mutate({
+    if (next === (record.statusId ?? null)) { setEditingCell(null); return true; }
+    const pending = beginInlineWrite(`entity:${record.id}:${STATUS_COLUMN_KEY}`, record.id);
+    if (!pending) return false;
+    setPendingInlineDraft(value);
+    void statusUpdateMutation.mutateAsync({
       id: record.id,
       data: { statusId: next, pageId: permPageId, expectedVersion: record.version },
-    });
+    }).then(
+      (saved) => handleEntityInlineSuccess(pending, saved),
+      (err) => handleEntityInlineError(pending, err),
+    );
+    return true;
   };
 
   // Inline commit for a page-local field value. Direct page values merge into
@@ -5365,19 +5498,49 @@ export function EntityRecords({
         });
         return false;
       }
-      setPageValuesMutation.mutate({
+      const pageCommitKey = `page:${pageId}:${record.id}:${field.fieldKey}`;
+      const pending = beginInlineWrite(pageCommitKey, record.id);
+      if (!pending) return false;
+      void setPageValuesMutation.mutateAsync({
         pageId,
         recordId: record.id,
         data: {
           valuesJson: { [field.fieldKey]: next === "" ? null : next },
           expectedVersions: { [String(sourcePageId)]: existingVersion },
         },
-      }, {
-        onSuccess: () => setEditingCell(null),
-        onError: (err) => {
-          if ((err as { status?: number })?.status !== 409) setEditingCell(null);
+      }).then(
+        (saved) => {
+          if (!isCurrentInlineWrite(pending)) {
+            if (pendingInlineWriteRef.current === pending) finishInlineWrite(pending);
+            return;
+          }
+          const editorIsCurrent = isPendingEditor(pending);
+          acknowledgedPageValuesRef.current = {
+            snapshotKey: pageValuesSnapshotKeyRef.current,
+            recordId: record.id,
+            valuesJson: { [field.fieldKey]: next },
+            version: saved.version,
+            fieldVersions: saved.fieldVersions,
+          };
+          setPageRecordValues((rows) =>
+            rows.map((row) => {
+              if (row.recordId !== record.id) return row;
+              const valuesJson = { ...(row.valuesJson ?? {}) };
+              if (next === "" || next === undefined || next === null) delete valuesJson[field.fieldKey];
+              else valuesJson[field.fieldKey] = next;
+              return {
+                ...row,
+                valuesJson,
+                version: saved.version,
+                fieldVersions: { ...row.fieldVersions, ...(saved.fieldVersions ?? {}) },
+              };
+            }),
+          );
+          finishPageInlineAck(pending);
+          if (editorIsCurrent) setEditingCell(null);
         },
-      });
+        (err) => handlePageInlineError(pending, err),
+      );
       return true;
     }
     // Local saves must not resubmit page_ref aliases: each alias belongs to a
@@ -5411,7 +5574,10 @@ export function EntityRecords({
       setPageRequiredDialog({ recordId: record.id, form, expectedVersion: existingVersion });
       return true;
     }
-    setPageValuesMutation.mutate(
+    const pageCommitKey = `page:${pageId}:${record.id}:${field.fieldKey}`;
+    const pending = beginInlineWrite(pageCommitKey, record.id);
+    if (!pending) return false;
+    void setPageValuesMutation.mutateAsync(
       {
         pageId,
         recordId: record.id,
@@ -5420,12 +5586,36 @@ export function EntityRecords({
           expectedVersions: { [String(pageId)]: existingVersion },
         },
       },
-      {
-        onSuccess: () => setEditingCell(null),
-        onError: (err) => {
-          if ((err as { status?: number })?.status !== 409) setEditingCell(null);
-        },
+    ).then(
+      (saved) => {
+        if (!isCurrentInlineWrite(pending)) {
+          if (pendingInlineWriteRef.current === pending) finishInlineWrite(pending);
+          return;
+        }
+        const editorIsCurrent = isPendingEditor(pending);
+        acknowledgedPageValuesRef.current = {
+          snapshotKey: pageValuesSnapshotKeyRef.current,
+          recordId: record.id,
+          valuesJson: saved.valuesJson,
+          version: saved.version,
+          fieldVersions: saved.fieldVersions,
+        };
+        setPageRecordValues((rows) =>
+          rows.map((row) =>
+            row.recordId === record.id
+              ? {
+                  ...row,
+                  valuesJson: saved.valuesJson,
+                  version: saved.version,
+                  fieldVersions: { ...row.fieldVersions, ...(saved.fieldVersions ?? {}) },
+                }
+              : row,
+          ),
+        );
+        finishPageInlineAck(pending);
+        if (editorIsCurrent) setEditingCell(null);
       },
+      (err) => handlePageInlineError(pending, err),
     );
     return true;
   };
@@ -5437,23 +5627,39 @@ export function EntityRecords({
     if (pageId == null || pageRequiredDialog == null) return;
     if (!guardPageLocalWrite(() => {})) return;
     const { recordId, form, expectedVersion } = pageRequiredDialog;
+    const writeScopeKey = recordsRenderKey;
     const valuesJson: Record<string, unknown> = {};
     for (const pf of storablePageFields) {
       const val = cellValueForPayload(pf as unknown as Field, form[pf.fieldKey]);
       if (val === "" || val === undefined || val === null) continue;
       valuesJson[pf.fieldKey] = val;
     }
-    setPageValuesMutation.mutate(
-      {
-        pageId,
-        recordId,
-        data: {
-          valuesJson,
-          expectedVersions: { [String(pageId)]: expectedVersion },
-        },
+    void setPageValuesMutation.mutateAsync({
+      pageId,
+      recordId,
+      data: {
+        valuesJson,
+        expectedVersions: { [String(pageId)]: expectedVersion },
       },
-      {
-        onSuccess: () => setPageRequiredDialog(null),
+    }).then(
+      () => {
+        setPageRequiredDialog(null);
+        queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/record-values`] });
+        for (const sourcePageId of pageRefSourcePageIds) {
+          queryClient.invalidateQueries({ queryKey: [`/api/pages/${sourcePageId}/record-values`] });
+        }
+        scheduleAutomationRefresh();
+        setRefreshTick((tick) => tick + 1);
+      },
+      (err) => {
+        if (recordsRenderKey !== writeScopeKey) return;
+        toast({
+          title: (err as { status?: number })?.status === 409
+            ? t("collaboration.conflict", "Данные изменились на сервере")
+            : t("records.saveError", "Не удалось сохранить значение"),
+          description: extractError(err),
+          variant: "destructive",
+        });
       },
     );
   };
@@ -5560,6 +5766,7 @@ export function EntityRecords({
     );
     const statusValue = newRowStatus === NO_STATUS ? null : Number(newRowStatus);
     const pageValuesJson: Record<string, unknown> = {};
+    const writeScopeKey = recordsRenderKey;
     if (hasPage && pageId != null) {
       for (const pf of pageFields) {
         if (pf.fieldType === "function" || pf.fieldType === "relation" || pf.fieldType === "lookup") continue;
@@ -5579,7 +5786,24 @@ export function EntityRecords({
         });
         if (created?.id != null) {
           if (hasPage && pageId != null && Object.keys(pageValuesJson).length > 0) {
-            await setPageValuesMutation.mutateAsync({ pageId, recordId: created.id, data: { valuesJson: pageValuesJson } });
+            try {
+              await setPageValuesMutation.mutateAsync({ pageId, recordId: created.id, data: { valuesJson: pageValuesJson } });
+              queryClient.invalidateQueries({ queryKey: [`/api/pages/${pageId}/record-values`] });
+              for (const sourcePageId of pageRefSourcePageIds) {
+                queryClient.invalidateQueries({ queryKey: [`/api/pages/${sourcePageId}/record-values`] });
+              }
+              scheduleAutomationRefresh();
+            } catch (err) {
+              if (recordsRenderKey !== writeScopeKey) return;
+              toast({
+                title: (err as { status?: number })?.status === 409
+                  ? t("collaboration.conflict", "Данные изменились на сервере")
+                  : t("records.saveError", "Не удалось сохранить значение"),
+                description: extractError(err),
+                variant: "destructive",
+              });
+              return;
+            }
           }
           setNewPageRow({});
           await persistPendingRelationLinks(created.id, newRow);
@@ -5656,6 +5880,13 @@ export function EntityRecords({
   const extraColCount = displayedPageFields.length;
 
   useEffect(() => {
+    const previous = editingCellRef.current;
+    if (
+      previous?.recordId !== editingCell?.recordId ||
+      previous?.fieldKey !== editingCell?.fieldKey
+    ) {
+      inlineEditorEpochRef.current += 1;
+    }
     editingCellRef.current = editingCell;
     activeCellDirtyRef.current = false;
     if (!editingCell && deferredRemoteRefreshRef.current) {
@@ -5811,6 +6042,106 @@ export function EntityRecords({
       ]),
     [displayFields, displayedPageFields],
   );
+  // Editing one cell changes this component's selection state. Keep the
+  // expensive per-row formula/formatting work out of that render: record and
+  // projection objects are immutable snapshots, so their identities are safe
+  // cache keys. A records/projection response replaces the relevant object and
+  // naturally invalidates only the affected rows.
+  const rowDisplayCacheRef = useRef(
+    new Map<
+      number,
+      {
+        record: EntityRecord;
+        basePageValues: Record<string, unknown>;
+        pageValues: Record<string, unknown>;
+        pageFormulaValues: Record<string, unknown> | undefined;
+        related: Map<string, PageRelatedValue> | undefined;
+        entityRelated: Map<string, PageRelatedValue> | undefined;
+        projectionsReady: boolean;
+        formulaFieldDefs: FormulaFieldDef[];
+        formulaOptions: FormulaEvaluationOptions;
+        rowFormatFields: FormatField[];
+        rowFormatFieldByKey: Map<string, FormatValueField & { formulaConfigJson?: { expression?: string } | null }>;
+        allValues: Record<string, unknown>;
+        formulaValues: Record<string, unknown>;
+        formatting: ReturnType<typeof computeRowFormatting>;
+      }
+    >(),
+  );
+  const cachedRowDisplay = (
+    record: EntityRecord,
+    pageValues: Record<string, unknown>,
+    pageFormulaValues: Record<string, unknown> | undefined,
+    related: Map<string, PageRelatedValue> | undefined,
+    entityRelated: Map<string, PageRelatedValue> | undefined,
+    rowProjectionsReady: boolean,
+  ) => {
+    const cached = rowDisplayCacheRef.current.get(record.id);
+    if (
+      cached &&
+      cached.record === record &&
+      cached.basePageValues === pageValues &&
+      cached.pageFormulaValues === pageFormulaValues &&
+      cached.related === related &&
+      cached.entityRelated === entityRelated &&
+      cached.projectionsReady === rowProjectionsReady &&
+      cached.formulaFieldDefs === formulaFieldDefs &&
+      cached.formulaOptions === formulaOptions &&
+      cached.rowFormatFields === rowFormatFields &&
+      cached.rowFormatFieldByKey === rowFormatFieldByKey
+    ) {
+      return cached;
+    }
+    const values = (record.valuesJson ?? {}) as Record<string, unknown>;
+    const displayedPageValues =
+      pageFormulaValues == null || Object.keys(pageFormulaValues).length === 0
+        ? pageValues
+        : { ...pageValues, ...pageFormulaValues };
+    const allValues = mergeFormulaInputValues(
+      values,
+      displayedPageValues,
+      entityRelated,
+      related,
+      { entityId, pageId },
+    );
+    const formulaValues = rowProjectionsReady ? buildFormulaScope(allValues, formulaFieldDefs, formulaOptions) : allValues;
+    const formatting = rowProjectionsReady
+      ? computeRowFormatting(rowFormatFields, (key) => {
+          const def = rowFormatFieldByKey.get(key);
+          return resolveFormattingValue(def, {
+            rawValues: allValues,
+            displayedPageValues,
+            entityRelatedValues: entityRelated,
+            pageRelatedValues: related,
+            resolveDefault: () => (def ? fieldRawValue(def, formulaValues) : formulaValues[key]),
+          });
+        })
+      : { cellColors: {}, cellTextColors: {} };
+    const next = {
+      record,
+      basePageValues: pageValues,
+      pageValues: displayedPageValues,
+      pageFormulaValues,
+      related,
+      entityRelated,
+      projectionsReady: rowProjectionsReady,
+      formulaFieldDefs,
+      formulaOptions,
+      rowFormatFields,
+      rowFormatFieldByKey,
+      allValues,
+      formulaValues,
+      formatting,
+    };
+    rowDisplayCacheRef.current.set(record.id, next);
+    return next;
+  };
+  useEffect(() => {
+    const visibleIds = new Set(records.map((record) => record.id));
+    for (const recordId of rowDisplayCacheRef.current.keys()) {
+      if (!visibleIds.has(recordId)) rowDisplayCacheRef.current.delete(recordId);
+    }
+  }, [records]);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // ── Pinned (frozen-left) columns ──────────────────────────────────────────
@@ -8226,49 +8557,17 @@ export function EntityRecords({
                     </tr>
                   )}
                   {(!showGroups || expandedGroupIndex >= 0 || expandAll) && groupRowsReady && records.map((record: EntityRecord, rowIndex: number) => {
-                    const values = (record.valuesJson ?? {}) as Record<string, unknown>;
-                    const pageValues = {
-                      ...(pageValuesByRecord.get(record.id)?.values ?? {}),
-                      ...(pageFormulaValues[String(record.id)] ?? {}),
-                    };
-                    // Related values are permission-filtered server projections.
-                    // Merge them before resolving formula references so entity and
-                    // page function fields (including chained formulas) see the
-                    // same relation/lookup value that the row displays.
-                    const allValues = mergeFormulaInputValues(
-                      values,
-                      pageValues,
+                    const rowDisplay = cachedRowDisplay(
+                      record,
+                      pageValuesByRecord.get(record.id)?.values ?? EMPTY_ROW_VALUES,
+                      pageFormulaValues[String(record.id)],
                       entityRelatedByRecord.get(record.id),
                       relatedByRecord.get(record.id),
-                      { entityId, pageId },
+                      rowProjectionsReady,
                     );
-                    // A formula may depend on any page/relation projection. Avoid
-                    // both a false value and needless formula work while those
-                    // requests are in flight.
-                    const formulaValues = rowProjectionsReady
-                      ? buildFormulaScope(allValues, formulaFieldDefs, formulaOptions)
-                      : allValues;
+                    const { allValues, formulaValues, formatting, pageValues } = rowDisplay;
+                    const values = (record.valuesJson ?? {}) as Record<string, unknown>;
                     const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
-                    // Formatting rules share the same dependencies as formula and
-                    // projected cells. Applying them to partial values can colour
-                    // a row incorrectly, so defer them along with that work.
-                    const formatting = rowProjectionsReady
-                      ? computeRowFormatting(rowFormatFields, (key) => {
-                          const def = rowFormatFieldByKey.get(key);
-                          return resolveFormattingValue(def, {
-                            rawValues: allValues,
-                            // page_ref values are live aliases. This is the same map
-                            // read by their render branch, rather than a raw field key.
-                            displayedPageValues: pageValues,
-                            entityRelatedValues: entityRelatedByRecord.get(record.id),
-                            pageRelatedValues: relatedByRecord.get(record.id),
-                            resolveDefault: () =>
-                              def
-                                ? fieldRawValue(def, formulaValues)
-                                : formulaValues[key],
-                          });
-                        })
-                      : { cellColors: {}, cellTextColors: {} };
                     // Resolve the row background once so pinned (sticky) cells and
                     // the non-pinned row stay consistent. Priority: conditional
                     // formatting > custom stripe colour > built-in striped grey >
@@ -8385,22 +8684,37 @@ export function EntityRecords({
                                 {statusManualEditable &&
                                 editingCell?.recordId === record.id &&
                                 editingCell?.fieldKey === STATUS_COLUMN_KEY ? (
-                                  <Select
-                                    defaultOpen
-                                    value={record.statusId != null ? String(record.statusId) : NO_STATUS}
-                                    onValueChange={(v) => commitStatus(record, v)}
-                                    onOpenChange={(o) => { if (!o) setEditingCell(null); }}
-                                  >
-                                    <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      {!workflowActiveForRecord(record) && (allowNoStatus || record.statusId == null) && (
-                                        <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
-                                      )}
-                                      {allowedStatusesForRecord(record).map((s: Status) => (
-                                        <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                  <>
+                                    <Select
+                                      defaultOpen
+                                      value={
+                                        pendingInlineWriteKey === `entity:${record.id}:${STATUS_COLUMN_KEY}` && pendingInlineDraft != null
+                                          ? String(pendingInlineDraft)
+                                          : record.statusId != null
+                                            ? String(record.statusId)
+                                            : NO_STATUS
+                                      }
+                                      onValueChange={(v) => commitStatus(record, v)}
+                                      onOpenChange={(o) => {
+                                        if (!o && pendingInlineWriteKey !== `entity:${record.id}:${STATUS_COLUMN_KEY}`) setEditingCell(null);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        {!workflowActiveForRecord(record) && (allowNoStatus || record.statusId == null) && (
+                                          <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
+                                        )}
+                                        {allowedStatusesForRecord(record).map((s: Status) => (
+                                          <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    {pendingInlineWriteKey === `entity:${record.id}:${STATUS_COLUMN_KEY}` && (
+                                    <span data-testid="inline-saving" className="ms-2 text-[10px] text-blue-600" aria-live="polite">
+                                        {t("records.saving", "Сохранение…")}
+                                      </span>
+                                    )}
+                                  </>
                                 ) : (
                                   <div
                                     className={`flex items-center gap-2 ${inlineEditEnabled && statusManualEditable ? "cursor-pointer rounded hover:bg-blue-50/60 -mx-1 px-1" : ""}`}
@@ -8570,19 +8884,26 @@ export function EntityRecords({
                           if (isEditingThis) {
                             return (
                               <td data-testid="record-cell" data-record-id={record.id} data-field-key={f.fieldKey} key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...colWidthStyle(`f:${f.id}`) }}>
-                                <InlineCellEditor
-                                  field={f}
-                                  initial={valueToForm(f, values[f.fieldKey])}
-                                  userOptions={userOptions}
-                                  commitResetKey={inlineCommitResetKey}
-                                   onDirty={() => { activeCellDirtyRef.current = true; }}
-                                  onCommit={(raw) => commitCell(record, f, raw)}
-                                  onCancel={() => setEditingCell(null)}
-                                  allFields={fields}
-                                  rowValues={values}
-                                  entityId={entityId}
-                                  pageId={permPageId}
-                                />
+                                <div className="relative">
+                                  <InlineCellEditor
+                                    field={f}
+                                    initial={valueToForm(f, values[f.fieldKey])}
+                                    userOptions={userOptions}
+                                    commitResetKey={inlineCommitResetKey}
+                                    onDirty={() => { activeCellDirtyRef.current = true; }}
+                                    onCommit={(raw) => commitCell(record, f, raw)}
+                                    onCancel={() => setEditingCell(null)}
+                                    allFields={fields}
+                                    rowValues={values}
+                                    entityId={entityId}
+                                    pageId={permPageId}
+                                  />
+                                  {pendingInlineWriteKey === `entity:${record.id}:${f.fieldKey}` && (
+                                    <span data-testid="inline-saving" className="absolute -bottom-4 end-0 text-[10px] text-blue-600" aria-live="polite">
+                                      {t("records.saving", "Сохранение…")}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                             );
                           }
@@ -8738,16 +9059,23 @@ export function EntityRecords({
                             if (isEditingThis) {
                               return (
                                 <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...colWidthStyle(`pf:${pf.id}`) }}>
-                                  <InlineCellEditor
-                                    field={refField}
-                                    initial={valueToForm(refField, v)}
-                                    userOptions={userOptions}
-                                    commitResetKey={inlineCommitResetKey}
-                                     onDirty={() => { activeCellDirtyRef.current = true; }}
-                                    rowValues={{ ...values, ...pageValues }}
-                                    onCommit={(raw) => commitPageCell(record, pf, raw)}
-                                    onCancel={() => setEditingCell(null)}
-                                  />
+                                  <div className="relative">
+                                    <InlineCellEditor
+                                      field={refField}
+                                      initial={valueToForm(refField, v)}
+                                      userOptions={userOptions}
+                                      commitResetKey={inlineCommitResetKey}
+                                      onDirty={() => { activeCellDirtyRef.current = true; }}
+                                      rowValues={{ ...values, ...pageValues }}
+                                      onCommit={(raw) => commitPageCell(record, pf, raw)}
+                                      onCancel={() => setEditingCell(null)}
+                                    />
+                                    {pendingInlineWriteKey === `page:${pageId}:${record.id}:${pf.fieldKey}` && (
+                                      <span data-testid="inline-saving" className="absolute -bottom-4 end-0 text-[10px] text-blue-600" aria-live="polite">
+                                        {t("records.saving", "Сохранение…")}
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
                               );
                             }
@@ -8801,16 +9129,23 @@ export function EntityRecords({
                           if (isEditingThis) {
                             return (
                               <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...colWidthStyle(`pf:${pf.id}`) }}>
-                                <InlineCellEditor
-                                  field={pageFieldAsField}
-                                  initial={valueToForm(pageFieldAsField, pageValues[pf.fieldKey])}
-                                  userOptions={userOptions}
-                                  commitResetKey={inlineCommitResetKey}
-                                   onDirty={() => { activeCellDirtyRef.current = true; }}
-                                  rowValues={{ ...values, ...pageValues }}
-                                  onCommit={(raw) => commitPageCell(record, pf, raw)}
-                                  onCancel={() => setEditingCell(null)}
-                                />
+                                <div className="relative">
+                                  <InlineCellEditor
+                                    field={pageFieldAsField}
+                                    initial={valueToForm(pageFieldAsField, pageValues[pf.fieldKey])}
+                                    userOptions={userOptions}
+                                    commitResetKey={inlineCommitResetKey}
+                                    onDirty={() => { activeCellDirtyRef.current = true; }}
+                                    rowValues={{ ...values, ...pageValues }}
+                                    onCommit={(raw) => commitPageCell(record, pf, raw)}
+                                    onCancel={() => setEditingCell(null)}
+                                  />
+                                  {pendingInlineWriteKey === `page:${pageId}:${record.id}:${pf.fieldKey}` && (
+                                    <span data-testid="inline-saving" className="absolute -bottom-4 end-0 text-[10px] text-blue-600" aria-live="polite">
+                                      {t("records.saving", "Сохранение…")}
+                                    </span>
+                                  )}
+                                </div>
                               </td>
                             );
                           }

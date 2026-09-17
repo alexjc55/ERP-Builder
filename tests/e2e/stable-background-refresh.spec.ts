@@ -30,6 +30,10 @@ type ProjectionGate = {
   release: () => void;
 };
 
+type MockApiOptions = {
+  recordCount?: number;
+};
+
 function userProfile() {
   return {
     id: 1,
@@ -249,18 +253,28 @@ function pageFields() {
   ];
 }
 
-function record(revision: number) {
+function record(
+  revision: number,
+  id = RECORD_ID,
+  stageOverride?: string,
+  versionOverride?: number,
+) {
   return {
-    id: RECORD_ID,
+    id,
     entityId: ENTITY_ID,
     valuesJson: {
-      title: revision === 0 ? INITIAL_TITLE : REFRESHED_TITLE,
-      stage: revision === 0 ? "todo" : "done",
+      title:
+        id === RECORD_ID
+          ? revision === 0
+            ? INITIAL_TITLE
+            : REFRESHED_TITLE
+          : `${revision === 0 ? INITIAL_TITLE : REFRESHED_TITLE} #${id}`,
+      stage: stageOverride ?? (revision === 0 ? "todo" : "done"),
     },
     statusId: null,
     archivedAt: null,
     statusChangedAt: null,
-    version: revision + 1,
+    version: versionOverride ?? revision + 1,
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: "2025-01-01T00:00:00.000Z",
   };
@@ -274,21 +288,31 @@ function json(route: Route, value: unknown, status = 200) {
   });
 }
 
-async function installMockApi(page: Page) {
+async function installMockApi(page: Page, options: MockApiOptions = {}) {
+  const recordCount = options.recordCount ?? 1;
   await page.addInitScript(() => {
     localStorage.setItem("erp_token", "fake-stable-refresh-token");
   });
 
   let recordsQueryCount = 0;
   let recordsRevision = 0;
+  let entityStage: string | null = null;
+  let pageNoteValue: string | null = null;
   let latestRecordVersion = 1;
+  let latestPageValueVersion = 1;
   let failNextRecordsQuery = false;
+  let failRecordsQueryCount = 0;
   let failNextProjectionRequest = false;
+  let failNextRecordUpdate = false;
+  let failNextPageValueUpdate = false;
   let projection: ProjectionGate | null = null;
   let pageValuesProjection: ProjectionGate | null = null;
   let recordUpdate: ProjectionGate | null = null;
+  let pageValueUpdate: ProjectionGate | null = null;
   const projectionRequests: Array<Record<string, unknown>> = [];
   const pageValuesRequests: Array<Record<string, unknown>> = [];
+  const recordUpdateRequests: Array<Record<string, unknown>> = [];
+  const pageValueUpdateRequests: Array<Record<string, unknown>> = [];
   const relatedLinkRequests: Array<Record<string, unknown>> = [];
   const unknownApiRequests: string[] = [];
 
@@ -370,33 +394,79 @@ async function installMockApi(page: Page) {
     }
 
     if (method === "POST" && path === `/api/entities/${ENTITY_ID}/records/query`) {
-      if (failNextRecordsQuery) {
+      if (failNextRecordsQuery || failRecordsQueryCount > 0) {
         failNextRecordsQuery = false;
+        if (failRecordsQueryCount > 0) failRecordsQueryCount -= 1;
         return json(route, { error: "mocked background refetch failed" }, 500);
       }
       const revision = recordsRevision;
       recordsQueryCount += 1;
       const currentRecord = record(revision);
-      latestRecordVersion = currentRecord.version;
+      latestRecordVersion = Math.max(latestRecordVersion, currentRecord.version);
+      const rows = Array.from({ length: recordCount }, (_, index) => {
+        const id = RECORD_ID + index;
+        return record(
+          revision,
+          id,
+          id === RECORD_ID ? entityStage ?? undefined : undefined,
+          id === RECORD_ID ? latestRecordVersion : undefined,
+        );
+      });
       return json(route, {
-        data: [currentRecord],
-        total: 1,
+        data: rows,
+        total: rows.length,
         numericTotals: {},
-        pageFormulaValues: {
-          [String(RECORD_ID)]: {
-            project_formula: revision === 0 ? INITIAL_PROJECT : REFRESHED_PROJECT,
-          },
-        },
+        pageFormulaValues: Object.fromEntries(
+          rows.map((row) => [
+            String(row.id),
+            { project_formula: revision === 0 ? INITIAL_PROJECT : REFRESHED_PROJECT },
+          ]),
+        ),
       });
     }
     if (method === "PUT" && path === `/api/records/${RECORD_ID}`) {
+      const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
+      recordUpdateRequests.push(body);
+      if (failNextRecordUpdate) {
+        failNextRecordUpdate = false;
+        return json(route, { error: "mocked entity save failed" }, 503);
+      }
+      const valuesJson = (body.valuesJson ?? {}) as Record<string, unknown>;
+      if (typeof valuesJson.stage === "string") entityStage = valuesJson.stage;
+      latestRecordVersion += 1;
       const currentUpdate = recordUpdate;
       if (currentUpdate) {
         recordUpdate = null;
         currentUpdate.markSeen();
         await currentUpdate.gate;
       }
-      return json(route, record(Math.max(1, recordsQueryCount)));
+      return json(
+        route,
+        record(recordsRevision, RECORD_ID, entityStage ?? undefined, latestRecordVersion),
+      );
+    }
+    if (method === "PUT" && path === `/api/pages/${PAGE_ID}/records/${RECORD_ID}/values`) {
+      const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
+      pageValueUpdateRequests.push(body);
+      if (failNextPageValueUpdate) {
+        failNextPageValueUpdate = false;
+        return json(route, { error: "mocked page scalar save failed" }, 503);
+      }
+      const valuesJson = (body.valuesJson ?? {}) as Record<string, unknown>;
+      if (typeof valuesJson.page_note === "string") pageNoteValue = valuesJson.page_note;
+      latestPageValueVersion += 1;
+      const currentPageValueUpdate = pageValueUpdate;
+      if (currentPageValueUpdate) {
+        pageValueUpdate = null;
+        currentPageValueUpdate.markSeen();
+        await currentPageValueUpdate.gate;
+      }
+      return json(route, {
+        recordId: RECORD_ID,
+        valuesJson: { page_note: pageNoteValue ?? INITIAL_PAGE_NOTE },
+        version: latestPageValueVersion,
+        fieldVersions: { page_note: latestPageValueVersion },
+      });
     }
     if (method === "POST" && path.startsWith("/api/pages/") && path.endsWith("/record-values/query")) {
       const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
@@ -413,10 +483,13 @@ async function installMockApi(page: Page) {
         valuesJson: {
           page_note:
             currentPageValues?.value ??
+            pageNoteValue ??
             (recordsRevision === 0 ? INITIAL_PAGE_NOTE : REFRESHED_PAGE_NOTE),
         },
-        version: recordsRevision === 0 ? 1 : 2,
-        fieldVersions: { page_note: recordsRevision === 0 ? 1 : 2 },
+        version: pageNoteValue == null ? (recordsRevision === 0 ? 1 : 2) : latestPageValueVersion,
+        fieldVersions: {
+          page_note: pageNoteValue == null ? (recordsRevision === 0 ? 1 : 2) : latestPageValueVersion,
+        },
       }] : []);
     }
     if (method === "POST" && path === `/api/pages/${PAGE_ID}/related-values`) {
@@ -546,19 +619,49 @@ async function installMockApi(page: Page) {
       };
       return { seen, release: releaseRequest, markSeen };
     },
+    armPageValueUpdateHold() {
+      let markSeen!: () => void;
+      let releaseRequest!: () => void;
+      const seen = new Promise<void>((resolve) => {
+        markSeen = resolve;
+      });
+      const released = new Promise<void>((resolve) => {
+        releaseRequest = resolve;
+      });
+      pageValueUpdate = {
+        seen,
+        gate: released,
+        value: "",
+        markSeen,
+        release: releaseRequest,
+      };
+      return { seen, release: releaseRequest, markSeen };
+    },
     failNextRecordsQuery() {
-      failNextRecordsQuery = true;
+      // Disconnect-mode automation can schedule two refreshes around the
+      // explicit manual refresh. Keep the one-shot failure armed through that
+      // small burst so a scheduled request cannot consume the test's fault.
+      failRecordsQueryCount = 3;
     },
     failNextProjection() {
       failNextProjectionRequest = true;
+    },
+    failNextRecordUpdate() {
+      failNextRecordUpdate = true;
+    },
+    failNextPageValueUpdate() {
+      failNextPageValueUpdate = true;
     },
     markRecordsRefreshed() {
       recordsRevision = 1;
     },
     projectionRequests,
     pageValuesRequests,
+    recordUpdateRequests,
+    pageValueUpdateRequests,
     relatedLinkRequests,
     currentRecordVersion: () => latestRecordVersion,
+    currentPageValueVersion: () => latestPageValueVersion,
     unknownApiRequests,
   };
 }
@@ -674,6 +777,7 @@ test("keeps inline editors stable across rapid select reopen and refresh failure
   await page.getByTestId("button-refresh-data-desktop").click();
   await Promise.all([updateHold.seen, refreshProjection.seen]);
   await expect(titleEditor).toHaveValue(draftTitle);
+  await expect(page.getByTestId("inline-saving")).toBeVisible();
   refreshProjection.release();
   await expect(titleEditor).toHaveValue(draftTitle);
   updateHold.release();
@@ -681,10 +785,117 @@ test("keeps inline editors stable across rapid select reopen and refresh failure
 
   // A failed background refetch reports an error but does not erase the stale
   // row snapshot.
+  // The status save schedules disconnect-mode automation refreshes at 400ms and
+  // 1200ms; let those planned refreshes settle before arming this deliberate
+  // one-shot failure so it cannot be consumed by the scheduled work.
+  await page.waitForTimeout(3_000);
   mock.failNextRecordsQuery();
   await page.getByTestId("button-refresh-data-desktop").click();
-  await expect(page.getByRole("alert")).toContainText("загруз");
+  await expect(page.getByText("Ошибка загрузки записей", { exact: true })).toBeVisible();
   await expect(page.getByText(REFRESHED_TITLE, { exact: true }).first()).toBeVisible();
+  expect(mock.unknownApiRequests).toEqual([]);
+});
+
+test(
+  "opens a select during a held projection and publishes entity/page saves inline",
+  async ({ page }) => {
+    test.setTimeout(90_000);
+    const mock = await installMockApi(page, { recordCount: 200 });
+
+    const initialProjection = mock.armProjectionHold();
+    await page.goto(PAGE_PATH, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("main table").first()).toBeVisible();
+    await initialProjection.seen;
+    initialProjection.release();
+    await expect(page.getByText(INITIAL_PROJECT, { exact: true }).first()).toBeVisible();
+
+    // First open and ACK a page-local scalar while its own ready snapshot is
+    // present. A subsequent held read is the pre-save snapshot that must not
+    // revert the already acknowledged value.
+    const latestPageNote = "Page scalar saved while projection remains pending";
+    await page.getByText(INITIAL_PAGE_NOTE, { exact: true }).click();
+    const pageNoteEditor = page.getByTestId("cell-editor-input");
+    await expect(pageNoteEditor).toBeVisible();
+    await pageNoteEditor.fill(latestPageNote);
+    await pageNoteEditor.press("Enter");
+    await expect.poll(() => mock.pageValueUpdateRequests.length).toBe(1);
+    await expect(page.getByText(latestPageNote, { exact: true })).toBeVisible();
+    expect(mock.pageValueUpdateRequests[0]).toMatchObject({
+      expectedVersions: { [String(PAGE_ID)]: 1 },
+      valuesJson: { page_note: latestPageNote },
+    });
+
+    const stalePageRead = mock.armPageValuesHold();
+    const pageProjection = mock.armProjectionHold();
+    await page.getByTestId("button-refresh-data-desktop").click();
+    await Promise.all([stalePageRead.seen, pageProjection.seen]);
+    stalePageRead.release();
+    pageProjection.release();
+    await expect(page.getByText(latestPageNote, { exact: true })).toBeVisible();
+    expect(mock.pageValueUpdateRequests.length).toBe(1);
+    await expect(page.getByTestId("inline-saving")).toHaveCount(0);
+
+    // A background refresh leaves the unrelated projection request pending.
+    // Opening the select must not wait for that request or for all 200 mocked
+    // rows to finish hydrating.
+    const projectionBeforeRefresh = mock.projectionRequests.length;
+    const heldProjection = mock.armProjectionHold();
+    await page.getByTestId("button-refresh-data-desktop").click();
+    await heldProjection.seen;
+    const stageCell = page.locator("main table tbody tr").first().locator("td").nth(1);
+    const stage = page.getByText("To do", { exact: true }).first();
+    await expect(stage).toBeVisible();
+    await stage.click();
+    await expect(page.getByRole("option", { name: "Done", exact: true })).toBeVisible();
+    expect(mock.projectionRequests.length).toBeGreaterThan(projectionBeforeRefresh);
+
+    const initialVersion = mock.currentRecordVersion();
+    await page.getByRole("option", { name: "Done", exact: true }).click();
+    await expect(page.getByText("Done", { exact: true }).first()).toBeVisible();
+    await expect.poll(() => mock.recordUpdateRequests.length).toBe(1);
+    expect(mock.recordUpdateRequests[0]).toMatchObject({
+      expectedVersion: initialVersion,
+      valuesJson: { stage: "done" },
+    });
+    expect(mock.currentRecordVersion()).toBe(initialVersion + 1);
+
+    // Reopening immediately reads the committed scalar, not the pre-save
+    // editor draft or a stale projection snapshot, without releasing the
+    // unrelated background projection first.
+    const savedStageCell = page.getByRole("cell", { name: "Done", exact: true }).first();
+    await expect(savedStageCell).toBeVisible();
+    await savedStageCell.click();
+    await expect(page.getByRole("option", { name: "Done", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    heldProjection.release();
+
+    expect(mock.unknownApiRequests).toEqual([]);
+  },
+);
+
+test("restores the old select value and reports a failed inline save", async ({ page }) => {
+  test.setTimeout(90_000);
+  const mock = await installMockApi(page, { recordCount: 200 });
+
+  const initialProjection = mock.armProjectionHold();
+  await page.goto(PAGE_PATH, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("main table").first()).toBeVisible();
+  await initialProjection.seen;
+  initialProjection.release();
+  await expect(page.getByText(INITIAL_PROJECT, { exact: true }).first()).toBeVisible();
+
+  mock.failNextRecordUpdate();
+  await page.getByText("To do", { exact: true }).first().click();
+  await page.getByRole("option", { name: "Done", exact: true }).click();
+  await expect.poll(() => mock.recordUpdateRequests.length).toBe(1);
+  await expect(page.getByText("Ошибка обновления", { exact: true })).toBeVisible();
+  await expect(page.getByText("To do", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Done", { exact: true })).toHaveCount(0);
+  expect(mock.recordUpdateRequests[0]).toMatchObject({
+    expectedVersion: 1,
+    valuesJson: { stage: "done" },
+  });
+  expect(mock.currentRecordVersion()).toBe(1);
   expect(mock.unknownApiRequests).toEqual([]);
 });
 
