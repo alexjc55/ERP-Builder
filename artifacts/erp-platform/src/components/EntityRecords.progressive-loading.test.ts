@@ -35,17 +35,10 @@ test("partial projection data is never presented as an empty formula or relation
   assert.match(source, /pageValuesPending \|\| pageValuesUnavailable/);
 });
 
-test("manual projection reservation reads the current tick without a duplicate records request", () => {
-  assert.match(
-    source,
-    /const manualProjectionRefreshTickRef = useRef\(manualProjectionRefreshTick\);\s*manualProjectionRefreshTickRef\.current = manualProjectionRefreshTick;/,
-  );
-  assert.match(
-    source,
-    /const manualTickForFetch = manualProjectionRefreshTickRef\.current \+ \(manual \? 1 : 0\);\s*if \(manual\) manualProjectionReservationRef\.current = manualTickForFetch;\s*const generationForFetch = `\$\{requestId\}:\$\{manualTickForFetch\}`;/,
-  );
-  assert.match(source, /const projectionGeneration = `\$\{recordsProjectionGeneration\}:\$\{projectionManualTick\}`;/);
-  assert.match(source, /const applied = await loadRecords\(true\);[\s\S]*?setManualProjectionRefreshTick/);
+test("manual refresh reuses the records generation without a duplicate projection tick", () => {
+  assert.match(source, /const generationForFetch = `\$\{requestId\}`;/);
+  assert.match(source, /await loadRecords\(true\);/);
+  assert.doesNotMatch(source, /setManualProjectionRefreshTick/);
   assert.doesNotMatch(source, /manualProjectionRefreshTick \+ \(manual \? 1 : 0\)/);
 });
 
@@ -117,4 +110,25 @@ test("a records-query failure stays retryable instead of becoming a pending tota
   assert.match(source, /data-testid="records-load-error"/);
   assert.match(source, /onClick=\{\(\) => setRefreshTick\(\(tick\) => tick \+ 1\)\}/);
   assert.match(source, /\{recordsLoadError \? \(\s*t\("records\.loadError"/);
+});
+
+test("same-row refresh publishes records and derived values atomically after projections", () => {
+  assert.match(source, /const deferPublication =[\s\S]*?pendingRecordsPublicationRef\.current = \{[\s\S]*?setPendingRecordsPublicationId\(requestId\);[\s\S]*?return true;/);
+  assert.match(
+    source,
+    /const projectionBundleReady =[\s\S]*?useEffect\(\(\) => \{[\s\S]*?pendingRecordsPublicationRef\.current[\s\S]*?setRecords\(response\.data\);[\s\S]*?setPageFormulaValues\(response\.pageFormulaValues/,
+  );
+  assert.match(source, /pageRelatedLoadingKey === expectedPageRelatedHydrationKey/);
+  assert.match(source, /entityRelatedLoadingKey === expectedEntityRelatedHydrationKey/);
+});
+
+test("open relation pickers survive a projection refresh but cannot write until ready", () => {
+  assert.match(source, /if \(\(entityRelationsPending \|\| entityRelationsUnavailable\) && !relationIsEditingThis\)/);
+  assert.match(source, /relAssignable \|\| keepRelationPickerMounted[\s\S]*?disabled=\{!relAssignable\}/);
+  assert.match(source, /if \(\(pageRelationsPending \|\| pageRelationsUnavailable\) && !isEditingThis\)/);
+});
+
+test("scope changes clear inline editor and conflict state without affecting background refresh", () => {
+  assert.match(source, /setEditingCell\(null\);[\s\S]*?activeCellDirtyRef\.current = false;[\s\S]*?setConflictCell\(null\);/);
+  assert.match(source, /const recordsRenderKeyRef = useRef<string \| null>\(null\);/);
 });

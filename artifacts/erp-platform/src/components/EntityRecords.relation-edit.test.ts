@@ -71,7 +71,7 @@ test("same-record-id mirror navigation invalidates stale page-value responses", 
   assert.match(source, /const requestId = \+\+pageValuesRequestIdRef\.current;/);
   assert.match(
     source,
-    /if \(requestId !== pageValuesRequestIdRef\.current\) return;\s*setPageRecordValues\(result\);\s*setPageValuesHydration\(\{ status: "ready", key: requestScopeKey, error: null \}\);/,
+    /if \(requestId !== pageValuesRequestIdRef\.current\) return;[\s\S]*?setPageRecordValues\(result\);\s*setPageValuesHydration\(\{ status: "ready", key: requestScopeKey, error: null \}\);/,
   );
   assert.match(
     source,
@@ -83,7 +83,7 @@ test("same-record-id mirror navigation invalidates stale page-value responses", 
   );
   assert.match(
     source,
-    /pageValuesHydration\.key !== pageValuesScopeKey[\s\S]*?pageRelatedHydrationKey !== expectedPageRelatedHydrationKey[\s\S]*?entityRelatedHydrationKey !== expectedEntityRelatedHydrationKey/,
+    /const pageValuesProjectionState[\s\S]*?const pageRelationsProjectionState[\s\S]*?const entityRelationsProjectionState/,
   );
 });
 
@@ -126,8 +126,9 @@ test("subscription gaps refresh only requests started before the active subscrip
 test("manual refresh cannot skip or invalidate a superseding scoped query", () => {
   assert.match(
     source,
-    /const applied = await loadRecords\(true\);[\s\S]*?if \(applied\) setManualProjectionRefreshTick/,
+    /await loadRecords\(true\);/,
   );
+  assert.doesNotMatch(source, /setManualProjectionRefreshTick/);
   assert.doesNotMatch(source, /skipNextTickFetchRef/);
   assert.match(
     source,

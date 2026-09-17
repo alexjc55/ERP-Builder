@@ -20,3 +20,9 @@ description: Freshness and responsiveness constraints when reducing bootstrap re
 **Why:** A global “skip next fetch” flag can be set by an old manual refresh after the new request starts, canceling it without replacement.
 
 **How to apply:** Tie refresh follow-up work to the winning request generation and test overlapping scope changes.
+
+**Rule:** A same-scope background refresh retains the complete last successful visible snapshot; replacement records, formulas, totals and projections publish together. Initial or changed-scope loading must not reuse another scope's values.
+
+**Why:** Replacing populated cells with loading indicators caused columns to shrink and redirected users' next clicks. Retaining projections independently also mixed old and new formula inputs.
+
+**How to apply:** Stage replacement responses by generation, abort staging on failure/supersession, expose stale errors with retry, and keep write readiness separate from display readiness. Preserve open picker/editor trees during refresh while guarding writes; clear transient editing state on scope changes. Manual refresh must dispatch only one projection generation.

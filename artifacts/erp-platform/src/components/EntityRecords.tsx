@@ -73,6 +73,7 @@ import {
   type ViewFilterCondition,
   type Transition,
   type RecordQuery,
+  type RecordQueryResult,
   type RecordGroup,
   type PivotQuery,
   type PivotConfig,
@@ -136,7 +137,9 @@ import {
   idlePageValuesHydration,
   pageValuesHydrationKey,
   runPageValueWrite,
+  projectionSnapshotState,
   type PageValuesHydrationState,
+  type ProjectionSnapshotState,
 } from "@/lib/pageValuesHydration";
 import {
   directEntityFormulaResultType,
@@ -2003,6 +2006,10 @@ export function EntityRecords({
   const runPageValuesQuery = queryPageValuesMutation.mutateAsync;
   const [pageRecordValues, setPageRecordValues] = useState<PageRecordValue[]>([]);
   const pageValuesRequestIdRef = useRef(0);
+  // The key includes the field/permission schema as well as the visible rows.
+  // A matching key may be displayed while its replacement request is pending;
+  // a different key must be blanked before paint so values cannot cross scopes.
+  const pageValuesSnapshotKeyRef = useRef<string | null>(null);
   // Projection reads are launched from the records response, before that response
   // mounts the wide table. These refs de-duplicate the follow-up effects for the
   // same exact row/config generation without turning a newer scope into a cache.
@@ -2117,29 +2124,6 @@ export function EntityRecords({
   // buckets/totals) to re-run. Declared here (above the page-values mutation)
   // so the page-local edit path can trigger a group-header refresh too.
   const [refreshTick, setRefreshTick] = useState(0);
-  const [manualProjectionRefreshTick, setManualProjectionRefreshTick] = useState(0);
-  // `loadRecords` is intentionally not recreated for every projection refresh:
-  // its request identity is tied to the records query, while manual projection
-  // reconciliation happens only after the winning response. Read the current
-  // tick through this ref when reserving that next manual generation.
-  const manualProjectionRefreshTickRef = useRef(manualProjectionRefreshTick);
-  manualProjectionRefreshTickRef.current = manualProjectionRefreshTick;
-  // A successful manual request reserves its next projection generation before
-  // its caller schedules the tick update. This closes the tiny render window
-  // between publishing rows and that update, in which an effect could otherwise
-  // launch the same projection generation twice.
-  const manualProjectionReservationRef = useRef<number | null>(null);
-  const reservedManualProjectionTick = manualProjectionReservationRef.current;
-  const projectionManualTick =
-    reservedManualProjectionTick != null && reservedManualProjectionTick > manualProjectionRefreshTick
-      ? reservedManualProjectionTick
-      : manualProjectionRefreshTick;
-  if (
-    reservedManualProjectionTick != null &&
-    reservedManualProjectionTick <= manualProjectionRefreshTick
-  ) {
-    manualProjectionReservationRef.current = null;
-  }
   // Inline editors guard against duplicate blur/Enter submits. A version
   // conflict releases that one-shot guard without remounting the editor, so its
   // local draft remains intact and can be retried against the refreshed version.
@@ -2248,7 +2232,6 @@ export function EntityRecords({
     form: FormState;
     expectedVersion: number;
   } | null>(null);
-
   // Relation page-fields surface one field of a single linked record. Their
   // values are NOT stored on the page (unlike page-local fields) — they are
   // resolved live from the linked record via a dedicated endpoint that re-applies
@@ -2260,7 +2243,9 @@ export function EntityRecords({
   const [relatedByRecord, setRelatedByRecord] = useState<Map<number, Map<string, PageRelatedValue>>>(
     new Map(),
   );
+  const pageRelatedSnapshotKeyRef = useRef<string | null>(null);
   const [pageRelatedHydrationKey, setPageRelatedHydrationKey] = useState<string | null>(null);
+  const [pageRelatedLoadingKey, setPageRelatedLoadingKey] = useState<string | null>(null);
   const [pageRelatedHydrationErrorKey, setPageRelatedHydrationErrorKey] = useState<string | null>(null);
   const pageRelatedRequestIdRef = useRef(0);
   const pageRelatedStartedRequestRef = useRef<string | null>(null);
@@ -2283,7 +2268,9 @@ export function EntityRecords({
   const [entityRelatedByRecord, setEntityRelatedByRecord] = useState<
     Map<number, Map<string, PageRelatedValue>>
   >(new Map());
+  const entityRelatedSnapshotKeyRef = useRef<string | null>(null);
   const [entityRelatedHydrationKey, setEntityRelatedHydrationKey] = useState<string | null>(null);
+  const [entityRelatedLoadingKey, setEntityRelatedLoadingKey] = useState<string | null>(null);
   const [entityRelatedHydrationErrorKey, setEntityRelatedHydrationErrorKey] = useState<string | null>(null);
   const entityRelatedRequestIdRef = useRef(0);
   const entityRelatedStartedRequestRef = useRef<string | null>(null);
@@ -2354,10 +2341,44 @@ export function EntityRecords({
       JSON.stringify(
         allFields
           .filter((f: Field) => f.fieldType === "relation" || f.fieldType === "lookup")
-          .map((f: Field) => [f.fieldKey, f.relationConfigJson?.relationId, f.relationConfigJson?.relatedFieldKey]),
+          .map((f: Field) => [
+            f.fieldKey,
+            f.isActive,
+            f.permissionsJson,
+            f.relationConfigJson?.relationId,
+            f.relationConfigJson?.relatedFieldKey,
+          ]),
       ),
     [allFields],
   );
+
+  // A field-config or permission change changes the meaning of every
+  // projection value.  Invalidate the old snapshots in a layout effect so a
+  // restricted value cannot be painted for one frame while the new request is
+  // starting.  Ordinary refreshes keep their matching snapshot instead.
+  useLayoutEffect(() => {
+    pageValuesRequestIdRef.current += 1;
+    pageRelatedRequestIdRef.current += 1;
+    entityRelatedRequestIdRef.current += 1;
+    pageValuesSnapshotKeyRef.current = null;
+    pageRelatedSnapshotKeyRef.current = null;
+    entityRelatedSnapshotKeyRef.current = null;
+    pageValuesStartedRequestRef.current = null;
+    pageRelatedStartedRequestRef.current = null;
+    entityRelatedStartedRequestRef.current = null;
+    setPageRecordValues([]);
+    setPageValuesHydration(idlePageValuesHydration());
+    setRelatedColumns([]);
+    setRelatedByRecord(new Map());
+    setPageRelatedHydrationKey(null);
+    setPageRelatedLoadingKey(null);
+    setPageRelatedHydrationErrorKey(null);
+    setEntityRelatedColumns([]);
+    setEntityRelatedByRecord(new Map());
+    setEntityRelatedHydrationKey(null);
+    setEntityRelatedLoadingKey(null);
+    setEntityRelatedHydrationErrorKey(null);
+  }, [entityRelationFieldsKey, pageValuesSchemaKey, relationFieldsKey]);
 
   // Optional mirror-page projection: restrict to a chosen subset of field keys.
   const mirrorKeySet =
@@ -2863,6 +2884,75 @@ export function EntityRecords({
     if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
   }, [page]);
   const [records, setRecords] = useState<EntityRecord[]>([]);
+  const recordsSnapshotRef = useRef<EntityRecord[]>([]);
+  recordsSnapshotRef.current = records;
+  const [pendingRecordsPublicationId, setPendingRecordsPublicationId] = useState<number | null>(null);
+  const pendingRecordsPublicationRef = useRef<{
+    requestId: number;
+    response: RecordQueryResult;
+    sigForFetch: string;
+    subscriptionKey: string | null;
+    projectionGeneration: string;
+    pageValuesKey: string | null;
+    pageRelatedKey: string;
+    entityRelatedKey: string;
+    staged: {
+      pageValues?: PageRecordValue[];
+      pageRelated?: { columns: PageRelatedColumn[]; values: PageRelatedValue[] };
+      entityRelated?: { columns: PageRelatedColumn[]; values: PageRelatedValue[] };
+    };
+  } | null>(null);
+  const [pendingProjectionRevision, setPendingProjectionRevision] = useState(0);
+  const stagePendingProjection = useCallback((
+    generation: string,
+    projection:
+      | { pageValues: PageRecordValue[] }
+      | { pageRelated: { columns: PageRelatedColumn[]; values: PageRelatedValue[] } }
+      | { entityRelated: { columns: PageRelatedColumn[]; values: PageRelatedValue[] } },
+  ): boolean => {
+    const pending = pendingRecordsPublicationRef.current;
+    if (!pending || pending.projectionGeneration !== generation) return false;
+    Object.assign(pending.staged, projection);
+    setPendingProjectionRevision((revision) => revision + 1);
+    return true;
+  }, []);
+  const abandonPendingProjection = useCallback((
+    generation: string,
+    failed:
+      | "pageValues"
+      | "pageRelated"
+      | "entityRelated",
+  ): boolean => {
+    const pending = pendingRecordsPublicationRef.current;
+    if (!pending || pending.projectionGeneration !== generation) return false;
+    pendingRecordsPublicationRef.current = null;
+    setPendingRecordsPublicationId(null);
+    setPendingProjectionRevision((revision) => revision + 1);
+    // Abort the other replacement reads. Their late successes must not escape
+    // the failed bundle and overwrite the retained complete snapshot.
+    pageValuesRequestIdRef.current += 1;
+    pageRelatedRequestIdRef.current += 1;
+    entityRelatedRequestIdRef.current += 1;
+    setPageRelatedLoadingKey(null);
+    setEntityRelatedLoadingKey(null);
+    setPageValuesHydration((state) =>
+      state.status === "loading"
+        ? { status: "ready", key: state.key, error: null }
+        : state,
+    );
+    if (failed === "pageValues") {
+      setPageValuesHydration({
+        status: "error",
+        key: pending.pageValuesKey!,
+        error: t("records.pageValuesLoadError", "Не удалось загрузить значения полей страницы"),
+      });
+    } else if (failed === "pageRelated") {
+      setPageRelatedHydrationErrorKey(pending.pageRelatedKey);
+    } else {
+      setEntityRelatedHydrationErrorKey(pending.entityRelatedKey);
+    }
+    return true;
+  }, [t]);
   const [total, setTotal] = useState(0);
   const [numericTotals, setNumericTotals] = useState<Record<string, number>>({});
   // Totals are only rendered for the exact query whose response supplied them.
@@ -2914,11 +3004,20 @@ export function EntityRecords({
     pageValuesRequestIdRef.current += 1;
     pageRelatedRequestIdRef.current += 1;
     entityRelatedRequestIdRef.current += 1;
+    pageValuesSnapshotKeyRef.current = null;
+    pageRelatedSnapshotKeyRef.current = null;
+    entityRelatedSnapshotKeyRef.current = null;
     pageValuesStartedRequestRef.current = null;
     pageRelatedStartedRequestRef.current = null;
     entityRelatedStartedRequestRef.current = null;
-    manualProjectionReservationRef.current = null;
+    pendingRecordsPublicationRef.current = null;
+    setPendingRecordsPublicationId(null);
     setRecords([]);
+    setEditingCell(null);
+    editingCellRef.current = null;
+    activeCellDirtyRef.current = false;
+    deferredRemoteRefreshRef.current = false;
+    setConflictCell(null);
     setPageRecordValues([]);
     setPageValuesHydration(idlePageValuesHydration());
     setPageRequiredDialog(null);
@@ -2936,10 +3035,12 @@ export function EntityRecords({
     setRelatedColumns([]);
     setRelatedByRecord(new Map());
     setPageRelatedHydrationKey(null);
+    setPageRelatedLoadingKey(null);
     setPageRelatedHydrationErrorKey(null);
     setEntityRelatedColumns([]);
     setEntityRelatedByRecord(new Map());
     setEntityRelatedHydrationKey(null);
+    setEntityRelatedLoadingKey(null);
     setEntityRelatedHydrationErrorKey(null);
   }, [entityId, pageId, permPageId]);
 
@@ -3961,7 +4062,69 @@ export function EntityRecords({
   const recordsLoadedSubscriptionKeyRef = useRef<string | null>(null);
   const subscriptionRefreshKeyRef = useRef<string | null>(null);
   const recordsResultKey = `${recordsScopeKey}:${queryKey}`;
-  const projectionGeneration = `${recordsProjectionGeneration}:${projectionManualTick}`;
+  const projectionGeneration = `${recordsProjectionGeneration}`;
+  const recordsPermissionScopeKey = useMemo(
+    () =>
+      JSON.stringify([
+        ...allFields.map((field: Field) => [field.fieldKey, field.isActive, field.permissionsJson]),
+        ...pageFields.map((field: PageField) => [field.fieldKey, field.isActive, field.permissionsJson]),
+      ]),
+    [allFields, pageFields],
+  );
+  const recordsRenderKey = `${recordsResultKey}:${recordsPermissionScopeKey}`;
+  const recordsRenderKeyRef = useRef<string | null>(null);
+  const recordsPermissionKeyRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (recordsRenderKeyRef.current == null) {
+      recordsRenderKeyRef.current = recordsRenderKey;
+      recordsPermissionKeyRef.current = recordsPermissionScopeKey;
+      return;
+    }
+    if (recordsRenderKeyRef.current === recordsRenderKey) return;
+    const permissionsChanged =
+      recordsPermissionKeyRef.current != null &&
+      recordsPermissionKeyRef.current !== recordsPermissionScopeKey;
+    recordsRenderKeyRef.current = recordsRenderKey;
+    recordsPermissionKeyRef.current = recordsPermissionScopeKey;
+    // Filter, pagination, sort, and view changes define a new row universe.
+    // Unlike a same-query background refresh, the old rows must be withheld
+    // before paint so a click cannot target a cell from the previous query.
+    recordsRequestIdRef.current += 1;
+    pageValuesRequestIdRef.current += 1;
+    pageRelatedRequestIdRef.current += 1;
+    entityRelatedRequestIdRef.current += 1;
+    recordsStartedScopeRef.current = null;
+    pendingRecordsPublicationRef.current = null;
+    setPendingRecordsPublicationId(null);
+    pageValuesStartedRequestRef.current = null;
+    pageRelatedStartedRequestRef.current = null;
+    entityRelatedStartedRequestRef.current = null;
+    pageValuesSnapshotKeyRef.current = null;
+    pageRelatedSnapshotKeyRef.current = null;
+    entityRelatedSnapshotKeyRef.current = null;
+    setRecords([]);
+    setEditingCell(null);
+    editingCellRef.current = null;
+    activeCellDirtyRef.current = false;
+    deferredRemoteRefreshRef.current = false;
+    setConflictCell(null);
+    setPageRecordValues([]);
+    setPageValuesHydration(idlePageValuesHydration());
+    setPageFormulaValues({});
+    setRelatedColumns([]);
+    setRelatedByRecord(new Map());
+    setPageRelatedHydrationKey(null);
+    setPageRelatedLoadingKey(null);
+    setPageRelatedHydrationErrorKey(null);
+    setEntityRelatedColumns([]);
+    setEntityRelatedByRecord(new Map());
+    setEntityRelatedHydrationKey(null);
+    setEntityRelatedLoadingKey(null);
+    setEntityRelatedHydrationErrorKey(null);
+    setTotalsResultKey(null);
+    setRecordsLoadError(null);
+    if (permissionsChanged) setRefreshTick((tick) => tick + 1);
+  }, [recordsPermissionScopeKey, recordsRenderKey]);
 
   // Start each row-dependent read as soon as the authoritative records response
   // arrives. Calling the generated mutations here starts network work before
@@ -3975,23 +4138,37 @@ export function EntityRecords({
       if (pageValuesStartedRequestRef.current === requestKey) return;
       pageValuesStartedRequestRef.current = requestKey;
       const requestId = ++pageValuesRequestIdRef.current;
+      const snapshotKey = requestScopeKey == null ? null : `${requestScopeKey}:${pageValuesSchemaKey}`;
+      const keepSnapshot = snapshotKey != null && pageValuesSnapshotKeyRef.current === snapshotKey;
       if (pageId == null || requestScopeKey == null) {
         setPageRecordValues([]);
         setPageValuesHydration(idlePageValuesHydration());
+        pageValuesSnapshotKeyRef.current = null;
         return;
       }
-      setPageRecordValues([]);
+      if (!keepSnapshot) {
+        setPageRecordValues([]);
+        pageValuesSnapshotKeyRef.current = null;
+      }
       setPageRequiredDialog(null);
       setPageValuesHydration({ status: "loading", key: requestScopeKey, error: null });
       void runPageValuesQuery({ pageId, data: { recordIds } })
         .then((result) => {
           if (requestId !== pageValuesRequestIdRef.current) return;
+          if (stagePendingProjection(generation, { pageValues: result })) return;
           setPageRecordValues(result);
           setPageValuesHydration({ status: "ready", key: requestScopeKey, error: null });
+          pageValuesSnapshotKeyRef.current = snapshotKey;
         })
         .catch((error: unknown) => {
           if (requestId !== pageValuesRequestIdRef.current) return;
-          setPageRecordValues([]);
+          if (abandonPendingProjection(generation, "pageValues")) return;
+          // Keep the last successful same-scope values visible. The error
+          // state remains explicit and blocks writes until a retry succeeds.
+          if (!keepSnapshot) {
+            setPageRecordValues([]);
+            pageValuesSnapshotKeyRef.current = null;
+          }
           setPageValuesHydration({
             status: "error",
             key: requestScopeKey,
@@ -3999,7 +4176,7 @@ export function EntityRecords({
           });
         });
     },
-    [pageId, pageValuesSchemaKey, pageValuesRetryTick, runPageValuesQuery, t],
+    [abandonPendingProjection, pageId, pageValuesSchemaKey, pageValuesRetryTick, runPageValuesQuery, stagePendingProjection, t],
   );
   const launchPageRelatedHydration = useCallback(
     (rows: readonly EntityRecord[], generation: string) => {
@@ -4009,18 +4186,34 @@ export function EntityRecords({
       if (pageRelatedStartedRequestRef.current === requestKey) return;
       pageRelatedStartedRequestRef.current = requestKey;
       const requestId = ++pageRelatedRequestIdRef.current;
+      const keepSnapshot = pageRelatedSnapshotKeyRef.current === hydrationKey;
       if (pageId == null || !hasRelationFields || recordIds.length === 0) {
         setRelatedColumns([]);
         setRelatedByRecord(new Map());
+        pageRelatedSnapshotKeyRef.current = hydrationKey;
+        setPageRelatedLoadingKey(null);
         setPageRelatedHydrationErrorKey(null);
         setPageRelatedHydrationKey(hydrationKey);
         return;
       }
-      setPageRelatedHydrationKey(null);
+      if (!keepSnapshot) {
+        setRelatedColumns([]);
+        setRelatedByRecord(new Map());
+        pageRelatedSnapshotKeyRef.current = null;
+        setPageRelatedHydrationKey(null);
+      }
+      setPageRelatedLoadingKey(hydrationKey);
       setPageRelatedHydrationErrorKey(null);
       void fetchRelatedValues({ pageId, data: { recordIds } })
         .then((res) => {
           if (requestId !== pageRelatedRequestIdRef.current) return;
+          if (
+            stagePendingProjection(generation, {
+              pageRelated: { columns: res.columns, values: res.values },
+            })
+          ) {
+            return;
+          }
           setRelatedColumns(res.columns);
           const valuesByRecord = new Map<number, Map<string, PageRelatedValue>>();
           for (const value of res.values) {
@@ -4032,17 +4225,24 @@ export function EntityRecords({
             values.set(value.fieldKey, value);
           }
           setRelatedByRecord(valuesByRecord);
+          pageRelatedSnapshotKeyRef.current = hydrationKey;
+          setPageRelatedLoadingKey(null);
           setPageRelatedHydrationKey(hydrationKey);
         })
         .catch(() => {
           if (requestId !== pageRelatedRequestIdRef.current) return;
-          setRelatedColumns([]);
-          setRelatedByRecord(new Map());
+          if (abandonPendingProjection(generation, "pageRelated")) return;
+          if (!keepSnapshot) {
+            setRelatedColumns([]);
+            setRelatedByRecord(new Map());
+            pageRelatedSnapshotKeyRef.current = null;
+          }
+          setPageRelatedLoadingKey(null);
           setPageRelatedHydrationErrorKey(hydrationKey);
           setPageRelatedHydrationKey(hydrationKey);
         });
     },
-    [fetchRelatedValues, hasRelationFields, pageId, relationFieldsKey],
+    [abandonPendingProjection, fetchRelatedValues, hasRelationFields, pageId, relationFieldsKey, stagePendingProjection],
   );
   const launchEntityRelatedHydration = useCallback(
     (rows: readonly EntityRecord[], generation: string) => {
@@ -4052,18 +4252,34 @@ export function EntityRecords({
       if (entityRelatedStartedRequestRef.current === requestKey) return;
       entityRelatedStartedRequestRef.current = requestKey;
       const requestId = ++entityRelatedRequestIdRef.current;
+      const keepSnapshot = entityRelatedSnapshotKeyRef.current === hydrationKey;
       if (!hasEntityRelationFields || recordIds.length === 0) {
         setEntityRelatedColumns([]);
         setEntityRelatedByRecord(new Map());
+        entityRelatedSnapshotKeyRef.current = hydrationKey;
+        setEntityRelatedLoadingKey(null);
         setEntityRelatedHydrationErrorKey(null);
         setEntityRelatedHydrationKey(hydrationKey);
         return;
       }
-      setEntityRelatedHydrationKey(null);
+      if (!keepSnapshot) {
+        setEntityRelatedColumns([]);
+        setEntityRelatedByRecord(new Map());
+        entityRelatedSnapshotKeyRef.current = null;
+        setEntityRelatedHydrationKey(null);
+      }
+      setEntityRelatedLoadingKey(hydrationKey);
       setEntityRelatedHydrationErrorKey(null);
       void fetchEntityRelatedValues({ entityId, data: { recordIds, pageId: permPageId } })
         .then((res) => {
           if (requestId !== entityRelatedRequestIdRef.current) return;
+          if (
+            stagePendingProjection(generation, {
+              entityRelated: { columns: res.columns, values: res.values },
+            })
+          ) {
+            return;
+          }
           setEntityRelatedColumns(res.columns);
           const valuesByRecord = new Map<number, Map<string, PageRelatedValue>>();
           for (const value of res.values) {
@@ -4075,17 +4291,24 @@ export function EntityRecords({
             values.set(value.fieldKey, value);
           }
           setEntityRelatedByRecord(valuesByRecord);
+          entityRelatedSnapshotKeyRef.current = hydrationKey;
+          setEntityRelatedLoadingKey(null);
           setEntityRelatedHydrationKey(hydrationKey);
         })
         .catch(() => {
           if (requestId !== entityRelatedRequestIdRef.current) return;
-          setEntityRelatedColumns([]);
-          setEntityRelatedByRecord(new Map());
+          if (abandonPendingProjection(generation, "entityRelated")) return;
+          if (!keepSnapshot) {
+            setEntityRelatedColumns([]);
+            setEntityRelatedByRecord(new Map());
+            entityRelatedSnapshotKeyRef.current = null;
+          }
+          setEntityRelatedLoadingKey(null);
           setEntityRelatedHydrationErrorKey(hydrationKey);
           setEntityRelatedHydrationKey(hydrationKey);
         });
     },
-    [entityId, entityRelationFieldsKey, fetchEntityRelatedValues, hasEntityRelationFields, permPageId],
+    [abandonPendingProjection, entityId, entityRelationFieldsKey, fetchEntityRelatedValues, hasEntityRelationFields, permPageId, stagePendingProjection],
   );
   useEffect(
     () => () => {
@@ -4148,6 +4371,14 @@ export function EntityRecords({
 
   const loadRecords = useCallback(async (manual = false) => {
     const requestId = ++recordsRequestIdRef.current;
+    // A newer records response supersedes any staged bundle and all of its
+    // dependent reads. Retained snapshots stay mounted until the replacement
+    // bundle settles; late responses from the superseded generation are ignored.
+    pendingRecordsPublicationRef.current = null;
+    setPendingRecordsPublicationId(null);
+    pageValuesRequestIdRef.current += 1;
+    pageRelatedRequestIdRef.current += 1;
+    entityRelatedRequestIdRef.current += 1;
     if (!recordsBootstrapReady) return false;
     if (!canView) {
       if (requestId === recordsRequestIdRef.current) setRecordsLoading(false);
@@ -4170,16 +4401,59 @@ export function EntityRecords({
       // Launch dependent page/relation reads before publishing rows. This preserves
       // progressive rendering without making passive effects wait behind a costly
       // first paint of a wide table.
-      // A successful manual refresh increments manualProjectionRefreshTick after
-      // this promise resolves. Reserve that next generation from the current ref,
-      // so the reconciliation effect de-duplicates this already-started fresh
-      // read without capturing an old tick or causing another records query.
-      const manualTickForFetch = manualProjectionRefreshTickRef.current + (manual ? 1 : 0);
-      if (manual) manualProjectionReservationRef.current = manualTickForFetch;
-      const generationForFetch = `${requestId}:${manualTickForFetch}`;
+      // The records response itself dispatches every dependent projection read.
+      // Do not schedule a second manual generation after it resolves.
+      const generationForFetch = `${requestId}`;
+      const nextRecordIdsKey = res.data.map((record) => record.id).join(",");
+      const currentRecordIdsKey = recordsSnapshotRef.current.map((record) => record.id).join(",");
+      const sameRecordScope =
+        recordsSnapshotRef.current.length > 0 &&
+        nextRecordIdsKey === currentRecordIdsKey;
+      const pageValuesSnapshotRetained =
+        pageId == null ||
+        pageValuesSnapshotKeyRef.current === `${pageId}:${nextRecordIdsKey}:${pageValuesSchemaKey}`;
+      const pageRelationsSnapshotRetained =
+        !hasRelationFields ||
+        pageRelatedSnapshotKeyRef.current === `${pageId ?? "none"}:${nextRecordIdsKey}:${relationFieldsKey}`;
+      const entityRelationsSnapshotRetained =
+        !hasEntityRelationFields ||
+        entityRelatedSnapshotKeyRef.current ===
+          `${entityId}:${permPageId ?? "none"}:${nextRecordIdsKey}:${entityRelationFieldsKey}`;
+      // If this is the same visible row universe and every configured
+      // projection has a retained snapshot, keep the old row/formula bundle
+      // mounted until all replacement projections resolve. This prevents a
+      // new record value from being combined with an old relation/lookup value.
+      const deferPublication =
+        sameRecordScope &&
+        (pageId != null || hasRelationFields || hasEntityRelationFields) &&
+        pageValuesSnapshotRetained &&
+        pageRelationsSnapshotRetained &&
+        entityRelationsSnapshotRetained;
+      if (deferPublication) {
+        pendingRecordsPublicationRef.current = {
+          requestId,
+          response: res,
+          sigForFetch,
+          subscriptionKey: requestSubscriptionKey,
+          projectionGeneration: generationForFetch,
+          pageValuesKey:
+            pageId == null
+              ? null
+              : pageValuesHydrationKey(pageId, res.data.map((record) => record.id)),
+          pageRelatedKey: `${pageId ?? "none"}:${nextRecordIdsKey}:${relationFieldsKey}`,
+          entityRelatedKey: `${entityId}:${permPageId ?? "none"}:${nextRecordIdsKey}:${entityRelationFieldsKey}`,
+          staged: {},
+        };
+        setPendingRecordsPublicationId(requestId);
+      }
       launchPageValuesHydration(res.data, generationForFetch);
       launchPageRelatedHydration(res.data, generationForFetch);
       launchEntityRelatedHydration(res.data, generationForFetch);
+      if (deferPublication) {
+        return true;
+      }
+      pendingRecordsPublicationRef.current = null;
+      setPendingRecordsPublicationId(null);
       setRecords(res.data);
       setRecordsProjectionGeneration(requestId);
       setTotal(res.total);
@@ -4194,15 +4468,12 @@ export function EntityRecords({
       return true;
     } catch (err) {
       if (requestId !== recordsRequestIdRef.current) return false;
-      setRecords([]);
-      setTotal(0);
-      setNumericTotals({});
+      // A failed same-query background refresh must not erase the last
+      // successful table snapshot. The alert below makes the stale state
+      // explicit while the rows remain stable and non-click-shifting.
       setTotalsResultKey(null);
       const errorMessage = extractError(err) ?? t("records.loadError", "Ошибка загрузки записей");
       setRecordsLoadError(errorMessage);
-      setPageFormulaValues({});
-      setGroups(null);
-      setRowGroupMap({});
       toast({ title: t("records.loadError", "Ошибка загрузки записей"), description: errorMessage, variant: "destructive" });
       return false;
     } finally {
@@ -4216,11 +4487,17 @@ export function EntityRecords({
     canView,
     collab.subscriptionKey,
     entityId,
+    entityRelationFieldsKey,
+    hasEntityRelationFields,
+    hasRelationFields,
     launchEntityRelatedHydration,
     launchPageRelatedHydration,
     launchPageValuesHydration,
+    pageId,
+    pageValuesSchemaKey,
     queryKey,
     permPageId,
+    relationFieldsKey,
     recordsBootstrapReady,
     recordsResultKey,
     recordsScopeKey,
@@ -4228,11 +4505,10 @@ export function EntityRecords({
   ]);
 
   useManualDataRefresh(async () => {
-    const applied = await loadRecords(true);
-    // Keep manual projection refreshes separate from the records generation.
-    // A filter/page/archive change may supersede this request while it is in
-    // flight; a stale manual completion must never cancel that newer query.
-    if (applied) setManualProjectionRefreshTick((tick) => tick + 1);
+    // loadRecords dispatches the records response and every dependent projection
+    // as one generation; scheduling a second manual projection tick here would
+    // supersede the still-settling bundle and reintroduce mixed snapshots.
+    await loadRecords(true);
   });
 
   useEffect(() => {
@@ -4325,30 +4601,150 @@ export function EntityRecords({
     recordIdsKey,
   ]);
 
-  const pageValuesPending =
-    pageId != null &&
-    (pageValuesHydration.key !== pageValuesScopeKey || pageValuesHydration.status === "loading");
+  const pageValuesProjectionState: ProjectionSnapshotState = projectionSnapshotState(
+    pageValuesSnapshotKeyRef.current,
+    pageValuesScopeKey == null ? null : `${pageValuesScopeKey}:${pageValuesSchemaKey}`,
+    pageValuesHydration.status === "loading",
+    pageValuesHydration.status === "error",
+  );
+  const pageRelationsProjectionState: ProjectionSnapshotState = projectionSnapshotState(
+    pageRelatedSnapshotKeyRef.current,
+    expectedPageRelatedHydrationKey,
+    pageRelatedLoadingKey === expectedPageRelatedHydrationKey,
+    pageRelatedHydrationErrorKey === expectedPageRelatedHydrationKey,
+  );
+  const entityRelationsProjectionState: ProjectionSnapshotState = projectionSnapshotState(
+    entityRelatedSnapshotKeyRef.current,
+    expectedEntityRelatedHydrationKey,
+    entityRelatedLoadingKey === expectedEntityRelatedHydrationKey,
+    entityRelatedHydrationErrorKey === expectedEntityRelatedHydrationKey,
+  );
+  // A matching snapshot stays visible during a background request. Only a
+  // missing snapshot renders a loading/unavailable cell; stale snapshots get
+  // an explicit banner but never replace known values with a spinner.
+  const pageValuesPending = pageId != null && pageValuesProjectionState === "missing";
   const pageValuesUnavailable =
     pageId != null &&
-    pageValuesHydration.key === pageValuesScopeKey &&
+    pageValuesProjectionState === "missing" &&
     pageValuesHydration.status === "error";
+  const pageValuesStale = pageId != null && pageValuesProjectionState === "stale";
   const pageRelationsPending =
-    hasRelationFields &&
+    hasRelationFields && records.length > 0 && pageRelationsProjectionState === "missing";
+  const pageRelationsUnavailable =
     records.length > 0 &&
-    pageRelatedHydrationKey !== expectedPageRelatedHydrationKey;
-  const pageRelationsUnavailable = pageRelatedHydrationErrorKey === expectedPageRelatedHydrationKey;
+    pageRelationsProjectionState === "missing" &&
+    pageRelatedHydrationErrorKey === expectedPageRelatedHydrationKey;
+  const pageRelationsStale =
+    hasRelationFields && records.length > 0 && pageRelationsProjectionState === "stale";
   const entityRelationsPending =
-    hasEntityRelationFields &&
+    hasEntityRelationFields && records.length > 0 && entityRelationsProjectionState === "missing";
+  const entityRelationsUnavailable =
     records.length > 0 &&
-    entityRelatedHydrationKey !== expectedEntityRelatedHydrationKey;
-  const entityRelationsUnavailable = entityRelatedHydrationErrorKey === expectedEntityRelatedHydrationKey;
+    entityRelationsProjectionState === "missing" &&
+    entityRelatedHydrationErrorKey === expectedEntityRelatedHydrationKey;
+  const entityRelationsStale =
+    hasEntityRelationFields && records.length > 0 && entityRelationsProjectionState === "stale";
   // Do not evaluate a formula from a partial page/relation snapshot. A formula
   // can reference any projected field (including indirectly through another
   // formula), so it is safer and faster to show its explicit pending state.
   const rowProjectionsPending = pageValuesPending || pageRelationsPending || entityRelationsPending;
   const rowProjectionsUnavailable =
     pageValuesUnavailable || pageRelationsUnavailable || entityRelationsUnavailable;
+  const rowProjectionsStale = pageValuesStale || pageRelationsStale || entityRelationsStale;
   const rowProjectionsReady = !rowProjectionsPending && !rowProjectionsUnavailable;
+  const pendingProjectionBundle = pendingRecordsPublicationRef.current;
+  const projectionBundleReady =
+    pendingProjectionBundle != null
+      ? (pageId == null || pendingProjectionBundle.staged.pageValues != null) &&
+        (!hasRelationFields || pendingProjectionBundle.staged.pageRelated != null) &&
+        (!hasEntityRelationFields || pendingProjectionBundle.staged.entityRelated != null)
+      : (pageId == null || pageValuesProjectionState === "ready") &&
+        (!hasRelationFields || pageRelationsProjectionState === "ready") &&
+        (!hasEntityRelationFields || entityRelationsProjectionState === "ready");
+
+  // Background records responses that share the current row universe are
+  // published atomically with their replacement projections. Initial rows
+  // still publish immediately above so their dependent cells can show the
+  // normal progressive loading state.
+  useEffect(() => {
+    const pending = pendingRecordsPublicationRef.current;
+    if (!pending || pendingRecordsPublicationId !== pending.requestId) return;
+    if (pending.requestId !== recordsRequestIdRef.current || !projectionBundleReady) return;
+    pendingRecordsPublicationRef.current = null;
+    setPendingRecordsPublicationId(null);
+    const { response } = pending;
+    if (pending.staged.pageValues != null) {
+      setPageRecordValues(pending.staged.pageValues);
+      pageValuesSnapshotKeyRef.current =
+        pageId == null
+          ? null
+          : `${pageId}:${response.data.map((record) => record.id).join(",")}:${pageValuesSchemaKey}`;
+      setPageValuesHydration({
+        status: "ready",
+        key: pageValuesHydrationKey(pageId!, response.data.map((record) => record.id)),
+        error: null,
+      });
+    }
+    if (pending.staged.pageRelated != null) {
+      const valuesByRecord = new Map<number, Map<string, PageRelatedValue>>();
+      for (const value of pending.staged.pageRelated.values) {
+        let values = valuesByRecord.get(value.recordId);
+        if (!values) {
+          values = new Map();
+          valuesByRecord.set(value.recordId, values);
+        }
+        values.set(value.fieldKey, value);
+      }
+      setRelatedColumns(pending.staged.pageRelated.columns);
+      setRelatedByRecord(valuesByRecord);
+      pageRelatedSnapshotKeyRef.current =
+        `${pageId ?? "none"}:${response.data.map((record) => record.id).join(",")}:${relationFieldsKey}`;
+      setPageRelatedLoadingKey(null);
+      setPageRelatedHydrationErrorKey(null);
+      setPageRelatedHydrationKey(pageRelatedSnapshotKeyRef.current);
+    }
+    if (pending.staged.entityRelated != null) {
+      const valuesByRecord = new Map<number, Map<string, PageRelatedValue>>();
+      for (const value of pending.staged.entityRelated.values) {
+        let values = valuesByRecord.get(value.recordId);
+        if (!values) {
+          values = new Map();
+          valuesByRecord.set(value.recordId, values);
+        }
+        values.set(value.fieldKey, value);
+      }
+      setEntityRelatedColumns(pending.staged.entityRelated.columns);
+      setEntityRelatedByRecord(valuesByRecord);
+      entityRelatedSnapshotKeyRef.current =
+        `${entityId}:${permPageId ?? "none"}:${response.data.map((record) => record.id).join(",")}:${entityRelationFieldsKey}`;
+      setEntityRelatedLoadingKey(null);
+      setEntityRelatedHydrationErrorKey(null);
+      setEntityRelatedHydrationKey(entityRelatedSnapshotKeyRef.current);
+    }
+    setRecords(response.data);
+    setRecordsProjectionGeneration(pending.requestId);
+    setTotal(response.total);
+    setNumericTotals(response.numericTotals ?? {});
+    setTotalsResultKey(recordsResultKey);
+    setRecordsLoadError(null);
+    setPageFormulaValues(response.pageFormulaValues ?? {});
+    setGroups(response.groups ?? null);
+    setRowGroupMap((response as { rowGroups?: Record<string, string | null> }).rowGroups ?? {});
+    setLoadedGroupSig(pending.sigForFetch);
+    recordsLoadedSubscriptionKeyRef.current = pending.subscriptionKey;
+  }, [
+    entityId,
+    entityRelationFieldsKey,
+    pageId,
+    pageValuesSchemaKey,
+    pendingProjectionRevision,
+    pendingRecordsPublicationId,
+    permPageId,
+    projectionBundleReady,
+    recordsResultKey,
+    relationFieldsKey,
+  ]);
+
   const totalsAuthoritative = totalsResultKey === recordsResultKey;
   const renderProjectionState = (state: "pending" | "unavailable") => (
     <span
@@ -6962,7 +7358,7 @@ export function EntityRecords({
               onRecordClick={openEdit}
               mode={calendarMode}
               onModeChange={setCalendarMode}
-              refreshTick={refreshTick + manualProjectionRefreshTick}
+              refreshTick={refreshTick}
               firstDayOfWeek={appSettings?.firstDayOfWeek ?? 7}
               ml={ml}
             />
@@ -6971,7 +7367,7 @@ export function EntityRecords({
       ) : showPivot ? (
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="p-3 sm:p-4">
-            <PivotView entityId={entityId} query={pivotQuery} refreshTick={refreshTick + manualProjectionRefreshTick} />
+            <PivotView entityId={entityId} query={pivotQuery} refreshTick={refreshTick} />
           </CardContent>
         </Card>
       ) : (
@@ -6983,6 +7379,11 @@ export function EntityRecords({
           className="mb-2 flex items-center justify-between gap-3 border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
         >
           <span>
+            {hasLoadedRecords && records.length > 0 && (
+              <>
+                {t("records.staleSnapshot", "Показаны последние успешно загруженные записи")}:{" "}
+              </>
+            )}
             {t("records.loadError", "Ошибка загрузки записей")}: {recordsLoadError}
           </span>
           <Button
@@ -6990,6 +7391,29 @@ export function EntityRecords({
             variant="outline"
             size="sm"
             className="shrink-0 border-red-300 bg-white text-red-700 hover:bg-red-100"
+            onClick={() => setRefreshTick((tick) => tick + 1)}
+          >
+            {t("records.retry", "Повторить")}
+          </Button>
+        </div>
+      )}
+      {rowProjectionsStale && (
+        <div
+          role="status"
+          data-testid="record-projection-stale"
+          className="mb-2 flex items-center justify-between gap-3 border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+        >
+          <span>
+            {t(
+              "records.projectionStale",
+              "Показаны последние успешно загруженные значения; обновление проекций недоступно.",
+            )}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 border-amber-300 bg-white text-amber-700 hover:bg-amber-100"
             onClick={() => setRefreshTick((tick) => tick + 1)}
           >
             {t("records.retry", "Повторить")}
@@ -8005,6 +8429,8 @@ export function EntityRecords({
                           const f = col.field;
                           const access = effFieldAccess(f);
                           const isFunction = f.fieldType === "function";
+                          const relationIsEditingThis =
+                            editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
                           // A lockAfterCreate field stops being editable once it has a
                           // value (mirrors the hard server boundary on records update).
                           const cellEditable =
@@ -8016,7 +8442,7 @@ export function EntityRecords({
                           const cellText = formatting.cellTextColors[f.fieldKey];
                           const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
                           if (f.fieldType === "relation" || f.fieldType === "lookup") {
-                            if (entityRelationsPending || entityRelationsUnavailable) {
+                            if ((entityRelationsPending || entityRelationsUnavailable) && !relationIsEditingThis) {
                               return (
                                 <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                                   {renderProjectionState(entityRelationsPending ? "pending" : "unavailable")}
@@ -8038,9 +8464,12 @@ export function EntityRecords({
                             // (mirrors the hard server boundary on related-link).
                             const relAssignable =
                               inlineEditEnabled &&
+                              entityRelationsProjectionState === "ready" &&
                               !!meta?.editableColumn &&
                               !!rel?.editable &&
                               !relationFieldLocked(f, rel?.linkedRecordId);
+                            const keepRelationPickerMounted =
+                              relationIsEditingThis && !!meta?.editableColumn && !!rel?.editable;
                             // Dependent (cascading) relation field: resolve the parent
                             // field's value for this row to gate + filter the picker. A
                             // relation parent contributes its linked record id; any other
@@ -8067,7 +8496,7 @@ export function EntityRecords({
                               );
                             return (
                               <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
-                                {relAssignable ? (
+                                {relAssignable || keepRelationPickerMounted ? (
                                   <EntityRelationLinkPicker
                                     entityId={entityId}
                                     fieldKey={f.fieldKey}
@@ -8085,8 +8514,10 @@ export function EntityRecords({
                                     pageId={pageId}
                                     pageSource={!!f.relationConfigJson?.relatedPageId}
                                     wrap={!!f.wrapText}
+                                    disabled={!relAssignable}
                                   />
                                 ) : f.fieldType === "lookup" &&
+                                  entityRelationsProjectionState === "ready" &&
                                   meta?.writeThrough &&
                                   meta?.relatedEntityId != null &&
                                   rel?.linkedRecordId != null &&
@@ -8221,7 +8652,7 @@ export function EntityRecords({
                           const isEditingThis =
                             editingCell?.recordId === record.id && editingCell?.fieldKey === pfKey;
                           if (pf.fieldType === "relation") {
-                            if (pageRelationsPending || pageRelationsUnavailable) {
+                            if ((pageRelationsPending || pageRelationsUnavailable) && !isEditingThis) {
                               return (
                                 <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                                   {renderProjectionState(pageRelationsPending ? "pending" : "unavailable")}
@@ -8236,7 +8667,12 @@ export function EntityRecords({
                             // column-wide (server-reported editable) regardless of whether a link
                             // already exists, so empty ("—") cells are clickable too.
                             const relAssignable =
-                              inlineEditEnabled && !!meta?.editableColumn && !!rel?.editable;
+                              inlineEditEnabled &&
+                              pageRelationsProjectionState === "ready" &&
+                              !!meta?.editableColumn &&
+                              !!rel?.editable;
+                            const keepRelationPickerMounted =
+                              isEditingThis && !!meta?.editableColumn && !!rel?.editable;
                             const display =
                               rel?.linkedRecordId == null ? (
                                 <span className="text-slate-300">—</span>
@@ -8245,7 +8681,7 @@ export function EntityRecords({
                               );
                             return (
                               <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                                {relAssignable && pageId != null ? (
+                                {(relAssignable || keepRelationPickerMounted) && pageId != null ? (
                                   <RelationLinkPicker
                                     pageId={pageId}
                                     fieldKey={pf.fieldKey}
@@ -8257,6 +8693,7 @@ export function EntityRecords({
                                     onEditingChange={(open) =>
                                       setEditingCell(open ? { recordId: record.id, fieldKey: pfKey } : null)
                                     }
+                                    disabled={!relAssignable}
                                   />
                                 ) : (
                                   <div className={pf.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>
@@ -9287,6 +9724,7 @@ function RelationLinkPicker({
   display,
   onChanged,
   onEditingChange,
+  disabled = false,
 }: {
   pageId: number;
   fieldKey: string;
@@ -9296,6 +9734,7 @@ function RelationLinkPicker({
   display: React.ReactNode;
   onChanged: (version?: number) => void;
   onEditingChange: (open: boolean) => void;
+  disabled?: boolean;
 }) {
   const t = useT();
   const { toast } = useToast();
@@ -9324,6 +9763,7 @@ function RelationLinkPicker({
   }, [open, search, pageId, fieldKey, fetchCandidates]);
 
   const choose = async (linkedRecordId: number | null) => {
+    if (disabled) return;
     try {
       const result = await linkMutation.mutateAsync({
         pageId,
@@ -9356,6 +9796,7 @@ function RelationLinkPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
+          disabled={disabled}
           className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-left hover:bg-blue-50/60"
           title={t("records.clickToAssign", "Нажмите, чтобы назначить связь")}
         >
@@ -9412,6 +9853,7 @@ function EntityRelationLinkPicker({
   display,
   onChanged,
   onEditingChange,
+  disabled = false,
   dependent = false,
   parentValue = null,
   relatedFilterFieldKey = null,
@@ -9427,6 +9869,7 @@ function EntityRelationLinkPicker({
   display: React.ReactNode;
   onChanged: (version?: number) => void;
   onEditingChange: (open: boolean) => void;
+  disabled?: boolean;
   /** True when this relation field is a dependent (cascading) field. */
   dependent?: boolean;
   /** The parent field's value used to narrow candidates (scalar, or a linked
@@ -9498,6 +9941,7 @@ function EntityRelationLinkPicker({
   }, [open, search, entityId, fieldKey, fetchCandidates, gated, dependent, parentValue]);
 
   const choose = async (linkedRecordId: number | null) => {
+    if (disabled) return;
     try {
       const result = await linkMutation.mutateAsync({
         entityId,
@@ -9532,7 +9976,7 @@ function EntityRelationLinkPicker({
         <button
           type="button"
           data-testid={`entity-relation-picker-${fieldKey}`}
-          disabled={triggerDisabled}
+          disabled={triggerDisabled || disabled}
           className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-left hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
           title={
             gated
