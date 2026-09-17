@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useId, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
   useListEntityRecords,
   useGetRecord,
@@ -192,7 +192,7 @@ import { computeRowFormatting, orderedFormatRules, resolveFormattingValue, ruleM
 import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCollaboration } from "@/lib/useCollaboration";
+import { useCollaboration, type CollaborationPresence } from "@/lib/useCollaboration";
 import { useManualDataRefresh } from "@/lib/manualDataRefresh";
 import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown, ListChecks, Merge, RefreshCw } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -903,6 +903,87 @@ function UrlPreviewCell({ url, label }: { url: string; label?: string }) {
       </HoverCardContent>
     </HoverCard>
   );
+}
+
+/**
+ * Collaboration decoration for a table cell.
+ *
+ * This deliberately stays free of Radix roots/contexts and React state. There
+ * can be thousands of these wrappers in a wide table, while normally only one
+ * or two have collaboration state. Keeping the cell content in the first,
+ * unconditional child also means adding/removing presence decoration never
+ * replaces an inline editor's DOM subtree (and therefore never loses its draft
+ * or selection).
+ */
+function CellCollabVisual({
+  recordId,
+  fieldKey,
+  isConflict,
+  editorNames,
+  editorColor,
+  conflictLabel,
+  editingLabel,
+  children,
+}: {
+  recordId: number;
+  fieldKey: string;
+  isConflict: boolean;
+  editorNames: string;
+  editorColor?: string;
+  conflictLabel: string;
+  editingLabel: string;
+  children: React.ReactNode;
+}) {
+  const hasEditors = editorNames.length > 0;
+  const active = hasEditors || isConflict;
+  const outlineColor = isConflict ? "#f59e0b" : (editorColor ?? "#3b82f6");
+  const tooltipId = useId();
+
+  return (
+    <div
+      className="relative w-full h-full min-h-[20px] flex items-center cursor-text"
+      tabIndex={active ? 0 : undefined}
+      aria-describedby={active ? tooltipId : undefined}
+    >
+      <div className="relative z-0 w-full">{children}</div>
+      {active && (
+        <>
+          <div
+            data-testid="cell-collab-outline"
+            data-record-id={recordId}
+            data-field-key={fieldKey}
+            data-state={isConflict ? "conflict" : "editing"}
+            className="absolute inset-y-[-6px] inset-x-[-8px] pointer-events-none rounded-[4px] border-[2px] z-10"
+            style={{ borderColor: outlineColor }}
+          />
+          <div
+            id={tooltipId}
+            role="tooltip"
+            data-testid="cell-collab-popover"
+            className="invisible absolute bottom-[calc(100%+8px)] left-1/2 z-50 w-max max-w-80 -translate-x-1/2 rounded-md border border-slate-200 bg-white p-2 text-xs text-slate-950 opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+          >
+            {isConflict && (
+              <div data-testid="cell-conflict" className="text-amber-600 font-bold mb-1">
+                {conflictLabel}
+              </div>
+            )}
+            {hasEditors && (
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: editorColor }} />
+                <span><span className="font-bold">{editorNames}</span> {editingLabel}</span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const EMPTY_CELL_EDITORS: CollaborationPresence[] = [];
+
+function collaborationCellKey(recordId: number, fieldKey: string): string {
+  return `${recordId}\u0000${fieldKey}`;
 }
 
 // A dependent-filter dropdown for one opt-in field. Options are fetched lazily on open
@@ -1920,15 +2001,25 @@ export function EntityRecords({
   const visibleCollabUsers = activeCollabUsers.slice(0, activeCollabUsers.length > 4 ? 3 : 4);
   const extraCollabUsers = Math.max(0, activeCollabUsers.length - visibleCollabUsers.length);
 
-  const getCellEditors = useCallback((recordId: number, fieldKey: string) => {
-    const byUser = new Map<number, (typeof otherCollabSessions)[number]>();
+  const cellEditorsByKey = useMemo(() => {
+    const cells = new Map<string, Map<number, CollaborationPresence>>();
     for (const presence of otherCollabSessions) {
-      if (presence.editing?.recordId === recordId && presence.editing.fieldKey === fieldKey) {
-        byUser.set(presence.userId, presence);
+      if (!presence.editing) continue;
+      const key = collaborationCellKey(presence.editing.recordId, presence.editing.fieldKey);
+      let byUser = cells.get(key);
+      if (!byUser) {
+        byUser = new Map();
+        cells.set(key, byUser);
       }
+      byUser.set(presence.userId, presence);
     }
-    return [...byUser.values()];
+    return new Map([...cells].map(([key, byUser]) => [key, [...byUser.values()]]));
   }, [otherCollabSessions]);
+  const getCellEditors = useCallback(
+    (recordId: number, fieldKey: string) =>
+      cellEditorsByKey.get(collaborationCellKey(recordId, fieldKey)) ?? EMPTY_CELL_EDITORS,
+    [cellEditorsByKey],
+  );
 
   const [realtimeTick, setRealtimeTick] = useState(0);
   const [collabReconnectRefreshes, setCollabReconnectRefreshes] = useState(0);
@@ -8607,39 +8698,21 @@ export function EntityRecords({
                       };
                       const hasCollabState = editors.length > 0 || isConflict;
                       const names = editors.map(e => e.name).join(", ");
-                      const outlineColor = isConflict ? "#f59e0b" : (editors[0]?.color ?? "#3b82f6");
                       return cloneElement(td, {
                         ...testProps,
-                        className: cn(td.props.className, "relative", hasCollabState && "group"),
+                        className: cn(td.props.className, "relative", hasCollabState && "group overflow-visible"),
                         children: (
-                          <HoverCard openDelay={200}>
-                            <HoverCardTrigger asChild>
-                              <div className="relative w-full h-full min-h-[20px] flex items-center cursor-text">
-                                {hasCollabState && (
-                                  <div
-                                    data-testid="cell-collab-outline"
-                                    data-record-id={record.id}
-                                    data-field-key={fieldKey}
-                                    data-state={isConflict ? "conflict" : "editing"}
-                                    className="absolute inset-y-[-6px] inset-x-[-8px] pointer-events-none rounded-[4px] border-[2px] z-10"
-                                    style={{ borderColor: outlineColor }}
-                                  />
-                                )}
-                                <div className="relative z-0 w-full">{td.props.children}</div>
-                              </div>
-                            </HoverCardTrigger>
-                            {hasCollabState && (
-                              <HoverCardContent data-testid="cell-collab-popover" className="w-auto p-2 text-xs z-50" side="top" align="center">
-                                {isConflict && <div data-testid="cell-conflict" className="text-amber-600 font-bold mb-1">{t("collaboration.conflict", "Данные изменились на сервере")}</div>}
-                                {editors.length > 0 && (
-                                  <div className="flex items-center gap-1.5">
-                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: editors[0].color }} />
-                                    <span><span className="font-bold">{names}</span> {t("collaboration.isEditing", "редактирует")}</span>
-                                  </div>
-                                )}
-                              </HoverCardContent>
-                            )}
-                          </HoverCard>
+                          <CellCollabVisual
+                            recordId={record.id}
+                            fieldKey={fieldKey}
+                            isConflict={isConflict}
+                            editorNames={names}
+                            editorColor={editors[0]?.color}
+                            conflictLabel={isConflict ? t("collaboration.conflict", "Данные изменились на сервере") : ""}
+                            editingLabel={editors.length > 0 ? t("collaboration.isEditing", "редактирует") : ""}
+                          >
+                            {td.props.children}
+                          </CellCollabVisual>
                         )
                       });
                     };

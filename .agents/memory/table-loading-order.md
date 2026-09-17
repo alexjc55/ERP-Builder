@@ -32,3 +32,9 @@ description: Freshness and responsiveness constraints when reducing bootstrap re
 **Why:** Complete background snapshot staging can delay the writer's own feedback. Reusing read generations for write ownership lets an intervening refresh discard a valid acknowledgement; scope equality alone cannot reject a response after navigating away and back.
 
 **How to apply:** Retain explicit saving feedback until acknowledgement, publish only server-confirmed values/versions, reject stale callbacks by captured invocation identity, and close only the initiating editor lifetime. Preserve source-page invalidation and automation follow-up for every save surface when relocating mutation callbacks.
+
+**Rule:** Collaboration decoration must have negligible cost for inactive cells; do not mount a full popup controller for every cell.
+
+**Why:** Profiling a 200-row table found the browser saturated by collaboration wrappers and development JSX construction, even with bounded requests and cached formulas. Keeping values visible was not enough to keep clicks responsive.
+
+**How to apply:** Profile browser CPU as well as network latency. Keep editor children mounted independently from tooltip visibility, index presence once, and create expensive floating UI only for an active tooltip. A passing timeout test is not proof of instant interaction; report measured click latency.

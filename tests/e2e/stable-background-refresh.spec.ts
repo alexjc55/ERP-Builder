@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 
 /**
  * This test deliberately does not use the API server.  The page is backed by a
@@ -842,7 +843,6 @@ test(
     const heldProjection = mock.armProjectionHold();
     await page.getByTestId("button-refresh-data-desktop").click();
     await heldProjection.seen;
-    const stageCell = page.locator("main table tbody tr").first().locator("td").nth(1);
     const stage = page.getByText("To do", { exact: true }).first();
     await expect(stage).toBeVisible();
     await stage.click();
@@ -869,6 +869,278 @@ test(
     await page.keyboard.press("Escape");
     heldProjection.release();
 
+    expect(mock.unknownApiRequests).toEqual([]);
+  },
+);
+
+test(
+  "profile: measures select reopen while a projection is held",
+  async ({ page, context }) => {
+    test.skip(
+      process.env.RUN_INLINE_EDITOR_PROFILE !== "1",
+      "Opt-in CDP performance profile",
+    );
+    test.setTimeout(90_000);
+
+    const startedAt = Date.now();
+    const diagnosticDirectory = "test-results/inline-editor-profile";
+    const checkpointPath = `${diagnosticDirectory}/checkpoints.jsonl`;
+    mkdirSync(diagnosticDirectory, { recursive: true });
+    writeFileSync(checkpointPath, "");
+    const pageConsole: Array<{ type: string; text: string }> = [];
+    const pageErrors: string[] = [];
+    const network = new Map<string, number>();
+    page.on("console", (message) => {
+      pageConsole.push({ type: message.type(), text: message.text() });
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.stack ?? error.message));
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (!url.pathname.startsWith("/api/")) return;
+      const key = `${request.method()} ${url.pathname}`;
+      network.set(key, (network.get(key) ?? 0) + 1);
+    });
+    const checkpoint = (name: string, extra: unknown = {}) => {
+      const value = {
+        name,
+        elapsedMs: Date.now() - startedAt,
+        ...((extra as Record<string, unknown>) ?? {}),
+      };
+      appendFileSync(checkpointPath, `${JSON.stringify(value)}\n`);
+      console.log(`INLINE_EDITOR_PROFILE_CHECKPOINT ${JSON.stringify(value)}`);
+    };
+
+    const mock = await installMockApi(page, { recordCount: 200 });
+    const initialProjection = mock.armProjectionHold();
+    await page.goto(PAGE_PATH, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("main table").first()).toBeVisible();
+    await initialProjection.seen;
+    initialProjection.release();
+    await expect(page.getByText(INITIAL_PROJECT, { exact: true }).first()).toBeVisible();
+
+    const latestPageNote = "Page scalar saved while projection remains pending";
+    await page.getByText(INITIAL_PAGE_NOTE, { exact: true }).click();
+    const pageNoteEditor = page.getByTestId("cell-editor-input");
+    await expect(pageNoteEditor).toBeVisible();
+    await pageNoteEditor.fill(latestPageNote);
+    await pageNoteEditor.press("Enter");
+    await expect.poll(() => mock.pageValueUpdateRequests.length).toBe(1);
+    await expect(page.getByText(latestPageNote, { exact: true })).toBeVisible();
+
+    const stalePageRead = mock.armPageValuesHold();
+    const pageProjection = mock.armProjectionHold();
+    await page.getByTestId("button-refresh-data-desktop").click();
+    await Promise.all([stalePageRead.seen, pageProjection.seen]);
+    stalePageRead.release();
+    pageProjection.release();
+    await expect(page.getByText(latestPageNote, { exact: true })).toBeVisible();
+    await expect(page.getByTestId("inline-saving")).toHaveCount(0);
+
+    const heldProjection = mock.armProjectionHold();
+    await page.getByTestId("button-refresh-data-desktop").click();
+    await heldProjection.seen;
+    const firstStageOpenStartedAt = Date.now();
+    await page.getByText("To do", { exact: true }).first().click({ timeout: 10_000 });
+    await expect(page.getByRole("option", { name: "Done", exact: true })).toBeVisible();
+    checkpoint("first-stage-option-visible", {
+      clickToOptionMs: Date.now() - firstStageOpenStartedAt,
+    });
+    const initialVersion = mock.currentRecordVersion();
+    await page.getByRole("option", { name: "Done", exact: true }).click();
+    await expect(page.getByText("Done", { exact: true }).first()).toBeVisible();
+    await expect.poll(() => mock.recordUpdateRequests.length).toBe(1);
+    checkpoint("entity-save-ack", {
+      initialVersion,
+      currentVersion: mock.currentRecordVersion(),
+      recordUpdates: mock.recordUpdateRequests.length,
+      projectionRequests: mock.projectionRequests.length,
+    });
+
+    const savedStageCell = page.getByRole("cell", { name: "Done", exact: true }).first();
+    await expect(savedStageCell).toBeVisible();
+    const domBefore = await page.evaluate(() => {
+      const tables = [...document.querySelectorAll("main table")];
+      const rows = [...document.querySelectorAll("main table tbody tr")];
+      const cells = [...document.querySelectorAll("main table tbody td")];
+      const exactDoneCells = cells.filter((cell) => cell.textContent?.trim() === "Done");
+      const describe = (element: Element) => {
+        const html = element as HTMLElement;
+        const style = getComputedStyle(html);
+        const rect = html.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        return {
+          tag: html.tagName,
+          role: html.getAttribute("role"),
+          text: html.textContent?.trim(),
+          connected: html.isConnected,
+          rect: {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+          },
+          display: style.display,
+          visibility: style.visibility,
+          pointerEvents: style.pointerEvents,
+          opacity: style.opacity,
+          ariaDisabled: html.getAttribute("aria-disabled"),
+          disabled: "disabled" in html ? Boolean((html as HTMLButtonElement).disabled) : null,
+          topAtCenter:
+            document.elementFromPoint(centerX, centerY)?.outerHTML.slice(0, 300) ?? null,
+        };
+      };
+      return {
+        readyState: document.readyState,
+        visibilityState: document.visibilityState,
+        tableCount: tables.length,
+        rowCount: rows.length,
+        cellCount: cells.length,
+        exactDoneCellCount: exactDoneCells.length,
+        exactDoneCells: exactDoneCells.map(describe),
+        optionCount: document.querySelectorAll('[role="option"]').length,
+        projectionStateCount: document.querySelectorAll(
+          '[data-testid="record-projection-state"]',
+        ).length,
+        inlineSavingCount: document.querySelectorAll('[data-testid="inline-saving"]').length,
+        activeElement: document.activeElement?.outerHTML.slice(0, 500) ?? null,
+      };
+    });
+    checkpoint("before-problem-click-dom", domBefore);
+
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Profiler.enable");
+    await cdp.send("Profiler.setSamplingInterval", { interval: 100 });
+    await cdp.send("Profiler.start");
+    const profileStartedAt = Date.now();
+    const stopProfile = new Promise<{
+      profile?: {
+        nodes: Array<{
+          id: number;
+          callFrame: {
+            functionName: string;
+            url: string;
+            lineNumber: number;
+            columnNumber: number;
+          };
+        }>;
+        samples?: number[];
+        timeDeltas?: number[];
+      };
+      error?: string;
+    }>((resolve) => {
+      setTimeout(() => {
+        cdp
+          .send("Profiler.stop")
+          .then((result) => {
+            writeFileSync(
+              `${diagnosticDirectory}/cpu-profile-timer.json`,
+              JSON.stringify(result.profile),
+            );
+            checkpoint("independent-timer-profile-stopped", {
+              nodes: result.profile.nodes.length,
+              samples: result.profile.samples?.length ?? 0,
+            });
+            resolve(result);
+          })
+          .catch((error: Error) => {
+            checkpoint("independent-timer-profile-error", {
+              error: error.stack ?? error.message,
+            });
+            resolve({ error: error.stack ?? error.message });
+          });
+      }, 10_000);
+    });
+
+    const clickStartedAt = Date.now();
+    const clickResult = await savedStageCell
+      .click({ timeout: 10_000 })
+      .then(() => ({ outcome: "resolved", elapsedMs: Date.now() - clickStartedAt }))
+      .catch((error: Error) => ({
+        outcome: "rejected",
+        elapsedMs: Date.now() - clickStartedAt,
+        error: error.message,
+      }));
+    const reopenOptionStartedAt = Date.now();
+    const reopenOptionPromise = page
+      .getByRole("option", { name: "Done", exact: true })
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .then(() => ({
+        outcome: "visible",
+        elapsedFromClickStartMs: Date.now() - clickStartedAt,
+        elapsedAfterClickResolvedMs: Date.now() - reopenOptionStartedAt,
+      }))
+      .catch((error: Error) => ({
+        outcome: "not-visible",
+        elapsedFromClickStartMs: Date.now() - clickStartedAt,
+        elapsedAfterClickResolvedMs: Date.now() - reopenOptionStartedAt,
+        error: error.message,
+      }));
+    const [stopped, reopenOptionResult] = await Promise.all([stopProfile, reopenOptionPromise]);
+    const profile = stopped.profile;
+    const nodeById = new Map(profile?.nodes.map((node) => [node.id, node]));
+    const totals = new Map<number, { samples: number; micros: number }>();
+    for (let index = 0; index < (profile?.samples?.length ?? 0); index += 1) {
+      const nodeId = profile!.samples![index];
+      const current = totals.get(nodeId) ?? { samples: 0, micros: 0 };
+      current.samples += 1;
+      current.micros += profile!.timeDeltas?.[index] ?? 0;
+      totals.set(nodeId, current);
+    }
+    const sampledMicros = [...totals.values()].reduce((sum, value) => sum + value.micros, 0);
+    const hotFrames = [...totals.entries()]
+      .map(([nodeId, value]) => {
+        const frame = nodeById.get(nodeId)?.callFrame;
+        return {
+          nodeId,
+          samples: value.samples,
+          sampledMs: Math.round(value.micros / 100) / 10,
+          sampledPercent:
+            sampledMicros === 0 ? 0 : Math.round((value.micros / sampledMicros) * 10_000) / 100,
+          functionName: frame?.functionName ?? "",
+          url: frame?.url ?? "",
+          line: (frame?.lineNumber ?? -1) + 1,
+          column: (frame?.columnNumber ?? -1) + 1,
+        };
+      })
+      .sort((a, b) => b.sampledMs - a.sampledMs)
+      .slice(0, 30);
+
+    if (profile) {
+      writeFileSync(
+        `${diagnosticDirectory}/cpu-profile.json`,
+        JSON.stringify(profile),
+      );
+    }
+    const diagnostic = {
+      clickResult,
+      reopenOptionResult,
+      profileWallMs: Date.now() - profileStartedAt,
+      profilerError: stopped.error ?? null,
+      profileNodeCount: profile?.nodes.length ?? 0,
+      profileSampleCount: profile?.samples?.length ?? 0,
+      sampledMs: Math.round(sampledMicros / 100) / 10,
+      hotFrames,
+      domBefore,
+      network: Object.fromEntries([...network.entries()].sort()),
+      mockCounts: {
+        projectionRequests: mock.projectionRequests.length,
+        pageValuesRequests: mock.pageValuesRequests.length,
+        recordUpdateRequests: mock.recordUpdateRequests.length,
+        pageValueUpdateRequests: mock.pageValueUpdateRequests.length,
+        unknownApiRequests: mock.unknownApiRequests,
+      },
+      console: pageConsole,
+      pageErrors,
+    };
+    writeFileSync(
+      `${diagnosticDirectory}/diagnostic.json`,
+      JSON.stringify(diagnostic, null, 2),
+    );
+    console.log(`INLINE_EDITOR_PROFILE_RESULT ${JSON.stringify(diagnostic)}`);
+
+    // Intentionally do not release heldProjection: the measured condition is
+    // the outstanding unrelated projection request.
     expect(mock.unknownApiRequests).toEqual([]);
   },
 );
