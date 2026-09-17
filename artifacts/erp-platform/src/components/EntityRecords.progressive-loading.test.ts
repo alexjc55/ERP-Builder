@@ -104,6 +104,16 @@ test("totals and empty states wait for the exact query response", () => {
   assert.match(source, /\{totalsAuthoritative && total > 0 && groupRowsReady/);
 });
 
+test("same-query refresh and failure retain the last totals while server aggregates can publish early", () => {
+  const loadStart = source.indexOf("const loadRecords = useCallback");
+  const loadEnd = source.indexOf("// eslint-disable-next-line react-hooks/exhaustive-deps", loadStart);
+  const load = source.slice(loadStart, loadEnd);
+  assert.ok(loadStart >= 0 && loadEnd > loadStart);
+  assert.doesNotMatch(load, /setTotalsResultKey\(null\)/);
+  assert.match(load, /sameAggregateTopology[\s\S]*?setNumericTotals\(res\.numericTotals \?\? \{\}\)/);
+  assert.match(load, /sameAggregateTopology[\s\S]*?setGroups\(res\.groups \?\? null\)/);
+});
+
 test("a records-query failure stays retryable instead of becoming a pending total forever", () => {
   assert.match(source, /const \[recordsLoadError, setRecordsLoadError\] = useState<string \| null>\(null\);/);
   assert.match(source, /setRecordsLoadError\(errorMessage\);/);

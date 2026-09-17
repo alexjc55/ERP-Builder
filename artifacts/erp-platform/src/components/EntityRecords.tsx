@@ -1,4 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useId, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { sameAggregateTopology } from "@/lib/aggregateSnapshot";
 import {
   useListEntityRecords,
   useGetRecord,
@@ -915,6 +916,20 @@ function UrlPreviewCell({ url, label }: { url: string; label?: string }) {
  * replaces an inline editor's DOM subtree (and therefore never loses its draft
  * or selection).
  */
+function InlineSavingIndicator({ label }: { label: string }) {
+  return (
+    <span
+      data-testid="inline-saving"
+      role="status"
+      aria-label={label}
+      className="absolute top-0 end-0 z-10 pointer-events-none text-blue-600"
+    >
+      <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
 function CellCollabVisual({
   recordId,
   fieldKey,
@@ -3065,6 +3080,8 @@ export function EntityRecords({
   // each record under its own group header.
   const [expandAll, setExpandAll] = useState(Boolean(groupDefaultExpanded));
   const [rowGroupMap, setRowGroupMap] = useState<Record<string, string | null>>({});
+  const aggregateTopologyRef = useRef({ groups, rowGroupMap });
+  aggregateTopologyRef.current = { groups, rowGroupMap };
   // Which group selection the CURRENTLY-loaded `records` belong to. On a grouped
   // mirror page the row set is server-narrowed to the expanded group; while the
   // narrowing fetch is in flight the previous (collapsed = full, or other-group)
@@ -4215,6 +4232,11 @@ export function EntityRecords({
     setEntityRelatedHydrationErrorKey(null);
     setTotalsResultKey(null);
     setRecordsLoadError(null);
+    // Group common values and sums belong to the query just as rows do.
+    // Retention is only valid for a background refresh of that same scope.
+    setGroups(null);
+    setRowGroupMap({});
+    setLoadedGroupSig(undefined);
     if (permissionsChanged) setRefreshTick((tick) => tick + 1);
   }, [recordsPermissionScopeKey, recordsRenderKey]);
 
@@ -4508,7 +4530,8 @@ export function EntityRecords({
     recordsLoadSubscriptionKeyRef.current = requestSubscriptionKey;
     if (requestId === recordsRequestIdRef.current) {
       setRecordsLoading(true);
-      setTotalsResultKey(null);
+      // Keep the last successful same-query totals mounted. Scope changes
+      // clear their key before paint; a refresh changes freshness, not layout.
       setRecordsLoadError(null);
     }
     // Group signature this fetch is for, so the render can tell whether the rows
@@ -4572,6 +4595,17 @@ export function EntityRecords({
       launchEntityRelatedHydration(res.data, generationForFetch);
       if (writePendingAtStart || pendingInlineWriteRef.current) return false;
       if (deferPublication) {
+        const previous = aggregateTopologyRef.current;
+        const nextAssignments = (res as { rowGroups?: Record<string, string | null> }).rowGroups ?? {};
+        if (sameAggregateTopology(previous.groups, res.groups ?? null, previous.rowGroupMap, nextAssignments)) {
+          // These are complete server aggregates, not calculations over visible
+          // rows. They do not depend on the pending cell-projection requests.
+          // Group membership changes still wait for the atomic row bundle.
+          setTotal(res.total);
+          setNumericTotals(res.numericTotals ?? {});
+          setGroups(res.groups ?? null);
+          setTotalsResultKey(recordsResultKey);
+        }
         return true;
       }
       pendingRecordsPublicationRef.current = null;
@@ -4593,7 +4627,6 @@ export function EntityRecords({
       // A failed same-query background refresh must not erase the last
       // successful table snapshot. The alert below makes the stale state
       // explicit while the rows remain stable and non-click-shifting.
-      setTotalsResultKey(null);
       const errorMessage = extractError(err) ?? t("records.loadError", "Ошибка загрузки записей");
       setRecordsLoadError(errorMessage);
       toast({ title: t("records.loadError", "Ошибка загрузки записей"), description: errorMessage, variant: "destructive" });
@@ -8783,9 +8816,7 @@ export function EntityRecords({
                                       </SelectContent>
                                     </Select>
                                     {pendingInlineWriteKey === `entity:${record.id}:${STATUS_COLUMN_KEY}` && (
-                                    <span data-testid="inline-saving" className="ms-2 text-[10px] text-blue-600" aria-live="polite">
-                                        {t("records.saving", "Сохранение…")}
-                                      </span>
+                                      <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />
                                     )}
                                   </>
                                 ) : (
@@ -8972,9 +9003,7 @@ export function EntityRecords({
                                     pageId={permPageId}
                                   />
                                   {pendingInlineWriteKey === `entity:${record.id}:${f.fieldKey}` && (
-                                    <span data-testid="inline-saving" className="absolute -bottom-4 end-0 text-[10px] text-blue-600" aria-live="polite">
-                                      {t("records.saving", "Сохранение…")}
-                                    </span>
+                                    <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />
                                   )}
                                 </div>
                               </td>
@@ -9144,9 +9173,7 @@ export function EntityRecords({
                                       onCancel={() => setEditingCell(null)}
                                     />
                                     {pendingInlineWriteKey === `page:${pageId}:${record.id}:${pf.fieldKey}` && (
-                                      <span data-testid="inline-saving" className="absolute -bottom-4 end-0 text-[10px] text-blue-600" aria-live="polite">
-                                        {t("records.saving", "Сохранение…")}
-                                      </span>
+                                      <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />
                                     )}
                                   </div>
                                 </td>
@@ -9214,9 +9241,7 @@ export function EntityRecords({
                                     onCancel={() => setEditingCell(null)}
                                   />
                                   {pendingInlineWriteKey === `page:${pageId}:${record.id}:${pf.fieldKey}` && (
-                                    <span data-testid="inline-saving" className="absolute -bottom-4 end-0 text-[10px] text-blue-600" aria-live="polite">
-                                      {t("records.saving", "Сохранение…")}
-                                    </span>
+                                    <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />
                                   )}
                                 </div>
                               </td>

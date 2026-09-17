@@ -22,6 +22,7 @@ const INITIAL_PAGE_NOTE = "Initial page scalar retained during refresh";
 const REFRESHED_PAGE_NOTE = "Refreshed page scalar published after refresh";
 const INITIAL_TITLE = "Initial long record title used by the refresh regression";
 const REFRESHED_TITLE = "Refreshed long record title used by the refresh regression";
+const GROUP_LABEL = "Stable grouped bucket";
 
 type ProjectionGate = {
   seen: Promise<void>;
@@ -33,6 +34,7 @@ type ProjectionGate = {
 
 type MockApiOptions = {
   recordCount?: number;
+  groupedMode?: boolean;
 };
 
 function userProfile() {
@@ -141,8 +143,8 @@ function entityMetadata() {
   };
 }
 
-function entityFields() {
-  return [
+function entityFields(includeAmount = false) {
+  const fields = [
     {
       id: 701,
       entityId: ENTITY_ID,
@@ -185,6 +187,47 @@ function entityFields() {
       updatedAt: "2025-01-01T00:00:00.000Z",
     },
   ];
+  if (includeAmount) {
+    fields.push({
+      id: 703,
+      entityId: ENTITY_ID,
+      fieldKey: "amount",
+      nameJson: { en: "Amount" },
+      fieldType: "number",
+      isRequired: false,
+      optionsJson: [],
+      permissionsJson: { "1": "edit" },
+      isFilterable: true,
+      showInTable: true,
+      isPinned: false,
+      showColumnTotal: true,
+      wrapText: false,
+      sortOrder: 2,
+      isActive: true,
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-01T00:00:00.000Z",
+    });
+    fields.push({
+      id: 704,
+      entityId: ENTITY_ID,
+      fieldKey: "category",
+      nameJson: { en: "Category" },
+      fieldType: "text",
+      isRequired: false,
+      optionsJson: [],
+      permissionsJson: { "1": "edit" },
+      isFilterable: true,
+      showInTable: false,
+      isPinned: false,
+      showColumnTotal: false,
+      wrapText: false,
+      sortOrder: 3,
+      isActive: true,
+      createdAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-01T00:00:00.000Z",
+    });
+  }
+  return fields;
 }
 
 function pageFields() {
@@ -291,6 +334,7 @@ function json(route: Route, value: unknown, status = 200) {
 
 async function installMockApi(page: Page, options: MockApiOptions = {}) {
   const recordCount = options.recordCount ?? 1;
+  const groupedMode = options.groupedMode ?? false;
   await page.addInitScript(() => {
     localStorage.setItem("erp_token", "fake-stable-refresh-token");
   });
@@ -310,6 +354,8 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
   let pageValuesProjection: ProjectionGate | null = null;
   let recordUpdate: ProjectionGate | null = null;
   let pageValueUpdate: ProjectionGate | null = null;
+  let recordsQuery: ProjectionGate | null = null;
+  const recordsQueryRequests: Array<Record<string, unknown>> = [];
   const projectionRequests: Array<Record<string, unknown>> = [];
   const pageValuesRequests: Array<Record<string, unknown>> = [];
   const recordUpdateRequests: Array<Record<string, unknown>> = [];
@@ -325,18 +371,33 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
 
     if (method === "GET" && path === "/api/auth/me") return json(route, userProfile());
     if (method === "GET" && path === "/api/pages") {
-      return json(route, [pageMetadata(), mirrorPageMetadata()]);
+      return json(route, [
+        pageMetadata(),
+        {
+          ...mirrorPageMetadata(),
+          ...(groupedMode
+            ? { groupByFieldKey: "category", groupDefaultExpanded: false }
+            : {}),
+        },
+      ]);
     }
     if (method === "GET" && path === "/api/entities") return json(route, [entityMetadata()]);
     if (method === "GET" && path === `/api/entities/${ENTITY_ID}`) return json(route, entityMetadata());
     if (method === "GET" && path === `/api/entities/${ENTITY_ID}/fields`) {
-      return json(route, entityFields());
+      return json(route, entityFields(groupedMode));
     }
     if (method === "GET" && path === `/api/pages/${PAGE_ID}/fields`) {
       return json(route, pageFields());
     }
     if (method === "GET" && path === `/api/pages/${MIRROR_PAGE_ID}/fields`) {
-      return json(route, []);
+      return json(
+        route,
+        groupedMode
+          ? pageFields()
+              .filter((field) => field.fieldKey === "project_name")
+              .map((field) => ({ ...field, pageId: MIRROR_PAGE_ID }))
+          : [],
+      );
     }
     if (
       method === "GET" &&
@@ -395,6 +456,8 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
     }
 
     if (method === "POST" && path === `/api/entities/${ENTITY_ID}/records/query`) {
+      const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
+      recordsQueryRequests.push(body);
       if (failNextRecordsQuery || failRecordsQueryCount > 0) {
         failNextRecordsQuery = false;
         if (failRecordsQueryCount > 0) failRecordsQueryCount -= 1;
@@ -406,17 +469,51 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
       latestRecordVersion = Math.max(latestRecordVersion, currentRecord.version);
       const rows = Array.from({ length: recordCount }, (_, index) => {
         const id = RECORD_ID + index;
-        return record(
+        const row = record(
           revision,
           id,
           id === RECORD_ID ? entityStage ?? undefined : undefined,
           id === RECORD_ID ? latestRecordVersion : undefined,
         );
+        if (groupedMode) {
+          row.valuesJson.amount = revision === 0 ? 123 : 0;
+          row.valuesJson.category = GROUP_LABEL;
+        }
+        return row;
       });
+      const currentRecordsQuery = recordsQuery;
+      if (currentRecordsQuery) {
+        recordsQuery = null;
+        currentRecordsQuery.markSeen();
+        await currentRecordsQuery.gate;
+      }
       return json(route, {
         data: rows,
         total: rows.length,
-        numericTotals: {},
+        numericTotals: groupedMode ? { amount: revision === 0 ? 123 : 0 } : {},
+        ...(groupedMode && body.grouped === true
+          ? {
+              groups: [
+                {
+                  key: GROUP_LABEL,
+                  label: GROUP_LABEL,
+                  count: rows.length,
+                  sums: { amount: revision === 0 ? 123 : 0 },
+                  values: { stage: entityStage ?? (revision === 0 ? "todo" : "done") },
+                },
+              ],
+              ...(body.withRowGroups === true
+                ? {
+                    rowGroups: Object.fromEntries(
+                      rows.map((row) => [
+                        String(row.id),
+                        GROUP_LABEL,
+                      ]),
+                    ),
+                  }
+                : {}),
+            }
+          : {}),
         pageFormulaValues: Object.fromEntries(
           rows.map((row) => [
             String(row.id),
@@ -493,7 +590,11 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
         },
       }] : []);
     }
-    if (method === "POST" && path === `/api/pages/${PAGE_ID}/related-values`) {
+    if (
+      method === "POST" &&
+      (path === `/api/pages/${PAGE_ID}/related-values` ||
+        (groupedMode && path === `/api/pages/${MIRROR_PAGE_ID}/related-values`))
+    ) {
       const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
       projectionRequests.push(body);
       if (failNextProjectionRequest) {
@@ -638,6 +739,24 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
       };
       return { seen, release: releaseRequest, markSeen };
     },
+    armRecordsQueryHold() {
+      let markSeen!: () => void;
+      let releaseRequest!: () => void;
+      const seen = new Promise<void>((resolve) => {
+        markSeen = resolve;
+      });
+      const released = new Promise<void>((resolve) => {
+        releaseRequest = resolve;
+      });
+      recordsQuery = {
+        seen,
+        gate: released,
+        value: "",
+        markSeen,
+        release: releaseRequest,
+      };
+      return { seen, release: releaseRequest, markSeen };
+    },
     failNextRecordsQuery() {
       // Disconnect-mode automation can schedule two refreshes around the
       // explicit manual refresh. Keep the one-shot failure armed through that
@@ -661,6 +780,7 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
     recordUpdateRequests,
     pageValueUpdateRequests,
     relatedLinkRequests,
+    recordsQueryRequests,
     currentRecordVersion: () => latestRecordVersion,
     currentPageValueVersion: () => latestPageValueVersion,
     unknownApiRequests,
@@ -1272,5 +1392,151 @@ test("recovers a retained projection after a failed refresh retry", async ({ pag
   await expect(page.getByText(REFRESHED_TITLE, { exact: true })).toBeVisible();
   await expect(page.getByTestId("record-projection-stale")).toHaveCount(0);
   expect(mock.projectionRequests.length).toBe(retryBefore + 1);
+  expect(mock.unknownApiRequests).toEqual([]);
+});
+
+test("keeps grouped totals stable and publishes fresh aggregates before related rows", async ({ page }) => {
+  test.setTimeout(90_000);
+  const mock = await installMockApi(page, { groupedMode: true });
+
+  const initialProjection = mock.armProjectionHold();
+  await page.goto(MIRROR_PAGE_PATH, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("main table").first()).toBeVisible();
+  await initialProjection.seen;
+  initialProjection.release();
+
+  const table = page.locator("main table").first();
+  const totalsRow = table.locator("thead tr").filter({ hasText: "123" }).first();
+  const mainHeader = table.locator("thead .erp-main-header");
+  const initialGroupRow = table.locator("tbody tr.cursor-pointer").first();
+  await expect(totalsRow).toBeVisible();
+  await expect(initialGroupRow).toContainText(GROUP_LABEL);
+  await expect(initialGroupRow).toContainText("To do");
+  expect(mock.recordsQueryRequests[0]).toMatchObject({
+    grouped: true,
+    pageId: MIRROR_PAGE_ID,
+  });
+
+  const initialGeometry = await Promise.all([
+    totalsRow.boundingBox(),
+    mainHeader.boundingBox(),
+    initialGroupRow.boundingBox(),
+  ]);
+  expect(initialGeometry.every(Boolean)).toBe(true);
+
+  // Expanding the group exercises the normal editable row without changing the
+  // server-computed common value shown in the group header.
+  await initialGroupRow.getByText(GROUP_LABEL, { exact: true }).click();
+  const dataRow = table.locator("tbody tr:not(.cursor-pointer)").first();
+  await expect(dataRow).toContainText(INITIAL_TITLE);
+  const stageCell = dataRow.locator("td").nth(1);
+
+  const saveHold = mock.armUpdateHold();
+  await stageCell.getByText("To do", { exact: true }).click();
+  const doneOption = page.getByRole("option", { name: "Done", exact: true });
+  await expect(doneOption).toBeVisible();
+  const stageCellBefore = await stageCell.boundingBox();
+  expect(stageCellBefore).not.toBeNull();
+  await doneOption.click();
+  await saveHold.seen;
+  const savingIndicator = page.getByTestId("inline-saving");
+  await expect(savingIndicator).toBeVisible();
+  await expect(
+    savingIndicator.locator(".sr-only").filter({ hasText: /^(Saving|Сохранение)(…|\.\.\.)?$/ }),
+  ).toHaveCount(1);
+  await expect(
+    savingIndicator.locator(":scope > :not(.sr-only)").filter({ hasText: /Saving|Сохранение/ }),
+  ).toHaveCount(0);
+  const stageCellDuringSave = await stageCell.boundingBox();
+  expect(stageCellDuringSave).not.toBeNull();
+  expect(Math.abs(stageCellDuringSave!.width - stageCellBefore!.width)).toBeLessThan(0.5);
+  expect(Math.abs(stageCellDuringSave!.height - stageCellBefore!.height)).toBeLessThan(0.5);
+
+  saveHold.release();
+  await expect(savingIndicator).toHaveCount(0);
+  await expect(initialGroupRow).toContainText("Done");
+  // Allow the save's scheduled refreshes to settle before isolating the
+  // deliberately gated manual refresh below.
+  await page.waitForTimeout(2_000);
+
+  // The records request is paused first. The complete old table, including its
+  // totals strip, must remain mounted at exactly the same y coordinates rather
+  // than jumping up by one header row.
+  const recordsRefresh = mock.armRecordsQueryHold();
+  const relatedRefresh = mock.armProjectionHold();
+  mock.markRecordsRefreshed();
+  await page.getByTestId("button-refresh-data-desktop").click();
+  await recordsRefresh.seen;
+  await expect(totalsRow).toContainText("123");
+  const heldGeometry = await Promise.all([
+    totalsRow.boundingBox(),
+    mainHeader.boundingBox(),
+    initialGroupRow.boundingBox(),
+  ]);
+  for (let index = 0; index < initialGeometry.length; index += 1) {
+    expect(heldGeometry[index]).not.toBeNull();
+    expect(Math.abs(heldGeometry[index]!.y - initialGeometry[index]!.y)).toBeLessThan(0.5);
+  }
+
+  // Once records/query arrives, its server aggregates are authoritative even
+  // though the related projection still gates atomic publication of body rows.
+  // In particular, a real numeric zero is retained rather than treated as an
+  // absent total.
+  recordsRefresh.release();
+  await relatedRefresh.seen;
+  const refreshedTotalsRow = table.locator("thead tr").filter({ hasText: /^0$/ }).first();
+  const refreshedGroupRow = table.locator("tbody tr.cursor-pointer").first();
+  await expect(refreshedTotalsRow).toBeVisible();
+  await expect(refreshedGroupRow).toContainText("Done");
+  await expect(refreshedGroupRow).toContainText(GROUP_LABEL);
+  await expect(dataRow).toContainText(INITIAL_TITLE);
+  const aggregateGeometry = await Promise.all([
+    refreshedTotalsRow.boundingBox(),
+    mainHeader.boundingBox(),
+    refreshedGroupRow.boundingBox(),
+  ]);
+  for (let index = 0; index < initialGeometry.length; index += 1) {
+    expect(aggregateGeometry[index]).not.toBeNull();
+    expect(Math.abs(aggregateGeometry[index]!.y - initialGeometry[index]!.y)).toBeLessThan(0.5);
+  }
+
+  relatedRefresh.release();
+  await expect(dataRow).toContainText(REFRESHED_TITLE);
+  await expect(page.getByTestId("inline-saving")).toHaveCount(0);
+
+  // A search changes the recordsRenderKey even though the entity/page and
+  // grouping configuration are unchanged. While that different query scope is
+  // held, no common values or sums from the previous group's row may paint.
+  const searchRequestCount = mock.recordsQueryRequests.length;
+  const searchRefresh = mock.armRecordsQueryHold();
+  const searchInput = page.getByPlaceholder("Поиск…");
+  await searchInput.fill("different grouped query scope");
+  await searchRefresh.seen;
+  expect(mock.recordsQueryRequests.length).toBe(searchRequestCount + 1);
+  expect(mock.recordsQueryRequests.at(-1)).toMatchObject({
+    grouped: true,
+    pageId: MIRROR_PAGE_ID,
+    search: "different grouped query scope",
+  });
+  await expect(table.locator("tbody tr.cursor-pointer")).toHaveCount(0);
+  await expect(page.getByText(GROUP_LABEL, { exact: true })).toHaveCount(0);
+  searchRefresh.release();
+  await expect(table.locator("tbody tr.cursor-pointer").first()).toContainText(GROUP_LABEL);
+
+  const clearSearchRequestCount = mock.recordsQueryRequests.length;
+  await searchInput.fill("");
+  await expect.poll(() => mock.recordsQueryRequests.length).toBeGreaterThan(clearSearchRequestCount);
+  await expect(table.locator("tbody tr.cursor-pointer").first()).toContainText(GROUP_LABEL);
+
+  // A same-scope failure leaves the last successful zero total in place and
+  // offers retry. Crossing to another page scope must hide it immediately.
+  mock.failNextRecordsQuery();
+  await page.getByTestId("button-refresh-data-desktop").click();
+  await expect(page.getByText("Ошибка загрузки записей", { exact: true })).toBeVisible();
+  await expect(refreshedTotalsRow).toBeVisible();
+  await expect(page.getByRole("button", { name: "Повторить" }).first()).toBeVisible();
+
+  await page.goto(PAGE_PATH, { waitUntil: "domcontentloaded" });
+  await expect(refreshedTotalsRow).toHaveCount(0);
   expect(mock.unknownApiRequests).toEqual([]);
 });

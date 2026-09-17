@@ -21,11 +21,17 @@ description: Freshness and responsiveness constraints when reducing bootstrap re
 
 **How to apply:** Tie refresh follow-up work to the winning request generation and test overlapping scope changes.
 
-**Rule:** A same-scope background refresh retains the complete last successful visible snapshot; replacement records, formulas, totals and projections publish together. Initial or changed-scope loading must not reuse another scope's values.
+**Rule:** A same-scope background refresh retains the last successful visible snapshot; replacement row values, formulas and cell projections publish together. Initial or changed-scope loading must not reuse another scope's values.
 
 **Why:** Replacing populated cells with loading indicators caused columns to shrink and redirected users' next clicks. Retaining projections independently also mixed old and new formula inputs.
 
 **How to apply:** Stage replacement responses by generation, abort staging on failure/supersession, expose stale errors with retry, and keep write readiness separate from display readiness. Preserve open picker/editor trees during refresh while guarding writes; clear transient editing state on scope changes. Manual refresh must dispatch only one projection generation.
+
+**Rule:** Keep the last accepted same-query totals mounted during refresh or failure. Complete server aggregates/common group values may publish before cell projections when group topology and visible row membership remain unchanged.
+
+**Why:** Clearing totals readiness on every request unmounted the totals strip and shifted the table. Waiting for unrelated cell projections also delayed already-computed group values. Aggregates are independently authoritative server results, unlike formulas recomputed from mixed cell inputs.
+
+**How to apply:** Never infer group sums from the displayed page of rows. If group keys/order/counts or row assignments change, retain atomic replacement with the row bundle. Clear groups as well as rows/totals before paint on a new query or permission scope.
 
 **Rule:** An acknowledged inline write must not wait for unrelated background projections before showing its saved scalar. The write's identity and editor lifetime are distinct from read request generations.
 
