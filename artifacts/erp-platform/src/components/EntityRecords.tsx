@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useId, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { sameAggregateTopology } from "@/lib/aggregateSnapshot";
+import { InlineListPicker } from "@/components/InlineListPicker";
 import {
   useListEntityRecords,
   useGetRecord,
@@ -12183,22 +12184,16 @@ function InlineCellEditor({
     const options = normalizeSelectOptions(field.optionsJson).map((o) => ({ value: o.value, label: ml(o.labelJson) || o.value }));
     return (
       <div onKeyDownCapture={cancelPickerOnEscape}>
-        <Select
-          defaultOpen
+        <InlineListPicker
+          label={ml(field.nameJson)}
+          placeholder={t("records.selectValue", "Выберите значение")}
+          options={[{ value: CLEAR_SELECT_VALUE, label: t("records.notSelected", "Не выбрано") }, ...options]}
           value={draft == null || draft === "" ? "" : String(draft)}
           onValueChange={(v) => commitOnce(v === CLEAR_SELECT_VALUE ? "" : v)}
           onOpenChange={(o) => {
             if (!o && !committedRef.current && !retryPendingRef.current) onCancel();
           }}
-        >
-          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("records.selectValue", "Выберите значение")} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={CLEAR_SELECT_VALUE}>{t("records.notSelected", "Не выбрано")}</SelectItem>
-            {options.map((o) => (
-              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
         {retryPickerControls}
       </div>
     );
@@ -12223,22 +12218,16 @@ function InlineCellEditor({
     const options = normalizeSelectOptions(field.optionsJson).map((o) => ({ value: o.value, label: ml(o.labelJson) || `${o.value}%` }));
     return (
       <div onKeyDownCapture={cancelPickerOnEscape}>
-        <Select
-          defaultOpen
+        <InlineListPicker
+          label={ml(field.nameJson)}
+          placeholder={t("records.selectValue", "Выберите значение")}
+          options={[{ value: CLEAR_SELECT_VALUE, label: t("records.notSelected", "Не выбрано") }, ...options]}
           value={draft == null || draft === "" ? "" : String(draft)}
           onValueChange={(v) => commitOnce(v === CLEAR_SELECT_VALUE ? "" : v)}
           onOpenChange={(o) => {
             if (!o && !committedRef.current && !retryPendingRef.current) onCancel();
           }}
-        >
-          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder={t("records.selectValue", "Выберите значение")} /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value={CLEAR_SELECT_VALUE}>{t("records.notSelected", "Не выбрано")}</SelectItem>
-            {options.map((o) => (
-              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
         {retryPickerControls}
       </div>
     );

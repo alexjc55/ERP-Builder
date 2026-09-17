@@ -56,3 +56,9 @@ description: Freshness and responsiveness constraints when reducing bootstrap re
 **Why:** Skipping callback or permission dependencies to force memoization can preserve stale access checks, old projections or incorrect edit state. Stable event identity alone cannot safely represent render data.
 
 **How to apply:** Pass row-local editing/pending/selection state separately, track every shared context input, and retain ordinary shallow comparison. A changed locale, permission, style or projection must still invalidate the affected render.
+
+**Rule:** Keep popup-positioning optimizations local to the measured editor type; do not replace the global Select positioning strategy.
+
+**Why:** After row isolation, geometry reads exposed modal Select's document-wide scroll-lock/layout cost. Selected-item alignment improved one run but failed repeated reopen budgets; a local non-modal listbox retained collision handling without that modal cost.
+
+**How to apply:** Validate viewport edges, RTL, long-list scrolling, selected-item visibility after final viewport sizing, and keyboard focus with each strategy. Require repeated first/reopen budget passes; never disable collision safety globally.

@@ -90,3 +90,39 @@ node --test tests/inline-row-dependencies.test.mjs
 It uses TypeScript's bound symbols to ensure every captured input in the shared
 row context participates in its memoization dependencies. Stable React setters
 and refs are exempt. This complements, rather than replaces, browser tests.
+
+## Inline list positioning
+
+Ordinary select and list-mode percent editors use a shared **non-modal listbox**
+in `InlineListPicker.tsx`, backed by the existing Popover. This avoids modal
+Select's document scroll locking and associated whole-page layout work.
+Floating UI still provides positioning, viewport fitting and collision handling;
+the global Select component and other menus are unchanged. Commit, cancellation,
+retry, ACK-first publication and version handling remain in InlineCellEditor.
+
+An intermediate local `item-aligned` Select candidate improved first opening
+but **was rejected**: independent repeat runs measured 281.1 / 295.6 ms reopening,
+exceeding the unchanged budget. It is not the delivered implementation.
+
+The same production fixture, with 200 rows and 1,200 cells, measured:
+
+| Measurement | Row-memoized modal Select baseline | Non-modal run 1 | Run 2 | Run 3 |
+| --- | ---: | ---: | ---: | ---: |
+| First pointer → option paint | 221.2 ms | 62.9 ms | 77.0 ms | 59.1 ms |
+| Reopen pointer → option paint | 197.3 ms | 65.6 ms | 69.8 ms | 62.5 ms |
+| First full Playwright wall time | 581 ms | 212 ms | 321 ms | 216 ms |
+| Reopen full Playwright wall time | 459 ms | 404 ms | 339 ms | 380 ms |
+
+Each final run made a fresh production build; runs were sequential without
+other validation workloads. All three passed the unchanged 250 ms browser
+budget. The baseline is one comparison run, not a statistical latency guarantee.
+Do not describe opening as instantaneous or generalize these results to every
+device, live request, or picker type.
+
+The full mocked spec additionally checks a 100-option list at the bottom/right
+edge in LTR and Hebrew RTL, popup bounds, keyboard access to every item,
+scroll-to-focused-item behavior, Escape, typeahead, Enter and versioned saving.
+It also checks no body scroll lock, unchanged-value selection without a write,
+reopening a selected option beyond the initial viewport, and clearing a value.
+The list re-reveals its focused option after collision placement supplies its
+final viewport size. Keyboard tests await each focus change before the next key.

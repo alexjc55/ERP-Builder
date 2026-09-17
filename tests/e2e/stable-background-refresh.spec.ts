@@ -35,9 +35,15 @@ type ProjectionGate = {
 type MockApiOptions = {
   recordCount?: number;
   groupedMode?: boolean;
+  language?: "en" | "he";
+  selectOptions?: Array<{
+    value: string;
+    labelJson: Record<string, string>;
+  }>;
+  defaultStage?: string;
 };
 
-function userProfile() {
+function userProfile(language: "en" | "he" = "en") {
   return {
     id: 1,
     email: "stable-refresh@example.test",
@@ -46,8 +52,8 @@ function userProfile() {
     roleId: 1,
     roleIds: [1],
     roleName: { en: "Stable refresh test" },
-    language: "en",
-    direction: "ltr",
+    language,
+    direction: language === "he" ? "rtl" : "ltr",
     startPageId: PAGE_ID,
     isActive: true,
     permissions: {
@@ -143,7 +149,10 @@ function entityMetadata() {
   };
 }
 
-function entityFields(includeAmount = false) {
+function entityFields(
+  includeAmount = false,
+  selectOptions?: Array<{ value: string; labelJson: Record<string, string> }>,
+) {
   const fields = [
     {
       id: 701,
@@ -171,10 +180,12 @@ function entityFields(includeAmount = false) {
       nameJson: { en: "Stage" },
       fieldType: "select",
       isRequired: false,
-      optionsJson: [
-        { value: "todo", labelJson: { en: "To do" } },
-        { value: "done", labelJson: { en: "Done" } },
-      ],
+      optionsJson:
+        selectOptions ??
+        [
+          { value: "todo", labelJson: { en: "To do" } },
+          { value: "done", labelJson: { en: "Done" } },
+        ],
       permissionsJson: { "1": "edit" },
       isFilterable: true,
       showInTable: true,
@@ -335,6 +346,7 @@ function json(route: Route, value: unknown, status = 200) {
 async function installMockApi(page: Page, options: MockApiOptions = {}) {
   const recordCount = options.recordCount ?? 1;
   const groupedMode = options.groupedMode ?? false;
+  const language = options.language ?? "en";
   await page.addInitScript(() => {
     localStorage.setItem("erp_token", "fake-stable-refresh-token");
   });
@@ -344,6 +356,7 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
   let entityStage: string | null = null;
   let pageNoteValue: string | null = null;
   let latestRecordVersion = 1;
+  const updatedRecordVersions = new Map<number, number>();
   let latestPageValueVersion = 1;
   let failNextRecordsQuery = false;
   let failRecordsQueryCount = 0;
@@ -369,7 +382,7 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
     const path = url.pathname;
     const method = request.method();
 
-    if (method === "GET" && path === "/api/auth/me") return json(route, userProfile());
+    if (method === "GET" && path === "/api/auth/me") return json(route, userProfile(language));
     if (method === "GET" && path === "/api/pages") {
       return json(route, [
         pageMetadata(),
@@ -384,7 +397,7 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
     if (method === "GET" && path === "/api/entities") return json(route, [entityMetadata()]);
     if (method === "GET" && path === `/api/entities/${ENTITY_ID}`) return json(route, entityMetadata());
     if (method === "GET" && path === `/api/entities/${ENTITY_ID}/fields`) {
-      return json(route, entityFields(groupedMode));
+      return json(route, entityFields(groupedMode, options.selectOptions));
     }
     if (method === "GET" && path === `/api/pages/${PAGE_ID}/fields`) {
       return json(route, pageFields());
@@ -472,8 +485,8 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
         const row = record(
           revision,
           id,
-          id === RECORD_ID ? entityStage ?? undefined : undefined,
-          id === RECORD_ID ? latestRecordVersion : undefined,
+          entityStage ?? options.defaultStage,
+          id === RECORD_ID ? latestRecordVersion : updatedRecordVersions.get(id),
         );
         if (groupedMode) {
           row.valuesJson.amount = revision === 0 ? 123 : 0;
@@ -522,7 +535,13 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
         ),
       });
     }
-    if (method === "PUT" && path === `/api/records/${RECORD_ID}`) {
+    const recordUpdateMatch = path.match(/^\/api\/records\/(\d+)$/);
+    if (method === "PUT" && recordUpdateMatch) {
+      const updatedRecordId = Number(recordUpdateMatch[1]);
+      if (updatedRecordId < RECORD_ID || updatedRecordId >= RECORD_ID + recordCount) {
+        unknownApiRequests.push(`${method} ${path}`);
+        return json(route, { error: "Unknown mocked record" }, 404);
+      }
       const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
       recordUpdateRequests.push(body);
       if (failNextRecordUpdate) {
@@ -532,6 +551,7 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
       const valuesJson = (body.valuesJson ?? {}) as Record<string, unknown>;
       if (typeof valuesJson.stage === "string") entityStage = valuesJson.stage;
       latestRecordVersion += 1;
+      updatedRecordVersions.set(updatedRecordId, latestRecordVersion);
       const currentUpdate = recordUpdate;
       if (currentUpdate) {
         recordUpdate = null;
@@ -540,7 +560,7 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
       }
       return json(
         route,
-        record(recordsRevision, RECORD_ID, entityStage ?? undefined, latestRecordVersion),
+        record(recordsRevision, updatedRecordId, entityStage ?? undefined, latestRecordVersion),
       );
     }
     if (method === "PUT" && path === `/api/pages/${PAGE_ID}/records/${RECORD_ID}/values`) {
@@ -1692,3 +1712,175 @@ test("keeps grouped totals stable and publishes fresh aggregates before related 
   await expect(refreshedTotalsRow).toHaveCount(0);
   expect(mock.unknownApiRequests).toEqual([]);
 });
+
+const LONG_STAGE_OPTIONS = [
+  { value: "ack", labelJson: { en: "ACK first option", he: "ACK אפשרות ראשונה" } },
+  { value: "cas", labelJson: { en: "CAS selected value", he: "CAS ערך נבחר" } },
+  ...Array.from({ length: 97 }, (_, index) => {
+    const optionNumber = String(index + 2).padStart(3, "0");
+    return {
+      value: `option-${optionNumber}`,
+      labelJson: {
+        en: `Intermediate option ${optionNumber}`,
+        he: `אפשרות ביניים ${optionNumber}`,
+      },
+    };
+  }),
+  { value: "zulu", labelJson: { en: "Zulu final option", he: "Zulu אפשרות אחרונה" } },
+];
+
+async function expectPopupInsideViewport(page: Page) {
+  const popup = page.getByRole("listbox");
+  await expect(popup).toBeVisible();
+  const [box, viewport] = await Promise.all([
+    popup.boundingBox(),
+    page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight })),
+  ]);
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1);
+}
+
+for (const scenario of [
+  { language: "en" as const, viewport: { width: 480, height: 360 }, direction: "ltr" },
+  { language: "he" as const, viewport: { width: 520, height: 380 }, direction: "rtl" },
+]) {
+  test(
+    `keeps a long inline select usable at bottom/right screen edges in ${scenario.direction.toUpperCase()}`,
+    async ({ page }) => {
+      test.setTimeout(90_000);
+      await page.setViewportSize(scenario.viewport);
+      const mock = await installMockApi(page, {
+        recordCount: 60,
+        language: scenario.language,
+        selectOptions: LONG_STAGE_OPTIONS,
+        defaultStage: "ack",
+      });
+
+      const initialProjection = mock.armProjectionHold();
+      await page.goto(PAGE_PATH, { waitUntil: "domcontentloaded" });
+      await expect(page.locator("main table").first()).toBeVisible();
+      await initialProjection.seen;
+      initialProjection.release();
+      await expect(page.getByText(INITIAL_PROJECT, { exact: true }).first()).toBeVisible();
+      await expect(page.locator("html")).toHaveAttribute("dir", scenario.direction);
+
+      const targetCell = page
+        .locator("main table tbody tr")
+        .last()
+        .locator("td")
+        .nth(1);
+      await targetCell.scrollIntoViewIfNeeded();
+      await targetCell.evaluate((cell, inline) =>
+        cell.scrollIntoView({
+          block: "end",
+          inline: inline as ScrollLogicalPosition,
+        }),
+        scenario.direction === "rtl" ? "start" : "end",
+      );
+      await expect(targetCell).toContainText(
+        scenario.language === "he" ? "ACK אפשרות ראשונה" : "ACK first option",
+      );
+      const targetBox = await targetCell.boundingBox();
+      expect(targetBox).not.toBeNull();
+      const bottomGap = scenario.viewport.height - (targetBox!.y + targetBox!.height);
+      const rightGap = scenario.viewport.width - (targetBox!.x + targetBox!.width);
+      expect(bottomGap).toBeGreaterThanOrEqual(-1);
+      expect(
+        bottomGap,
+        "fixture cell should exercise the bottom screen edge",
+      ).toBeLessThanOrEqual(80);
+      expect(rightGap).toBeGreaterThanOrEqual(-1);
+      expect(
+        rightGap,
+        "fixture cell should exercise the right screen edge",
+      ).toBeLessThanOrEqual(80);
+      await targetCell.click();
+
+      const options = page.getByRole("option");
+      const ackOption = page.getByRole("option", { name: /ACK/, exact: false });
+      const casOption = page.getByRole("option", { name: /CAS/, exact: false });
+      const lastOption = page.getByRole("option", { name: /Zulu/, exact: false });
+      await expect(options).toHaveCount(LONG_STAGE_OPTIONS.length + 1);
+      await expect(ackOption).toHaveAttribute("aria-selected", "true");
+      await expectPopupInsideViewport(page);
+      await expect(page.locator("body")).not.toHaveAttribute("data-scroll-locked");
+      await expect(ackOption).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(ackOption).toBeFocused();
+
+      // Start at the clear choice and traverse every long-list entry with the
+      // keyboard. Reaching the final highlighted option proves the scroll
+      // viewport did not strand any option below the screen edge.
+      await page.keyboard.press("Home");
+      await expect(options.nth(0)).toBeFocused();
+      for (let index = 0; index < LONG_STAGE_OPTIONS.length; index += 1) {
+        await page.keyboard.press("ArrowDown");
+        // Wait for each real focus change
+        // rather than sending another key against the previous active item.
+        await expect(options.nth(index + 1)).toBeFocused();
+      }
+      await expect(lastOption).toHaveAttribute("data-highlighted", "");
+      await expect(lastOption).toBeInViewport();
+      await expectPopupInsideViewport(page);
+
+      for (let index = 1; index < LONG_STAGE_OPTIONS.length; index += 1) {
+        await page.keyboard.press("ArrowUp");
+        await expect(options.nth(LONG_STAGE_OPTIONS.length - index)).toBeFocused();
+      }
+      await expect(ackOption).toHaveAttribute("data-highlighted", "");
+      await expect(ackOption).toBeInViewport();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("listbox")).toHaveCount(0);
+      await expect(targetCell).toContainText("ACK");
+      expect(mock.recordUpdateRequests).toEqual([]);
+
+      // Reopen and use typeahead plus Enter to ACK the CAS selection.
+      await targetCell.click();
+      await expect(ackOption).toBeFocused();
+      await page.keyboard.type("cas");
+      await expect(casOption).toHaveAttribute("data-highlighted", "");
+      await page.keyboard.press("Enter");
+      await expect.poll(() => mock.recordUpdateRequests.length).toBe(1);
+      expect(mock.recordUpdateRequests[0]).toMatchObject({
+        expectedVersion: 1,
+        valuesJson: { stage: "cas" },
+      });
+      await expect(targetCell).toContainText("CAS");
+      await expect(page.getByRole("listbox")).toHaveCount(0);
+
+      // Re-selecting the current value must close without a redundant write.
+      await targetCell.click();
+      await expect(casOption).toBeFocused();
+      await casOption.click();
+      await expect(page.getByRole("listbox")).toHaveCount(0);
+      expect(mock.recordUpdateRequests).toHaveLength(1);
+
+      // A value at the far end must be visible/focused immediately on reopen.
+      await targetCell.click();
+      await expect(casOption).toBeFocused();
+      await page.keyboard.press("End");
+      await expect(lastOption).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(targetCell).toContainText("Zulu");
+      await expect(page.getByRole("listbox")).toHaveCount(0);
+      expect(mock.recordUpdateRequests[1]).toMatchObject({ expectedVersion: 2, valuesJson: { stage: "zulu" } });
+      await targetCell.click();
+      await expect(lastOption).toBeFocused();
+      await expect(lastOption).toBeInViewport();
+      await expectPopupInsideViewport(page);
+
+      // The clear option retains the original empty-string write contract.
+      await page.keyboard.press("Home");
+      await expect(options.nth(0)).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(targetCell).toHaveText("—");
+      await expect(page.getByRole("listbox")).toHaveCount(0);
+      expect(mock.recordUpdateRequests).toHaveLength(3);
+      expect(mock.recordUpdateRequests[2]).toMatchObject({ expectedVersion: 3, valuesJson: { stage: "" } });
+      expect(mock.unknownApiRequests).toEqual([]);
+    },
+  );
+}
