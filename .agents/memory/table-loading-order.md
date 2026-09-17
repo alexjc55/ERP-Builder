@@ -44,3 +44,15 @@ description: Freshness and responsiveness constraints when reducing bootstrap re
 **Why:** Profiling a 200-row table found the browser saturated by collaboration wrappers and development JSX construction, even with bounded requests and cached formulas. Keeping values visible was not enough to keep clicks responsive.
 
 **How to apply:** Profile browser CPU as well as network latency. Keep editor children mounted independently from tooltip visibility, index presence once, and create expensive floating UI only for an active tooltip. A passing timeout test is not proof of instant interaction; report measured click latency.
+
+**Rule:** Evaluate editor responsiveness on a fresh production build and measure actual browser input-to-paint separately from automation wall time.
+
+**Why:** Development JSX instrumentation exaggerated whole-table render costs. After isolating rows, Playwright locator/actionability work and floating-menu layout dominated total test time and obscured the smaller improvement in actual browser input latency.
+
+**How to apply:** Compare the same fixture and browser clock before/after; retain automation wall times as diagnostics rather than silently substituting metrics. Budget the actual pointer-to-visible-frame interval, keep row/cell-count assertions, and never relax version/scope checks to improve a timing result.
+
+**Rule:** Row render inputs must remain compared immutable snapshots; only event commands may use latest-committed callbacks.
+
+**Why:** Skipping callback or permission dependencies to force memoization can preserve stale access checks, old projections or incorrect edit state. Stable event identity alone cannot safely represent render data.
+
+**How to apply:** Pass row-local editing/pending/selection state separately, track every shared context input, and retain ordinary shallow comparison. A changed locale, permission, style or projection must still invalidate the affected render.

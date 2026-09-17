@@ -1029,6 +1029,114 @@ test(
       appendFileSync(checkpointPath, `${JSON.stringify(value)}\n`);
       console.log(`INLINE_EDITOR_PROFILE_CHECKPOINT ${JSON.stringify(value)}`);
     };
+    const armBrowserOptionPaint = () =>
+      page.evaluate(() => {
+        type BrowserOptionPaintResult = {
+          elapsedMs: number;
+          error: string | null;
+        };
+        const profileWindow = window as Window & {
+          __inlineEditorOptionPaint?: Promise<BrowserOptionPaintResult>;
+        };
+        profileWindow.__inlineEditorOptionPaint = new Promise((resolve) => {
+          let pointerDownAt: number | null = null;
+          let settled = false;
+          let paintScheduled = false;
+          let observer: MutationObserver | null = null;
+          let timeoutId: number | null = null;
+          const hasVisibleOption = () =>
+            [...document.querySelectorAll('[role="option"]')].some((element) => {
+              const html = element as HTMLElement;
+              const style = getComputedStyle(html);
+              const rect = html.getBoundingClientRect();
+              return (
+                style.display !== "none" &&
+                style.visibility !== "hidden" &&
+                Number(style.opacity) !== 0 &&
+                rect.width > 0 &&
+                rect.height > 0
+              );
+            });
+          const finish = (result: BrowserOptionPaintResult) => {
+            if (settled) return;
+            settled = true;
+            observer?.disconnect();
+            if (timeoutId !== null) window.clearTimeout(timeoutId);
+            resolve(result);
+          };
+          const inspect = () => {
+            if (pointerDownAt === null || settled || paintScheduled) return;
+            try {
+              if (!hasVisibleOption()) return;
+              paintScheduled = true;
+              // The second frame starts after the first frame containing the
+              // visible option has had an opportunity to paint.
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  try {
+                    if (hasVisibleOption()) {
+                      finish({
+                        elapsedMs: performance.now() - pointerDownAt!,
+                        error: null,
+                      });
+                    } else {
+                      paintScheduled = false;
+                      inspect();
+                    }
+                  } catch (error) {
+                    finish({
+                      elapsedMs: Number.NaN,
+                      error: error instanceof Error ? error.message : String(error),
+                    });
+                  }
+                });
+              });
+            } catch (error) {
+              finish({
+                elapsedMs: Number.NaN,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          };
+          document.addEventListener(
+            "pointerdown",
+            () => {
+              pointerDownAt = performance.now();
+              inspect();
+            },
+            { capture: true, once: true },
+          );
+          observer = new MutationObserver(inspect);
+          observer.observe(document.documentElement, {
+            attributes: true,
+            childList: true,
+            subtree: true,
+          });
+          timeoutId = window.setTimeout(
+            () =>
+              finish({
+                elapsedMs: Number.NaN,
+                error: "visible option was not painted within 10 seconds",
+              }),
+            10_000,
+          );
+        });
+      });
+    const readBrowserOptionPaint = () =>
+      page.evaluate(async () => {
+        const result = await (
+          window as Window & {
+            __inlineEditorOptionPaint?: Promise<{
+              elapsedMs: number;
+              error: string | null;
+            }>;
+          }
+        ).__inlineEditorOptionPaint;
+        return result ?? {
+          elapsedMs: Number.NaN,
+          error: "browser option-paint measurement was not armed",
+        };
+      });
 
     const mock = await installMockApi(page, { recordCount: 200 });
     const initialProjection = mock.armProjectionHold();
@@ -1059,11 +1167,15 @@ test(
     const heldProjection = mock.armProjectionHold();
     await page.getByTestId("button-refresh-data-desktop").click();
     await heldProjection.seen;
+    await armBrowserOptionPaint();
     const firstStageOpenStartedAt = Date.now();
     await page.getByText("To do", { exact: true }).first().click({ timeout: 10_000 });
     await expect(page.getByRole("option", { name: "Done", exact: true })).toBeVisible();
+    const firstOpenMs = Date.now() - firstStageOpenStartedAt;
+    const firstBrowserOptionPaint = await readBrowserOptionPaint();
     checkpoint("first-stage-option-visible", {
-      clickToOptionMs: Date.now() - firstStageOpenStartedAt,
+      clickToOptionMs: firstOpenMs,
+      browserPointerToOptionPaintMs: firstBrowserOptionPaint.elapsedMs,
     });
     const initialVersion = mock.currentRecordVersion();
     await page.getByRole("option", { name: "Done", exact: true }).click();
@@ -1127,6 +1239,8 @@ test(
       };
     });
     checkpoint("before-problem-click-dom", domBefore);
+    expect(domBefore.rowCount, "performance fixture must retain all 200 rows").toBe(200);
+    expect(domBefore.cellCount, "performance fixture must retain all 1,200 cells").toBe(1200);
 
     const cdp = await context.newCDPSession(page);
     await cdp.send("Profiler.enable");
@@ -1172,6 +1286,7 @@ test(
       }, 10_000);
     });
 
+    await armBrowserOptionPaint();
     const clickStartedAt = Date.now();
     const clickResult = await savedStageCell
       .click({ timeout: 10_000 })
@@ -1196,7 +1311,12 @@ test(
         elapsedAfterClickResolvedMs: Date.now() - reopenOptionStartedAt,
         error: error.message,
       }));
-    const [stopped, reopenOptionResult] = await Promise.all([stopProfile, reopenOptionPromise]);
+    const browserReopenOptionPaintPromise = readBrowserOptionPaint();
+    const [stopped, reopenOptionResult, reopenBrowserOptionPaint] = await Promise.all([
+      stopProfile,
+      reopenOptionPromise,
+      browserReopenOptionPaintPromise,
+    ]);
     const profile = stopped.profile;
     const nodeById = new Map(profile?.nodes.map((node) => [node.id, node]));
     const totals = new Map<number, { samples: number; micros: number }>();
@@ -1233,8 +1353,19 @@ test(
       );
     }
     const diagnostic = {
+      firstOpenMs,
+      firstBrowserOptionPaint,
       clickResult,
       reopenOptionResult,
+      reopenBrowserOptionPaint,
+      fullWallTimings: {
+        firstClickToOptionVisibleMs: firstOpenMs,
+        reopenClickToOptionVisibleMs: reopenOptionResult.elapsedFromClickStartMs,
+      },
+      browserPointerToOptionPaintTimings: {
+        firstMs: firstBrowserOptionPaint.elapsedMs,
+        reopenMs: reopenBrowserOptionPaint.elapsedMs,
+      },
       profileWallMs: Date.now() - profileStartedAt,
       profilerError: stopped.error ?? null,
       profileNodeCount: profile?.nodes.length ?? 0,
@@ -1262,6 +1393,27 @@ test(
     // Intentionally do not release heldProjection: the measured condition is
     // the outstanding unrelated projection request.
     expect(mock.unknownApiRequests).toEqual([]);
+    expect(pageErrors).toEqual([]);
+    expect(firstBrowserOptionPaint.error).toBeNull();
+    expect(Number.isFinite(firstBrowserOptionPaint.elapsedMs)).toBe(true);
+    expect(reopenBrowserOptionPaint.error).toBeNull();
+    expect(Number.isFinite(reopenBrowserOptionPaint.elapsedMs)).toBe(true);
+    const configuredBudget = process.env.INLINE_EDITOR_PROFILE_BUDGET_MS;
+    if (configuredBudget !== undefined) {
+      const budgetMs = Number(configuredBudget);
+      expect(
+        Number.isFinite(budgetMs) && budgetMs > 0,
+        "INLINE_EDITOR_PROFILE_BUDGET_MS must be a positive number",
+      ).toBe(true);
+      expect(
+        firstBrowserOptionPaint.elapsedMs,
+        "first browser pointer-to-option-paint exceeded the production budget",
+      ).toBeLessThanOrEqual(budgetMs);
+      expect(
+        reopenBrowserOptionPaint.elapsedMs,
+        "browser pointer-to-option-paint reopen exceeded the production budget",
+      ).toBeLessThanOrEqual(budgetMs);
+    }
   },
 );
 

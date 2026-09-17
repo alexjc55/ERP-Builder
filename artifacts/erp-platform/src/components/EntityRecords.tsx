@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useId, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useId, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { sameAggregateTopology } from "@/lib/aggregateSnapshot";
 import {
   useListEntityRecords,
@@ -229,6 +229,518 @@ const DEFAULT_PAGE_SIZE = 50;
  */
 const NULL_GROUP_KEY = "\u0000__null__";
 const EMPTY_ROW_VALUES: Record<string, unknown> = {};
+const EMPTY_FIELDS: Field[] = [];
+const EMPTY_PAGE_FIELDS: PageField[] = [];
+const EMPTY_STATUSES: Status[] = [];
+const EMPTY_TRANSITIONS: Transition[] = [];
+const EMPTY_USER_OPTIONS: UserOption[] = [];
+
+// Only commands may use the latest committed closure. Render inputs (including
+// permissions, projections and translations) are ordinary compared props below.
+function useCommittedCommand<Args extends unknown[], Result>(command: (...args: Args) => Result) {
+  const committed = useRef(command);
+  useLayoutEffect(() => { committed.current = command; }, [command]);
+  return useCallback((...args: Args) => committed.current(...args), []);
+}
+
+type RecordRowCell = { recordId: number; fieldKey: string } | null;
+type RecordRowColumn =
+  | { kind: "entity"; token: string; pinKey: string; field: Field }
+  | { kind: "page"; token: string; pinKey: string; field: PageField }
+  | { kind: "status"; token: typeof STATUS_COLUMN_KEY; pinKey: typeof STATUS_COLUMN_KEY };
+type RecordRowContext = {
+  orderedColumns: RecordRowColumn[];
+  fields: Field[];
+  t: ReturnType<typeof useT>;
+  ml: ReturnType<typeof useML>;
+  userOptions: UserOption[];
+  userNames: Map<number, string>;
+  stripedRows: boolean;
+  stripeColor: string | null;
+  showBulk: boolean;
+  showActionsColumn: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
+  inlineEditEnabled: boolean;
+  statusManualEditable: boolean;
+  allowNoStatus: boolean;
+  statusById: Map<number, Status>;
+  entityId: number;
+  pageId: number | undefined;
+  permPageId: number | undefined;
+  formulaOptions: FormulaEvaluationOptions;
+  directEntityFormulaTypes: Map<string, string>;
+  directPageFormulaTypes: Map<string, string>;
+  entityRelatedColMeta: Map<string, PageRelatedColumn>;
+  relatedColMeta: Map<string, PageRelatedColumn>;
+  entityRelationsPending: boolean;
+  entityRelationsUnavailable: boolean;
+  entityRelationsProjectionState: string;
+  pageRelationsPending: boolean;
+  pageRelationsUnavailable: boolean;
+  pageRelationsProjectionState: string;
+  rowProjectionsPending: boolean;
+  rowProjectionsUnavailable: boolean;
+  pageValuesPending: boolean;
+  pageValuesUnavailable: boolean;
+  pageLocalWritesReady: boolean;
+  archivePending: boolean;
+  unarchivePending: boolean;
+  canRecord: ReturnType<typeof useAuth>["canRecord"];
+  effFieldAccess: (field: Field) => FieldAccess;
+  workflowActiveForRecord: (record: EntityRecord) => boolean;
+  allowedStatusesForRecord: (record: EntityRecord) => Status[];
+  pageFieldReadOnly: (field: PageField) => boolean;
+  pageRefEditable: (field: PageField) => boolean;
+  pageRefAsField: (field: PageField) => Field;
+  relationAsField: (field: PageField, meta?: PageRelatedColumn) => Field;
+  renderProjectionState: (state: "pending" | "unavailable") => React.ReactNode;
+  getCellEditors: (recordId: number, fieldKey: string) => CollaborationPresence[];
+  bulkColStyle: (bg: string, isHeader?: boolean) => CSSProperties;
+  colWidthStyle: (key: string) => CSSProperties | undefined;
+  pinStyle: (key: string, bg: string, isHeader?: boolean) => CSSProperties | undefined;
+  setHighlightedRowId: React.Dispatch<React.SetStateAction<number | null>>;
+  setSelectedIds: React.Dispatch<React.SetStateAction<Set<number>>>;
+  setEditingCell: React.Dispatch<React.SetStateAction<RecordRowCell>>;
+  setRefreshTick: React.Dispatch<React.SetStateAction<number>>;
+  setWriteThroughEdit: React.Dispatch<React.SetStateAction<{ entityId: number; recordId: number } | null>>;
+  setHistoryFor: React.Dispatch<React.SetStateAction<EntityRecord | null>>;
+  setToDelete: React.Dispatch<React.SetStateAction<EntityRecord | null>>;
+  markCellDirty: () => void;
+  commitCell: (record: EntityRecord, field: Field, raw: CellValue) => boolean;
+  commitPageCell: (record: EntityRecord, field: PageField, raw: CellValue) => boolean;
+  commitStatus: (record: EntityRecord, value: string) => boolean;
+  openEdit: (record: EntityRecord) => void;
+  archiveRecord: (record: EntityRecord) => void;
+  unarchiveRecord: (record: EntityRecord) => void;
+};
+type RecordTableRowProps = {
+  context: RecordRowContext;
+  record: EntityRecord;
+  rowIndex: number;
+  rowDisplay: {
+    formulaValues: Record<string, unknown>;
+    pageValues: Record<string, unknown>;
+    formatting: ReturnType<typeof computeRowFormatting>;
+  };
+  entityRelatedValues: Map<string, PageRelatedValue> | undefined;
+  relatedValues: Map<string, PageRelatedValue> | undefined;
+  editingCell: RecordRowCell;
+  conflictCell: RecordRowCell;
+  highlighted: boolean;
+  selected: boolean;
+  pendingInlineWriteKey: string | null;
+  pendingInlineDraft: CellValue | null;
+  inlineCommitResetKey: number;
+};
+
+// Default shallow comparison includes EVERY prop, including the complete shared
+// render context and command identities. No comparator exceptions or ref reads.
+// Group headers are siblings owned by the parent, never part of this boundary.
+const EntityRecordTableRow = memo(function EntityRecordTableRow({
+  context, record, rowIndex, rowDisplay, entityRelatedValues, relatedValues,
+  editingCell, conflictCell, highlighted, selected, pendingInlineWriteKey,
+  pendingInlineDraft, inlineCommitResetKey,
+}: RecordTableRowProps) {
+  const {
+    orderedColumns, fields, t, ml, userOptions, userNames, stripedRows, stripeColor,
+    showBulk, showActionsColumn, canUpdate, canDelete, inlineEditEnabled,
+    statusManualEditable, allowNoStatus, statusById, entityId, pageId, permPageId,
+    formulaOptions, directEntityFormulaTypes, directPageFormulaTypes,
+    entityRelatedColMeta, relatedColMeta, entityRelationsPending,
+    entityRelationsUnavailable, entityRelationsProjectionState, pageRelationsPending,
+    pageRelationsUnavailable, pageRelationsProjectionState, rowProjectionsPending,
+    rowProjectionsUnavailable, pageValuesPending, pageValuesUnavailable,
+    pageLocalWritesReady, archivePending, unarchivePending, canRecord, effFieldAccess,
+    workflowActiveForRecord, allowedStatusesForRecord, pageFieldReadOnly,
+    pageRefEditable, pageRefAsField, relationAsField, renderProjectionState,
+    getCellEditors, bulkColStyle, colWidthStyle, pinStyle, setHighlightedRowId,
+    setSelectedIds, setEditingCell, setRefreshTick, setWriteThroughEdit, setHistoryFor,
+    setToDelete, markCellDirty, commitCell, commitPageCell, commitStatus, openEdit,
+    archiveRecord, unarchiveRecord,
+  } = context;
+  const { formulaValues, formatting, pageValues } = rowDisplay;
+  const values = (record.valuesJson ?? {}) as Record<string, unknown>;
+  const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
+  const isStripedRow = stripedRows && rowIndex % 2 === 1;
+  const rowBgConcrete = formatting.rowColor || (isStripedRow ? (stripeColor ?? "#f8fafc") : "#ffffff");
+  const rowBgForTr = rowBgConcrete === "#ffffff" ? undefined : rowBgConcrete;
+  const withCollab = (td: React.ReactElement<any>, fieldKey: string) => {
+    if (!td) return td;
+    const editors = getCellEditors(record.id, fieldKey);
+    const isConflict = conflictCell?.recordId === record.id && conflictCell?.fieldKey === fieldKey;
+    const hasCollabState = editors.length > 0 || isConflict;
+    return cloneElement(td, {
+      "data-testid": "record-cell",
+      "data-record-id": record.id,
+      "data-field-key": fieldKey,
+      className: cn(td.props.className, "relative", hasCollabState && "group overflow-visible"),
+      children: (
+        <CellCollabVisual
+          recordId={record.id}
+          fieldKey={fieldKey}
+          isConflict={isConflict}
+          editorNames={editors.map(e => e.name).join(", ")}
+          editorColor={editors[0]?.color}
+          conflictLabel={isConflict ? t("collaboration.conflict", "Данные изменились на сервере") : ""}
+          editingLabel={editors.length > 0 ? t("collaboration.isEditing", "редактирует") : ""}
+        >
+          {td.props.children}
+        </CellCollabVisual>
+      ),
+    });
+  };
+  return (
+    <tr
+      className={`border-b border-slate-100 hover:bg-slate-50 ${highlighted ? "erp-row-selected" : ""}`}
+      style={rowBgForTr ? { backgroundColor: rowBgForTr } : undefined}
+      onClick={() => setHighlightedRowId(prev => prev === record.id ? null : record.id)}
+    >
+      {showBulk && (
+        <td className="px-2 py-3 text-center align-middle" style={bulkColStyle(rowBgConcrete)}>
+          <Checkbox checked={selected} onCheckedChange={v => setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (v === true) next.add(record.id); else next.delete(record.id);
+            return next;
+          })} />
+        </td>
+      )}
+      {orderedColumns.map(col => {
+        if (col.kind === "status") {
+          return withCollab((
+            <td key={STATUS_COLUMN_KEY} className="px-4 py-3" style={{
+              ...colWidthStyle(STATUS_COLUMN_KEY),
+              ...(status && !(editingCell?.recordId === record.id && editingCell?.fieldKey === STATUS_COLUMN_KEY)
+                ? { backgroundColor: `${status.color}20` } : {}),
+            }}>
+              {statusManualEditable && editingCell?.recordId === record.id && editingCell?.fieldKey === STATUS_COLUMN_KEY ? (
+                <>
+                  <Select defaultOpen
+                    value={pendingInlineWriteKey === `entity:${record.id}:${STATUS_COLUMN_KEY}` && pendingInlineDraft != null
+                      ? String(pendingInlineDraft) : record.statusId != null ? String(record.statusId) : NO_STATUS}
+                    onValueChange={v => commitStatus(record, v)}
+                    onOpenChange={o => {
+                      if (!o && pendingInlineWriteKey !== `entity:${record.id}:${STATUS_COLUMN_KEY}`) setEditingCell(null);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {!workflowActiveForRecord(record) && (allowNoStatus || record.statusId == null) && (
+                        <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
+                      )}
+                      {allowedStatusesForRecord(record).map(s => (
+                        <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {pendingInlineWriteKey === `entity:${record.id}:${STATUS_COLUMN_KEY}` && (
+                    <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />
+                  )}
+                </>
+              ) : (
+                <div
+                  className={`flex items-center gap-2 ${inlineEditEnabled && statusManualEditable ? "cursor-pointer rounded hover:bg-blue-50/60 -mx-1 px-1" : ""}`}
+                  onClick={inlineEditEnabled && statusManualEditable ? () => setEditingCell({ recordId: record.id, fieldKey: STATUS_COLUMN_KEY }) : undefined}
+                  title={inlineEditEnabled && statusManualEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
+                >
+                  {status ? <span className="inline-flex items-center font-medium" style={{ color: readableStatusTextColor(status.color) }}>{ml(status.nameJson)}</span> : <span className="text-slate-300">—</span>}
+                  {record.archivedAt && <span className="inline-flex items-center gap-1 text-indigo-500 text-xs"><Archive className="w-3 h-3" /> {t("records.inArchive", "В архиве")}</span>}
+                </div>
+              )}
+            </td>
+          ), STATUS_COLUMN_KEY);
+        }
+        const cellNode = (() => {
+          if (col.kind === "entity") {
+            const f = col.field;
+            const access = effFieldAccess(f);
+            const isFunction = f.fieldType === "function";
+            const relationIsEditingThis = editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
+            const cellEditable = inlineEditEnabled && access === "edit" && !isFunction && !scalarFieldLocked(f, values[f.fieldKey]);
+            const cellBg = formatting.cellColors[f.fieldKey];
+            const cellText = formatting.cellTextColors[f.fieldKey];
+            const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
+            if (f.fieldType === "relation" || f.fieldType === "lookup") {
+              if ((entityRelationsPending || entityRelationsUnavailable) && !relationIsEditingThis) {
+                return (
+                  <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
+                    {renderProjectionState(entityRelationsPending ? "pending" : "unavailable")}
+                  </td>
+                );
+              }
+              const meta = entityRelatedColMeta.get(f.fieldKey);
+              const rel = entityRelatedValues?.get(f.fieldKey);
+              const relField = { ...f, fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"], optionsJson: meta?.optionsJson ?? [] } as unknown as Field;
+              const relAssignable = inlineEditEnabled && entityRelationsProjectionState === "ready" && !!meta?.editableColumn && !!rel?.editable && !relationFieldLocked(f, rel?.linkedRecordId);
+              const keepRelationPickerMounted = relationIsEditingThis && !!meta?.editableColumn && !!rel?.editable;
+              const relDep = f.dependencyConfigJson;
+              const relDepParentKey = relDep?.dependsOnFieldKey;
+              const relIsDependent = !!(relDepParentKey && relDep?.relatedFilterFieldKey);
+              let relParentValue: string | null = null;
+              if (relIsDependent && relDepParentKey) {
+                const parentField = fields.find(x => x.fieldKey === relDepParentKey);
+                if (parentField?.fieldType === "relation") {
+                  const pid = entityRelatedValues?.get(relDepParentKey)?.linkedRecordId;
+                  relParentValue = pid == null ? null : String(pid);
+                } else {
+                  const raw = values[relDepParentKey];
+                  relParentValue = raw == null || raw === "" ? null : String(raw);
+                }
+              }
+              const display = rel?.linkedRecordId == null ? <span className="text-slate-300">—</span> : renderCellValue(relField, rel?.value, t, userNames, cellText, ml);
+              return (
+                <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
+                  {relAssignable || keepRelationPickerMounted ? (
+                    <EntityRelationLinkPicker
+                      entityId={entityId} fieldKey={f.fieldKey} recordId={record.id}
+                      expectedVersion={record.version} currentLinkedId={rel?.linkedRecordId ?? null}
+                      display={display} onChanged={() => setRefreshTick(x => x + 1)}
+                      onEditingChange={open => setEditingCell(open ? { recordId: record.id, fieldKey: f.fieldKey } : null)}
+                      dependent={relIsDependent} parentValue={relParentValue}
+                      relatedFilterFieldKey={relDep?.relatedFilterFieldKey ?? null}
+                      pageId={pageId} pageSource={!!f.relationConfigJson?.relatedPageId}
+                      wrap={!!f.wrapText} disabled={!relAssignable}
+                    />
+                  ) : f.fieldType === "lookup" && entityRelationsProjectionState === "ready" && meta?.writeThrough && meta?.relatedEntityId != null && rel?.linkedRecordId != null && canRecord(meta.relatedEntityId, "update") ? (
+                    relField.fieldType === "file" || relField.fieldType === "url" ? (
+                      <div className="flex w-full items-center justify-between gap-1">
+                        <span className={f.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</span>
+                        <button type="button" onClick={() => setWriteThroughEdit({ entityId: meta.relatedEntityId as number, recordId: rel.linkedRecordId as number })}
+                          className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-blue-50/60 hover:text-slate-600"
+                          title={t("records.openLinkedRecord", "Открыть связанную запись")}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button type="button" onClick={() => setWriteThroughEdit({ entityId: meta.relatedEntityId as number, recordId: rel.linkedRecordId as number })}
+                        className="flex w-full items-center -mx-1 rounded px-1 text-left hover:bg-blue-50/60"
+                        title={t("records.openLinkedRecord", "Открыть связанную запись")}>
+                        <span className={f.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</span>
+                      </button>
+                    )
+                  ) : <div className={f.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>}
+                </td>
+              );
+            }
+            const isEditingThis = editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
+            if (isEditingThis) {
+              return (
+                <td data-testid="record-cell" data-record-id={record.id} data-field-key={f.fieldKey} key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...colWidthStyle(`f:${f.id}`) }}>
+                  <div className="relative">
+                    <InlineCellEditor field={f} initial={valueToForm(f, values[f.fieldKey])}
+                      userOptions={userOptions} commitResetKey={inlineCommitResetKey} onDirty={markCellDirty}
+                      onCommit={raw => commitCell(record, f, raw)} onCancel={() => setEditingCell(null)}
+                      allFields={fields} rowValues={values} entityId={entityId} pageId={permPageId}
+                    />
+                    {pendingInlineWriteKey === `entity:${record.id}:${f.fieldKey}` && <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />}
+                  </div>
+                </td>
+              );
+            }
+            if (f.fieldType === "boolean" && cellEditable) {
+              return (
+                <td key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
+                  <Switch checked={values[f.fieldKey] === true} onCheckedChange={v => commitCell(record, f, v)} />
+                </td>
+              );
+            }
+            if (isFunction) {
+              if (rowProjectionsPending || rowProjectionsUnavailable) {
+                return (
+                  <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
+                    {renderProjectionState(rowProjectionsPending ? "pending" : "unavailable")}
+                  </td>
+                );
+              }
+              const computed = formatFormulaFieldResult(f.fieldKey, f.formulaConfigJson?.expression ?? "", formulaValues, f.formulaConfigJson?.decimals, formulaOptions);
+              return (
+                <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
+                  {computed.error ? <span className="text-red-400 text-xs" title={t("fields.formulaError", "Ошибка формулы")}>{t("fields.formulaError", "Ошибка формулы")}</span>
+                    : computed.text === "" ? <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span>
+                    : <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>
+                      {directEntityFormulaTypes.get(f.fieldKey) === "user" ? String(directFormulaDisplayValue(computed.text, "user", userNames))
+                        : computed.bool !== undefined ? t(computed.bool ? "fields.yes" : "fields.no", computed.bool ? "Да" : "Нет")
+                        : computed.numeric ? <AffixedNumericValue config={f.formulaConfigJson}>{computed.text}</AffixedNumericValue> : computed.text}
+                    </span>}
+                </td>
+              );
+            }
+            return (
+              <td key={f.id} onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: f.fieldKey }) : undefined}
+                className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
+                style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}
+                title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}>
+                {renderCellValue(f, values[f.fieldKey], t, userNames, cellText, ml)}
+              </td>
+            );
+          }
+          const pf = col.field;
+          const isFunction = pf.fieldType === "function";
+          const cellBg = formatting.cellColors[pf.fieldKey];
+          const cellText = formatting.cellTextColors[pf.fieldKey];
+          const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
+          const pfKey = `pf:${pf.fieldKey}`;
+          const isEditingThis = editingCell?.recordId === record.id && editingCell?.fieldKey === pfKey;
+          if (pf.fieldType === "relation") {
+            if ((pageRelationsPending || pageRelationsUnavailable) && !isEditingThis) {
+              return (
+                <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                  {renderProjectionState(pageRelationsPending ? "pending" : "unavailable")}
+                </td>
+              );
+            }
+            const meta = relatedColMeta.get(pf.fieldKey);
+            const rel = relatedValues?.get(pf.fieldKey);
+            const relField = relationAsField(pf, meta);
+            const relAssignable = inlineEditEnabled && pageRelationsProjectionState === "ready" && !!meta?.editableColumn && !!rel?.editable;
+            const keepRelationPickerMounted = isEditingThis && !!meta?.editableColumn && !!rel?.editable;
+            const display = rel?.linkedRecordId == null ? <span className="text-slate-300">—</span> : renderCellValue(relField, rel?.value, t, userNames, cellText, ml);
+            return (
+              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                {(relAssignable || keepRelationPickerMounted) && pageId != null ? (
+                  <RelationLinkPicker pageId={pageId} fieldKey={pf.fieldKey} recordId={record.id} expectedVersion={record.version}
+                    currentLinkedId={rel?.linkedRecordId ?? null} display={display} onChanged={() => setRefreshTick(x => x + 1)}
+                    onEditingChange={open => setEditingCell(open ? { recordId: record.id, fieldKey: pfKey } : null)} disabled={!relAssignable} />
+                ) : <div className={pf.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>}
+              </td>
+            );
+          }
+          if (pf.fieldType === "lookup") {
+            if (pageRelationsPending || pageRelationsUnavailable) {
+              return (
+                <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                  {renderProjectionState(pageRelationsPending ? "pending" : "unavailable")}
+                </td>
+              );
+            }
+            const meta = relatedColMeta.get(pf.fieldKey);
+            const rel = relatedValues?.get(pf.fieldKey);
+            const relField = relationAsField(pf, meta);
+            const display = rel?.linkedRecordId == null || rel?.value == null ? <span className="text-slate-300">—</span> : renderCellValue(relField, rel?.value, t, userNames, cellText, ml);
+            return (
+              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                <div className={pf.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>
+              </td>
+            );
+          }
+          if (pf.fieldType === "page_ref") {
+            const refField = pageRefAsField(pf);
+            const v = pageValues[pf.fieldKey];
+            const refEditable = pageLocalWritesReady && inlineEditEnabled && pageRefEditable(pf);
+            if (isEditingThis) {
+              return (
+                <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...colWidthStyle(`pf:${pf.id}`) }}>
+                  <div className="relative">
+                    <InlineCellEditor field={refField} initial={valueToForm(refField, v)} userOptions={userOptions}
+                      commitResetKey={inlineCommitResetKey} onDirty={markCellDirty} rowValues={{ ...values, ...pageValues }}
+                      onCommit={(raw) => commitPageCell(record, pf, raw)} onCancel={() => setEditingCell(null)} />
+                    {pendingInlineWriteKey === `page:${pageId}:${record.id}:${pf.fieldKey}` && <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />}
+                  </div>
+                </td>
+              );
+            }
+            // Dirty editors stay mounted through hydration and CAS retries.
+            if (pageValuesPending || pageValuesUnavailable) {
+              return (
+                <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                  {renderProjectionState(pageValuesPending ? "pending" : "unavailable")}
+                </td>
+              );
+            }
+            if (refField.fieldType === "boolean" && refEditable) {
+              return (
+                <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                  <Switch checked={v === true} onCheckedChange={next => commitPageCell(record, pf, next)} />
+                </td>
+              );
+            }
+            return (
+              <td key={`pf-${pf.id}`} onClick={refEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
+                className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${refEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
+                style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
+                title={refEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}>
+                {v == null || v === "" ? <span className="text-slate-300">—</span> : renderCellValue(refField, v, t, userNames, cellText, ml)}
+              </td>
+            );
+          }
+          if (isFunction && (rowProjectionsPending || rowProjectionsUnavailable)) {
+            return (
+              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                {renderProjectionState(rowProjectionsPending ? "pending" : "unavailable")}
+              </td>
+            );
+          }
+          const cellEditable = pageLocalWritesReady && inlineEditEnabled && !isFunction && !pageFieldReadOnly(pf);
+          const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
+          if (isEditingThis) {
+            return (
+              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...colWidthStyle(`pf:${pf.id}`) }}>
+                <div className="relative">
+                  <InlineCellEditor field={pageFieldAsField} initial={valueToForm(pageFieldAsField, pageValues[pf.fieldKey])}
+                    userOptions={userOptions} commitResetKey={inlineCommitResetKey} onDirty={markCellDirty}
+                    rowValues={{ ...values, ...pageValues }} onCommit={(raw) => commitPageCell(record, pf, raw)} onCancel={() => setEditingCell(null)} />
+                  {pendingInlineWriteKey === `page:${pageId}:${record.id}:${pf.fieldKey}` && <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />}
+                </div>
+              </td>
+            );
+          }
+          if (pageValuesPending || pageValuesUnavailable) {
+            return (
+              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                {renderProjectionState(pageValuesPending ? "pending" : "unavailable")}
+              </td>
+            );
+          }
+          if (pf.fieldType === "boolean" && cellEditable) {
+            return (
+              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                <Switch checked={pageValues[pf.fieldKey] === true} onCheckedChange={v => commitPageCell(record, pf, v)} />
+              </td>
+            );
+          }
+          if (isFunction) {
+            const computed = formatFormulaFieldResult(pf.fieldKey, pf.formulaConfigJson?.expression ?? "", formulaValues, pf.formulaConfigJson?.decimals, formulaOptions);
+            return (
+              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
+                {computed.error ? <span className="text-red-400 text-xs" title={t("fields.formulaError", "Ошибка формулы")}>{t("fields.formulaError", "Ошибка формулы")}</span>
+                  : computed.text === "" ? <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span>
+                  : <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>
+                    {directPageFormulaTypes.get(pf.fieldKey) === "user" ? String(directFormulaDisplayValue(computed.text, "user", userNames))
+                      : computed.bool !== undefined ? t(computed.bool ? "fields.yes" : "fields.no", computed.bool ? "Да" : "Нет")
+                      : computed.numeric ? <AffixedNumericValue config={pf.formulaConfigJson}>{computed.text}</AffixedNumericValue> : computed.text}
+                  </span>}
+              </td>
+            );
+          }
+          return (
+            <td key={`pf-${pf.id}`} onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
+              className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
+              style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
+              title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}>
+              {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], t, userNames, cellText, ml)}
+            </td>
+          );
+        })();
+        if (!cellNode) return null;
+        return withCollab(cellNode as React.ReactElement, col.field.fieldKey);
+      })}
+      {showActionsColumn && (
+        <td className="px-4 py-3">
+          <div className="flex items-center justify-end gap-1">
+            {canUpdate && <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="record-edit-button" data-record-id={record.id} onClick={() => openEdit(record)}><Pencil className="w-3.5 h-3.5" /></Button>}
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500" title={t("records.history", "История изменений")} onClick={() => setHistoryFor(record)}><History className="w-3.5 h-3.5" /></Button>
+            {canUpdate && (record.archivedAt
+              ? <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-500" title={t("records.restoreFromArchive", "Восстановить из архива")} disabled={unarchivePending} onClick={() => unarchiveRecord(record)}><ArchiveRestore className="w-3.5 h-3.5" /></Button>
+              : <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500" title={t("records.toArchive", "В архив")} disabled={archivePending} onClick={() => archiveRecord(record)}><Archive className="w-3.5 h-3.5" /></Button>
+            )}
+            {canDelete && <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setToDelete(record)}><Trash2 className="w-3.5 h-3.5" /></Button>}
+            {!canUpdate && !canDelete && <span className="text-slate-300 text-xs">—</span>}
+          </div>
+        </td>
+      )}
+    </tr>
+  );
+});
 
 // The status cell background is the status color at ~12% over white (very light),
 // so light-colored statuses (yellow, light green) become unreadable if the text
@@ -1753,12 +2265,12 @@ export function EntityRecords({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { canRecord, canAdmin, fieldAccess, user } = useAuth();
-  const userRoleIds: number[] =
+  const userRoleIds = useMemo<number[]>(() =>
     user?.roleIds && user.roleIds.length > 0
       ? user.roleIds
       : user?.roleId != null
         ? [user.roleId]
-        : [];
+        : [], [user?.roleIds, user?.roleId]);
 
   // On a mirror page, record permissions and field access are resolved against
   // the mirror page's override (key `mirror:<pageId>`); on a regular entity page
@@ -1949,7 +2461,7 @@ export function EntityRecords({
     (isMirror ? canAdmin("pages") : col.kind === "entity" ? canConfigureColumns : canAdmin("pages"));
 
   const {
-    data: rawAllFields = [],
+    data: rawAllFields = EMPTY_FIELDS,
     isLoading: fieldsLoading,
     isError: fieldsError,
     error: fieldsLoadError,
@@ -1964,8 +2476,8 @@ export function EntityRecords({
     () => applyFieldLabelOverrides(rawAllFields, fieldLabelOverrides),
     [rawAllFields, fieldLabelOverrides],
   );
-  const { data: statuses = [] } = useListEntityStatuses(entityId);
-  const { data: transitions = [] } = useListEntityTransitions(entityId);
+  const { data: statuses = EMPTY_STATUSES } = useListEntityStatuses(entityId);
+  const { data: transitions = EMPTY_TRANSITIONS } = useListEntityTransitions(entityId);
   const {
     data: mainViews = [],
     isLoading: mainViewsLoading,
@@ -1997,7 +2509,10 @@ export function EntityRecords({
   const collabPageId = pageId ?? entity?.pageId;
   const collab = useCollaboration(collabPageId);
   const otherCollabSessions = useMemo(
-    () => collab.users.filter((u) => u.userId !== user?.id),
+    () => {
+      const others = collab.users.filter((u) => u.userId !== user?.id);
+      return others.length > 0 ? others : EMPTY_CELL_EDITORS;
+    },
     [collab.users, user?.id],
   );
   const activeCollabUsers = useMemo(
@@ -2063,7 +2578,7 @@ export function EntityRecords({
   // an opaque colour and cannot rely on the row's Tailwind class. Custom colour
   // wins; otherwise mirror the bold/plain header default.
   const headerBg = headerColor ?? (boldHeader ? "#e2e8f0" : "#f8fafc");
-  const { data: userOptions = [] } = useListUserOptions();
+  const { data: userOptions = EMPTY_USER_OPTIONS } = useListUserOptions();
   // Roles are only needed to label per-field permission overrides in setup mode.
   const { data: rolesList = [] } = useListRoles({
     query: { enabled: canConfigureColumns, queryKey: getListRolesQueryKey() },
@@ -2101,7 +2616,7 @@ export function EntityRecords({
   // table is rendered inside a page (pageId set).
   const hasPage = pageId != null;
   const {
-    data: allPageFields = [],
+    data: allPageFields = EMPTY_PAGE_FIELDS,
     isLoading: pageFieldsLoading,
     isError: pageFieldsError,
     error: pageFieldsLoadError,
@@ -2466,49 +2981,51 @@ export function EntityRecords({
   }, [entityRelationFieldsKey, pageValuesSchemaKey, relationFieldsKey]);
 
   // Optional mirror-page projection: restrict to a chosen subset of field keys.
-  const mirrorKeySet =
-    visibleFieldKeys && visibleFieldKeys.length > 0 ? new Set(visibleFieldKeys) : null;
-  const fields = [...allFields]
+  const mirrorKeySet = useMemo(() =>
+    visibleFieldKeys && visibleFieldKeys.length > 0 ? new Set(visibleFieldKeys) : null,
+    [visibleFieldKeys],
+  );
+  const fields = useMemo(() => [...allFields]
     .filter((f: Field) => f.isActive)
     .filter((f: Field) => !mirrorKeySet || mirrorKeySet.has(f.fieldKey))
-    .sort((a: Field, b: Field) => a.sortOrder - b.sortOrder);
+    .sort((a: Field, b: Field) => a.sortOrder - b.sortOrder), [allFields, mirrorKeySet]);
   // Fields the current user is allowed to see (not hidden by field-level perms).
   // Per-role display-only hide: a field explicitly marked "hidden" for EVERY
   // assigned role disappears for that user everywhere in the UI — including
   // superAdmin and including create/edit forms (user preference, 2026-08).
   // The server boundary is unchanged: for super this remains cosmetic.
-  const roleDisplayVisible = (f: Field) => {
+  const roleDisplayVisible = useCallback((f: Field) => {
     if (userRoleIds.length === 0) return true;
     return userRoleIds.some((rid) => f.permissionsJson?.[String(rid)] !== "hidden");
-  };
-  const visibleFormFields = fields.filter(
+  }, [userRoleIds]);
+  const visibleFormFields = useMemo(() => fields.filter(
     (f: Field) => fieldAccess(f, entityId, permPageId) !== "hidden" && roleDisplayVisible(f),
-  );
+  ), [fields, fieldAccess, entityId, permPageId, roleDisplayVisible]);
   // Per-role display-only "view": when EVERY assigned role explicitly limits the
   // field to view/hidden, treat it as read-only in the UI even for superAdmin
   // (same philosophy as the display-only hide; server access for super unchanged).
-  const roleDisplayView = (f: Field) =>
+  const roleDisplayView = useCallback((f: Field) =>
     userRoleIds.length > 0 &&
     userRoleIds.every((rid) => {
       const e = f.permissionsJson?.[String(rid)];
       return e === "view" || e === "hidden";
-    });
+    }), [userRoleIds]);
   // Effective field access for editability decisions on this page (inline cells,
   // add-row, relation persist) — fieldAccess capped by the display-only view rule.
-  const effFieldAccess = (f: Field) => {
+  const effFieldAccess = useCallback((f: Field) => {
     const a = fieldAccess(f, entityId, permPageId);
     return a === "edit" && roleDisplayView(f) ? "view" : a;
-  };
+  }, [fieldAccess, entityId, permPageId, roleDisplayView]);
   // Cosmetic mirror of a PAGE-LOCAL field's per-role access: when every assigned
   // role limits the page field to view/hidden, its cells are read-only in the UI.
   // The hard boundary lives on the server (PUT page values rejects the change).
-  const pageFieldReadOnly = (pf: PageField) =>
+  const pageFieldReadOnly = useCallback((pf: PageField) =>
     userRoleIds.length > 0 &&
     userRoleIds.every((rid) => {
       const e = (pf.permissionsJson as Record<string, string> | null | undefined)?.[String(rid)];
       return e === "view" || e === "hidden";
-    });
-  const pageRefAsField = (pf: PageField): Field => {
+    }), [userRoleIds]);
+  const pageRefAsField = useCallback((pf: PageField): Field => {
     const cfg = pf.pageRefConfigJson;
     return {
       ...pf,
@@ -2518,11 +3035,11 @@ export function EntityRecords({
       permissionsJson: {},
       entityId: 0,
     } as unknown as Field;
-  };
-  const pageRefEditable = (pf: PageField) =>
+  }, []);
+  const pageRefEditable = useCallback((pf: PageField) =>
     pf.fieldType === "page_ref" &&
     pf.pageRefConfigJson?.resolvedEditable === true &&
-    !pageFieldReadOnly(pf);
+    !pageFieldReadOnly(pf), [pageFieldReadOnly]);
   const pageFieldAsInputField = (pf: PageField): Field =>
     pf.fieldType === "page_ref"
       ? pageRefAsField(pf)
@@ -2646,7 +3163,7 @@ export function EntityRecords({
         }),
     [pageFields, userRoleIds],
   );
-  const statusById = new Map(statuses.map((s: Status) => [s.id, s]));
+  const statusById = useMemo(() => new Map(statuses.map((s: Status) => [s.id, s])), [statuses]);
   const isSuperAdmin = user?.permissions?.superAdmin === true;
 
   // Cosmetic mirror of the server's per-role status visibility (entity-level, like
@@ -2656,7 +3173,7 @@ export function EntityRecords({
   const toIdSet = (v: unknown): Set<number> =>
     new Set<number>(Array.isArray(v) ? v.filter((n): n is number => Number.isInteger(n)) : []);
   const statusEntityPerm = isSuperAdmin ? undefined : user?.permissions?.records?.[String(entityId)];
-  const hiddenStatusIds = toIdSet(statusEntityPerm?.hiddenStatusIds);
+  const hiddenStatusIds = useMemo(() => toIdSet(statusEntityPerm?.hiddenStatusIds), [statusEntityPerm?.hiddenStatusIds]);
   const hiddenRowStatusIds = toIdSet(statusEntityPerm?.hiddenRowStatusIds);
   // Cosmetic per-role column hide. Read from the CURRENT context key (mirror
   // override when on a mirror page, else the entity) so it matches canRecord's
@@ -2670,8 +3187,8 @@ export function EntityRecords({
   const showActionsColumn = !hideActionsColumn;
   // Drop hidden-picker statuses but always keep `keepId` (a record's current
   // status) so its Select still renders the value it's actually set to.
-  const dropHidden = (list: Status[], keepId?: number | null): Status[] =>
-    list.filter((s: Status) => !hiddenStatusIds.has(s.id) || s.id === keepId);
+  const dropHidden = useCallback((list: Status[], keepId?: number | null): Status[] =>
+    list.filter((s: Status) => !hiddenStatusIds.has(s.id) || s.id === keepId), [hiddenStatusIds]);
   // Quick-filter chips: a role can neither filter by hidden-picker statuses nor by
   // hidden-row statuses (the latter have no rows to surface anyway). When the
   // status column is hidden entirely (role flag or page-level), the status
@@ -2813,7 +3330,7 @@ export function EntityRecords({
   }, [widthsStorageKey]);
   // A fixed width on a cell must also clamp min/max so an auto-layout table
   // actually honours it (the widest unconstrained cell would otherwise win).
-  const colWidthStyle = (key: string): CSSProperties | undefined => {
+  const colWidthStyle = useCallback((key: string): CSSProperties | undefined => {
     // In setup mode the headers carry extra controls (move arrows, sort number,
     // permission badge, config button). Honoring the manually-saved widths there
     // squeezes those controls and makes columns overlap, so we ignore the saved
@@ -2822,7 +3339,7 @@ export function EntityRecords({
     if (setupMode) return undefined;
     const w = columnWidths[key];
     return w ? { width: w, minWidth: w, maxWidth: w } : undefined;
-  };
+  }, [setupMode, columnWidths]);
   // Holds the teardown for an in-flight drag so it can be forcibly run on
   // unmount / entity switch (a drag that never sees pointerup must not leak
   // window listeners or leave body cursor/userSelect stuck).
@@ -4915,7 +5432,7 @@ export function EntityRecords({
   ]);
 
   const totalsAuthoritative = totalsResultKey === recordsResultKey;
-  const renderProjectionState = (state: "pending" | "unavailable") => (
+  const renderProjectionState = useCallback((state: "pending" | "unavailable") => (
     <span
       data-testid="record-projection-state"
       data-state={state}
@@ -4934,7 +5451,7 @@ export function EntityRecords({
         ? t("records.projectionLoading", "Загрузка…")
         : t("records.projectionUnavailable", "Значение недоступно")}
     </span>
-  );
+  ), [t]);
 
   const reorderFieldsMutation = useReorderFields({
     mutation: {
@@ -5792,14 +6309,14 @@ export function EntityRecords({
   // cell renderers/editors. The render type and select options come from the
   // related entity field (resolved server-side); a hidden related field reports
   // a null type and renders as plain (uneditable) text.
-  const relationAsField = (pf: PageField, meta?: PageRelatedColumn): Field =>
+  const relationAsField = useCallback((pf: PageField, meta?: PageRelatedColumn): Field =>
     ({
       ...pf,
       fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
       optionsJson: meta?.optionsJson ?? [],
       permissionsJson: {},
       entityId: 0,
-    }) as unknown as Field;
+    }) as unknown as Field, []);
 
   // Synthetic Field wrapper so a page-local field can reuse the entity filter
   // popovers. The render type and select options come straight from the page field.
@@ -5808,8 +6325,8 @@ export function EntityRecords({
 
   // Whether workflow enforcement applies to a given row (mirrors the server boundary).
   // When active the status cannot be cleared and only allowed transitions are offered.
-  const workflowActiveForRecord = (record: EntityRecord): boolean =>
-    transitions.length > 0 && record.statusId != null && !isSuperAdmin;
+  const workflowActiveForRecord = useCallback((record: EntityRecord): boolean =>
+    transitions.length > 0 && record.statusId != null && !isSuperAdmin, [transitions, isSuperAdmin]);
 
   // When the entity disables it, the "Без статуса" option is hidden from status
   // pickers. Still shown when the current value is already null, so the Select
@@ -5817,7 +6334,7 @@ export function EntityRecords({
   const allowNoStatus = entity?.allowNoStatus ?? true;
 
   // Statuses a given row may move to, mirroring the server workflow boundary (per-row).
-  const allowedStatusesForRecord = (record: EntityRecord): Status[] => {
+  const allowedStatusesForRecord = useCallback((record: EntityRecord): Status[] => {
     const cur = record.statusId ?? null;
     if (!workflowActiveForRecord(record)) return dropHidden(statuses, cur);
     const ids = new Set<number>([
@@ -5832,7 +6349,7 @@ export function EntityRecords({
         .map((tr: Transition) => tr.toStatusId),
     ]);
     return dropHidden(statuses.filter((s: Status) => ids.has(s.id)), cur);
-  };
+  }, [workflowActiveForRecord, dropHidden, statuses, transitions, userRoleIds]);
 
   const startAddRow = () => {
     if (hasWritablePageValueFields && !guardPageLocalWrite(() => {})) return;
@@ -5991,16 +6508,17 @@ export function EntityRecords({
   // "Показывать в таблице" flag: a field hidden on the source entity's own
   // pages can still be surfaced on a mirror page that opted it in. RBAC field
   // perms still apply (tableFields is already permission-filtered above).
-  const displayFields = setupMode
+  const displayFields = useMemo(() => setupMode
     ? tableFields
     : tableFields
         .filter((f: Field) => (mirrorKeySet ? mirrorKeySet.has(f.fieldKey) : f.showInTable !== false))
-        .filter((f: Field) => !viewVisibleFieldKeys || viewVisibleFieldKeys.includes(f.fieldKey));
+        .filter((f: Field) => !viewVisibleFieldKeys || viewVisibleFieldKeys.includes(f.fieldKey)),
+    [setupMode, tableFields, mirrorKeySet, viewVisibleFieldKeys]);
   // Page-local columns are appended after the entity columns. In setup mode the
   // admin sees them all; otherwise only those opted-in via "Показывать в таблице".
-  const displayedPageFields = setupMode
+  const displayedPageFields = useMemo(() => setupMode
     ? pageFields
-    : pageFields.filter((f: PageField) => f.showInTable !== false);
+    : pageFields.filter((f: PageField) => f.showInTable !== false), [setupMode, pageFields]);
   const extraColCount = displayedPageFields.length;
 
   useEffect(() => {
@@ -6077,7 +6595,7 @@ export function EntityRecords({
     | { kind: "entity"; token: string; pinKey: string; field: Field }
     | { kind: "page"; token: string; pinKey: string; field: PageField }
     | { kind: "status"; token: typeof STATUS_COLUMN_KEY; pinKey: typeof STATUS_COLUMN_KEY };
-  const orderedColumns: UnifiedCol[] = (() => {
+  const orderedColumns = useMemo<UnifiedCol[]>(() => {
     const entityColumns: UnifiedCol[] = displayFields.map(
       (f: Field): UnifiedCol => ({ kind: "entity", token: `e:${f.fieldKey}`, pinKey: `f:${f.id}`, field: f }),
     );
@@ -6120,7 +6638,7 @@ export function EntityRecords({
       return sorted;
     }
     return base;
-  })();
+  }, [displayFields, displayedPageFields, showStatusColumn, entity?.statusSortOrder, isMirror, mirrorColumnOrder]);
   // Format metadata is identical for every row. Memoizing it keeps the first
   // progressive table paint focused on ordinary stored cells.
   const rowFormatFields = useMemo<FormatField[]>(
@@ -6309,7 +6827,7 @@ export function EntityRecords({
   const BULK_COL_W = 40;
   // Sticky style for the checkbox column: pinned to the inline start (left in
   // LTR, right in RTL) independent of horizontal scroll.
-  const bulkColStyle = (bg: string, isHeader = false): CSSProperties => ({
+  const bulkColStyle = useCallback((bg: string, isHeader = false): CSSProperties => ({
     position: "sticky",
     insetInlineStart: 0,
     zIndex: isHeader ? 3 : 2,
@@ -6317,7 +6835,7 @@ export function EntityRecords({
     width: BULK_COL_W,
     minWidth: BULK_COL_W,
     maxWidth: BULK_COL_W,
-  });
+  }), []);
   // Keep the selection limited to rows that are still in the current result
   // set (filters/page/tab changes drop stale ids so a bulk action never hits
   // rows the user no longer sees).
@@ -6365,7 +6883,7 @@ export function EntityRecords({
   // cells don't show through; a caller-supplied conditional-format/row colour
   // takes precedence, otherwise the given base colour. The last pinned column
   // gets a divider shadow to mark the frozen boundary.
-  const pinStyle = (key: string, bg: string, isHeader = false): CSSProperties | undefined => {
+  const pinStyle = useCallback((key: string, bg: string, isHeader = false): CSSProperties | undefined => {
     if (!pinnedKeys.has(key) || !pinReady) return undefined;
     return {
       position: "sticky",
@@ -6374,7 +6892,59 @@ export function EntityRecords({
       backgroundColor: bg,
       ...(key === lastPinnedKey ? { boxShadow: "2px 0 5px -2px rgba(15,23,42,0.15)" } : undefined),
     };
-  };
+  }, [pinnedKeys, pinReady, pinnedLeft, lastPinnedKey]);
+
+  const rowCommitCell = useCommittedCommand(commitCell);
+  const rowCommitPageCell = useCommittedCommand(commitPageCell);
+  const rowCommitStatus = useCommittedCommand(commitStatus);
+  const rowOpenEdit = useCommittedCommand(openEdit);
+  const rowArchiveRecord = useCommittedCommand((record: EntityRecord) => {
+    archiveMutation.mutate({ id: record.id, data: { expectedVersion: record.version } });
+  });
+  const rowUnarchiveRecord = useCommittedCommand((record: EntityRecord) => {
+    unarchiveMutation.mutate({ id: record.id, data: { expectedVersion: record.version } });
+  });
+  const markCellDirty = useCallback(() => { activeCellDirtyRef.current = true; }, []);
+  const archivePending = archiveMutation.isPending;
+  const unarchivePending = unarchiveMutation.isPending;
+  // Shared render inputs are immutable snapshots, not an event/ref facade.
+  // Every captured value is a dependency; local cell/selection/pending state is
+  // passed separately to just the affected row. Changes in permissions, locale,
+  // columns, formulas, projection readiness or styles invalidate the context.
+  const recordRowContext = useMemo<RecordRowContext>(() => ({
+    orderedColumns, fields, t, ml, userOptions, userNames, stripedRows, stripeColor,
+    showBulk, showActionsColumn, canUpdate, canDelete, inlineEditEnabled,
+    statusManualEditable, allowNoStatus, statusById, entityId, pageId, permPageId,
+    formulaOptions, directEntityFormulaTypes, directPageFormulaTypes,
+    entityRelatedColMeta, relatedColMeta, entityRelationsPending,
+    entityRelationsUnavailable, entityRelationsProjectionState, pageRelationsPending,
+    pageRelationsUnavailable, pageRelationsProjectionState, rowProjectionsPending,
+    rowProjectionsUnavailable, pageValuesPending, pageValuesUnavailable,
+    pageLocalWritesReady, archivePending, unarchivePending, canRecord, effFieldAccess,
+    workflowActiveForRecord, allowedStatusesForRecord, pageFieldReadOnly,
+    pageRefEditable, pageRefAsField, relationAsField, renderProjectionState,
+    getCellEditors, bulkColStyle, colWidthStyle, pinStyle, setHighlightedRowId,
+    setSelectedIds, setEditingCell, setRefreshTick, setWriteThroughEdit, setHistoryFor,
+    setToDelete, markCellDirty, commitCell: rowCommitCell, commitPageCell: rowCommitPageCell,
+    commitStatus: rowCommitStatus, openEdit: rowOpenEdit,
+    archiveRecord: rowArchiveRecord, unarchiveRecord: rowUnarchiveRecord,
+  }), [
+    orderedColumns, fields, t, ml, userOptions, userNames, stripedRows, stripeColor,
+    showBulk, showActionsColumn, canUpdate, canDelete, inlineEditEnabled,
+    statusManualEditable, allowNoStatus, statusById, entityId, pageId, permPageId,
+    formulaOptions, directEntityFormulaTypes, directPageFormulaTypes,
+    entityRelatedColMeta, relatedColMeta, entityRelationsPending,
+    entityRelationsUnavailable, entityRelationsProjectionState, pageRelationsPending,
+    pageRelationsUnavailable, pageRelationsProjectionState, rowProjectionsPending,
+    rowProjectionsUnavailable, pageValuesPending, pageValuesUnavailable,
+    pageLocalWritesReady, archivePending, unarchivePending, canRecord, effFieldAccess,
+    workflowActiveForRecord, allowedStatusesForRecord, pageFieldReadOnly,
+    pageRefEditable, pageRefAsField, relationAsField, renderProjectionState,
+    getCellEditors, bulkColStyle, colWidthStyle, pinStyle, setHighlightedRowId,
+    setSelectedIds, setEditingCell, setRefreshTick, setWriteThroughEdit, setHistoryFor,
+    setToDelete, markCellDirty, rowCommitCell, rowCommitPageCell,
+    rowCommitStatus, rowOpenEdit, rowArchiveRecord, rowUnarchiveRecord,
+  ]);
 
   if (!canView) {
     return (
@@ -8689,21 +9259,6 @@ export function EntityRecords({
                       relatedByRecord.get(record.id),
                       rowProjectionsReady,
                     );
-                    const { allValues, formulaValues, formatting, pageValues } = rowDisplay;
-                    const values = (record.valuesJson ?? {}) as Record<string, unknown>;
-                    const status = record.statusId != null ? statusById.get(record.statusId) : undefined;
-                    // Resolve the row background once so pinned (sticky) cells and
-                    // the non-pinned row stay consistent. Priority: conditional
-                    // formatting > custom stripe colour > built-in striped grey >
-                    // plain white. rowBgConcrete is always opaque (for sticky
-                    // cells); rowBgForTr is undefined on plain rows so hover works.
-                    const isStripedRow = stripedRows && rowIndex % 2 === 1;
-                    const rowBgConcrete = formatting.rowColor
-                      ? formatting.rowColor
-                      : isStripedRow
-                        ? (stripeColor ?? "#f8fafc")
-                        : "#ffffff";
-                    const rowBgForTr = rowBgConcrete === "#ffffff" ? undefined : rowBgConcrete;
                     // Expand-all: emit the group header row whenever this record's
                     // group differs from the previous record's (rows arrive
                     // ordered by group from the server, so each header shows once
@@ -8720,662 +9275,24 @@ export function EntityRecords({
                       if (curGk !== undefined && curGk !== prevGk) interleavedHeader = groupByKey.get(curGk);
                     }
 
-                    const withCollab = (td: React.ReactElement<any>, fieldKey: string) => {
-                      if (!td) return td;
-                      const editors = getCellEditors(record.id, fieldKey);
-                      const isConflict = conflictCell?.recordId === record.id && conflictCell?.fieldKey === fieldKey;
-                      const testProps = {
-                        "data-testid": "record-cell",
-                        "data-record-id": record.id,
-                        "data-field-key": fieldKey,
-                      };
-                      const hasCollabState = editors.length > 0 || isConflict;
-                      const names = editors.map(e => e.name).join(", ");
-                      return cloneElement(td, {
-                        ...testProps,
-                        className: cn(td.props.className, "relative", hasCollabState && "group overflow-visible"),
-                        children: (
-                          <CellCollabVisual
-                            recordId={record.id}
-                            fieldKey={fieldKey}
-                            isConflict={isConflict}
-                            editorNames={names}
-                            editorColor={editors[0]?.color}
-                            conflictLabel={isConflict ? t("collaboration.conflict", "Данные изменились на сервере") : ""}
-                            editingLabel={editors.length > 0 ? t("collaboration.isEditing", "редактирует") : ""}
-                          >
-                            {td.props.children}
-                          </CellCollabVisual>
-                        )
-                      });
-                    };
-
                     return (
                       <Fragment key={record.id}>
                       {interleavedHeader && renderGroupRow(interleavedHeader)}
-                      <tr
-                        className={`border-b border-slate-100 hover:bg-slate-50 ${highlightedRowId === record.id ? "erp-row-selected" : ""}`}
-                        style={rowBgForTr ? { backgroundColor: rowBgForTr } : undefined}
-                        onClick={() => setHighlightedRowId((prev) => (prev === record.id ? null : record.id))}
-                      >
-                        {showBulk && (
-                          <td className="px-2 py-3 text-center align-middle" style={bulkColStyle(rowBgConcrete)}>
-                            <Checkbox
-                              checked={selectedIds.has(record.id)}
-                              onCheckedChange={(v) => {
-                                setSelectedIds((prev) => {
-                                  const next = new Set(prev);
-                                  if (v === true) next.add(record.id);
-                                  else next.delete(record.id);
-                                  return next;
-                                });
-                              }}
-                            />
-                          </td>
-                        )}
-                        {orderedColumns.map((col) => {
-                          if (col.kind === "status") {
-                            return withCollab((
-                              <td
-                                key={STATUS_COLUMN_KEY}
-                                className="px-4 py-3"
-                                style={{
-                                  ...colWidthStyle(STATUS_COLUMN_KEY),
-                                  ...(status &&
-                                  !(editingCell?.recordId === record.id && editingCell?.fieldKey === STATUS_COLUMN_KEY)
-                                    ? { backgroundColor: `${status.color}20` }
-                                    : {}),
-                                }}
-                              >
-                                {statusManualEditable &&
-                                editingCell?.recordId === record.id &&
-                                editingCell?.fieldKey === STATUS_COLUMN_KEY ? (
-                                  <>
-                                    <Select
-                                      defaultOpen
-                                      value={
-                                        pendingInlineWriteKey === `entity:${record.id}:${STATUS_COLUMN_KEY}` && pendingInlineDraft != null
-                                          ? String(pendingInlineDraft)
-                                          : record.statusId != null
-                                            ? String(record.statusId)
-                                            : NO_STATUS
-                                      }
-                                      onValueChange={(v) => commitStatus(record, v)}
-                                      onOpenChange={(o) => {
-                                        if (!o && pendingInlineWriteKey !== `entity:${record.id}:${STATUS_COLUMN_KEY}`) setEditingCell(null);
-                                      }}
-                                    >
-                                      <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
-                                      <SelectContent>
-                                        {!workflowActiveForRecord(record) && (allowNoStatus || record.statusId == null) && (
-                                          <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
-                                        )}
-                                        {allowedStatusesForRecord(record).map((s: Status) => (
-                                          <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                    {pendingInlineWriteKey === `entity:${record.id}:${STATUS_COLUMN_KEY}` && (
-                                      <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />
-                                    )}
-                                  </>
-                                ) : (
-                                  <div
-                                    className={`flex items-center gap-2 ${inlineEditEnabled && statusManualEditable ? "cursor-pointer rounded hover:bg-blue-50/60 -mx-1 px-1" : ""}`}
-                                    onClick={inlineEditEnabled && statusManualEditable ? () => setEditingCell({ recordId: record.id, fieldKey: STATUS_COLUMN_KEY }) : undefined}
-                                    title={inlineEditEnabled && statusManualEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
-                                  >
-                                    {status ? (
-                                      <span className="inline-flex items-center font-medium" style={{ color: readableStatusTextColor(status.color) }}>
-                                        {ml(status.nameJson)}
-                                      </span>
-                                    ) : (
-                                      <span className="text-slate-300">—</span>
-                                    )}
-                                    {record.archivedAt && (
-                                      <span className="inline-flex items-center gap-1 text-indigo-500 text-xs">
-                                        <Archive className="w-3 h-3" /> {t("records.inArchive", "В архиве")}
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </td>
-                            ), STATUS_COLUMN_KEY);
-                          }
-                          const cellNode = (() => {
-                          if (col.kind === "entity") {
-                          const f = col.field;
-                          const access = effFieldAccess(f);
-                          const isFunction = f.fieldType === "function";
-                          const relationIsEditingThis =
-                            editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
-                          // A lockAfterCreate field stops being editable once it has a
-                          // value (mirrors the hard server boundary on records update).
-                          const cellEditable =
-                            inlineEditEnabled &&
-                            access === "edit" &&
-                            !isFunction &&
-                            !scalarFieldLocked(f, values[f.fieldKey]);
-                          const cellBg = formatting.cellColors[f.fieldKey];
-                          const cellText = formatting.cellTextColors[f.fieldKey];
-                          const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
-                          if (f.fieldType === "relation" || f.fieldType === "lookup") {
-                            if ((entityRelationsPending || entityRelationsUnavailable) && !relationIsEditingThis) {
-                              return (
-                                <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
-                                  {renderProjectionState(entityRelationsPending ? "pending" : "unavailable")}
-                                </td>
-                              );
-                            }
-                            const meta = entityRelatedColMeta.get(f.fieldKey);
-                            const rel = entityRelatedByRecord.get(record.id)?.get(f.fieldKey);
-                            // Synthetic Field so the related value reuses the standard cell
-                            // renderer with the related field's render type / select options.
-                            const relField = {
-                              ...f,
-                              fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
-                              optionsJson: meta?.optionsJson ?? [],
-                            } as unknown as Field;
-                            // Assignable column-wide when inline edit is on and the server
-                            // reports both the column and this row's link as editable. A
-                            // lockAfterCreate field stops being assignable once a link exists
-                            // (mirrors the hard server boundary on related-link).
-                            const relAssignable =
-                              inlineEditEnabled &&
-                              entityRelationsProjectionState === "ready" &&
-                              !!meta?.editableColumn &&
-                              !!rel?.editable &&
-                              !relationFieldLocked(f, rel?.linkedRecordId);
-                            const keepRelationPickerMounted =
-                              relationIsEditingThis && !!meta?.editableColumn && !!rel?.editable;
-                            // Dependent (cascading) relation field: resolve the parent
-                            // field's value for this row to gate + filter the picker. A
-                            // relation parent contributes its linked record id; any other
-                            // parent contributes its stored scalar value.
-                            const relDep = f.dependencyConfigJson;
-                            const relDepParentKey = relDep?.dependsOnFieldKey;
-                            const relIsDependent = !!(relDepParentKey && relDep?.relatedFilterFieldKey);
-                            let relParentValue: string | null = null;
-                            if (relIsDependent && relDepParentKey) {
-                              const parentField = fields.find((x) => x.fieldKey === relDepParentKey);
-                              if (parentField?.fieldType === "relation") {
-                                const pid = entityRelatedByRecord.get(record.id)?.get(relDepParentKey)?.linkedRecordId;
-                                relParentValue = pid == null ? null : String(pid);
-                              } else {
-                                const raw = values[relDepParentKey];
-                                relParentValue = raw == null || raw === "" ? null : String(raw);
-                              }
-                            }
-                            const display =
-                              rel?.linkedRecordId == null ? (
-                                <span className="text-slate-300">—</span>
-                              ) : (
-                                renderCellValue(relField, rel?.value, t, userNames, cellText, ml)
-                              );
-                            return (
-                              <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
-                                {relAssignable || keepRelationPickerMounted ? (
-                                  <EntityRelationLinkPicker
-                                    entityId={entityId}
-                                    fieldKey={f.fieldKey}
-                                    recordId={record.id}
-                                    expectedVersion={record.version}
-                                    currentLinkedId={rel?.linkedRecordId ?? null}
-                                    display={display}
-                                    onChanged={() => setRefreshTick((x) => x + 1)}
-                                    onEditingChange={(open) =>
-                                      setEditingCell(open ? { recordId: record.id, fieldKey: f.fieldKey } : null)
-                                    }
-                                    dependent={relIsDependent}
-                                    parentValue={relParentValue}
-                                    relatedFilterFieldKey={relDep?.relatedFilterFieldKey ?? null}
-                                    pageId={pageId}
-                                    pageSource={!!f.relationConfigJson?.relatedPageId}
-                                    wrap={!!f.wrapText}
-                                    disabled={!relAssignable}
-                                  />
-                                ) : f.fieldType === "lookup" &&
-                                  entityRelationsProjectionState === "ready" &&
-                                  meta?.writeThrough &&
-                                  meta?.relatedEntityId != null &&
-                                  rel?.linkedRecordId != null &&
-                                  canRecord(meta.relatedEntityId, "update") ? (
-                                  // The projected value of a file/url lookup renders as a
-                                  // clickable <a> (opens the file/link), so the whole cell
-                                  // can't double as the "edit source record" target — keep a
-                                  // dedicated pencil button next to the link. Every other
-                                  // type makes the entire cell clickable, no icon.
-                                  relField.fieldType === "file" || relField.fieldType === "url" ? (
-                                    <div className="flex w-full items-center justify-between gap-1">
-                                      <span className={f.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</span>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setWriteThroughEdit({
-                                            entityId: meta.relatedEntityId as number,
-                                            recordId: rel.linkedRecordId as number,
-                                          })
-                                        }
-                                        className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-blue-50/60 hover:text-slate-600"
-                                        title={t("records.openLinkedRecord", "Открыть связанную запись")}
-                                      >
-                                        <Pencil className="h-3.5 w-3.5" />
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setWriteThroughEdit({
-                                          entityId: meta.relatedEntityId as number,
-                                          recordId: rel.linkedRecordId as number,
-                                        })
-                                      }
-                                      className="flex w-full items-center -mx-1 rounded px-1 text-left hover:bg-blue-50/60"
-                                      title={t("records.openLinkedRecord", "Открыть связанную запись")}
-                                    >
-                                      <span className={f.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</span>
-                                    </button>
-                                  )
-                                ) : (
-                                  <div className={f.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>
-                                )}
-                              </td>
-                            );
-                          }
-                          const isEditingThis =
-                            editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
-                          if (isEditingThis) {
-                            return (
-                              <td data-testid="record-cell" data-record-id={record.id} data-field-key={f.fieldKey} key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...colWidthStyle(`f:${f.id}`) }}>
-                                <div className="relative">
-                                  <InlineCellEditor
-                                    field={f}
-                                    initial={valueToForm(f, values[f.fieldKey])}
-                                    userOptions={userOptions}
-                                    commitResetKey={inlineCommitResetKey}
-                                    onDirty={() => { activeCellDirtyRef.current = true; }}
-                                    onCommit={(raw) => commitCell(record, f, raw)}
-                                    onCancel={() => setEditingCell(null)}
-                                    allFields={fields}
-                                    rowValues={values}
-                                    entityId={entityId}
-                                    pageId={permPageId}
-                                  />
-                                  {pendingInlineWriteKey === `entity:${record.id}:${f.fieldKey}` && (
-                                    <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />
-                                  )}
-                                </div>
-                              </td>
-                            );
-                          }
-                          if (f.fieldType === "boolean" && cellEditable) {
-                            return (
-                              <td key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
-                                <Switch
-                                  checked={values[f.fieldKey] === true}
-                                  onCheckedChange={(v) => commitCell(record, f, v)}
-                                />
-                              </td>
-                            );
-                          }
-                          if (isFunction) {
-                            if (rowProjectionsPending || rowProjectionsUnavailable) {
-                              return (
-                                <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
-                                  {renderProjectionState(rowProjectionsPending ? "pending" : "unavailable")}
-                                </td>
-                              );
-                            }
-                            const computed = formatFormulaFieldResult(
-                              f.fieldKey,
-                              f.formulaConfigJson?.expression ?? "",
-                              formulaValues,
-                              f.formulaConfigJson?.decimals,
-                              formulaOptions,
-                            );
-                            return (
-                              <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
-                                {computed.error ? (
-                                  <span className="text-red-400 text-xs" title={t("fields.formulaError", "Ошибка формулы")}>{t("fields.formulaError", "Ошибка формулы")}</span>
-                                ) : computed.text === "" ? (
-                                  <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span>
-                                ) : (
-                                  <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>
-                                    {directEntityFormulaTypes.get(f.fieldKey) === "user"
-                                      ? String(directFormulaDisplayValue(computed.text, "user", userNames))
-                                      : computed.bool !== undefined
-                                      ? t(computed.bool ? "fields.yes" : "fields.no", computed.bool ? "Да" : "Нет")
-                                      : computed.numeric
-                                        ? <AffixedNumericValue config={f.formulaConfigJson}>{computed.text}</AffixedNumericValue>
-                                        : computed.text}
-                                  </span>
-                                )}
-                              </td>
-                            );
-                          }
-                          return (
-                            <td
-                              key={f.id}
-                              onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: f.fieldKey }) : undefined}
-                              className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
-                              style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}
-                              title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
-                            >
-                              {renderCellValue(f, values[f.fieldKey], t, userNames, cellText, ml)}
-                            </td>
-                          );
-                          }
-                          const pf = col.field;
-                          const isFunction = pf.fieldType === "function";
-                          const cellBg = formatting.cellColors[pf.fieldKey];
-                          const cellText = formatting.cellTextColors[pf.fieldKey];
-                          const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
-                          const pfKey = `pf:${pf.fieldKey}`;
-                          const isEditingThis =
-                            editingCell?.recordId === record.id && editingCell?.fieldKey === pfKey;
-                          if (pf.fieldType === "relation") {
-                            if ((pageRelationsPending || pageRelationsUnavailable) && !isEditingThis) {
-                              return (
-                                <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                                  {renderProjectionState(pageRelationsPending ? "pending" : "unavailable")}
-                                </td>
-                              );
-                            }
-                            const meta = relatedColMeta.get(pf.fieldKey);
-                            const rel = relatedByRecord.get(record.id)?.get(pf.fieldKey);
-                            const relField = relationAsField(pf, meta);
-                            // The relation column now ASSIGNS the link: clicking a cell opens a
-                            // searchable picker of related-entity records. A cell is assignable
-                            // column-wide (server-reported editable) regardless of whether a link
-                            // already exists, so empty ("—") cells are clickable too.
-                            const relAssignable =
-                              inlineEditEnabled &&
-                              pageRelationsProjectionState === "ready" &&
-                              !!meta?.editableColumn &&
-                              !!rel?.editable;
-                            const keepRelationPickerMounted =
-                              isEditingThis && !!meta?.editableColumn && !!rel?.editable;
-                            const display =
-                              rel?.linkedRecordId == null ? (
-                                <span className="text-slate-300">—</span>
-                              ) : (
-                                renderCellValue(relField, rel?.value, t, userNames, cellText, ml)
-                              );
-                            return (
-                              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                                {(relAssignable || keepRelationPickerMounted) && pageId != null ? (
-                                  <RelationLinkPicker
-                                    pageId={pageId}
-                                    fieldKey={pf.fieldKey}
-                                    recordId={record.id}
-                                    expectedVersion={record.version}
-                                    currentLinkedId={rel?.linkedRecordId ?? null}
-                                    display={display}
-                                    onChanged={() => setRefreshTick((x) => x + 1)}
-                                    onEditingChange={(open) =>
-                                      setEditingCell(open ? { recordId: record.id, fieldKey: pfKey } : null)
-                                    }
-                                    disabled={!relAssignable}
-                                  />
-                                ) : (
-                                  <div className={pf.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>
-                                )}
-                              </td>
-                            );
-                          }
-                          if (pf.fieldType === "lookup") {
-                            if (pageRelationsPending || pageRelationsUnavailable) {
-                              return (
-                                <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                                  {renderProjectionState(pageRelationsPending ? "pending" : "unavailable")}
-                                </td>
-                              );
-                            }
-                            // Page lookup is a read-only projection of the linked record's
-                            // (entity- or page-source) field, resolved by the same page
-                            // related-values endpoint as relation. It is never assignable.
-                            const meta = relatedColMeta.get(pf.fieldKey);
-                            const rel = relatedByRecord.get(record.id)?.get(pf.fieldKey);
-                            const relField = relationAsField(pf, meta);
-                            const display =
-                              rel?.linkedRecordId == null || rel?.value == null ? (
-                                <span className="text-slate-300">—</span>
-                              ) : (
-                                renderCellValue(relField, rel?.value, t, userNames, cellText, ml)
-                              );
-                            return (
-                              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                                <div className={pf.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>
-                              </td>
-                            );
-                          }
-                          if (pf.fieldType === "page_ref") {
-                            // Live alias of ANOTHER page's page-local value for this
-                            // record. The source's resolved type drives both rendering
-                            // and editing; the server-provided flag is only a cosmetic
-                            // hint — the write route re-checks every boundary.
-                            const refField = pageRefAsField(pf);
-                            const v = pageValues[pf.fieldKey];
-                            const refEditable = pageLocalWritesReady && inlineEditEnabled && pageRefEditable(pf);
-                            if (isEditingThis) {
-                              return (
-                                <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...colWidthStyle(`pf:${pf.id}`) }}>
-                                  <div className="relative">
-                                    <InlineCellEditor
-                                      field={refField}
-                                      initial={valueToForm(refField, v)}
-                                      userOptions={userOptions}
-                                      commitResetKey={inlineCommitResetKey}
-                                      onDirty={() => { activeCellDirtyRef.current = true; }}
-                                      rowValues={{ ...values, ...pageValues }}
-                                      onCommit={(raw) => commitPageCell(record, pf, raw)}
-                                      onCancel={() => setEditingCell(null)}
-                                    />
-                                    {pendingInlineWriteKey === `page:${pageId}:${record.id}:${pf.fieldKey}` && (
-                                      <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />
-                                    )}
-                                  </div>
-                                </td>
-                              );
-                            }
-                            // Keep a dirty editor mounted across a projection refresh
-                            // (including a 409 retry). `commitPageCell` still enforces
-                            // the exact hydration/CAS guard, so this does not unlock a
-                            // write from stale page values.
-                            if (pageValuesPending || pageValuesUnavailable) {
-                              return (
-                                <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                                  {renderProjectionState(pageValuesPending ? "pending" : "unavailable")}
-                                </td>
-                              );
-                            }
-                            if (refField.fieldType === "boolean" && refEditable) {
-                              return (
-                                <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                                  <Switch
-                                    checked={v === true}
-                                    onCheckedChange={(next) => commitPageCell(record, pf, next)}
-                                  />
-                                </td>
-                              );
-                            }
-                            return (
-                              <td
-                                key={`pf-${pf.id}`}
-                                onClick={refEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
-                                className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${refEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
-                                style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
-                                title={refEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
-                              >
-                                {v == null || v === "" ? (
-                                  <span className="text-slate-300">—</span>
-                                ) : (
-                                  renderCellValue(refField, v, t, userNames, cellText, ml)
-                                )}
-                              </td>
-                            );
-                          }
-                          if (isFunction && (rowProjectionsPending || rowProjectionsUnavailable)) {
-                            return (
-                              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                                {renderProjectionState(rowProjectionsPending ? "pending" : "unavailable")}
-                              </td>
-                            );
-                          }
-                          const cellEditable =
-                            pageLocalWritesReady && inlineEditEnabled && !isFunction && !pageFieldReadOnly(pf);
-                          const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
-                          if (isEditingThis) {
-                            return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...colWidthStyle(`pf:${pf.id}`) }}>
-                                <div className="relative">
-                                  <InlineCellEditor
-                                    field={pageFieldAsField}
-                                    initial={valueToForm(pageFieldAsField, pageValues[pf.fieldKey])}
-                                    userOptions={userOptions}
-                                    commitResetKey={inlineCommitResetKey}
-                                    onDirty={() => { activeCellDirtyRef.current = true; }}
-                                    rowValues={{ ...values, ...pageValues }}
-                                    onCommit={(raw) => commitPageCell(record, pf, raw)}
-                                    onCancel={() => setEditingCell(null)}
-                                  />
-                                  {pendingInlineWriteKey === `page:${pageId}:${record.id}:${pf.fieldKey}` && (
-                                    <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />
-                                  )}
-                                </div>
-                              </td>
-                            );
-                          }
-                          // An editor's local draft is authoritative while it is
-                          // open. Keep it mounted during refresh/409 hydration;
-                          // its commit still goes through guardPageLocalWrite.
-                          if (pageValuesPending || pageValuesUnavailable) {
-                            return (
-                              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                                {renderProjectionState(pageValuesPending ? "pending" : "unavailable")}
-                              </td>
-                            );
-                          }
-                          if (pf.fieldType === "boolean" && cellEditable) {
-                            return (
-                              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                                <Switch
-                                  checked={pageValues[pf.fieldKey] === true}
-                                  onCheckedChange={(v) => commitPageCell(record, pf, v)}
-                                />
-                              </td>
-                            );
-                          }
-                          if (isFunction) {
-                            const computed = formatFormulaFieldResult(
-                              pf.fieldKey,
-                              pf.formulaConfigJson?.expression ?? "",
-                              formulaValues,
-                              pf.formulaConfigJson?.decimals,
-                              formulaOptions,
-                            );
-                            return (
-                              <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                                {computed.error ? (
-                                  <span className="text-red-400 text-xs" title={t("fields.formulaError", "Ошибка формулы")}>{t("fields.formulaError", "Ошибка формулы")}</span>
-                                ) : computed.text === "" ? (
-                                  <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span>
-                                ) : (
-                                  <span className="text-slate-700" style={cellText ? { color: cellText } : undefined}>
-                                    {directPageFormulaTypes.get(pf.fieldKey) === "user"
-                                      ? String(directFormulaDisplayValue(computed.text, "user", userNames))
-                                      : computed.bool !== undefined
-                                      ? t(computed.bool ? "fields.yes" : "fields.no", computed.bool ? "Да" : "Нет")
-                                      : computed.numeric
-                                        ? <AffixedNumericValue config={pf.formulaConfigJson}>{computed.text}</AffixedNumericValue>
-                                        : computed.text}
-                                  </span>
-                                )}
-                              </td>
-                            );
-                          }
-                          return (
-                            <td
-                              key={`pf-${pf.id}`}
-                              onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
-                              className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
-                              style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
-                              title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
-                            >
-                              {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], t, userNames, cellText, ml)}
-                            </td>
-                          );
-                          })();
-                          if (!cellNode) return null;
-                          const key = col.kind === "entity" ? col.field.fieldKey : (col.kind === "page" ? col.field.fieldKey : null);
-                          return key ? withCollab(cellNode as React.ReactElement, key) : cellNode;
-                        })}
-                        {showActionsColumn && (
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            {canUpdate && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                data-testid="record-edit-button"
-                                data-record-id={record.id}
-                                onClick={() => openEdit(record)}
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-slate-500"
-                              title={t("records.history", "История изменений")}
-                              onClick={() => setHistoryFor(record)}
-                            >
-                              <History className="w-3.5 h-3.5" />
-                            </Button>
-                            {canUpdate && (
-                              record.archivedAt ? (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-indigo-500"
-                                  title={t("records.restoreFromArchive", "Восстановить из архива")}
-                                  disabled={unarchiveMutation.isPending}
-                                  onClick={() => unarchiveMutation.mutate({
-                                    id: record.id,
-                                    data: { expectedVersion: record.version },
-                                  })}
-                                >
-                                  <ArchiveRestore className="w-3.5 h-3.5" />
-                                </Button>
-                              ) : (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-slate-500"
-                                  title={t("records.toArchive", "В архив")}
-                                  disabled={archiveMutation.isPending}
-                                  onClick={() => archiveMutation.mutate({
-                                    id: record.id,
-                                    data: { expectedVersion: record.version },
-                                  })}
-                                >
-                                  <Archive className="w-3.5 h-3.5" />
-                                </Button>
-                              )
-                            )}
-                            {canDelete && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setToDelete(record)}>
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
-                            {!canUpdate && !canDelete && <span className="text-slate-300 text-xs">—</span>}
-                          </div>
-                        </td>
-                        )}
-                      </tr>
+                      <EntityRecordTableRow
+                        context={recordRowContext}
+                        record={record}
+                        rowIndex={rowIndex}
+                        rowDisplay={rowDisplay}
+                        entityRelatedValues={entityRelatedByRecord.get(record.id)}
+                        relatedValues={relatedByRecord.get(record.id)}
+                        editingCell={editingCell?.recordId === record.id ? editingCell : null}
+                        conflictCell={conflictCell?.recordId === record.id ? conflictCell : null}
+                        highlighted={highlightedRowId === record.id}
+                        selected={selectedIds.has(record.id)}
+                        pendingInlineWriteKey={pendingInlineWriteKey?.startsWith(`entity:${record.id}:`) || pendingInlineWriteKey?.startsWith(`page:${pageId}:${record.id}:`) ? pendingInlineWriteKey : null}
+                        pendingInlineDraft={pendingInlineWriteKey?.startsWith(`entity:${record.id}:`) ? pendingInlineDraft : null}
+                        inlineCommitResetKey={editingCell?.recordId === record.id ? inlineCommitResetKey : 0}
+                      />
                       </Fragment>
                     );
                   })}
