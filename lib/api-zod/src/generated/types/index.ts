@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adminOperationalAlerts';
+export * from './adminOperationalAlertsDrive';
+export * from './adminOperationalAlertsInbound';
 export * from './aiAgent';
 export * from './aiAgentActsAsCandidate';
 export * from './aiAgentInput';
@@ -216,6 +219,9 @@ export * from './googleDriveConnectionInfo';
 export * from './googleDriveConnectionInfoKeyMode';
 export * from './googleDriveConnectionUpdate';
 export * from './googleDriveConnectionUpdateKeyMode';
+export * from './googleDriveHealth';
+export * from './googleDriveHealthReason';
+export * from './googleDriveHealthState';
 export * from './googleDriveStatus';
 export * from './guestLink';
 export * from './guestLinkCreated';

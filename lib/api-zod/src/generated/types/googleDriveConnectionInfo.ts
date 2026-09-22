@@ -6,10 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GoogleDriveConnectionInfoKeyMode } from './googleDriveConnectionInfoKeyMode';
+import type { GoogleDriveHealth } from './googleDriveHealth';
 
 export interface GoogleDriveConnectionInfo {
   keyMode: GoogleDriveConnectionInfoKeyMode;
+  /** True only when the most recent real provider operation succeeded. */
   connected: boolean;
+  /** A refresh token is stored; this does not imply it is valid. */
+  configured: boolean;
   folderConfigured: boolean;
   /** Whether the platform ships built-in OAuth client credentials. */
   builtinAvailable: boolean;
@@ -22,4 +26,5 @@ export interface GoogleDriveConnectionInfo {
   accountEmail?: string;
   folderId?: string;
   folderName?: string;
+  health: GoogleDriveHealth;
 }

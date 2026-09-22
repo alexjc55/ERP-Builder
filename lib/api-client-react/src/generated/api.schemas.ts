@@ -449,13 +449,47 @@ export interface DeletedFile {
   deletedAt: string;
 }
 
+export type GoogleDriveHealthState = typeof GoogleDriveHealthState[keyof typeof GoogleDriveHealthState];
+
+
+export const GoogleDriveHealthState = {
+  unknown: 'unknown',
+  healthy: 'healthy',
+  reauth_required: 'reauth_required',
+  transient_error: 'transient_error',
+} as const;
+
 export interface GoogleDriveStatus {
-  /** A refresh token is stored. */
+  /** The most recent real provider operation succeeded. */
   connected: boolean;
+  /** A refresh token is stored; this does not imply it is valid. */
+  configured: boolean;
   /** An upload target folder is configured. */
   folderConfigured: boolean;
   /** The Google Drive module is toggled on in the modules registry. */
   enabled: boolean;
+  healthState: GoogleDriveHealthState;
+}
+
+export type GoogleDriveHealthReason = typeof GoogleDriveHealthReason[keyof typeof GoogleDriveHealthReason];
+
+
+export const GoogleDriveHealthReason = {
+  oauth_refresh_rejected: 'oauth_refresh_rejected',
+  credentials_not_configured: 'credentials_not_configured',
+  token_not_configured: 'token_not_configured',
+  provider_auth_rejected: 'provider_auth_rejected',
+  provider_rate_limited: 'provider_rate_limited',
+  provider_unavailable: 'provider_unavailable',
+  provider_request_rejected: 'provider_request_rejected',
+  network_error: 'network_error',
+} as const;
+
+export interface GoogleDriveHealth {
+  state: GoogleDriveHealthState;
+  reason?: GoogleDriveHealthReason;
+  lastCheckedAt?: string;
+  lastSuccessAt?: string;
 }
 
 export type GoogleDriveConnectionInfoKeyMode = typeof GoogleDriveConnectionInfoKeyMode[keyof typeof GoogleDriveConnectionInfoKeyMode];
@@ -468,7 +502,10 @@ export const GoogleDriveConnectionInfoKeyMode = {
 
 export interface GoogleDriveConnectionInfo {
   keyMode: GoogleDriveConnectionInfoKeyMode;
+  /** True only when the most recent real provider operation succeeded. */
   connected: boolean;
+  /** A refresh token is stored; this does not imply it is valid. */
+  configured: boolean;
   folderConfigured: boolean;
   /** Whether the platform ships built-in OAuth client credentials. */
   builtinAvailable: boolean;
@@ -481,6 +518,23 @@ export interface GoogleDriveConnectionInfo {
   accountEmail?: string;
   folderId?: string;
   folderName?: string;
+  health: GoogleDriveHealth;
+}
+
+export type AdminOperationalAlertsDrive = GoogleDriveHealth & {
+  settingsPath: string;
+};
+
+export type AdminOperationalAlertsInbound = {
+  failedCount: number;
+  integrationId: number;
+  deliveryId: number;
+  retryPath: string;
+};
+
+export interface AdminOperationalAlerts {
+  drive?: AdminOperationalAlertsDrive;
+  inbound?: AdminOperationalAlertsInbound;
 }
 
 export type GoogleDriveConnectionUpdateKeyMode = typeof GoogleDriveConnectionUpdateKeyMode[keyof typeof GoogleDriveConnectionUpdateKeyMode];

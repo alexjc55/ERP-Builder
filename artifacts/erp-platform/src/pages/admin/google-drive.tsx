@@ -5,6 +5,7 @@ import {
   useUpdateGoogleDriveConnection,
   useStartGoogleDriveOauth,
   useDisconnectGoogleDrive,
+  useCheckGoogleDriveConnection,
   useListGoogleDriveFolders,
   useCreateGoogleDriveFolder,
   useDeleteGoogleDriveFolder,
@@ -146,10 +147,26 @@ export default function GoogleDrivePage() {
       onError: () => { toast({ title: t("gdrive.disconnectError", "Ошибка отключения"), variant: "destructive" }); setDisconnecting(false); },
     },
   });
+  const checkMutation = useCheckGoogleDriveConnection({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: t("gdrive.checkHealthy", "Соединение с Google Drive работает") });
+        invalidate();
+      },
+      onError: () => {
+        toast({
+          title: t("gdrive.checkFailed", "Проверка Google Drive завершилась ошибкой"),
+          description: t("gdrive.checkFailedHint", "Проверьте состояние подключения и при необходимости переподключите аккаунт."),
+          variant: "destructive",
+        });
+        invalidate();
+      },
+    },
+  });
 
   const saving = updateMutation.isPending;
   const builtinAvailable = conn?.builtinAvailable ?? false;
-  const connected = conn?.connected ?? false;
+  const configured = conn?.configured ?? false;
   const redirectUri = conn?.redirectUri ?? "";
 
   const credsReady = useMemo(() => {
@@ -200,12 +217,24 @@ export default function GoogleDrivePage() {
         {!isLoading && (
           <Badge
             variant="secondary"
-            className={connected ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}
+            className={
+              conn?.health.state === "healthy"
+                ? "bg-emerald-100 text-emerald-700"
+                : conn?.health.state === "reauth_required"
+                  ? "bg-red-100 text-red-700"
+                  : conn?.health.state === "transient_error"
+                    ? "bg-amber-100 text-amber-800"
+                    : "bg-slate-100 text-slate-500"
+            }
           >
-            {connected ? (
-              <><Check className="w-3.5 h-3.5 mr-1" />{t("gdrive.statusConnected", "Подключено")}</>
+            {conn?.health.state === "healthy" ? (
+              <><Check className="w-3.5 h-3.5 mr-1" />{t("gdrive.healthHealthy", "Работает")}</>
+            ) : conn?.health.state === "reauth_required" ? (
+              <><X className="w-3.5 h-3.5 mr-1" />{t("gdrive.healthReauth", "Нужно переподключить")}</>
+            ) : conn?.health.state === "transient_error" ? (
+              <><X className="w-3.5 h-3.5 mr-1" />{t("gdrive.healthTransient", "Временная ошибка")}</>
             ) : (
-              <><X className="w-3.5 h-3.5 mr-1" />{t("gdrive.statusDisconnected", "Не подключено")}</>
+              <><RefreshCw className="w-3.5 h-3.5 mr-1" />{t("gdrive.healthUnknown", "Не проверено")}</>
             )}
           </Badge>
         )}
@@ -227,8 +256,18 @@ export default function GoogleDrivePage() {
                 label={t("gdrive.mode", "Режим ключей")}
                 value={conn?.keyMode === "builtin" ? t("gdrive.modeBuiltin", "Встроенные") : t("gdrive.modeOwn", "Собственные")}
               />
-              {connected ? (
+              <Row label={t("gdrive.healthState", "Проверка")} value={driveHealthLabel(conn?.health.state, t)} />
+              <Row label={t("gdrive.lastChecked", "Последняя проверка")} value={formatHealthDate(conn?.health.lastCheckedAt)} />
+              <Row label={t("gdrive.lastSuccess", "Последний успех")} value={formatHealthDate(conn?.health.lastSuccessAt)} />
+              {conn?.health.reason && (
+                <Row label={t("gdrive.healthReason", "Причина")} value={driveReasonLabel(conn.health.reason, t)} />
+              )}
+              {configured ? (
                 <div className="flex gap-2 pt-2">
+                  <Button variant="outline" size="sm" onClick={() => checkMutation.mutate()} disabled={checkMutation.isPending}>
+                    {checkMutation.isPending ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Check className="w-4 h-4 mr-1.5" />}
+                    {t("gdrive.check", "Проверить соединение")}
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => startMutation.mutate()} disabled={startMutation.isPending}>
                     {startMutation.isPending ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-1.5" />}
                     {t("gdrive.reconnect", "Переподключить")}
@@ -256,7 +295,7 @@ export default function GoogleDrivePage() {
             </CardContent>
           </Card>
 
-          {connected && <FolderManager t={t} />}
+          {configured && <FolderManager t={t} />}
 
           {/* Key mode + own creds */}
           <Card className="border-slate-200 shadow-sm">
@@ -613,6 +652,32 @@ function Row({ label, value }: { label: string; value: string }) {
       <span className="text-slate-700 font-medium truncate max-w-[60%]">{value}</span>
     </div>
   );
+}
+
+function formatHealthDate(value?: string): string {
+  return value ? new Date(value).toLocaleString() : "—";
+}
+
+function driveHealthLabel(state: string | undefined, t: (key: string, fallback: string) => string): string {
+  if (state === "healthy") return t("gdrive.healthHealthy", "Работает");
+  if (state === "reauth_required") return t("gdrive.healthReauth", "Нужно переподключить");
+  if (state === "transient_error") return t("gdrive.healthTransient", "Временная ошибка");
+  return t("gdrive.healthUnknown", "Не проверено");
+}
+
+function driveReasonLabel(reason: string, t: (key: string, fallback: string) => string): string {
+  const labels: Record<string, [string, string]> = {
+    oauth_refresh_rejected: ["gdrive.reasonOauthRejected", "Google отклонил обновление доступа"],
+    credentials_not_configured: ["gdrive.reasonCredentials", "OAuth-ключи не настроены"],
+    token_not_configured: ["gdrive.reasonToken", "Подключение не завершено"],
+    provider_auth_rejected: ["gdrive.reasonAuthRejected", "Google отклонил авторизацию"],
+    provider_rate_limited: ["gdrive.reasonRateLimited", "Google временно ограничил запросы"],
+    provider_unavailable: ["gdrive.reasonUnavailable", "Google Drive временно недоступен"],
+    provider_request_rejected: ["gdrive.reasonRequestRejected", "Google отклонил запрос"],
+    network_error: ["gdrive.reasonNetwork", "Сетевая ошибка"],
+  };
+  const label = labels[reason] ?? ["gdrive.reasonUnknown", "Ошибка подключения"];
+  return t(label[0], label[1]);
 }
 
 function ModeButton({ active, disabled, onClick, children }: { active: boolean; disabled?: boolean; onClick: () => void; children: React.ReactNode }) {

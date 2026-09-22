@@ -10448,9 +10448,11 @@ export const GetDashboardStatsResponse = zod.object({
  * @summary Lightweight Drive readiness for file-field forms (any authenticated user)
  */
 export const GetGoogleDriveStatusResponse = zod.object({
-  "connected": zod.boolean().describe('A refresh token is stored.'),
+  "connected": zod.boolean().describe('The most recent real provider operation succeeded.'),
+  "configured": zod.boolean().describe('A refresh token is stored; this does not imply it is valid.'),
   "folderConfigured": zod.boolean().describe('An upload target folder is configured.'),
-  "enabled": zod.boolean().describe('The Google Drive module is toggled on in the modules registry.')
+  "enabled": zod.boolean().describe('The Google Drive module is toggled on in the modules registry.'),
+  "healthState": zod.enum(['unknown', 'healthy', 'reauth_required', 'transient_error'])
 })
 
 
@@ -10459,7 +10461,8 @@ export const GetGoogleDriveStatusResponse = zod.object({
  */
 export const GetGoogleDriveConnectionResponse = zod.object({
   "keyMode": zod.enum(['builtin', 'own']),
-  "connected": zod.boolean(),
+  "connected": zod.boolean().describe('True only when the most recent real provider operation succeeded.'),
+  "configured": zod.boolean().describe('A refresh token is stored; this does not imply it is valid.'),
   "folderConfigured": zod.boolean(),
   "builtinAvailable": zod.boolean().describe('Whether the platform ships built-in OAuth client credentials.'),
   "hasOwnCreds": zod.boolean().describe('Whether own-mode client secret is stored.'),
@@ -10467,7 +10470,13 @@ export const GetGoogleDriveConnectionResponse = zod.object({
   "redirectUri": zod.string().describe('The OAuth redirect URI to register in the Google client.'),
   "accountEmail": zod.string().optional(),
   "folderId": zod.string().optional(),
-  "folderName": zod.string().optional()
+  "folderName": zod.string().optional(),
+  "health": zod.object({
+  "state": zod.enum(['unknown', 'healthy', 'reauth_required', 'transient_error']),
+  "reason": zod.enum(['oauth_refresh_rejected', 'credentials_not_configured', 'token_not_configured', 'provider_auth_rejected', 'provider_rate_limited', 'provider_unavailable', 'provider_request_rejected', 'network_error']).optional(),
+  "lastCheckedAt": zod.coerce.date().optional(),
+  "lastSuccessAt": zod.coerce.date().optional()
+})
 })
 
 
@@ -10482,7 +10491,8 @@ export const UpdateGoogleDriveConnectionBody = zod.object({
 
 export const UpdateGoogleDriveConnectionResponse = zod.object({
   "keyMode": zod.enum(['builtin', 'own']),
-  "connected": zod.boolean(),
+  "connected": zod.boolean().describe('True only when the most recent real provider operation succeeded.'),
+  "configured": zod.boolean().describe('A refresh token is stored; this does not imply it is valid.'),
   "folderConfigured": zod.boolean(),
   "builtinAvailable": zod.boolean().describe('Whether the platform ships built-in OAuth client credentials.'),
   "hasOwnCreds": zod.boolean().describe('Whether own-mode client secret is stored.'),
@@ -10490,7 +10500,58 @@ export const UpdateGoogleDriveConnectionResponse = zod.object({
   "redirectUri": zod.string().describe('The OAuth redirect URI to register in the Google client.'),
   "accountEmail": zod.string().optional(),
   "folderId": zod.string().optional(),
-  "folderName": zod.string().optional()
+  "folderName": zod.string().optional(),
+  "health": zod.object({
+  "state": zod.enum(['unknown', 'healthy', 'reauth_required', 'transient_error']),
+  "reason": zod.enum(['oauth_refresh_rejected', 'credentials_not_configured', 'token_not_configured', 'provider_auth_rejected', 'provider_rate_limited', 'provider_unavailable', 'provider_request_rejected', 'network_error']).optional(),
+  "lastCheckedAt": zod.coerce.date().optional(),
+  "lastSuccessAt": zod.coerce.date().optional()
+})
+})
+
+
+/**
+ * @summary Perform a real token refresh and Drive provider request (admin)
+ */
+export const CheckGoogleDriveConnectionResponse = zod.object({
+  "keyMode": zod.enum(['builtin', 'own']),
+  "connected": zod.boolean().describe('True only when the most recent real provider operation succeeded.'),
+  "configured": zod.boolean().describe('A refresh token is stored; this does not imply it is valid.'),
+  "folderConfigured": zod.boolean(),
+  "builtinAvailable": zod.boolean().describe('Whether the platform ships built-in OAuth client credentials.'),
+  "hasOwnCreds": zod.boolean().describe('Whether own-mode client secret is stored.'),
+  "ownClientId": zod.string().optional().describe('The stored own-mode OAuth client ID (not secret).'),
+  "redirectUri": zod.string().describe('The OAuth redirect URI to register in the Google client.'),
+  "accountEmail": zod.string().optional(),
+  "folderId": zod.string().optional(),
+  "folderName": zod.string().optional(),
+  "health": zod.object({
+  "state": zod.enum(['unknown', 'healthy', 'reauth_required', 'transient_error']),
+  "reason": zod.enum(['oauth_refresh_rejected', 'credentials_not_configured', 'token_not_configured', 'provider_auth_rejected', 'provider_rate_limited', 'provider_unavailable', 'provider_request_rejected', 'network_error']).optional(),
+  "lastCheckedAt": zod.coerce.date().optional(),
+  "lastSuccessAt": zod.coerce.date().optional()
+})
+})
+
+
+/**
+ * @summary Capability-filtered Drive and failed inbound delivery warnings
+ */
+export const GetAdminOperationalAlertsResponse = zod.object({
+  "drive": zod.object({
+  "state": zod.enum(['unknown', 'healthy', 'reauth_required', 'transient_error']),
+  "reason": zod.enum(['oauth_refresh_rejected', 'credentials_not_configured', 'token_not_configured', 'provider_auth_rejected', 'provider_rate_limited', 'provider_unavailable', 'provider_request_rejected', 'network_error']).optional(),
+  "lastCheckedAt": zod.coerce.date().optional(),
+  "lastSuccessAt": zod.coerce.date().optional()
+}).and(zod.object({
+  "settingsPath": zod.string()
+})).optional(),
+  "inbound": zod.object({
+  "failedCount": zod.number(),
+  "integrationId": zod.number(),
+  "deliveryId": zod.number(),
+  "retryPath": zod.string()
+}).optional()
 })
 
 
@@ -10507,7 +10568,8 @@ export const StartGoogleDriveOauthResponse = zod.object({
  */
 export const DisconnectGoogleDriveResponse = zod.object({
   "keyMode": zod.enum(['builtin', 'own']),
-  "connected": zod.boolean(),
+  "connected": zod.boolean().describe('True only when the most recent real provider operation succeeded.'),
+  "configured": zod.boolean().describe('A refresh token is stored; this does not imply it is valid.'),
   "folderConfigured": zod.boolean(),
   "builtinAvailable": zod.boolean().describe('Whether the platform ships built-in OAuth client credentials.'),
   "hasOwnCreds": zod.boolean().describe('Whether own-mode client secret is stored.'),
@@ -10515,7 +10577,13 @@ export const DisconnectGoogleDriveResponse = zod.object({
   "redirectUri": zod.string().describe('The OAuth redirect URI to register in the Google client.'),
   "accountEmail": zod.string().optional(),
   "folderId": zod.string().optional(),
-  "folderName": zod.string().optional()
+  "folderName": zod.string().optional(),
+  "health": zod.object({
+  "state": zod.enum(['unknown', 'healthy', 'reauth_required', 'transient_error']),
+  "reason": zod.enum(['oauth_refresh_rejected', 'credentials_not_configured', 'token_not_configured', 'provider_auth_rejected', 'provider_rate_limited', 'provider_unavailable', 'provider_request_rejected', 'network_error']).optional(),
+  "lastCheckedAt": zod.coerce.date().optional(),
+  "lastSuccessAt": zod.coerce.date().optional()
+})
 })
 
 

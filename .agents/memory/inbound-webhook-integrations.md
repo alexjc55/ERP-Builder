@@ -45,4 +45,10 @@ description: Durable security, execution, matching, and concurrency rules for ge
 
 **Why:** Disabling user creation must not make existing linked users undiscoverable.
 
+**Rule:** Drive configuration presence and verified health must remain separate; failed unattended deliveries need administrator-visible warnings outside settings.
+
+**Why:** A stored refresh token previously displayed as connected even when Google rejected refresh, hiding failures of automatically submitted orders. `invalid_grant` alone does not identify the underlying reason for revocation.
+
+**How to apply:** Preserve configured-but-unverified upload readiness, sanitize provider errors, and never silently omit failed files or automatically replay deliveries as part of health recovery.
+
 **How to apply:** Run system-ID and profile-field matches first. Enter the guarded creation path only for a create/upsert operation with no match.

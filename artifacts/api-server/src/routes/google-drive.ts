@@ -7,6 +7,7 @@ import {
   db,
   googleDriveConnectionTable,
   googleDriveFoldersTable,
+  inboundDeliveriesTable,
   entityRecordsTable,
   entityFieldsTable,
   mirrorPermKey,
@@ -47,6 +48,8 @@ import {
   fetchDriveThumbnail,
   saveConnectionTokens,
   isGoogleDriveModuleEnabled,
+  checkDriveConnection,
+  classifyDriveFailure,
 } from "../lib/googleDrive";
 
 const router: IRouter = Router();
@@ -71,11 +74,18 @@ async function ensureConnectionRow(): Promise<GoogleDriveConnection> {
 function connectionInfo(conn: GoogleDriveConnection, req: Request) {
   return {
     keyMode: conn.keyMode,
-    connected: Boolean(conn.refreshTokenEnc),
+    connected: Boolean(conn.refreshTokenEnc) && conn.healthState === "healthy",
+    configured: Boolean(conn.refreshTokenEnc),
     folderConfigured: Boolean(conn.folderId),
     builtinAvailable: builtinCredsAvailable(),
     hasOwnCreds: Boolean(conn.ownClientId && conn.ownClientSecretEnc),
     redirectUri: driveRedirectUri(req),
+    health: {
+      state: conn.healthState,
+      ...(conn.healthReason ? { reason: conn.healthReason } : {}),
+      ...(conn.healthLastCheckedAt ? { lastCheckedAt: conn.healthLastCheckedAt } : {}),
+      ...(conn.healthLastSuccessAt ? { lastSuccessAt: conn.healthLastSuccessAt } : {}),
+    },
     ...(conn.ownClientId ? { ownClientId: conn.ownClientId } : {}),
     ...(conn.accountEmail ? { accountEmail: conn.accountEmail } : {}),
     ...(conn.folderId ? { folderId: conn.folderId } : {}),
@@ -90,9 +100,11 @@ function connectionInfo(conn: GoogleDriveConnection, req: Request) {
 router.get("/google-drive/status", requireAuth, async (_req, res): Promise<void> => {
   const [conn, enabled] = await Promise.all([getConnection(), isGoogleDriveModuleEnabled()]);
   res.json({
-    connected: Boolean(conn?.refreshTokenEnc),
+    connected: Boolean(conn?.refreshTokenEnc) && conn?.healthState === "healthy",
+    configured: Boolean(conn?.refreshTokenEnc),
     folderConfigured: Boolean(conn?.folderId),
     enabled,
+    healthState: conn?.healthState ?? "unknown",
   });
 });
 
@@ -100,6 +112,68 @@ router.get("/google-drive/status", requireAuth, async (_req, res): Promise<void>
 router.get("/google-drive/connection", requireAuth, requireAdmin("googleDrive"), async (req, res): Promise<void> => {
   const conn = await ensureConnectionRow();
   res.json(connectionInfo(conn, req));
+});
+
+/** POST /google-drive/check — refresh credentials and perform a real Drive request. */
+router.post("/google-drive/check", requireAuth, requireAdmin("googleDrive"), async (req, res): Promise<void> => {
+  const conn = await ensureConnectionRow();
+  if (!conn.refreshTokenEnc) {
+    res.status(409).json({ error: "Google Drive is not configured", connection: connectionInfo(conn, req) });
+    return;
+  }
+  try {
+    await checkDriveConnection(conn);
+    res.json(connectionInfo((await getConnection())!, req));
+  } catch (err) {
+    req.log.warn({ err }, "Google Drive connection check failed");
+    res.status(502).json({
+      error: "Google Drive connection check failed",
+      connection: connectionInfo((await getConnection())!, req),
+    });
+  }
+});
+
+/**
+ * Polling summary for the global admin warning. Each alert is returned only to
+ * administrators with the matching capability.
+ */
+router.get("/admin/operational-alerts", requireAuth, async (req, res): Promise<void> => {
+  const permissions = await getPermissions(req);
+  const superAdmin = permissions.superAdmin === true;
+  const maySeeDrive = superAdmin || permissions.admin?.googleDrive === true;
+  const maySeeInbound = superAdmin || permissions.admin?.inboundIntegrations === true;
+  const alerts: {
+    drive?: ReturnType<typeof connectionInfo>["health"] & { settingsPath: string };
+    inbound?: { failedCount: number; integrationId: number; deliveryId: number; retryPath: string };
+  } = {};
+  if (maySeeDrive) {
+    const conn = await getConnection();
+    if (conn?.refreshTokenEnc && (conn.healthState === "reauth_required" || conn.healthState === "transient_error")) {
+      alerts.drive = { ...connectionInfo(conn, req).health, settingsPath: SETTINGS_PATH };
+    }
+  }
+  if (maySeeInbound) {
+    const [summary] = await db
+      .select({
+        failedCount: sql<number>`count(*)::int`,
+        integrationId: sql<number>`(array_agg(${inboundDeliveriesTable.integrationId} order by ${inboundDeliveriesTable.receivedAt} desc))[1]`,
+        deliveryId: sql<number>`(array_agg(${inboundDeliveriesTable.id} order by ${inboundDeliveriesTable.receivedAt} desc))[1]`,
+      })
+      .from(inboundDeliveriesTable)
+      .where(and(
+        eq(inboundDeliveriesTable.status, "failed"),
+        sql`${inboundDeliveriesTable.eventId} NOT LIKE 'dry-run:%'`,
+      ));
+    if (summary && summary.failedCount > 0) {
+      alerts.inbound = {
+        failedCount: summary.failedCount,
+        integrationId: summary.integrationId,
+        deliveryId: summary.deliveryId,
+        retryPath: `/admin/inbound-integrations/${summary.integrationId}?tab=log&delivery=${summary.deliveryId}`,
+      };
+    }
+  }
+  res.json(alerts);
 });
 
 /** PUT /google-drive/connection — set key mode + own credentials (admin). */
@@ -192,7 +266,9 @@ router.get("/google-drive/oauth/callback", async (req: Request, res: Response): 
       });
     redirectBack("connected");
   } catch (err) {
-    req.log.error({ err }, "Google Drive OAuth callback failed");
+    // OAuth errors may carry authorization codes, tokens, or raw provider
+    // bodies. Log only our stable safe classification.
+    req.log.error({ reason: classifyDriveFailure(err, "refresh").reason }, "Google Drive OAuth callback failed");
     redirectBack("error");
   }
 });
@@ -202,7 +278,16 @@ router.post("/google-drive/disconnect", requireAuth, requireAdmin("googleDrive")
   await ensureConnectionRow();
   const [row] = await db
     .update(googleDriveConnectionTable)
-    .set({ refreshTokenEnc: null, accountEmail: null, folderId: null, folderName: null })
+    .set({
+      refreshTokenEnc: null,
+      accountEmail: null,
+      folderId: null,
+      folderName: null,
+      healthState: "unknown",
+      healthReason: null,
+      healthLastCheckedAt: null,
+      healthLastSuccessAt: null,
+    })
     .where(eq(googleDriveConnectionTable.id, DRIVE_CONNECTION_ID))
     .returning();
   // Drop the managed-folder list too; the Drive folders themselves are left

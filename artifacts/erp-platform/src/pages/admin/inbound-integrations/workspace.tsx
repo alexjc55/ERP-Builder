@@ -107,13 +107,18 @@ export default function InboundIntegrationWorkspacePage() {
   const deliveries = integration?.deliveries || [];
   const latestVersion = versions[0];
 
-  const [activeTab, setActiveTab] = useState("mapping");
+  const [activeTab, setActiveTab] = useState(() =>
+    new URLSearchParams(window.location.search).get("tab") === "log" ? "log" : "mapping",
+  );
   const [sampleJson, setSampleJson] = useState("");
   const [analyzedPaths, setAnalyzedPaths] = useState<AnalyzedPath[]>([]);
   const [parsedSample, setParsedSample] = useState<any>(null);
   const [steps, setSteps] = useState<InboundStep[]>([]);
   const [dryRunResult, setDryRunResult] = useState<InboundDryRunResult | null>(null);
-  const [selectedDeliveryId, setSelectedDeliveryId] = useState<number | null>(null);
+  const [selectedDeliveryId, setSelectedDeliveryId] = useState<number | null>(() => {
+    const value = Number(new URLSearchParams(window.location.search).get("delivery"));
+    return Number.isInteger(value) && value > 0 ? value : null;
+  });
 
   const { data: entities = [] } = useListEntities();
   const { data: pages = [] } = useListPages();

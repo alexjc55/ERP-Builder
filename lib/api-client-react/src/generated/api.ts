@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminOperationalAlerts,
   AiAgent,
   AiAgentActsAsCandidate,
   AiAgentInput,
@@ -14493,6 +14494,153 @@ export const useUpdateGoogleDriveConnection = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getUpdateGoogleDriveConnectionMutationOptions(options));
     }
+
+export const getCheckGoogleDriveConnectionUrl = () => {
+
+
+
+
+  return `/api/google-drive/check`
+}
+
+/**
+ * @summary Perform a real token refresh and Drive provider request (admin)
+ */
+export const checkGoogleDriveConnection = async ( options?: RequestInit): Promise<GoogleDriveConnectionInfo> => {
+
+  return customFetch<GoogleDriveConnectionInfo>(getCheckGoogleDriveConnectionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCheckGoogleDriveConnectionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkGoogleDriveConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof checkGoogleDriveConnection>>, TError,void, TContext> => {
+
+const mutationKey = ['checkGoogleDriveConnection'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof checkGoogleDriveConnection>>, void> = () => {
+
+
+          return  checkGoogleDriveConnection(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CheckGoogleDriveConnectionMutationResult = NonNullable<Awaited<ReturnType<typeof checkGoogleDriveConnection>>>
+
+    export type CheckGoogleDriveConnectionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Perform a real token refresh and Drive provider request (admin)
+ */
+export const useCheckGoogleDriveConnection = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkGoogleDriveConnection>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof checkGoogleDriveConnection>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCheckGoogleDriveConnectionMutationOptions(options));
+    }
+
+export const getGetAdminOperationalAlertsUrl = () => {
+
+
+
+
+  return `/api/admin/operational-alerts`
+}
+
+/**
+ * @summary Capability-filtered Drive and failed inbound delivery warnings
+ */
+export const getAdminOperationalAlerts = async ( options?: RequestInit): Promise<AdminOperationalAlerts> => {
+
+  return customFetch<AdminOperationalAlerts>(getGetAdminOperationalAlertsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminOperationalAlertsQueryKey = () => {
+    return [
+    `/api/admin/operational-alerts`
+    ] as const;
+    }
+
+
+export const getGetAdminOperationalAlertsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminOperationalAlerts>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminOperationalAlerts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminOperationalAlertsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminOperationalAlerts>>> = ({ signal }) => getAdminOperationalAlerts({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminOperationalAlerts>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminOperationalAlertsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminOperationalAlerts>>>
+export type GetAdminOperationalAlertsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Capability-filtered Drive and failed inbound delivery warnings
+ */
+
+export function useGetAdminOperationalAlerts<TData = Awaited<ReturnType<typeof getAdminOperationalAlerts>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminOperationalAlerts>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminOperationalAlertsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getStartGoogleDriveOauthUrl = () => {
 

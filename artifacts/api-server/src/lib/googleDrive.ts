@@ -1,6 +1,12 @@
 import { OAuth2Client } from "google-auth-library";
 import { eq } from "drizzle-orm";
-import { db, googleDriveConnectionTable, modulesTable, type GoogleDriveConnection } from "@workspace/db";
+import {
+  db,
+  googleDriveConnectionTable,
+  modulesTable,
+  type GoogleDriveConnection,
+  type GoogleDriveHealthState,
+} from "@workspace/db";
 import { decryptSecret, encryptSecret } from "./crypto";
 
 /**
@@ -34,6 +40,91 @@ export async function isGoogleDriveModuleEnabled(): Promise<boolean> {
 export interface DriveClientCreds {
   clientId: string;
   clientSecret: string;
+}
+
+export type DriveHealthReason =
+  | "oauth_refresh_rejected"
+  | "credentials_not_configured"
+  | "token_not_configured"
+  | "provider_auth_rejected"
+  | "provider_rate_limited"
+  | "provider_unavailable"
+  | "provider_request_rejected"
+  | "network_error";
+
+export class DriveHealthOperationError extends Error {
+  constructor(
+    public readonly healthState: "reauth_required" | "transient_error",
+    public readonly healthReason: DriveHealthReason,
+  ) {
+    super(healthState === "reauth_required"
+      ? "Google Drive authorization requires administrator attention"
+      : "Google Drive is temporarily unavailable");
+  }
+}
+
+/** Reduce provider errors to a stable, non-sensitive health result. */
+export function classifyDriveFailure(
+  err: unknown,
+  operation: "refresh" | "upload" | "check",
+): { state: Exclude<GoogleDriveHealthState, "unknown" | "healthy">; reason: DriveHealthReason } {
+  const value = err as {
+    code?: unknown;
+    message?: unknown;
+    status?: unknown;
+    response?: { status?: unknown; data?: { error?: unknown } | unknown };
+    healthState?: unknown;
+    healthReason?: unknown;
+  };
+  if (
+    (value?.healthState === "reauth_required" || value?.healthState === "transient_error") &&
+    typeof value.healthReason === "string"
+  ) {
+    return { state: value.healthState, reason: value.healthReason as DriveHealthReason };
+  }
+  const providerError =
+    value?.response?.data && typeof value.response.data === "object"
+      ? (value.response.data as { error?: unknown }).error
+      : undefined;
+  const text = [value?.code, value?.message, providerError]
+    .filter((part) => typeof part === "string")
+    .join(" ")
+    .toLowerCase();
+  const status = Number(value?.status ?? value?.response?.status);
+  if (text.includes("invalid_grant") || text.includes("client credentials are not configured") || text.includes("is not connected")) {
+    return { state: "reauth_required", reason: "oauth_refresh_rejected" };
+  }
+  if (operation === "refresh" && (status === 400 || status === 401)) {
+    return { state: "reauth_required", reason: "oauth_refresh_rejected" };
+  }
+  if (status === 401) return { state: "reauth_required", reason: "provider_auth_rejected" };
+  if (status === 429) return { state: "transient_error", reason: "provider_rate_limited" };
+  if (status >= 500) return { state: "transient_error", reason: "provider_unavailable" };
+  if (Number.isFinite(status) && status >= 400) {
+    return { state: "transient_error", reason: "provider_request_rejected" };
+  }
+  return { state: "transient_error", reason: "network_error" };
+}
+
+/** Health writes are best-effort and must never replace the original Drive outcome. */
+export async function recordDriveHealth(
+  state: GoogleDriveHealthState,
+  reason: DriveHealthReason | null,
+): Promise<void> {
+  const now = new Date();
+  try {
+    await db
+      .update(googleDriveConnectionTable)
+      .set({
+        healthState: state,
+        healthReason: reason,
+        healthLastCheckedAt: now,
+        ...(state === "healthy" ? { healthLastSuccessAt: now } : {}),
+      })
+      .where(eq(googleDriveConnectionTable.id, DRIVE_CONNECTION_ID));
+  } catch {
+    // Observability must not alter the provider operation's success/failure.
+  }
 }
 
 /** True if the platform ships built-in OAuth client credentials via env. */
@@ -124,13 +215,46 @@ export async function exchangeCode(
 /** Obtain a fresh access token from the stored refresh token. */
 export async function getAccessToken(conn: GoogleDriveConnection): Promise<string> {
   const creds = resolveCreds(conn);
-  if (!creds) throw new Error("Google Drive client credentials are not configured");
-  if (!conn.refreshTokenEnc) throw new Error("Google Drive is not connected");
-  const client = makeOAuthClient(creds);
-  client.setCredentials({ refresh_token: decryptSecret(conn.refreshTokenEnc) });
-  const { token } = await client.getAccessToken();
-  if (!token) throw new Error("Failed to refresh Google Drive access token");
-  return token;
+  if (!creds) {
+    await recordDriveHealth("reauth_required", "credentials_not_configured");
+    throw new DriveHealthOperationError("reauth_required", "credentials_not_configured");
+  }
+  if (!conn.refreshTokenEnc) {
+    await recordDriveHealth("reauth_required", "token_not_configured");
+    throw new DriveHealthOperationError("reauth_required", "token_not_configured");
+  }
+  try {
+    const client = makeOAuthClient(creds);
+    client.setCredentials({ refresh_token: decryptSecret(conn.refreshTokenEnc) });
+    const { token } = await client.getAccessToken();
+    if (!token) throw new Error("Failed to refresh Google Drive access token");
+    await recordDriveHealth("healthy", null);
+    return token;
+  } catch (err) {
+    const health = classifyDriveFailure(err, "refresh");
+    await recordDriveHealth(health.state, health.reason);
+    throw new DriveHealthOperationError(health.state, health.reason);
+  }
+}
+
+/** Perform a real provider round-trip for the admin "check connection" action. */
+export async function checkDriveConnection(conn: GoogleDriveConnection): Promise<void> {
+  try {
+    const accessToken = await getAccessToken(conn);
+    const response = await fetch("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+      const error = new Error("Drive connection check failed") as Error & { status: number };
+      error.status = response.status;
+      throw error;
+    }
+    await recordDriveHealth("healthy", null);
+  } catch (err) {
+    const health = classifyDriveFailure(err, "check");
+    await recordDriveHealth(health.state, health.reason);
+    throw err;
+  }
 }
 
 /** Ensure the managed upload folder exists, returning its id. */
@@ -241,25 +365,49 @@ export async function uploadToFolder(
   );
   const tail = Buffer.from(`\r\n--${boundary}--\r\n`, "utf8");
   const body = Buffer.concat([head, data, tail]);
-  const resp = await fetch(
-    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,mimeType,webViewLink",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": `multipart/related; boundary=${boundary}`,
+  let resp: Response;
+  try {
+    resp = await fetch(
+      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,mimeType,webViewLink",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": `multipart/related; boundary=${boundary}`,
+        },
+        body,
       },
-      body,
-    },
-  );
-  if (!resp.ok) throw new Error(`Drive upload failed (${resp.status})`);
-  const file = (await resp.json()) as {
+    );
+    if (!resp.ok) {
+      const error = new Error("Drive upload failed") as Error & { status: number };
+      error.status = resp.status;
+      throw error;
+    }
+  } catch (err) {
+    const health = classifyDriveFailure(err, "upload");
+    await recordDriveHealth(health.state, health.reason);
+    throw new DriveHealthOperationError(health.state, health.reason);
+  }
+  let file: {
     id: string;
     name: string;
     size?: string;
     mimeType?: string;
     webViewLink?: string;
   };
+  try {
+    file = (await resp.json()) as typeof file;
+    if (!file.id || !file.name) {
+      const error = new Error("Drive upload returned invalid metadata") as Error & { status: number };
+      error.status = 502;
+      throw error;
+    }
+  } catch (err) {
+    const health = classifyDriveFailure(err, "upload");
+    await recordDriveHealth(health.state, health.reason);
+    throw new DriveHealthOperationError(health.state, health.reason);
+  }
+  await recordDriveHealth("healthy", null);
   return {
     fileId: file.id,
     name: file.name,
@@ -337,6 +485,10 @@ export async function saveConnectionTokens(refreshToken: string, email: string |
     .update(googleDriveConnectionTable)
     .set({
       refreshTokenEnc: encryptSecret(refreshToken),
+      healthState: "healthy",
+      healthReason: null,
+      healthLastCheckedAt: new Date(),
+      healthLastSuccessAt: new Date(),
       ...(email ? { accountEmail: email } : {}),
     })
     .where(eq(googleDriveConnectionTable.id, DRIVE_CONNECTION_ID));

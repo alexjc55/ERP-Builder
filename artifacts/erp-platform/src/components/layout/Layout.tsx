@@ -1,14 +1,19 @@
 import { useAuth } from "@/lib/auth";
 import { useML, useT, useLang, LANGS } from "@/lib/i18n";
 import { adminCapForPath } from "@/lib/permissions";
-import { useListPages, useGetSettings } from "@workspace/api-client-react";
+import {
+  useListPages,
+  useGetSettings,
+  useGetAdminOperationalAlerts,
+  getGetAdminOperationalAlertsQueryKey,
+} from "@workspace/api-client-react";
 import type { Page } from "@workspace/api-client-react";
 import { useLocation, Link } from "wouter";
 import {
   Building2, Languages, Settings, LayoutDashboard,
   LogOut, ChevronDown, ChevronRight,
   Menu, X, Check, UserCog, Eye,
-  PanelLeftClose, PanelLeftOpen, RefreshCw,
+  PanelLeftClose, PanelLeftOpen, RefreshCw, AlertTriangle,
 } from "lucide-react";
 import { getIconComponent } from "@/lib/icons";
 import { useState, useEffect } from "react";
@@ -149,6 +154,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     });
   const { data: pagesData } = useListPages();
   const { data: settings } = useGetSettings();
+  const maySeeOperationalAlerts = !isGuest && (isSuperAdmin || canAdmin("googleDrive") || canAdmin("inboundIntegrations"));
+  const { data: operationalAlerts } = useGetAdminOperationalAlerts({
+    query: {
+      enabled: maySeeOperationalAlerts,
+      refetchInterval: 30_000,
+      staleTime: 0,
+      retry: false,
+      queryKey: getGetAdminOperationalAlertsQueryKey(),
+    },
+  });
 
   const brandName = (settings && ml(settings.appNameJson)) || "ERP Builder";
   const brandSubtitle = (settings && ml(settings.subtitleJson)) || "Production Platform";
@@ -381,6 +396,30 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       )}
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {(operationalAlerts?.drive || operationalAlerts?.inbound) && (
+          <div
+            className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 bg-red-50 border-b border-red-200 text-sm text-red-900"
+            role="alert"
+            data-testid="operational-warning"
+          >
+            <span className="flex items-center gap-2 font-medium">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              {t("layout.operationalWarning", "Требуется внимание администратора")}
+            </span>
+            {operationalAlerts.drive && (
+              <Link href={operationalAlerts.drive.settingsPath} className="underline underline-offset-2 hover:text-red-700">
+                {operationalAlerts.drive.state === "reauth_required"
+                  ? t("layout.driveReauthWarning", "Google Drive: требуется переподключение")
+                  : t("layout.driveTransientWarning", "Google Drive: ошибка соединения")}
+              </Link>
+            )}
+            {operationalAlerts.inbound && (
+              <Link href={operationalAlerts.inbound.retryPath} className="underline underline-offset-2 hover:text-red-700">
+                {t("layout.inboundFailedWarning", "Необработанные входящие доставки")}: {operationalAlerts.inbound.failedCount}
+              </Link>
+            )}
+          </div>
+        )}
         {isGuest && (
           <div className="flex items-center gap-2 px-4 py-2 bg-sky-100 border-b border-sky-300 text-sm text-sky-900">
             <Eye className="w-4 h-4 shrink-0" />

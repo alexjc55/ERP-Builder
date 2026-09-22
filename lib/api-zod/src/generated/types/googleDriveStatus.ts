@@ -5,12 +5,16 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { GoogleDriveHealthState } from './googleDriveHealthState';
 
 export interface GoogleDriveStatus {
-  /** A refresh token is stored. */
+  /** The most recent real provider operation succeeded. */
   connected: boolean;
+  /** A refresh token is stored; this does not imply it is valid. */
+  configured: boolean;
   /** An upload target folder is configured. */
   folderConfigured: boolean;
   /** The Google Drive module is toggled on in the modules registry. */
   enabled: boolean;
+  healthState: GoogleDriveHealthState;
 }

@@ -4102,6 +4102,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/GoogleDriveConnectionInfo"
 
+  /google-drive/check:
+    post:
+      operationId: checkGoogleDriveConnection
+      tags: [googleDrive]
+      summary: Perform a real token refresh and Drive provider request (admin)
+      responses:
+        "200":
+          description: Checked connection info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleDriveConnectionInfo"
+
+  /admin/operational-alerts:
+    get:
+      operationId: getAdminOperationalAlerts
+      tags: [googleDrive, inboundIntegrations]
+      summary: Capability-filtered Drive and failed inbound delivery warnings
+      responses:
+        "200":
+          description: Current operational warnings visible to the administrator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOperationalAlerts"
+
   /google-drive/oauth/start:
     post:
       operationId: startGoogleDriveOauth
@@ -4768,27 +4794,60 @@ components:
 
     GoogleDriveStatus:
       type: object
-      required: [connected, folderConfigured, enabled]
+      required: [connected, configured, folderConfigured, enabled, healthState]
       properties:
         connected:
           type: boolean
-          description: A refresh token is stored.
+          description: The most recent real provider operation succeeded.
+        configured:
+          type: boolean
+          description: A refresh token is stored; this does not imply it is valid.
         folderConfigured:
           type: boolean
           description: An upload target folder is configured.
         enabled:
           type: boolean
           description: The Google Drive module is toggled on in the modules registry.
+        healthState:
+          $ref: "#/components/schemas/GoogleDriveHealthState"
+
+    GoogleDriveHealthState:
+      type: string
+      enum: [unknown, healthy, reauth_required, transient_error]
+
+    GoogleDriveHealth:
+      type: object
+      required: [state]
+      properties:
+        state:
+          $ref: "#/components/schemas/GoogleDriveHealthState"
+        reason:
+          type: string
+          enum:
+            - oauth_refresh_rejected
+            - credentials_not_configured
+            - token_not_configured
+            - provider_auth_rejected
+            - provider_rate_limited
+            - provider_unavailable
+            - provider_request_rejected
+            - network_error
+        lastCheckedAt: { type: string, format: date-time }
+        lastSuccessAt: { type: string, format: date-time }
 
     GoogleDriveConnectionInfo:
       type: object
-      required: [keyMode, connected, folderConfigured, builtinAvailable, hasOwnCreds, redirectUri]
+      required: [keyMode, connected, configured, folderConfigured, builtinAvailable, hasOwnCreds, redirectUri, health]
       properties:
         keyMode:
           type: string
           enum: [builtin, own]
         connected:
           type: boolean
+          description: True only when the most recent real provider operation succeeded.
+        configured:
+          type: boolean
+          description: A refresh token is stored; this does not imply it is valid.
         folderConfigured:
           type: boolean
         builtinAvailable:
@@ -4809,6 +4868,27 @@ components:
           type: string
         folderName:
           type: string
+        health:
+          $ref: "#/components/schemas/GoogleDriveHealth"
+
+    AdminOperationalAlerts:
+      type: object
+      properties:
+        drive:
+          allOf:
+            - $ref: "#/components/schemas/GoogleDriveHealth"
+            - type: object
+              required: [settingsPath]
+              properties:
+                settingsPath: { type: string }
+        inbound:
+          type: object
+          required: [failedCount, integrationId, deliveryId, retryPath]
+          properties:
+            failedCount: { type: integer }
+            integrationId: { type: integer }
+            deliveryId: { type: integer }
+            retryPath: { type: string }
 
     GoogleDriveConnectionUpdate:
       type: object

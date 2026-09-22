@@ -3,6 +3,7 @@ import { z } from "zod/v4";
 
 /** Which OAuth client credentials are used for the Drive connection. */
 export type GoogleDriveKeyMode = "builtin" | "own";
+export type GoogleDriveHealthState = "unknown" | "healthy" | "reauth_required" | "transient_error";
 
 /**
  * Single-row table holding the platform's Google Drive connection. There is at
@@ -12,8 +13,9 @@ export type GoogleDriveKeyMode = "builtin" | "own";
  * - keyMode "builtin": use the platform's env OAuth client (GOOGLE_OAUTH_CLIENT_ID/SECRET).
  * - keyMode "own": use the admin-provided client id/secret stored here.
  *
- * `refreshTokenEnc` present ⇒ connected. `folderId` present ⇒ an upload target
- * folder is configured (auto-created on connect, can be changed later).
+ * `refreshTokenEnc` present means configured, not necessarily healthy. Durable
+ * health fields record only safe classifications, never tokens/provider bodies.
+ * `folderId` present ⇒ an upload target folder is configured.
  */
 export const googleDriveConnectionTable = pgTable("google_drive_connection", {
   id: serial("id").primaryKey(),
@@ -24,6 +26,10 @@ export const googleDriveConnectionTable = pgTable("google_drive_connection", {
   accountEmail: text("account_email"),
   folderId: text("folder_id"),
   folderName: text("folder_name"),
+  healthState: text("health_state").$type<GoogleDriveHealthState>().notNull().default("unknown"),
+  healthReason: text("health_reason"),
+  healthLastCheckedAt: timestamp("health_last_checked_at", { withTimezone: true }),
+  healthLastSuccessAt: timestamp("health_last_success_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
