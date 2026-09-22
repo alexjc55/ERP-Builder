@@ -134,6 +134,13 @@
       "when": 1790082673198,
       "tag": "0018_curvy_network",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790088986931,
+      "tag": "0019_bent_ricochet",
+      "breakpoints": true
     }
   ]
 }

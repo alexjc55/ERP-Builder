@@ -8451,6 +8451,8 @@ export const ListColumnGroupsResponseItem = zod.object({
   "color": zod.string(),
   "displayMode": zod.enum(['bar', 'fill']),
   "textColor": zod.string().nullable(),
+  "bodyBackgroundColor": zod.string().nullable(),
+  "bodyTextColor": zod.string().nullable(),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -8470,6 +8472,8 @@ export const CreateColumnGroupBody = zod.object({
   "color": zod.string(),
   "displayMode": zod.enum(['bar', 'fill']),
   "textColor": zod.string().nullish(),
+  "bodyBackgroundColor": zod.string().nullish(),
+  "bodyTextColor": zod.string().nullish(),
   "sortOrder": zod.number().optional()
 })
 
@@ -8491,6 +8495,8 @@ export const GetColumnGroupResponse = zod.object({
   "color": zod.string(),
   "displayMode": zod.enum(['bar', 'fill']),
   "textColor": zod.string().nullable(),
+  "bodyBackgroundColor": zod.string().nullable(),
+  "bodyTextColor": zod.string().nullable(),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
@@ -8513,6 +8519,8 @@ export const UpdateColumnGroupBody = zod.object({
   "color": zod.string().optional(),
   "displayMode": zod.enum(['bar', 'fill']).optional(),
   "textColor": zod.string().nullish(),
+  "bodyBackgroundColor": zod.string().nullish(),
+  "bodyTextColor": zod.string().nullish(),
   "sortOrder": zod.number().optional()
 })
 
@@ -8526,6 +8534,8 @@ export const UpdateColumnGroupResponse = zod.object({
   "color": zod.string(),
   "displayMode": zod.enum(['bar', 'fill']),
   "textColor": zod.string().nullable(),
+  "bodyBackgroundColor": zod.string().nullable(),
+  "bodyTextColor": zod.string().nullable(),
   "sortOrder": zod.number(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()

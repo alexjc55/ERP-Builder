@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useId, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { sameAggregateTopology } from "@/lib/aggregateSnapshot";
+import { columnGroupBodyStyle, resolveColumnGroupCellStyle } from "@/lib/columnGroupStyles";
 import { InlineListPicker } from "@/components/InlineListPicker";
 import {
   useListEntityRecords,
@@ -300,6 +301,7 @@ type RecordRowContext = {
   bulkColStyle: (bg: string, isHeader?: boolean) => CSSProperties;
   colWidthStyle: (key: string) => CSSProperties | undefined;
   pinStyle: (key: string, bg: string, isHeader?: boolean) => CSSProperties | undefined;
+  columnBodyStyles: Map<string, { backgroundColor?: string; color?: string }>;
   setHighlightedRowId: React.Dispatch<React.SetStateAction<number | null>>;
   setSelectedIds: React.Dispatch<React.SetStateAction<Set<number>>>;
   setEditingCell: React.Dispatch<React.SetStateAction<RecordRowCell>>;
@@ -355,7 +357,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
     pageLocalWritesReady, archivePending, unarchivePending, canRecord, effFieldAccess,
     workflowActiveForRecord, allowedStatusesForRecord, pageFieldReadOnly,
     pageRefEditable, pageRefAsField, relationAsField, renderProjectionState,
-    getCellEditors, bulkColStyle, colWidthStyle, pinStyle, setHighlightedRowId,
+    getCellEditors, bulkColStyle, colWidthStyle, pinStyle, columnBodyStyles, setHighlightedRowId,
     setSelectedIds, setEditingCell, setRefreshTick, setWriteThroughEdit, setHistoryFor,
     setToDelete, markCellDirty, commitCell, commitPageCell, commitStatus, openEdit,
     archiveRecord, unarchiveRecord,
@@ -451,6 +453,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
             </td>
           ), STATUS_COLUMN_KEY);
         }
+        const groupBodyStyle = columnBodyStyles.get(col.pinKey);
         const cellNode = (() => {
           if (col.kind === "entity") {
             const f = col.field;
@@ -458,8 +461,13 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
             const isFunction = f.fieldType === "function";
             const relationIsEditingThis = editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
             const cellEditable = inlineEditEnabled && access === "edit" && !isFunction && !scalarFieldLocked(f, values[f.fieldKey]);
-            const cellBg = formatting.cellColors[f.fieldKey];
-            const cellText = formatting.cellTextColors[f.fieldKey];
+            const resolvedBodyStyle = resolveColumnGroupCellStyle(groupBodyStyle, {
+              cellColor: formatting.cellColors[f.fieldKey],
+              rowColor: formatting.rowColor,
+              textColor: formatting.cellTextColors[f.fieldKey],
+            });
+            const cellBg = resolvedBodyStyle?.backgroundColor;
+            const cellText = resolvedBodyStyle?.color;
             const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
             if (f.fieldType === "relation" || f.fieldType === "lookup") {
               if ((entityRelationsPending || entityRelationsUnavailable) && !relationIsEditingThis) {
@@ -488,7 +496,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                   relParentValue = raw == null || raw === "" ? null : String(raw);
                 }
               }
-              const display = rel?.linkedRecordId == null ? <span className="text-slate-300">—</span> : renderCellValue(relField, rel?.value, t, userNames, cellText, ml);
+              const display = rel?.linkedRecordId == null ? <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span> : renderCellValue(relField, rel?.value, t, userNames, cellText, ml);
               return (
                 <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                   {relAssignable || keepRelationPickerMounted ? (
@@ -526,7 +534,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
             const isEditingThis = editingCell?.recordId === record.id && editingCell?.fieldKey === f.fieldKey;
             if (isEditingThis) {
               return (
-                <td data-testid="record-cell" data-record-id={record.id} data-field-key={f.fieldKey} key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...colWidthStyle(`f:${f.id}`) }}>
+                <td data-testid="record-cell" data-record-id={record.id} data-field-key={f.fieldKey} key={f.id} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                   <div className="relative">
                     <InlineCellEditor field={f} initial={valueToForm(f, values[f.fieldKey])}
                       userOptions={userOptions} commitResetKey={inlineCommitResetKey} onDirty={markCellDirty}
@@ -577,8 +585,13 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
           }
           const pf = col.field;
           const isFunction = pf.fieldType === "function";
-          const cellBg = formatting.cellColors[pf.fieldKey];
-          const cellText = formatting.cellTextColors[pf.fieldKey];
+          const resolvedBodyStyle = resolveColumnGroupCellStyle(groupBodyStyle, {
+            cellColor: formatting.cellColors[pf.fieldKey],
+            rowColor: formatting.rowColor,
+            textColor: formatting.cellTextColors[pf.fieldKey],
+          });
+          const cellBg = resolvedBodyStyle?.backgroundColor;
+          const cellText = resolvedBodyStyle?.color;
           const cellStyle = cellBg || cellText ? { backgroundColor: cellBg || undefined, color: cellText || undefined } : undefined;
           const pfKey = `pf:${pf.fieldKey}`;
           const isEditingThis = editingCell?.recordId === record.id && editingCell?.fieldKey === pfKey;
@@ -595,7 +608,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
             const relField = relationAsField(pf, meta);
             const relAssignable = inlineEditEnabled && pageRelationsProjectionState === "ready" && !!meta?.editableColumn && !!rel?.editable;
             const keepRelationPickerMounted = isEditingThis && !!meta?.editableColumn && !!rel?.editable;
-            const display = rel?.linkedRecordId == null ? <span className="text-slate-300">—</span> : renderCellValue(relField, rel?.value, t, userNames, cellText, ml);
+            const display = rel?.linkedRecordId == null ? <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span> : renderCellValue(relField, rel?.value, t, userNames, cellText, ml);
             return (
               <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                 {(relAssignable || keepRelationPickerMounted) && pageId != null ? (
@@ -617,7 +630,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
             const meta = relatedColMeta.get(pf.fieldKey);
             const rel = relatedValues?.get(pf.fieldKey);
             const relField = relationAsField(pf, meta);
-            const display = rel?.linkedRecordId == null || rel?.value == null ? <span className="text-slate-300">—</span> : renderCellValue(relField, rel?.value, t, userNames, cellText, ml);
+            const display = rel?.linkedRecordId == null || rel?.value == null ? <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span> : renderCellValue(relField, rel?.value, t, userNames, cellText, ml);
             return (
               <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                 <div className={pf.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</div>
@@ -630,7 +643,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
             const refEditable = pageLocalWritesReady && inlineEditEnabled && pageRefEditable(pf);
             if (isEditingThis) {
               return (
-                <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...colWidthStyle(`pf:${pf.id}`) }}>
+                <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                   <div className="relative">
                     <InlineCellEditor field={refField} initial={valueToForm(refField, v)} userOptions={userOptions}
                       commitResetKey={inlineCommitResetKey} onDirty={markCellDirty} rowValues={{ ...values, ...pageValues }}
@@ -660,7 +673,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                 className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${refEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
                 style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
                 title={refEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}>
-                {v == null || v === "" ? <span className="text-slate-300">—</span> : renderCellValue(refField, v, t, userNames, cellText, ml)}
+                {v == null || v === "" ? <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span> : renderCellValue(refField, v, t, userNames, cellText, ml)}
               </td>
             );
           }
@@ -675,7 +688,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
           const pageFieldAsField = { ...pf, permissionsJson: {}, entityId: 0 } as unknown as Field;
           if (isEditingThis) {
             return (
-              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...colWidthStyle(`pf:${pf.id}`) }}>
+              <td key={`pf-${pf.id}`} className="px-4 py-3 max-w-[240px]" style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                 <div className="relative">
                   <InlineCellEditor field={pageFieldAsField} initial={valueToForm(pageFieldAsField, pageValues[pf.fieldKey])}
                     userOptions={userOptions} commitResetKey={inlineCommitResetKey} onDirty={markCellDirty}
@@ -6640,6 +6653,21 @@ export function EntityRecords({
     }
     return base;
   }, [displayFields, displayedPageFields, showStatusColumn, entity?.statusSortOrder, isMirror, mirrorColumnOrder]);
+  const columnBodyStyles = useMemo(() => {
+    const styles = new Map<string, { backgroundColor?: string; color?: string }>();
+    for (const col of orderedColumns) {
+      if (col.kind === "status") continue;
+      const override = columnGroups?.[col.token];
+      const effectiveId =
+        override !== undefined
+          ? override === 0 ? null : override
+          : col.field.columnGroupId ?? null;
+      const group = effectiveId == null ? undefined : columnGroupById.get(effectiveId);
+      const style = columnGroupBodyStyle(group);
+      if (style) styles.set(col.pinKey, style);
+    }
+    return styles;
+  }, [orderedColumns, columnGroups, columnGroupById]);
   // Format metadata is identical for every row. Memoizing it keeps the first
   // progressive table paint focused on ordinary stored cells.
   const rowFormatFields = useMemo<FormatField[]>(
@@ -6924,7 +6952,7 @@ export function EntityRecords({
     pageLocalWritesReady, archivePending, unarchivePending, canRecord, effFieldAccess,
     workflowActiveForRecord, allowedStatusesForRecord, pageFieldReadOnly,
     pageRefEditable, pageRefAsField, relationAsField, renderProjectionState,
-    getCellEditors, bulkColStyle, colWidthStyle, pinStyle, setHighlightedRowId,
+    getCellEditors, bulkColStyle, colWidthStyle, pinStyle, columnBodyStyles, setHighlightedRowId,
     setSelectedIds, setEditingCell, setRefreshTick, setWriteThroughEdit, setHistoryFor,
     setToDelete, markCellDirty, commitCell: rowCommitCell, commitPageCell: rowCommitPageCell,
     commitStatus: rowCommitStatus, openEdit: rowOpenEdit,
@@ -6941,7 +6969,7 @@ export function EntityRecords({
     pageLocalWritesReady, archivePending, unarchivePending, canRecord, effFieldAccess,
     workflowActiveForRecord, allowedStatusesForRecord, pageFieldReadOnly,
     pageRefEditable, pageRefAsField, relationAsField, renderProjectionState,
-    getCellEditors, bulkColStyle, colWidthStyle, pinStyle, setHighlightedRowId,
+    getCellEditors, bulkColStyle, colWidthStyle, pinStyle, columnBodyStyles, setHighlightedRowId,
     setSelectedIds, setEditingCell, setRefreshTick, setWriteThroughEdit, setHistoryFor,
     setToDelete, markCellDirty, rowCommitCell, rowCommitPageCell,
     rowCommitStatus, rowOpenEdit, rowArchiveRecord, rowUnarchiveRecord,
@@ -7124,14 +7152,16 @@ export function EntityRecords({
           }
           const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
           const sum = g.sums?.[totalKey];
+          const groupBodyStyle = columnBodyStyles.get(col.pinKey);
           if (idx === 0) {
+            const firstCellBg = groupBodyStyle?.backgroundColor ?? groupBg;
             return (
               <td
                 key={col.pinKey}
                 className="px-3 py-2.5 align-middle"
-                style={{ ...pinStyle(col.pinKey, groupBg), ...colWidthStyle(col.pinKey) }}
+                style={{ ...pinStyle(col.pinKey, firstCellBg), ...colWidthStyle(col.pinKey), backgroundColor: firstCellBg, color: groupBodyStyle?.color }}
               >
-                <span className={`inline-flex items-center gap-1.5 ${expanded ? "font-bold text-slate-900" : "font-normal text-slate-800"}`}>
+                <span className={`inline-flex items-center gap-1.5 ${expanded ? "font-bold text-slate-900" : "font-normal text-slate-800"}`} style={groupBodyStyle?.color ? { color: groupBodyStyle.color } : undefined}>
                   {expanded ? (
                     <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
                   ) : (
@@ -7142,7 +7172,7 @@ export function EntityRecords({
                   </span>
                   <span className="text-xs font-normal text-slate-400">({g.count})</span>
                   {sum !== undefined && (
-                    <span className={`ml-2 text-emerald-700 whitespace-nowrap ${expanded ? "font-bold" : "font-semibold"}`}>
+                    <span className={`ml-2 text-emerald-700 whitespace-nowrap ${expanded ? "font-bold" : "font-semibold"}`} style={groupBodyStyle?.color ? { color: groupBodyStyle.color } : undefined}>
                       {formatTotalValue(col.field, sum)}
                     </span>
                   )}
@@ -7239,20 +7269,23 @@ export function EntityRecords({
             // textColor is passed INTO renderCellValue (like normal cells do) —
             // inner elements carry their own colour classes, so an inherited
             // wrapper colour would not reach them.
+            commonTextColor = commonTextColor ?? groupBodyStyle?.color;
             commonContent = renderCellValue(renderField, renderValue, t, userNames, commonTextColor, ml);
           }
+          const groupCellBg = commonCellColor ?? groupBodyStyle?.backgroundColor ?? groupBg;
           return (
             <td
               key={col.pinKey}
               className="px-4 py-2.5 align-middle"
               style={{
-                ...pinStyle(col.pinKey, commonCellColor ?? groupBg),
+                ...pinStyle(col.pinKey, groupCellBg),
                 ...colWidthStyle(col.pinKey),
-                ...(commonCellColor ? { backgroundColor: commonCellColor } : undefined),
+                backgroundColor: groupCellBg,
+                color: commonTextColor ?? groupBodyStyle?.color,
               }}
             >
               {sum !== undefined ? (
-                <span className={`text-emerald-700 whitespace-nowrap ${expanded ? "font-bold" : "font-semibold"}`}>
+                <span className={`text-emerald-700 whitespace-nowrap ${expanded ? "font-bold" : "font-semibold"}`} style={groupBodyStyle?.color ? { color: groupBodyStyle.color } : undefined}>
                   {formatTotalValue(col.field, sum)}
                 </span>
               ) : hasCommon ? (
@@ -8520,8 +8553,9 @@ export function EntityRecords({
                         const gridLine = "var(--erp-table-border, hsl(var(--border) / 0.7))";
                         const leftNeighbourHasTotal = isRtl ? prevHasTotal : nextHasTotal;
                         const sepColor = hasTotal || leftNeighbourHasTotal ? gridLine : "#F8FAFC";
-                        const fillColor = hasTotal ? (fld.totalFillColor || "#d1fae5") : "#F8FAFC";
-                        const textColor = fld.totalTextColor || "#047857";
+                        const groupBodyStyle = columnBodyStyles.get(col.pinKey);
+                        const fillColor = hasTotal ? (fld.totalFillColor || groupBodyStyle?.backgroundColor || "#d1fae5") : "#F8FAFC";
+                        const textColor = fld.totalTextColor || groupBodyStyle?.color || "#047857";
                         return (
                           <th
                             key={`tot-${col.pinKey}`}

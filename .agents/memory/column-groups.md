@@ -36,6 +36,9 @@ got 403/empty and the bar/fill silently disappeared in normal view — violating
 "NORMAL view for everyone". If you ever re-tighten this, the visuals break for non-admins.
 
 ## Other invariants
+- Body colors are optional baseline styling, independent of header bar/fill.
+  **Why:** group decoration must not hide conditional highlights that communicate record state.
+  **How to apply:** conditional cell/row backgrounds override group backgrounds; conditional text overrides group text. Clearing a body color restores existing styling.
 - Delete-group is **soft** from the columns' side: pointers are plain ints (no FK), so a
   dangling `columnGroupId` / override just stops rendering.
 - `columnGroupId` is per-field config JSONB-adjacent: it must be in BOTH the create insert

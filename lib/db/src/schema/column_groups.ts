@@ -14,6 +14,8 @@ export type ColumnGroupDisplayMode = "bar" | "fill";
  *           tooltip naming the group);
  *  - "fill" paints the whole header cell with `color` and the header text with
  *           `textColor` (falls back to white when unset).
+ * Optional nullable body colors are independent of those header settings and
+ * provide a base palette for grouped data cells only.
  *
  * Deleting a group is "soft" from the columns' perspective: pointers to a removed
  * group simply stop rendering (no cascade onto fields/pages).
@@ -25,6 +27,9 @@ export const columnGroupsTable = pgTable("column_groups", {
   displayMode: text("display_mode").$type<ColumnGroupDisplayMode>().notNull().default("bar"),
   // Header text color when displayMode = "fill"; null/unset falls back to white.
   textColor: text("text_color"),
+  // Optional body-cell palette. Independent from header rendering.
+  bodyBackgroundColor: text("body_background_color"),
+  bodyTextColor: text("body_text_color"),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

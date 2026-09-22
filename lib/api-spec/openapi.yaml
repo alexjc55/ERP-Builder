@@ -5877,7 +5877,7 @@ components:
 
     ColumnGroup:
       type: object
-      required: [id, nameJson, color, displayMode, textColor, sortOrder, createdAt, updatedAt]
+      required: [id, nameJson, color, displayMode, textColor, bodyBackgroundColor, bodyTextColor, sortOrder, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -5888,6 +5888,10 @@ components:
         displayMode:
           $ref: "#/components/schemas/ColumnGroupDisplayMode"
         textColor:
+          type: ["string", "null"]
+        bodyBackgroundColor:
+          type: ["string", "null"]
+        bodyTextColor:
           type: ["string", "null"]
         sortOrder:
           type: integer
@@ -5910,6 +5914,10 @@ components:
           $ref: "#/components/schemas/ColumnGroupDisplayMode"
         textColor:
           type: ["string", "null"]
+        bodyBackgroundColor:
+          type: ["string", "null"]
+        bodyTextColor:
+          type: ["string", "null"]
         sortOrder:
           type: integer
 
@@ -5923,6 +5931,10 @@ components:
         displayMode:
           $ref: "#/components/schemas/ColumnGroupDisplayMode"
         textColor:
+          type: ["string", "null"]
+        bodyBackgroundColor:
+          type: ["string", "null"]
+        bodyTextColor:
           type: ["string", "null"]
         sortOrder:
           type: integer

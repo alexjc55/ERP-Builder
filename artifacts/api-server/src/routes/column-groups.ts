@@ -19,6 +19,8 @@ const router: IRouter = Router();
  * A group carries a multilingual name, a color, and a `displayMode` that drives
  * how grouped columns render on the records-table header ("bar" = thin colored
  * top-border + tooltip; "fill" = filled header cell + configurable text color).
+ * Optional nullable body colors independently provide a base palette for data
+ * cells and do not alter the header mode or colors.
  *
  * Columns point at a group by id: the base lives on the field
  * (`entity_fields.columnGroupId` / `page_fields.columnGroupId`) and may be
@@ -53,6 +55,8 @@ router.post("/column-groups", requireAuth, requireAdmin("columnGroups"), async (
       color: parsed.data.color,
       displayMode: parsed.data.displayMode,
       textColor: parsed.data.textColor ?? null,
+      bodyBackgroundColor: parsed.data.bodyBackgroundColor ?? null,
+      bodyTextColor: parsed.data.bodyTextColor ?? null,
       ...(parsed.data.sortOrder != null ? { sortOrder: parsed.data.sortOrder } : {}),
     })
     .returning();
@@ -97,6 +101,8 @@ router.put("/column-groups/:id", requireAuth, requireAdmin("columnGroups"), asyn
   if (parsed.data.color != null) updateData.color = parsed.data.color;
   if (parsed.data.displayMode != null) updateData.displayMode = parsed.data.displayMode;
   if ("textColor" in parsed.data) updateData.textColor = parsed.data.textColor ?? null;
+  if ("bodyBackgroundColor" in parsed.data) updateData.bodyBackgroundColor = parsed.data.bodyBackgroundColor ?? null;
+  if ("bodyTextColor" in parsed.data) updateData.bodyTextColor = parsed.data.bodyTextColor ?? null;
   if (parsed.data.sortOrder != null) updateData.sortOrder = parsed.data.sortOrder;
 
   if (Object.keys(updateData).length === 0) {

@@ -14,5 +14,9 @@ export interface ColumnGroupUpdate {
   displayMode?: ColumnGroupDisplayMode;
   /** @nullable */
   textColor?: string | null;
+  /** @nullable */
+  bodyBackgroundColor?: string | null;
+  /** @nullable */
+  bodyTextColor?: string | null;
   sortOrder?: number;
 }

@@ -1358,6 +1358,10 @@ export interface ColumnGroup {
   displayMode: ColumnGroupDisplayMode;
   /** @nullable */
   textColor: string | null;
+  /** @nullable */
+  bodyBackgroundColor: string | null;
+  /** @nullable */
+  bodyTextColor: string | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -1369,6 +1373,10 @@ export interface ColumnGroupInput {
   displayMode: ColumnGroupDisplayMode;
   /** @nullable */
   textColor?: string | null;
+  /** @nullable */
+  bodyBackgroundColor?: string | null;
+  /** @nullable */
+  bodyTextColor?: string | null;
   sortOrder?: number;
 }
 
@@ -1378,6 +1386,10 @@ export interface ColumnGroupUpdate {
   displayMode?: ColumnGroupDisplayMode;
   /** @nullable */
   textColor?: string | null;
+  /** @nullable */
+  bodyBackgroundColor?: string | null;
+  /** @nullable */
+  bodyTextColor?: string | null;
   sortOrder?: number;
 }
 

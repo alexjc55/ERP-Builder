@@ -15,6 +15,10 @@ export interface ColumnGroup {
   displayMode: ColumnGroupDisplayMode;
   /** @nullable */
   textColor: string | null;
+  /** @nullable */
+  bodyBackgroundColor: string | null;
+  /** @nullable */
+  bodyTextColor: string | null;
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;

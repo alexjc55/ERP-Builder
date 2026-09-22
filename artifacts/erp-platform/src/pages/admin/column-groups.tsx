@@ -56,6 +56,8 @@ export default function ColumnGroupsPage() {
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [displayMode, setDisplayMode] = useState<ColumnGroupDisplayMode>("bar");
   const [textColor, setTextColor] = useState("");
+  const [bodyBackgroundColor, setBodyBackgroundColor] = useState("");
+  const [bodyTextColor, setBodyTextColor] = useState("");
   const [deleting, setDeleting] = useState<ColumnGroup | null>(null);
 
   const invalidate = () =>
@@ -86,6 +88,8 @@ export default function ColumnGroupsPage() {
     setColor(DEFAULT_COLOR);
     setDisplayMode("bar");
     setTextColor("");
+    setBodyBackgroundColor("");
+    setBodyTextColor("");
     setDialogOpen(true);
   };
 
@@ -95,6 +99,8 @@ export default function ColumnGroupsPage() {
     setColor(g.color || DEFAULT_COLOR);
     setDisplayMode(g.displayMode);
     setTextColor(g.textColor ?? "");
+    setBodyBackgroundColor(g.bodyBackgroundColor ?? "");
+    setBodyTextColor(g.bodyTextColor ?? "");
     setDialogOpen(true);
   };
 
@@ -106,15 +112,17 @@ export default function ColumnGroupsPage() {
     }
     const normColor = color.trim() || DEFAULT_COLOR;
     const normText = displayMode === "fill" ? (textColor.trim() || null) : null;
+    const normBodyBackground = bodyBackgroundColor.trim() || null;
+    const normBodyText = bodyTextColor.trim() || null;
 
     if (editing) {
       updateMutation.mutate({
         id: editing.id,
-        data: { nameJson, color: normColor, displayMode, textColor: normText },
+        data: { nameJson, color: normColor, displayMode, textColor: normText, bodyBackgroundColor: normBodyBackground, bodyTextColor: normBodyText },
       });
     } else {
       createMutation.mutate({
-        data: { nameJson, color: normColor, displayMode, textColor: normText },
+        data: { nameJson, color: normColor, displayMode, textColor: normText, bodyBackgroundColor: normBodyBackground, bodyTextColor: normBodyText },
       });
     }
   };
@@ -181,6 +189,7 @@ export default function ColumnGroupsPage() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3">
+                        <div className="flex flex-col items-start gap-1">
                         {g.displayMode === "fill" ? (
                           <span
                             className="inline-block px-3 py-1 rounded text-xs font-medium"
@@ -193,6 +202,15 @@ export default function ColumnGroupsPage() {
                             {ml(g.nameJson) || "Aa"}
                           </span>
                         )}
+                          {(g.bodyBackgroundColor || g.bodyTextColor) && (
+                            <span
+                              className="inline-block px-3 py-1 rounded text-xs"
+                              style={{ backgroundColor: g.bodyBackgroundColor ?? "#ffffff", color: g.bodyTextColor ?? "#334155" }}
+                            >
+                              {t("colGroups.bodyPreview", "Строка таблицы")}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
@@ -227,12 +245,14 @@ export default function ColumnGroupsPage() {
               onChange={setNameJson}
               required
             />
-            <ColorPickerControl
-              label={t("colGroups.color", "Цвет группы")}
-              value={color}
-              onChange={(v) => setColor(v || DEFAULT_COLOR)}
-            />
-            <div className="space-y-1.5">
+            <section className="space-y-3 rounded-md border border-slate-200 p-3">
+              <h3 className="text-sm font-semibold text-slate-700">{t("colGroups.headerSection", "Заголовок")}</h3>
+              <ColorPickerControl
+                label={t("colGroups.color", "Цвет группы")}
+                value={color}
+                onChange={(v) => setColor(v || DEFAULT_COLOR)}
+              />
+              <div className="space-y-1.5">
               <Label>{t("colGroups.displayMode", "Режим отображения")}</Label>
               <div className="flex gap-2">
                 <Button
@@ -259,14 +279,31 @@ export default function ColumnGroupsPage() {
                   ? t("colGroups.mode.fillDesc", "Заголовок колонки заливается цветом группы.")
                   : t("colGroups.mode.barDesc", "Над заголовком колонки рисуется тонкая цветная полоса.")}
               </p>
-            </div>
-            {displayMode === "fill" && (
+              </div>
+              {displayMode === "fill" && (
+                <ColorPickerControl
+                  label={t("colGroups.textColor", "Цвет текста заголовка")}
+                  value={textColor}
+                  onChange={setTextColor}
+                />
+              )}
+            </section>
+            <section className="space-y-3 rounded-md border border-slate-200 p-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700">{t("colGroups.bodySection", "Строки таблицы")}</h3>
+                <p className="text-xs text-slate-400">{t("colGroups.bodySectionDesc", "Необязательные цвета ячеек группы. Очистите цвет, чтобы использовать оформление таблицы.")}</p>
+              </div>
               <ColorPickerControl
-                label={t("colGroups.textColor", "Цвет текста заголовка")}
-                value={textColor}
-                onChange={setTextColor}
+                label={t("colGroups.bodyBackgroundColor", "Фон ячеек")}
+                value={bodyBackgroundColor}
+                onChange={setBodyBackgroundColor}
               />
-            )}
+              <ColorPickerControl
+                label={t("colGroups.bodyTextColor", "Текст ячеек")}
+                value={bodyTextColor}
+                onChange={setBodyTextColor}
+              />
+            </section>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
