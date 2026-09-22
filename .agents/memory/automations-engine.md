@@ -3,6 +3,12 @@ name: Automations engine — contract source of truth & combined mapping
 description: Where automation trigger/condition/action/mapping types live, and how the combined value mode resolves.
 ---
 
+## Outgoing webhook display boundary
+
+Keep legacy raw values separate from versioned typed/display projections.
+**Why:** downstream receivers need names, labels and nonnumeric formula results without breaking integrations that rely on stored IDs. Automation exports are system-authoritative, not a snapshot of one viewer's filtered table.
+**How to apply:** use shared typed formula materializers, preserve page namespaces, reload at the webhook action after prior mutations, and never make private files public. Local file URLs require an explicitly configured ERP origin; do not guess a deployment URL.
+
 ## Contract dual source of truth (gotcha)
 
 Automation trigger/condition/action/**mapping** types are defined as **zod schemas

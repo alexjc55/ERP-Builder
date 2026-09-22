@@ -9,6 +9,8 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:settings": "tsx --test src/lib/app-settings-validation.test.ts",
+    "test:webhooks": "tsx --test src/lib/automation-webhook-display.test.ts",
+    "test:webhooks-db": "bash ../../scripts/with-validation-lock.sh env RUN_WEBHOOK_DB_TESTS=1 tsx --test --test-concurrency=1 src/lib/automation-webhook-payload.db.test.ts",
     "test:lifecycle": "tsx --test src/lib/bounded-ttl-cache.test.ts src/lib/collaboration.test.ts src/routes/roles-agent-cache-wiring.test.ts",
     "test:pivot-affix": "tsx --test src/routes/pivot-display-affix.test.ts",
     "test:inbound-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/inbound-integrations.db.test.ts",

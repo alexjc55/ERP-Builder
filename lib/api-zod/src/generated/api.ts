@@ -6777,6 +6777,7 @@ export const ListEntityAutomationsParams = zod.object({
 })
 
 
+
 export const listEntityAutomationsResponseActionsJsonItemIdempotencyKeyMax = 200;
 
 
@@ -6886,6 +6887,9 @@ export const ListEntityAutomationsResponseItem = zod.object({
 })).optional(),
   "url": zod.string().optional(),
   "includeRecord": zod.boolean().optional(),
+  "pageId": zod.number().min(1).optional().describe('Optional webhook mirror-page context; omitted includes all applicable page-local fields in distinct namespaces.'),
+  "language": zod.enum(['ru', 'en', 'he']).optional().describe('Webhook display language, defaults to ru.'),
+  "baseUrl": zod.string().url().optional().describe('HTTP(S) application origin for protected local file links; falls back to WEBHOOK_ORIGIN. Does not make files public.'),
   "revisionId": zod.number().min(1).optional(),
   "idempotencyKey": zod.string().min(1).max(listEntityAutomationsResponseActionsJsonItemIdempotencyKeyMax).optional(),
   "output": zod.union([zod.object({
@@ -6958,6 +6962,7 @@ export const CreateEntityAutomationParams = zod.object({
 
 export const createEntityAutomationBodyConditionsJsonDefault = [];
 export const createEntityAutomationBodyConditionConjunctionDefault = `and`;
+
 export const createEntityAutomationBodyActionsJsonItemIdempotencyKeyMax = 200;
 
 
@@ -7065,6 +7070,9 @@ export const CreateEntityAutomationBody = zod.object({
 })).optional(),
   "url": zod.string().optional(),
   "includeRecord": zod.boolean().optional(),
+  "pageId": zod.number().min(1).optional().describe('Optional webhook mirror-page context; omitted includes all applicable page-local fields in distinct namespaces.'),
+  "language": zod.enum(['ru', 'en', 'he']).optional().describe('Webhook display language, defaults to ru.'),
+  "baseUrl": zod.string().url().optional().describe('HTTP(S) application origin for protected local file links; falls back to WEBHOOK_ORIGIN. Does not make files public.'),
   "revisionId": zod.number().min(1).optional(),
   "idempotencyKey": zod.string().min(1).max(createEntityAutomationBodyActionsJsonItemIdempotencyKeyMax).optional(),
   "output": zod.union([zod.object({
@@ -7152,6 +7160,7 @@ export const ListEntityAutomationRunsResponse = zod.array(ListEntityAutomationRu
 export const GetAutomationParams = zod.object({
   "id": zod.coerce.number()
 })
+
 
 
 export const getAutomationResponseActionsJsonItemIdempotencyKeyMax = 200;
@@ -7263,6 +7272,9 @@ export const GetAutomationResponse = zod.object({
 })).optional(),
   "url": zod.string().optional(),
   "includeRecord": zod.boolean().optional(),
+  "pageId": zod.number().min(1).optional().describe('Optional webhook mirror-page context; omitted includes all applicable page-local fields in distinct namespaces.'),
+  "language": zod.enum(['ru', 'en', 'he']).optional().describe('Webhook display language, defaults to ru.'),
+  "baseUrl": zod.string().url().optional().describe('HTTP(S) application origin for protected local file links; falls back to WEBHOOK_ORIGIN. Does not make files public.'),
   "revisionId": zod.number().min(1).optional(),
   "idempotencyKey": zod.string().min(1).max(getAutomationResponseActionsJsonItemIdempotencyKeyMax).optional(),
   "output": zod.union([zod.object({
@@ -7331,6 +7343,7 @@ export const GetAutomationResponse = zod.object({
 export const UpdateAutomationParams = zod.object({
   "id": zod.coerce.number()
 })
+
 
 
 export const updateAutomationBodyActionsJsonItemIdempotencyKeyMax = 200;
@@ -7440,6 +7453,9 @@ export const UpdateAutomationBody = zod.object({
 })).optional(),
   "url": zod.string().optional(),
   "includeRecord": zod.boolean().optional(),
+  "pageId": zod.number().min(1).optional().describe('Optional webhook mirror-page context; omitted includes all applicable page-local fields in distinct namespaces.'),
+  "language": zod.enum(['ru', 'en', 'he']).optional().describe('Webhook display language, defaults to ru.'),
+  "baseUrl": zod.string().url().optional().describe('HTTP(S) application origin for protected local file links; falls back to WEBHOOK_ORIGIN. Does not make files public.'),
   "revisionId": zod.number().min(1).optional(),
   "idempotencyKey": zod.string().min(1).max(updateAutomationBodyActionsJsonItemIdempotencyKeyMax).optional(),
   "output": zod.union([zod.object({
@@ -7498,6 +7514,7 @@ export const UpdateAutomationBody = zod.object({
 })).optional(),
   "sortOrder": zod.number().optional()
 })
+
 
 
 export const updateAutomationResponseActionsJsonItemIdempotencyKeyMax = 200;
@@ -7609,6 +7626,9 @@ export const UpdateAutomationResponse = zod.object({
 })).optional(),
   "url": zod.string().optional(),
   "includeRecord": zod.boolean().optional(),
+  "pageId": zod.number().min(1).optional().describe('Optional webhook mirror-page context; omitted includes all applicable page-local fields in distinct namespaces.'),
+  "language": zod.enum(['ru', 'en', 'he']).optional().describe('Webhook display language, defaults to ru.'),
+  "baseUrl": zod.string().url().optional().describe('HTTP(S) application origin for protected local file links; falls back to WEBHOOK_ORIGIN. Does not make files public.'),
   "revisionId": zod.number().min(1).optional(),
   "idempotencyKey": zod.string().min(1).max(updateAutomationResponseActionsJsonItemIdempotencyKeyMax).optional(),
   "output": zod.union([zod.object({

@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { AutomationActionLanguage } from './automationActionLanguage';
 import type { AutomationActionTargetFieldSource } from './automationActionTargetFieldSource';
 import type { AutomationActionType } from './automationActionType';
 import type { AutomationCondition } from './automationCondition';
@@ -26,6 +27,15 @@ export interface AutomationAction {
   match?: AutomationCondition[];
   url?: string;
   includeRecord?: boolean;
+  /**
+     * Optional webhook mirror-page context; omitted includes all applicable page-local fields in distinct namespaces.
+     * @minimum 1
+     */
+  pageId?: number;
+  /** Webhook display language, defaults to ru. */
+  language?: AutomationActionLanguage;
+  /** HTTP(S) application origin for protected local file links; falls back to WEBHOOK_ORIGIN. Does not make files public. */
+  baseUrl?: string;
   /** @minimum 1 */
   revisionId?: number;
   /**

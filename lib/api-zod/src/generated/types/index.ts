@@ -28,6 +28,7 @@ export * from './auditLogEntry';
 export * from './authResult';
 export * from './automation';
 export * from './automationAction';
+export * from './automationActionLanguage';
 export * from './automationActionTargetFieldSource';
 export * from './automationActionType';
 export * from './automationCondition';

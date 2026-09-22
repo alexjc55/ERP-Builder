@@ -9155,6 +9155,18 @@ components:
           type: string
         includeRecord:
           type: boolean
+        pageId:
+          type: integer
+          minimum: 1
+          description: Optional webhook mirror-page context; omitted includes all applicable page-local fields in distinct namespaces.
+        language:
+          type: string
+          enum: [ru, en, he]
+          description: Webhook display language, defaults to ru.
+        baseUrl:
+          type: string
+          format: uri
+          description: HTTP(S) application origin for protected local file links; falls back to WEBHOOK_ORIGIN. Does not make files public.
         revisionId:
           type: integer
           minimum: 1

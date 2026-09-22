@@ -8952,6 +8952,36 @@
     "he": "שלח נתוני רשומה"
   },
   {
+    "key": "auto.webhookPage",
+    "ru": "Контекст страницы",
+    "en": "Page context",
+    "he": "הקשר עמוד"
+  },
+  {
+    "key": "auto.webhookAllPages",
+    "ru": "Все страницы (отдельные пространства имён)",
+    "en": "All pages (separate namespaces)",
+    "he": "כל העמודים (מרחבי שמות נפרדים)"
+  },
+  {
+    "key": "auto.webhookLanguage",
+    "ru": "Язык отображения",
+    "en": "Display language",
+    "he": "שפת תצוגה"
+  },
+  {
+    "key": "auto.webhookOrigin",
+    "ru": "Адрес приложения для локальных файлов",
+    "en": "Application origin for local files",
+    "he": "כתובת היישום לקבצים מקומיים"
+  },
+  {
+    "key": "auto.webhookHelp",
+    "ru": "Версия 2: исходные значения и поля с именами, ID и отображаемыми значениями. Поля страниц имеют отдельные ключи page:ID. Для относительных ссылок на файлы укажите адрес приложения или WEBHOOK_ORIGIN; доступ к файлам остаётся защищённым. Без данных записи отправляются только entityId и recordId.",
+    "en": "Version 2 includes legacy values and fields with names, IDs and display values. Page fields use separate page:ID keys. Relative file links require an application origin or WEBHOOK_ORIGIN; file access stays protected. With record data disabled, only entityId and recordId are sent.",
+    "he": "גרסה 2 כוללת ערכים מקוריים ושדות עם שמות, מזהים וערכי תצוגה. שדות עמוד משתמשים במפתחות נפרדים page:ID. קישורים יחסיים לקבצים דורשים כתובת יישום או WEBHOOK_ORIGIN; הגישה לקבצים נשארת מוגנת. ללא נתוני רשומה נשלחים רק entityId ו-recordId."
+  },
+  {
     "key": "auto.valuePlaceholder",
     "ru": "значение",
     "en": "value",

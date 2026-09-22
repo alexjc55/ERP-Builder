@@ -4171,6 +4171,18 @@ export const AutomationActionTargetFieldSource = {
   page: 'page',
 } as const;
 
+/**
+ * Webhook display language, defaults to ru.
+ */
+export type AutomationActionLanguage = typeof AutomationActionLanguage[keyof typeof AutomationActionLanguage];
+
+
+export const AutomationActionLanguage = {
+  ru: 'ru',
+  en: 'en',
+  he: 'he',
+} as const;
+
 export interface AutomationAction {
   type: AutomationActionType;
   fieldKey?: string;
@@ -4186,6 +4198,15 @@ export interface AutomationAction {
   match?: AutomationCondition[];
   url?: string;
   includeRecord?: boolean;
+  /**
+     * Optional webhook mirror-page context; omitted includes all applicable page-local fields in distinct namespaces.
+     * @minimum 1
+     */
+  pageId?: number;
+  /** Webhook display language, defaults to ru. */
+  language?: AutomationActionLanguage;
+  /** HTTP(S) application origin for protected local file links; falls back to WEBHOOK_ORIGIN. Does not make files public. */
+  baseUrl?: string;
   /** @minimum 1 */
   revisionId?: number;
   /**

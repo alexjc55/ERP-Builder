@@ -75,6 +75,7 @@ import { applyPageFieldDefaults } from "./page-field-defaults";
 import { isGoogleDriveModuleEnabled } from "./googleDrive";
 import { logger } from "./logger";
 import { lockAndValidateGdriveFileReferences } from "./gdrive-file-reference-lock";
+import { buildAutomationWebhookPayload } from "./automation-webhook-payload";
 
 /**
  * Stage 16 — Automations Engine (runtime).
@@ -1221,9 +1222,7 @@ async function runActions(
         break;
       }
       case "webhook": {
-        const payload = action.includeRecord
-          ? { entityId: ctx.entityId, recordId: ctx.recordId, values: ctx.values, statusId: ctx.statusId }
-          : { entityId: ctx.entityId, recordId: ctx.recordId };
+        const payload = await buildAutomationWebhookPayload(ctx.entityId, ctx.recordId, action);
         ok = await sendWebhook(action.url, payload, log);
         break;
       }
@@ -1313,7 +1312,8 @@ function createRelationReadKeys(
         }
       }
     }
-    // A full-record webhook explicitly asks for every readable projection.
+    // Keep the create-form link readiness barrier even though webhooks reload
+    // their graph at the action boundary.
     if (action.type === "webhook" && action.includeRecord) {
       for (const field of fieldByKey.values()) addIfRelation(field.fieldKey);
     }

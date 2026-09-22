@@ -170,6 +170,12 @@ export const automationActionSchema = z.discriminatedUnion("type", [
     type: z.literal("webhook"),
     url: z.string().url(),
     includeRecord: z.boolean().optional(),
+    pageId: z.number().int().positive().optional(),
+    language: z.enum(["ru", "en", "he"]).optional(),
+    baseUrl: z.string().url().refine((value) => {
+      const url = new URL(value);
+      return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password;
+    }, "baseUrl must be an HTTP(S) URL without credentials").optional(),
   }),
   /** Render a published document revision for the triggering record. */
   z.object({
