@@ -195,6 +195,7 @@ import type {
   TranslationInput,
   TranslationUpdate,
   UpdateDriveFolderBody,
+  UpdateInboundDeliveryAttentionBody,
   UpdateMeInput,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -1862,6 +1863,78 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getReprocessInboundDeliveryMutationOptions(options));
+    }
+
+export const getUpdateInboundDeliveryAttentionUrl = (id: number,) => {
+
+
+
+
+  return `/api/inbound-deliveries/${id}/attention`
+}
+
+/**
+ * @summary Dismiss or restore attention for a failed inbound delivery
+ */
+export const updateInboundDeliveryAttention = async (id: number,
+    updateInboundDeliveryAttentionBody: UpdateInboundDeliveryAttentionBody, options?: RequestInit): Promise<InboundDelivery> => {
+
+  return customFetch<InboundDelivery>(getUpdateInboundDeliveryAttentionUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      updateInboundDeliveryAttentionBody,)
+  }
+);}
+
+
+
+
+export const getUpdateInboundDeliveryAttentionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInboundDeliveryAttention>>, TError,{id: number;data: BodyType<UpdateInboundDeliveryAttentionBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateInboundDeliveryAttention>>, TError,{id: number;data: BodyType<UpdateInboundDeliveryAttentionBody>}, TContext> => {
+
+const mutationKey = ['updateInboundDeliveryAttention'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateInboundDeliveryAttention>>, {id: number;data: BodyType<UpdateInboundDeliveryAttentionBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateInboundDeliveryAttention(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateInboundDeliveryAttentionMutationResult = NonNullable<Awaited<ReturnType<typeof updateInboundDeliveryAttention>>>
+    export type UpdateInboundDeliveryAttentionMutationBody = BodyType<UpdateInboundDeliveryAttentionBody>
+    export type UpdateInboundDeliveryAttentionMutationError = ErrorType<void>
+
+    /**
+ * @summary Dismiss or restore attention for a failed inbound delivery
+ */
+export const useUpdateInboundDeliveryAttention = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInboundDeliveryAttention>>, TError,{id: number;data: BodyType<UpdateInboundDeliveryAttentionBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateInboundDeliveryAttention>>,
+        TError,
+        {id: number;data: BodyType<UpdateInboundDeliveryAttentionBody>},
+        TContext
+      > => {
+      return useMutation(getUpdateInboundDeliveryAttentionMutationOptions(options));
     }
 
 export const getGetInboundDeliveryUrl = (id: number,) => {

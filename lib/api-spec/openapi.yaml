@@ -412,6 +412,31 @@ paths:
           description: Delivery queued
           content: { application/json: { schema: { $ref: "#/components/schemas/InboundDelivery" } } }
 
+  /inbound-deliveries/{id}/attention:
+    put:
+      operationId: updateInboundDeliveryAttention
+      tags: [inboundIntegrations]
+      summary: Dismiss or restore attention for a failed inbound delivery
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [dismissed]
+              properties:
+                dismissed: { type: boolean }
+      responses:
+        "200":
+          description: Failed delivery with its updated attention state
+          content: { application/json: { schema: { $ref: "#/components/schemas/InboundDelivery" } } }
+        "400": { description: Invalid route parameter or request body }
+        "403": { description: Guest or administrator capability denied }
+        "404": { description: Delivery not found }
+        "409": { description: Delivery is no longer failed }
+
   /inbound-deliveries/{id}:
     get:
       operationId: getInboundDelivery
@@ -6083,6 +6108,7 @@ components:
         errorCode: { type: [string, "null"] }
         errorMessage: { type: [string, "null"] }
         receivedAt: { type: string, format: date-time }
+        attentionDismissedAt: { type: [string, "null"], format: date-time }
     InboundMapping:
       type: object
       required: [steps]

@@ -14,6 +14,7 @@ import {
   inboundExternalObjectMappingsTable,
   inboundIntegrationsTable,
   inboundMappingVersionsTable,
+  NO_ACCESS_PERMS,
   pool,
   rolesTable,
   systemEventsTable,
@@ -35,6 +36,8 @@ const runId = `inbound-db-${randomUUID()}`;
 const ids: {
   role?: number;
   user?: number;
+  deniedRole?: number;
+  deniedUser?: number;
   entity?: number;
   integration?: number;
   versions: number[];
@@ -121,6 +124,18 @@ async function delivery(id: number) {
 }
 
 async function postReprocess(id: number) {
+  return requestAdminRouter(`/api/inbound-deliveries/${id}/reprocess`, "POST", {}, "admin");
+}
+
+async function putAttention(id: number, dismissed: boolean, auth: "admin" | "guest" | "denied" = "admin") {
+  return requestAdminRouter(`/api/inbound-deliveries/${id}/attention`, "PUT", { dismissed }, auth);
+}
+
+async function getInboundErrors() {
+  return requestAdminRouter("/api/inbound-integrations/errors?limit=100", "GET", undefined, "admin");
+}
+
+async function requestAdminRouter(path: string, method: string, body: unknown, auth: "admin" | "guest" | "denied") {
   const app = express();
   app.use(express.json());
   app.use("/api", adminRouter);
@@ -130,13 +145,15 @@ async function postReprocess(id: number) {
   try {
     const address = server.address();
     assert.ok(address && typeof address !== "string");
-    return await fetch(`http://127.0.0.1:${address.port}/api/inbound-deliveries/${id}/reprocess`, {
-      method: "POST",
+    const userId = auth === "denied" ? ids.deniedUser! : ids.user!;
+    const roleId = auth === "denied" ? ids.deniedRole! : ids.role!;
+    return await fetch(`http://127.0.0.1:${address.port}${path}`, {
+      method,
       headers: {
-        authorization: `Bearer ${signToken({ userId: ids.user!, roleId: ids.role! })}`,
+        authorization: `Bearer ${signToken({ userId, roleId, guest: auth === "guest" })}`,
         "content-type": "application/json",
       },
-      body: "{}",
+      body: body === undefined ? undefined : JSON.stringify(body),
     });
   } finally {
     await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
@@ -167,6 +184,19 @@ async function setup() {
     roleId: ids.role,
   }).returning({ id: usersTable.id });
   ids.user = user!.id;
+  const [deniedRole] = await db.insert(rolesTable).values({
+    nameJson: { en: `${runId}-denied` },
+    permissionsJson: NO_ACCESS_PERMS,
+  }).returning({ id: rolesTable.id });
+  ids.deniedRole = deniedRole!.id;
+  const [deniedUser] = await db.insert(usersTable).values({
+    email: `${runId}-denied@example.invalid`,
+    passwordHash: null,
+    firstName: runId,
+    lastName: "Denied webhook test",
+    roleId: ids.deniedRole,
+  }).returning({ id: usersTable.id });
+  ids.deniedUser = deniedUser!.id;
   const [entity] = await db.insert(entitiesTable).values({
     entityKey: runId,
     nameJson: { en: runId },
@@ -201,7 +231,9 @@ async function cleanup() {
     await db.delete(inboundIntegrationsTable).where(eq(inboundIntegrationsTable.id, ids.integration));
   }
   if (ids.entity) await db.delete(entitiesTable).where(eq(entitiesTable.id, ids.entity));
+  if (ids.deniedUser) await db.delete(usersTable).where(eq(usersTable.id, ids.deniedUser));
   if (ids.user) await db.delete(usersTable).where(eq(usersTable.id, ids.user));
+  if (ids.deniedRole) await db.delete(rolesTable).where(eq(rolesTable.id, ids.deniedRole));
   if (ids.role) await db.delete(rolesTable).where(eq(rolesTable.id, ids.role));
 }
 
@@ -434,5 +466,98 @@ test("inbound worker PostgreSQL concurrency and atomicity regressions", async (t
     assert.equal(row.status, "processing");
     assert.equal(row.attemptCount, 3);
     assert.equal((await db.select().from(inboundDeliveryStepLogsTable).where(eq(inboundDeliveryStepLogsTable.deliveryId, id))).length, 0);
+  });
+
+  await t.test("failed delivery attention can be dismissed and restored without changing failure history", async () => {
+    const id = await addDelivery(upsertVersion, "attention");
+    await db.update(inboundDeliveriesTable).set({
+      status: "failed",
+      errorCode: "TEST_FAILURE",
+      errorMessage: "Original failure",
+      completedAt: new Date(),
+    }).where(eq(inboundDeliveriesTable.id, id));
+    await db.insert(inboundDeliveryStepLogsTable).values({
+      deliveryId: id,
+      stepKey: "failed-step",
+      status: "failed",
+      message: "Original step history",
+    });
+
+    const invalidPathResponse = await requestAdminRouter(
+      "/api/inbound-deliveries/1.5/attention",
+      "PUT",
+      { dismissed: true },
+      "admin",
+    );
+    assert.equal(invalidPathResponse.status, 400);
+    const invalidBodyResponse = await requestAdminRouter(
+      `/api/inbound-deliveries/${id}/attention`,
+      "PUT",
+      { dismissed: "yes" },
+      "admin",
+    );
+    assert.equal(invalidBodyResponse.status, 400);
+
+    const guestResponse = await putAttention(id, true, "guest");
+    assert.equal(guestResponse.status, 403);
+    assert.equal((await delivery(id)).attentionDismissedAt, null);
+    const deniedResponse = await putAttention(id, true, "denied");
+    assert.equal(deniedResponse.status, 403);
+    assert.equal((await delivery(id)).attentionDismissedAt, null);
+
+    const dismissResponse = await putAttention(id, true);
+    assert.equal(dismissResponse.status, 200);
+    const dismissed = await dismissResponse.json() as {
+      status: string;
+      errorCode: string | null;
+      errorMessage: string | null;
+      attentionDismissedAt: string | null;
+    };
+    assert.equal(dismissed.status, "failed");
+    assert.equal(dismissed.errorCode, "TEST_FAILURE");
+    assert.equal(dismissed.errorMessage, "Original failure");
+    assert.ok(dismissed.attentionDismissedAt);
+    const storedDismissed = await delivery(id);
+    assert.equal(storedDismissed.status, "failed");
+    assert.deepEqual(storedDismissed.payloadJson, {
+      externalId: `${runId}:customer`,
+      orderId: `${runId}:order`,
+      name: "Concurrent customer",
+    });
+    assert.ok(storedDismissed.attentionDismissedAt);
+    const retainedLogs = await db.select().from(inboundDeliveryStepLogsTable)
+      .where(eq(inboundDeliveryStepLogsTable.deliveryId, id));
+    assert.equal(retainedLogs.length, 1);
+    assert.equal(retainedLogs[0]?.message, "Original step history");
+
+    const errorsWhileDismissed = await getInboundErrors();
+    assert.equal(errorsWhileDismissed.status, 200);
+    const dismissedErrors = await errorsWhileDismissed.json() as { items: { id: number }[] };
+    assert.equal(dismissedErrors.items.some((item) => item.id === id), false);
+
+    const restoreResponse = await putAttention(id, false);
+    assert.equal(restoreResponse.status, 200);
+    assert.equal((await delivery(id)).attentionDismissedAt, null);
+    const errorsAfterRestore = await getInboundErrors();
+    const restoredErrors = await errorsAfterRestore.json() as { items: { id: number }[] };
+    assert.equal(restoredErrors.items.some((item) => item.id === id), true);
+
+    await db.update(inboundDeliveriesTable).set({ status: "completed" }).where(eq(inboundDeliveriesTable.id, id));
+    const nonFailedResponse = await putAttention(id, true);
+    assert.equal(nonFailedResponse.status, 409);
+    assert.equal((await delivery(id)).attentionDismissedAt, null);
+  });
+
+  await t.test("reprocess clears a dismissal in the same failed-to-queued update", async () => {
+    const id = await addDelivery(upsertVersion, "attention-reprocess");
+    await db.update(inboundDeliveriesTable).set({
+      status: "failed",
+      attentionDismissedAt: new Date(),
+    }).where(eq(inboundDeliveriesTable.id, id));
+    const response = await postReprocess(id);
+    assert.equal(response.status, 202);
+    const queued = await response.json() as { status: string; attentionDismissedAt: string | null };
+    assert.equal(queued.status, "queued");
+    assert.equal(queued.attentionDismissedAt, null);
   });
 });

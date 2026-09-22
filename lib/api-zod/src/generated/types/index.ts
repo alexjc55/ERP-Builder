@@ -439,6 +439,7 @@ export * from './translation';
 export * from './translationInput';
 export * from './translationUpdate';
 export * from './updateDriveFolderBody';
+export * from './updateInboundDeliveryAttentionBody';
 export * from './updateMeInput';
 export * from './updateMeInputDirection';
 export * from './updateMeInputLanguage';

@@ -19,4 +19,6 @@ export interface InboundDelivery {
   /** @nullable */
   errorMessage?: string | null;
   receivedAt: Date;
+  /** @nullable */
+  attentionDismissedAt?: Date | null;
 }

@@ -66,6 +66,7 @@ export const inboundDeliveriesTable = pgTable(
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
     processingStartedAt: timestamp("processing_started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    attentionDismissedAt: timestamp("attention_dismissed_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("inbound_delivery_event").on(t.integrationId, t.eventId),

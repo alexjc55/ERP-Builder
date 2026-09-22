@@ -699,7 +699,8 @@ export const ListInboundIntegrationErrorsResponse = zod.object({
   "attemptCount": zod.number(),
   "errorCode": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
-  "receivedAt": zod.coerce.date()
+  "receivedAt": zod.coerce.date(),
+  "attentionDismissedAt": zod.coerce.date().nullish()
 }))
 })
 
@@ -760,7 +761,8 @@ export const GetInboundIntegrationResponse = zod.object({
   "attemptCount": zod.number(),
   "errorCode": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
-  "receivedAt": zod.coerce.date()
+  "receivedAt": zod.coerce.date(),
+  "attentionDismissedAt": zod.coerce.date().nullish()
 }))
 }))
 
@@ -887,7 +889,8 @@ export const DryRunInboundMappingResponse = zod.object({
   "attemptCount": zod.number(),
   "errorCode": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
-  "receivedAt": zod.coerce.date()
+  "receivedAt": zod.coerce.date(),
+  "attentionDismissedAt": zod.coerce.date().nullish()
 }),
   "steps": zod.array(zod.object({
   "id": zod.number(),
@@ -914,6 +917,34 @@ export const ReprocessInboundDeliveryBody = zod.object({
 })
 
 
+/**
+ * @summary Dismiss or restore attention for a failed inbound delivery
+ */
+
+
+
+export const UpdateInboundDeliveryAttentionParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const UpdateInboundDeliveryAttentionBody = zod.object({
+  "dismissed": zod.boolean()
+})
+
+export const UpdateInboundDeliveryAttentionResponse = zod.object({
+  "id": zod.number(),
+  "integrationId": zod.number(),
+  "eventId": zod.string(),
+  "payloadHash": zod.string(),
+  "status": zod.enum(['received', 'queued', 'processing', 'completed', 'completed_with_warnings', 'failed']),
+  "attemptCount": zod.number(),
+  "errorCode": zod.string().nullish(),
+  "errorMessage": zod.string().nullish(),
+  "receivedAt": zod.coerce.date(),
+  "attentionDismissedAt": zod.coerce.date().nullish()
+})
+
+
 export const GetInboundDeliveryParams = zod.object({
   "id": zod.coerce.number()
 })
@@ -927,7 +958,8 @@ export const GetInboundDeliveryResponse = zod.object({
   "attemptCount": zod.number(),
   "errorCode": zod.string().nullish(),
   "errorMessage": zod.string().nullish(),
-  "receivedAt": zod.coerce.date()
+  "receivedAt": zod.coerce.date(),
+  "attentionDismissedAt": zod.coerce.date().nullish()
 }).and(zod.object({
   "payloadJson": zod.unknown(),
   "steps": zod.array(zod.object({

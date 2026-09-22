@@ -1487,6 +1487,8 @@ export interface InboundDelivery {
   /** @nullable */
   errorMessage?: string | null;
   receivedAt: string;
+  /** @nullable */
+  attentionDismissedAt?: string | null;
 }
 
 export type InboundIntegrationDetail = InboundIntegration & {
@@ -5189,6 +5191,10 @@ export type DryRunInboundMappingBody = {
 
 export type ReprocessInboundDeliveryBody = {
   dryRun?: boolean;
+};
+
+export type UpdateInboundDeliveryAttentionBody = {
+  dismissed: boolean;
 };
 
 export type StreamCollaborationPageEventsParams = {

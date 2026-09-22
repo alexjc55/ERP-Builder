@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 import { lookup } from "dns/promises";
 import { request as httpsRequest } from "https";
 import { Router, type IRouter, type Request } from "express";
-import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import {
   db,
   inboundIntegrationsTable,
@@ -44,6 +44,10 @@ import { getAccessToken, getConnection, isGoogleDriveModuleEnabled, uploadToFold
 import type { FileFieldConfig, DriveNameSection } from "@workspace/db";
 import { validateInboundMapping, resolveInboundValue, readInboundPath, type InboundMatch, type InboundStep } from "../lib/inbound-mapping";
 import { INBOUND_SECRET_PREFIX, classifyInboundDuplicate, hashInboundSecret, parseInboundBearer } from "../lib/inbound-auth";
+import {
+  UpdateInboundDeliveryAttentionBody,
+  UpdateInboundDeliveryAttentionParams,
+} from "@workspace/api-zod";
 import { AUDIT_CREATED, auditStr, diffValues } from "./audit-log";
 import {
   emitEvent,
@@ -109,7 +113,10 @@ adminRouter.post("/inbound-integrations", requireAuth, requireAdmin("inboundInte
 adminRouter.get("/inbound-integrations/errors", requireAuth, requireAdmin("inboundIntegrations"), async (req, res) => {
   const limit = Math.min(100, Math.max(1, int(req.query.limit) ?? 25));
   const rows = await db.select().from(inboundDeliveriesTable)
-    .where(eq(inboundDeliveriesTable.status, "failed")).orderBy(desc(inboundDeliveriesTable.receivedAt)).limit(limit);
+    .where(and(
+      eq(inboundDeliveriesTable.status, "failed"),
+      isNull(inboundDeliveriesTable.attentionDismissedAt),
+    )).orderBy(desc(inboundDeliveriesTable.receivedAt)).limit(limit);
   res.json({ unresolved: rows.length, items: rows });
 });
 
@@ -240,7 +247,14 @@ adminRouter.post("/inbound-deliveries/:id/reprocess", requireAuth, requireAdmin(
   if (!current) { res.status(404).json({ error: "Delivery not found" }); return; }
   if (current.status === "processing") { res.status(409).json({ error: "Delivery is currently processing" }); return; }
   const [row] = await db.update(inboundDeliveriesTable)
-    .set({ status: "queued", errorCode: null, errorMessage: null, completedAt: null, processingStartedAt: null })
+    .set({
+      status: "queued",
+      errorCode: null,
+      errorMessage: null,
+      completedAt: null,
+      processingStartedAt: null,
+      attentionDismissedAt: null,
+    })
     // Recheck the snapshot state: a worker may claim/complete between the
     // read above and this reset, and resetting that newer state would replay it.
     .where(and(eq(inboundDeliveriesTable.id, id), eq(inboundDeliveriesTable.status, current.status)))
@@ -262,6 +276,34 @@ adminRouter.post("/inbound-deliveries/:id/reprocess", requireAuth, requireAdmin(
     void recoverInboundDeliveries(1).catch(() => {});
   }
   res.status(202).json(row);
+});
+
+adminRouter.put("/inbound-deliveries/:id/attention", requireAuth, requireAdmin("inboundIntegrations"), async (req, res): Promise<void> => {
+  const params = UpdateInboundDeliveryAttentionParams.safeParse(req.params);
+  const body = UpdateInboundDeliveryAttentionBody.safeParse(req.body);
+  if (!params.success || !Number.isInteger(params.data.id) || !body.success) {
+    res.status(400).json({ error: "Invalid delivery attention request" });
+    return;
+  }
+  const [row] = await db.update(inboundDeliveriesTable)
+    .set({ attentionDismissedAt: body.data.dismissed ? new Date() : null })
+    .where(and(
+      eq(inboundDeliveriesTable.id, params.data.id),
+      eq(inboundDeliveriesTable.status, "failed"),
+    ))
+    .returning();
+  if (row) {
+    res.json(row);
+    return;
+  }
+  const [current] = await db.select({ status: inboundDeliveriesTable.status })
+    .from(inboundDeliveriesTable)
+    .where(eq(inboundDeliveriesTable.id, params.data.id));
+  if (!current) {
+    res.status(404).json({ error: "Delivery not found" });
+    return;
+  }
+  res.status(409).json({ error: "Only failed deliveries can change attention state" });
 });
 
 adminRouter.get("/inbound-deliveries/:id", requireAuth, requireAdmin("inboundIntegrations"), async (req, res): Promise<void> => {

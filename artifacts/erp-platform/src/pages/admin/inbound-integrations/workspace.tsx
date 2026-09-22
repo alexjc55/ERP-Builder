@@ -9,6 +9,7 @@ import {
   useDryRunInboundMapping,
   useGetInboundDelivery,
   useReprocessInboundDelivery,
+  useUpdateInboundDeliveryAttention,
   useListEntities,
   useListEntityFields,
   useListEntityRelations,
@@ -16,6 +17,7 @@ import {
   useListPageFields,
   useListRoles,
   getGetInboundDeliveryQueryKey,
+  getGetAdminOperationalAlertsQueryKey,
   getListEntityFieldsQueryKey,
   getListEntityRelationsQueryKey,
   getListPageFieldsQueryKey,
@@ -123,6 +125,19 @@ export default function InboundIntegrationWorkspacePage() {
   const { data: entities = [] } = useListEntities();
   const { data: pages = [] } = useListPages();
   const { data: roles = [] } = useListRoles();
+  const updateAttention = useUpdateInboundDeliveryAttention({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: [`/api/inbound-integrations/${integrationId}`] });
+        queryClient.invalidateQueries({ queryKey: getGetAdminOperationalAlertsQueryKey() });
+        toast({ title: t("inbound.attentionUpdated", "Отметка внимания обновлена") });
+      },
+      onError: () => toast({
+        title: t("inbound.attentionUpdateError", "Не удалось обновить отметку внимания"),
+        variant: "destructive",
+      }),
+    },
+  });
 
   const analyzeMutation = useAnalyzeInboundSample({
     mutation: {
@@ -450,11 +465,33 @@ export default function InboundIntegrationWorkspacePage() {
                         <Badge variant={delivery.status === "completed" ? "default" : delivery.status === "failed" ? "destructive" : "secondary"} className={delivery.status === "completed" ? "bg-emerald-500" : ""}>
                           {delivery.status}
                         </Badge>
+                        {delivery.attentionDismissedAt && (
+                          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                            {t("inbound.reviewed", "Просмотрено")}
+                          </Badge>
+                        )}
                         <span className="text-xs text-slate-500">{new Date(delivery.receivedAt).toLocaleString()}</span>
                          <span className="text-xs font-mono text-slate-400">ID: {delivery.id}</span>
                          {delivery.eventId && <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{t("inbound.event", "Событие")}: {delivery.eventId}</span>}
                       </div>
-                      <ChevronRight className="w-4 h-4 text-slate-400" />
+                      <div className="flex items-center gap-2">
+                        {delivery.status === "failed" && !delivery.attentionDismissedAt && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={updateAttention.isPending}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              updateAttention.mutate({ id: delivery.id, data: { dismissed: true } });
+                            }}
+                          >
+                            <Check className="w-4 h-4 me-1" />
+                            {t("inbound.noAttentionRequired", "Не требует внимания")}
+                          </Button>
+                        )}
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                      </div>
                     </div>
                     {delivery.errorMessage && (
                       <div className="px-4 py-2 bg-red-50 border-t border-red-100 text-xs text-red-700 font-mono truncate">
@@ -485,6 +522,7 @@ function DeliveryDetailsDialog({ deliveryId, onClose }: { deliveryId: number | n
     query: { enabled: !!deliveryId, queryKey: getGetInboundDeliveryQueryKey(queryId) },
   });
   const reprocess = useReprocessInboundDelivery();
+  const updateAttention = useUpdateInboundDeliveryAttention();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -497,6 +535,22 @@ function DeliveryDetailsDialog({ deliveryId, onClose }: { deliveryId: number | n
         queryClient.invalidateQueries({ queryKey: [`/api/inbound-integrations`] }); // rough invalidate
       },
       onError: () => toast({ title: t("inbound.reprocessError", "Ошибка переобработки"), variant: "destructive" })
+    });
+  };
+
+  const handleAttention = (dismissed: boolean) => {
+    if (!deliveryId) return;
+    updateAttention.mutate({ id: deliveryId, data: { dismissed } }, {
+      onSuccess: (updated) => {
+        toast({ title: t("inbound.attentionUpdated", "Отметка внимания обновлена") });
+        queryClient.invalidateQueries({ queryKey: getGetInboundDeliveryQueryKey(deliveryId) });
+        queryClient.invalidateQueries({ queryKey: [`/api/inbound-integrations/${updated.integrationId}`] });
+        queryClient.invalidateQueries({ queryKey: getGetAdminOperationalAlertsQueryKey() });
+      },
+      onError: () => toast({
+        title: t("inbound.attentionUpdateError", "Не удалось обновить отметку внимания"),
+        variant: "destructive",
+      }),
     });
   };
 
@@ -516,6 +570,11 @@ function DeliveryDetailsDialog({ deliveryId, onClose }: { deliveryId: number | n
                   <Badge variant={delivery.status === "completed" ? "default" : delivery.status === "failed" ? "destructive" : "secondary"}>
                     {delivery.status}
                   </Badge>
+                  {delivery.attentionDismissedAt && (
+                    <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                      {t("inbound.reviewed", "Просмотрено")}
+                    </Badge>
+                  )}
                 </DialogTitle>
                 <div className="text-xs text-slate-500">
                   {t("inbound.attempts", "Попыток")}: {delivery.attemptCount}
@@ -553,6 +612,17 @@ function DeliveryDetailsDialog({ deliveryId, onClose }: { deliveryId: number | n
             </div>
             <DialogFooter className="p-4 border-t border-slate-100 bg-slate-50">
               <Button variant="outline" onClick={onClose}>{t("inbound.close", "Закрыть")}</Button>
+              {delivery.status === "failed" && (
+                <Button
+                  variant="outline"
+                  onClick={() => handleAttention(!delivery.attentionDismissedAt)}
+                  disabled={updateAttention.isPending}
+                >
+                  {delivery.attentionDismissedAt
+                    ? t("inbound.restoreAttention", "Вернуть внимание")
+                    : t("inbound.noAttentionRequired", "Не требует внимания")}
+                </Button>
+              )}
               <Button onClick={handleReprocess} disabled={reprocess.isPending}>{t("inbound.reprocess", "Переобработать")}</Button>
             </DialogFooter>
           </>

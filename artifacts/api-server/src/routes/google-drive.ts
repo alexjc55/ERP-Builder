@@ -8,6 +8,7 @@ import {
   googleDriveConnectionTable,
   googleDriveFoldersTable,
   inboundDeliveriesTable,
+  modulesTable,
   entityRecordsTable,
   entityFieldsTable,
   mirrorPermKey,
@@ -146,13 +147,22 @@ router.get("/admin/operational-alerts", requireAuth, async (req, res): Promise<v
     drive?: ReturnType<typeof connectionInfo>["health"] & { settingsPath: string };
     inbound?: { failedCount: number; integrationId: number; deliveryId: number; retryPath: string };
   } = {};
-  if (maySeeDrive) {
+  if (maySeeDrive && await isGoogleDriveModuleEnabled()) {
     const conn = await getConnection();
     if (conn?.refreshTokenEnc && (conn.healthState === "reauth_required" || conn.healthState === "transient_error")) {
       alerts.drive = { ...connectionInfo(conn, req).health, settingsPath: SETTINGS_PATH };
     }
   }
   if (maySeeInbound) {
+    const [inboundModule] = await db
+      .select({ isEnabled: modulesTable.isEnabled })
+      .from(modulesTable)
+      .where(eq(modulesTable.moduleKey, "inbound_integrations"))
+      .limit(1);
+    if (inboundModule?.isEnabled !== true) {
+      res.json(alerts);
+      return;
+    }
     const [summary] = await db
       .select({
         failedCount: sql<number>`count(*)::int`,
@@ -162,6 +172,7 @@ router.get("/admin/operational-alerts", requireAuth, async (req, res): Promise<v
       .from(inboundDeliveriesTable)
       .where(and(
         eq(inboundDeliveriesTable.status, "failed"),
+        sql`${inboundDeliveriesTable.attentionDismissedAt} IS NULL`,
         sql`${inboundDeliveriesTable.eventId} NOT LIKE 'dry-run:%'`,
       ));
     if (summary && summary.failedCount > 0) {

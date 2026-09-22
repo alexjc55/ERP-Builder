@@ -1,0 +1,1 @@
+ALTER TABLE "inbound_deliveries" ADD COLUMN "attention_dismissed_at" timestamp with time zone;
