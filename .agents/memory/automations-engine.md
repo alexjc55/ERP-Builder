@@ -9,6 +9,10 @@ Keep legacy raw values separate from versioned typed/display projections.
 **Why:** downstream receivers need names, labels and nonnumeric formula results without breaking integrations that rely on stored IDs. Automation exports are system-authoritative, not a snapshot of one viewer's filtered table.
 **How to apply:** use shared typed formula materializers, preserve page namespaces, reload at the webhook action after prior mutations, and never make private files public. Capture the current browser origin when saving webhook settings; do not ask administrators to enter it manually. The user chose automatic capture to avoid confusing duplicate configuration; scheduled delivery must use the saved origin rather than guessing a deployment URL.
 
+Outgoing webhooks export all mirror-page data without a page selector, including entity formula results in each page context.
+**Why:** the user wants receivers to choose useful data, not administrators to accidentally omit it through export settings.
+**How to apply:** ignore persisted legacy webhook page selections; preserve source-field identity separately from calculation context when exporting contextual results.
+
 ## Contract dual source of truth (gotcha)
 
 Automation trigger/condition/action/**mapping** types are defined as **zod schemas

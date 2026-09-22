@@ -306,9 +306,6 @@ async function validateSpec(
       const outputError = await validateDocumentOutput(entityId, a.output);
       if (outputError) return outputError;
     }
-    if (a.type === "webhook" && a.pageId != null && !mirrorPageIds.has(a.pageId)) {
-      return "Webhook page must be a mirror page of the automation entity";
-    }
   }
   return null;
 }

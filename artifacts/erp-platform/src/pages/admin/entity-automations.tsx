@@ -166,7 +166,6 @@ type ActionDraft = {
   match: ConditionDraft[];
   url: string;
   includeRecord: boolean;
-  webhookPageId: string;
   webhookLanguage: "ru" | "en" | "he";
   /** For set_field: "entity" = triggering record's field; "page" = a page-local field on a mirror page. */
   targetFieldSource: "entity" | "page";
@@ -238,7 +237,6 @@ function emptyAction(defaultFieldKey: string): ActionDraft {
     match: [],
     url: "",
     includeRecord: true,
-    webhookPageId: "",
     webhookLanguage: "ru",
     targetFieldSource: "entity",
     targetPageId: "",
@@ -626,7 +624,6 @@ export default function EntityAutomationsPage() {
     match: (a.match ?? []).map(conditionToDraft),
     url: a.url ?? "",
     includeRecord: a.includeRecord ?? true,
-    webhookPageId: a.pageId == null ? "" : String(a.pageId),
     webhookLanguage: a.language ?? "ru",
     targetFieldSource: a.type === "set_field" && a.targetFieldSource === "page" ? "page" : "entity",
     targetPageId: a.type === "set_field" && a.targetPageId != null ? String(a.targetPageId) : "",
@@ -776,7 +773,6 @@ export default function EntityAutomationsPage() {
       } else if (a.type === "webhook") {
         if (!a.url) { toast({ title: t("auto.specifyUrl", "Укажите URL"), variant: "destructive" }); return; }
         builtActions.push({ type: "webhook", url: a.url, includeRecord: a.includeRecord,
-          ...(a.webhookPageId ? { pageId: Number(a.webhookPageId) } : {}),
           language: a.webhookLanguage,
           baseUrl: window.location.origin,
         });
@@ -1882,14 +1878,6 @@ function ActionCard({
             {t("auto.includeRecord", "Передавать данные записи")}
           </label>
           {draft.includeRecord && <>
-            <Label>{t("auto.webhookPage", "Контекст страницы")}</Label>
-            <Select value={draft.webhookPageId || "__all__"} onValueChange={(value) => onChange({ webhookPageId: value === "__all__" ? "" : value })}>
-              <SelectTrigger data-testid="webhook-page-context"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">{t("auto.webhookAllPages", "Все страницы (отдельные пространства имён)")}</SelectItem>
-                {mirrorPages.map((p) => <SelectItem key={p.id} value={String(p.id)}>{pageLabel(p)}</SelectItem>)}
-              </SelectContent>
-            </Select>
             <Label>{t("auto.webhookLanguage", "Язык отображения")}</Label>
             <Select value={draft.webhookLanguage} onValueChange={(value) => onChange({ webhookLanguage: value as "ru" | "en" | "he" })}>
               <SelectTrigger data-testid="webhook-display-language"><SelectValue /></SelectTrigger>

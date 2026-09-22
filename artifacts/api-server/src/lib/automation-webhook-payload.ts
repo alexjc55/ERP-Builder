@@ -16,6 +16,7 @@ type Relation = typeof relationsTable.$inferSelect;
 type Link = typeof recordLinksTable.$inferSelect;
 type Projection = {
   key: string; fieldKey: string; entityId: number; pageId: number | null;
+  contextPageId: number | null;
   name: string; nameJson: unknown; type: string; rawValue: unknown;
   resolvedValue: unknown; displayValue: string; error?: string;
 };
@@ -31,6 +32,8 @@ const MAX_FIELDS = 5000;
 export async function buildAutomationWebhookPayload(
   entityId: number,
   recordId: number,
+  // pageId remains accepted because persisted actions may still contain it.
+  // Exports intentionally ignore it and always include every mirror context.
   options: { includeRecord?: boolean; pageId?: number; language?: WebhookLanguage; baseUrl?: string },
 ) {
   if (!options.includeRecord) return { entityId, recordId };
@@ -89,8 +92,6 @@ export async function buildAutomationWebhookPayload(
     frontier = nextIds.length ? await db.select().from(entityRecordsTable).where(inArray(entityRecordsTable.id, nextIds)) : [];
     for (const row of frontier) records.set(row.id, row);
   }
-  if (options.pageId != null && pages.get(options.pageId)?.mirrorEntityId !== entityId) throw new Error("Webhook page is not a mirror of the triggering entity");
-
   const userIds = new Set<number>();
   for (const row of records.values()) {
     const scan = (defs: Field[], values: Record<string, unknown>) => {
@@ -208,20 +209,31 @@ export async function buildAutomationWebhookPayload(
     if (before === JSON.stringify([...scopes])) { stable = true; break; }
   }
   if (!stable) throw new Error("Webhook linked formula cycle or dependency depth limit exceeded");
-  const project = (row: RecordRow, field: Field, pageId: number | undefined, stack: Set<string>): Projection => {
-    const key = pageId == null ? `entity:${row.entityId}.${field.fieldKey}` : `page:${pageId}.${field.fieldKey}`;
+  const project = (
+    row: RecordRow,
+    field: Field,
+    pageId: number | undefined,
+    stack: Set<string>,
+    contextPageId = pageId,
+  ): Projection => {
+    const key = pageId != null
+      ? `page:${pageId}.${field.fieldKey}`
+      : contextPageId != null
+        ? `entity-context:${row.entityId}:page:${contextPageId}.${field.fieldKey}`
+        : `entity:${row.entityId}.${field.fieldKey}`;
     const token = `${row.id}:${key}`;
     const values = pageId == null ? row.valuesJson as Record<string, unknown> : pageValues.get(`${pageId}:${row.id}`) ?? {};
     const rawValue = field.fieldType === "created_at" ? row.createdAt.toISOString() : field.fieldType === "function" || field.fieldType === "relation" || field.fieldType === "lookup" ? null : values[field.fieldKey] ?? null;
     const result: Projection = { key, fieldKey: field.fieldKey, entityId: row.entityId, pageId: pageId ?? null,
+      contextPageId: contextPageId ?? null,
       name: webhookLabel(field.nameJson, language), nameJson: field.nameJson, type: field.fieldType, rawValue,
       resolvedValue: null, displayValue: "" };
     if (stack.has(token) || stack.size > MAX_DEPTH) return { ...result, error: "projection_cycle_or_depth_limit" };
     const next = new Set(stack).add(token);
     let value: unknown = rawValue;
     if (field.fieldType === "function") {
-      const contextPage = pageId ?? (row.entityId === entityId ? options.pageId : undefined);
-      value = scopes.get(`${row.id}:${contextPage ?? ""}`)?.[key] ?? null;
+      const scopeKey = pageId == null ? `entity:${row.entityId}.${field.fieldKey}` : key;
+      value = scopes.get(`${row.id}:${contextPageId ?? ""}`)?.[scopeKey] ?? null;
     } else if (field.fieldType === "user") {
       const resolve = (id: unknown) => id == null ? null : users.get(Number(id)) ?? { id, name: null };
       value = Array.isArray(rawValue) ? rawValue.map(resolve) : resolve(rawValue);
@@ -248,7 +260,7 @@ export async function buildAutomationWebhookPayload(
           const targetPage = cfg.relatedPageId ?? undefined;
           const targetDefs = targetPage == null ? fields.get(target.entityId) : pages.get(targetPage)?.mirrorEntityId === target.entityId ? pageFields.get(targetPage) : [];
           const targetField = targetDefs?.find((f) => f.fieldKey === cfg.relatedFieldKey);
-          const projection = targetField ? project(target, targetField, targetPage, next) : null;
+           const projection = targetField ? project(target, targetField, targetPage, next) : null;
           projected.push({ relationId: relation.id, linkId: link.id, entityId: target.entityId, recordId: target.id,
             pageId: targetPage ?? null, field: projection, resolvedValue: projection?.resolvedValue ?? null,
             displayValue: projection?.displayValue ?? "", ...(projection ? {} : { error: "missing_projection_field" }) });
@@ -261,7 +273,11 @@ export async function buildAutomationWebhookPayload(
     return result;
   };
   const entityFields = (fields.get(entityId) ?? []).map((f) => project(current, f, undefined, new Set()));
-  const localFields = [...pages.values()].filter((p) => p.mirrorEntityId === entityId && (options.pageId == null || p.id === options.pageId))
+  const entityPages = [...pages.values()].filter((p) => p.mirrorEntityId === entityId);
+  const contextualEntityFormulas = entityPages.flatMap((p) => (fields.get(entityId) ?? [])
+    .filter((f) => f.fieldType === "function")
+    .map((f) => project(current, f, undefined, new Set(), p.id)));
+  const localFields = entityPages
     .flatMap((p) => (pageFields.get(p.id) ?? []).map((f) => project(current, f, p.id, new Set())));
   // Keep the historical values map; derived relation values retain the old string[] shape.
   const legacyValues = { ...(current.valuesJson as Record<string, unknown>) };
@@ -277,7 +293,7 @@ export async function buildAutomationWebhookPayload(
       .map((v) => typeof v === "object" ? JSON.stringify(v) : String(v));
   }
   const payload = { entityId, recordId, values: legacyValues, statusId: current.statusId, schemaVersion: 2,
-    language, pageId: options.pageId ?? null, fields: [...entityFields, ...localFields] };
+    language, pageId: null, fields: [...entityFields, ...contextualEntityFormulas, ...localFields] };
   if (Buffer.byteLength(JSON.stringify(payload)) > 2_000_000) throw new Error("Webhook payload exceeds 2 MB");
   return payload;
 }

@@ -26,6 +26,8 @@ test("versioned webhook latest values, projections and backward compatibility", 
     userId = user!.id;
     const [page] = await db.insert(pagesTable).values({ nameJson: { en: "Context" }, mirrorEntityId: a!.id }).returning();
     pageIds.push(page!.id);
+    const [secondPage] = await db.insert(pagesTable).values({ nameJson: { en: "Second context" }, mirrorEntityId: a!.id }).returning();
+    pageIds.push(secondPage!.id);
     const [pageB] = await db.insert(pagesTable).values({ nameJson: { en: "Linked context" }, mirrorEntityId: b!.id }).returning();
     pageIds.push(pageB!.id);
     const [relation] = await db.insert(relationsTable).values({ sourceEntityId: a!.id, targetEntityId: b!.id, relationKey: key, relationType: "many_to_many" }).returning();
@@ -56,12 +58,14 @@ test("versioned webhook latest values, projections and backward compatibility", 
     await db.insert(pageFieldsTable).values([
       { pageId: page!.id, fieldKey: "name", fieldType: "text" },
       { pageId: page!.id, fieldKey: "page_chain", fieldType: "function", formulaConfigJson: { expression: `{page:${page!.id}.name}` } },
+      { pageId: secondPage!.id, fieldKey: "name", fieldType: "text" },
       { pageId: pageB!.id, fieldKey: "computed", fieldType: "function", formulaConfigJson: { expression: '"page text"' } },
     ]);
     const [record] = await db.insert(entityRecordsTable).values({ entityId: a!.id, valuesJson: { name: "Before", flag: false, choice: "stable", person: userId } }).returning();
     const [linked] = await db.insert(entityRecordsTable).values({ entityId: b!.id, valuesJson: { person: userId } }).returning();
     await db.insert(recordLinksTable).values({ relationId: relation!.id, relationType: "many_to_many", sourceRecordId: record!.id, targetRecordId: linked!.id });
     await db.insert(pageRecordValuesTable).values({ pageId: page!.id, recordId: record!.id, valuesJson: { name: "Page name" } });
+    await db.insert(pageRecordValuesTable).values({ pageId: secondPage!.id, recordId: record!.id, valuesJson: { name: "Second page name" } });
     assert.deepEqual(await buildAutomationWebhookPayload(a!.id, record!.id, { includeRecord: false, pageId: 9999999 }), { entityId: a!.id, recordId: record!.id });
     // Simulates a preceding automation mutation; webhook must not use trigger-time context.
     await db.update(entityRecordsTable).set({ valuesJson: { name: "After", flag: false, choice: "stable", person: userId } }).where(eq(entityRecordsTable.id, record!.id));
@@ -90,9 +94,32 @@ test("versioned webhook latest values, projections and backward compatibility", 
     assert.deepEqual(payload.values!.related_user, [String(userId)]);
     assert.equal(field(`page:${page!.id}.name`).resolvedValue, "Page name");
     assert.equal(field(`page:${page!.id}.page_chain`).resolvedValue, "Page name");
+    assert.equal(field(`page:${secondPage!.id}.name`).resolvedValue, "Second page name");
+    assert.equal(field(`page:${page!.id}.name`).pageId, page!.id);
+    assert.equal(field(`page:${page!.id}.name`).contextPageId, page!.id);
+    assert.equal(field(`page:${secondPage!.id}.name`).pageId, secondPage!.id);
+    assert.equal(entity("text_result").resolvedValue, "After");
+    assert.equal(entity("text_result").pageId, null);
+    assert.equal(entity("text_result").contextPageId, null);
+    const firstContextFormula = field(`entity-context:${a!.id}:page:${page!.id}.text_result`);
+    const secondContextFormula = field(`entity-context:${a!.id}:page:${secondPage!.id}.text_result`);
+    assert.equal(firstContextFormula.resolvedValue, "Page name");
+    assert.equal(secondContextFormula.resolvedValue, "Second page name");
+    assert.equal(firstContextFormula.pageId, null);
+    assert.equal(firstContextFormula.contextPageId, page!.id);
+    assert.equal(secondContextFormula.pageId, null);
+    assert.equal(secondContextFormula.contextPageId, secondPage!.id);
+    assert.equal(new Set(payload.fields!.map((f) => f.key)).size, payload.fields!.length);
     assert.equal(entity("name").resolvedValue, "After");
     assert.ok(!JSON.stringify(payload).includes("formulaConfigJson"));
-    await assert.rejects(() => buildAutomationWebhookPayload(a!.id, record!.id, { includeRecord: true, pageId: pageB!.id }), /not a mirror/);
+    const legacySelectedPayload = await buildAutomationWebhookPayload(a!.id, record!.id, {
+      includeRecord: true, language: "en", pageId: pageB!.id,
+    });
+    assert.ok("fields" in legacySelectedPayload && legacySelectedPayload.fields);
+    assert.equal(legacySelectedPayload.pageId, null);
+    assert.equal(legacySelectedPayload.fields.length, payload.fields.length);
+    assert.deepEqual(legacySelectedPayload.fields.map((f) => f.key).sort(), payload.fields.map((f) => f.key).sort());
+    assert.equal(legacySelectedPayload.fields.find((f) => f.key === `page:${secondPage!.id}.name`)?.resolvedValue, "Second page name");
     assert.equal(entity("attachment").resolvedValue, null);
     await db.update(entityRecordsTable).set({ valuesJson: { ...payload.values, attachment: { path: "/local/files/test.pdf", name: "PDF" } } }).where(eq(entityRecordsTable.id, record!.id));
     const configuredAction = automationActionSchema.parse({
@@ -104,7 +131,8 @@ test("versioned webhook latest values, projections and backward compatibility", 
     const configuredPayload = await buildAutomationWebhookPayload(a!.id, record!.id, configuredAction);
     assert.ok("fields" in configuredPayload && configuredPayload.fields);
     assert.equal(configuredPayload.language, "he");
-    assert.equal(configuredPayload.pageId, page!.id);
+    assert.equal(configuredPayload.pageId, null);
+    assert.equal(configuredPayload.fields.some((f) => f.key === `page:${secondPage!.id}.name`), true);
     const file = configuredPayload.fields.find((f) => f.fieldKey === "attachment");
     assert.deepEqual(file!.resolvedValue, {
       kind: "server", name: "PDF", url: "https://configured-origin.example.test/api/storage/local/files/test.pdf",

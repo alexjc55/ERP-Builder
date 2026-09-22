@@ -32,6 +32,7 @@ Example (illustrative IDs):
       "fieldKey": "owner",
       "entityId": 12,
       "pageId": null,
+      "contextPageId": null,
       "name": "Owner",
       "nameJson": {"en": "Owner"},
       "type": "user",
@@ -44,6 +45,7 @@ Example (illustrative IDs):
       "fieldKey": "priority",
       "entityId": 12,
       "pageId": null,
+      "contextPageId": null,
       "name": "Priority",
       "nameJson": {"en": "Priority"},
       "type": "select",
@@ -55,12 +57,23 @@ Example (illustrative IDs):
 }
 ```
 
-`fields` contains active entity fields and page-local fields. A page field has a
-`page:123.field_key` key and `pageId: 123`; collisions with entity fields and
-other pages are impossible. The optional action `pageId` must identify a mirror
-of the automation entity. Without it, all applicable mirror-page local fields
-are included, each in its own namespace; entity formulas have no arbitrary
-implicit page context.
+`fields` contains active entity fields and the local fields from every mirror
+page of the entity. A page field has a `page:123.field_key` key, `pageId: 123`,
+and `contextPageId: 123`; collisions with entity fields and other pages are
+impossible. Entity fields retain their `entity:12.field_key` projection with
+`pageId: null` and `contextPageId: null`.
+
+Entity formulas are also evaluated once in each mirror-page context so a result
+that depends on page-local values is never silently discarded. These additional
+projections use an `entity-context:12:page:123.formula_key` key,
+`pageId: null`, and `contextPageId: 123`. They remain entity-source fields;
+`contextPageId` describes evaluation context and must not be interpreted as the
+field's source page.
+
+The action no longer selects a page. All mirror pages are always exported.
+For stored-action compatibility, an optional legacy action `pageId` is accepted
+but ignored, even if the referenced page was removed or belongs to another
+entity. The top-level version-2 `pageId` compatibility property is always null.
 
 `language` accepts `ru` (default), `en`, or `he`. Names and select labels prefer
 that language, then Russian, English, Hebrew. Select IDs are stable stored
