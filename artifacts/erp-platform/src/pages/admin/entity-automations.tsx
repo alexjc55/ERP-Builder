@@ -168,7 +168,6 @@ type ActionDraft = {
   includeRecord: boolean;
   webhookPageId: string;
   webhookLanguage: "ru" | "en" | "he";
-  webhookBaseUrl: string;
   /** For set_field: "entity" = triggering record's field; "page" = a page-local field on a mirror page. */
   targetFieldSource: "entity" | "page";
   /** The mirror page to write to when targetFieldSource is "page". */
@@ -241,7 +240,6 @@ function emptyAction(defaultFieldKey: string): ActionDraft {
     includeRecord: true,
     webhookPageId: "",
     webhookLanguage: "ru",
-    webhookBaseUrl: "",
     targetFieldSource: "entity",
     targetPageId: "",
     confirmAllRecords: false,
@@ -630,7 +628,6 @@ export default function EntityAutomationsPage() {
     includeRecord: a.includeRecord ?? true,
     webhookPageId: a.pageId == null ? "" : String(a.pageId),
     webhookLanguage: a.language ?? "ru",
-    webhookBaseUrl: a.baseUrl ?? "",
     targetFieldSource: a.type === "set_field" && a.targetFieldSource === "page" ? "page" : "entity",
     targetPageId: a.type === "set_field" && a.targetPageId != null ? String(a.targetPageId) : "",
     confirmAllRecords: false,
@@ -781,7 +778,7 @@ export default function EntityAutomationsPage() {
         builtActions.push({ type: "webhook", url: a.url, includeRecord: a.includeRecord,
           ...(a.webhookPageId ? { pageId: Number(a.webhookPageId) } : {}),
           language: a.webhookLanguage,
-          ...(a.webhookBaseUrl.trim() ? { baseUrl: a.webhookBaseUrl.trim() } : {}),
+          baseUrl: window.location.origin,
         });
       } else if (a.type === "generate_document") {
         if (!a.revisionId) {
@@ -1902,9 +1899,6 @@ function ActionCard({
                 <SelectItem value="he">עברית</SelectItem>
               </SelectContent>
             </Select>
-            <Label>{t("auto.webhookOrigin", "Адрес приложения для локальных файлов")}</Label>
-            <Input data-testid="webhook-base-url" value={draft.webhookBaseUrl} onChange={(e) => onChange({ webhookBaseUrl: e.target.value })} placeholder="https://erp.example.com" />
-            <p className="text-xs text-slate-500">{t("auto.webhookHelp", "Версия 2: исходные значения и поля с именами, ID и отображаемыми значениями. Поля страниц имеют отдельные ключи page:ID. Для относительных ссылок на файлы укажите адрес приложения или WEBHOOK_ORIGIN; доступ к файлам остаётся защищённым. Без данных записи отправляются только entityId и recordId.")}</p>
           </>}
         </div>
       )}

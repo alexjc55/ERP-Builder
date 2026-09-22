@@ -93,10 +93,11 @@ Resolved files include only kind, name and URL (plus Drive file ID or
 links retain their HTTP(S) URL. Local `/local/...` and `/objects/...` paths use
 the existing protected `/api/storage` serving route.
 
-The scheduler has no HTTP request origin, and this application does not persist
-a canonical origin for automation delivery. Configure **Application origin for
-local files** (`baseUrl`, e.g. your real `https://erp.company.example`) in the
-webhook action, or set server `WEBHOOK_ORIGIN`. No deployment URL is guessed.
+The scheduler has no HTTP request origin. When saving an automation in the UI,
+the current browser origin is automatically stored as the webhook action's
+`baseUrl`; no manual address field is shown. API clients may supply `baseUrl`
+or use server `WEBHOOK_ORIGIN`. Existing actions without an origin can be
+opened and saved once from the deployed ERP. No deployment URL is guessed.
 Without either, a relative file URL fails the webhook action explicitly rather
 than sending an unusable relative link. Origins with embedded credentials or
 non-HTTP(S) schemes are rejected. Links do not embed authentication tokens,

@@ -7,7 +7,7 @@ description: Where automation trigger/condition/action/mapping types live, and h
 
 Keep legacy raw values separate from versioned typed/display projections.
 **Why:** downstream receivers need names, labels and nonnumeric formula results without breaking integrations that rely on stored IDs. Automation exports are system-authoritative, not a snapshot of one viewer's filtered table.
-**How to apply:** use shared typed formula materializers, preserve page namespaces, reload at the webhook action after prior mutations, and never make private files public. Local file URLs require an explicitly configured ERP origin; do not guess a deployment URL.
+**How to apply:** use shared typed formula materializers, preserve page namespaces, reload at the webhook action after prior mutations, and never make private files public. Capture the current browser origin when saving webhook settings; do not ask administrators to enter it manually. The user chose automatic capture to avoid confusing duplicate configuration; scheduled delivery must use the saved origin rather than guessing a deployment URL.
 
 ## Contract dual source of truth (gotcha)
 
