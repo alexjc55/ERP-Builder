@@ -3,6 +3,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 
 const API_DIR = path.join("artifacts", "api-server");
 const LOCK_RUNNER = "../../scripts/with-validation-lock.sh";
@@ -25,17 +26,482 @@ async function readJson(file) {
   return JSON.parse(await readFile(file, "utf8"));
 }
 
-async function findDbTests(directory, relativeTo) {
+async function findTestFiles(directory, relativeTo) {
   const found = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const absolute = path.join(directory, entry.name);
     if (entry.isDirectory()) {
-      found.push(...(await findDbTests(absolute, relativeTo)));
-    } else if (entry.isFile() && entry.name.endsWith(".db.test.ts")) {
+      found.push(...(await findTestFiles(absolute, relativeTo)));
+    } else if (entry.isFile() && entry.name.endsWith(".test.ts")) {
       found.push(path.relative(relativeTo, absolute).split(path.sep).join("/"));
     }
   }
   return found.sort();
+}
+
+const MUTATION_METHODS = new Set(["insert", "update", "delete"]);
+const MUTATING_SQL_COMMANDS = new Set([
+  "insert",
+  "update",
+  "delete",
+  "merge",
+  "replace",
+  "create",
+  "alter",
+  "drop",
+  "truncate",
+  "grant",
+  "revoke",
+  "comment",
+  "vacuum",
+  "reindex",
+  "cluster",
+]);
+const SQL_COMMANDS = new Set([
+  ...MUTATING_SQL_COMMANDS,
+  "select",
+  "values",
+  "show",
+  "explain",
+]);
+
+function symbolAt(checker, node) {
+  return node && checker.getSymbolAtLocation(node);
+}
+
+function unwrapExpression(expression) {
+  while (
+    expression &&
+    (ts.isParenthesizedExpression(expression) ||
+      ts.isAwaitExpression(expression) ||
+      ts.isAsExpression(expression) ||
+      ts.isTypeAssertionExpression(expression) ||
+      ts.isNonNullExpression(expression) ||
+      ts.isSatisfiesExpression(expression))
+  ) {
+    expression = expression.expression;
+  }
+  return expression;
+}
+
+function propertyParts(expression) {
+  expression = unwrapExpression(expression);
+  if (ts.isPropertyAccessExpression(expression)) {
+    return { receiver: expression.expression, name: expression.name.text };
+  }
+  if (
+    ts.isElementAccessExpression(expression) &&
+    expression.argumentExpression &&
+    (ts.isStringLiteral(expression.argumentExpression) ||
+      ts.isNoSubstitutionTemplateLiteral(expression.argumentExpression))
+  ) {
+    return {
+      receiver: expression.expression,
+      name: expression.argumentExpression.text,
+    };
+  }
+  return undefined;
+}
+
+function bindingPropertyName(element) {
+  const name = element.propertyName ?? element.name;
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return name.text;
+  return undefined;
+}
+
+function sqlText(expression) {
+  expression = unwrapExpression(expression);
+  if (
+    ts.isStringLiteral(expression) ||
+    ts.isNoSubstitutionTemplateLiteral(expression)
+  ) {
+    return expression.text;
+  }
+  if (ts.isTemplateExpression(expression)) {
+    return (
+      expression.head.text +
+      expression.templateSpans
+        .map((span) => ` ${span.literal.text}`)
+        .join("")
+    );
+  }
+  if (ts.isTaggedTemplateExpression(expression)) {
+    return sqlText(expression.template);
+  }
+  if (ts.isCallExpression(expression)) {
+    const property = propertyParts(expression.expression);
+    if (property?.name === "raw" && expression.arguments[0]) {
+      return sqlText(expression.arguments[0]);
+    }
+  }
+  if (
+    ts.isBinaryExpression(expression) &&
+    expression.operatorToken.kind === ts.SyntaxKind.PlusToken
+  ) {
+    const left = sqlText(expression.left);
+    const right = sqlText(expression.right);
+    return left === undefined || right === undefined
+      ? undefined
+      : `${left} ${right}`;
+  }
+  return undefined;
+}
+
+function tokenizeSql(text) {
+  const tokens = [];
+  let index = 0;
+  while (index < text.length) {
+    const character = text[index];
+    if (/\s/.test(character)) {
+      index += 1;
+      continue;
+    }
+    if (text.startsWith("--", index)) {
+      const newline = text.indexOf("\n", index + 2);
+      index = newline === -1 ? text.length : newline + 1;
+      continue;
+    }
+    if (text.startsWith("/*", index)) {
+      let commentDepth = 1;
+      index += 2;
+      while (index < text.length && commentDepth > 0) {
+        if (text.startsWith("/*", index)) {
+          commentDepth += 1;
+          index += 2;
+        } else if (text.startsWith("*/", index)) {
+          commentDepth -= 1;
+          index += 2;
+        } else {
+          index += 1;
+        }
+      }
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      const quote = character;
+      index += 1;
+      while (index < text.length) {
+        if (text[index] === quote && text[index + 1] === quote) {
+          index += 2;
+        } else if (text[index] === quote) {
+          index += 1;
+          break;
+        } else {
+          index += 1;
+        }
+      }
+      continue;
+    }
+    if (character === "$") {
+      const delimiter = text.slice(index).match(/^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/)?.[0];
+      if (delimiter) {
+        const end = text.indexOf(delimiter, index + delimiter.length);
+        index = end === -1 ? text.length : end + delimiter.length;
+        continue;
+      }
+    }
+    if (character === "(" || character === ")" || character === ";") {
+      tokens.push(character);
+      index += 1;
+      continue;
+    }
+    const word = text.slice(index).match(/^[A-Za-z_][A-Za-z0-9_$]*/)?.[0];
+    if (word) {
+      tokens.push(word.toLowerCase());
+      index += word.length;
+      continue;
+    }
+    index += 1;
+  }
+  return tokens;
+}
+
+function tokenGroupMutates(tokens) {
+  const groups = [];
+  const segments = [[]];
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index] === "(") {
+      const precededBy = segments.at(-1).at(-1);
+      const groupStart = index + 1;
+      let groupDepth = 1;
+      while (index + 1 < tokens.length && groupDepth > 0) {
+        index += 1;
+        if (tokens[index] === "(") groupDepth += 1;
+        if (tokens[index] === ")") groupDepth -= 1;
+      }
+      groups.push({ precededBy, tokens: tokens.slice(groupStart, index) });
+    } else if (tokens[index] === ";") {
+      segments.push([]);
+    } else if (tokens[index] !== ")") {
+      segments.at(-1).push(tokens[index]);
+    }
+  }
+  for (const segment of segments) {
+    const command = segment.find((token) => SQL_COMMANDS.has(token));
+    if (command && MUTATING_SQL_COMMANDS.has(command)) return true;
+  }
+  return groups.some(
+    (group) =>
+      (group.precededBy === "as" ||
+        group.precededBy === "materialized" ||
+        group.tokens[0] === "with") &&
+      tokenGroupMutates(group.tokens),
+  );
+}
+
+function isMutatingSql(expression) {
+  const text = sqlText(expression);
+  if (text === undefined) return false;
+  return tokenGroupMutates(tokenizeSql(text));
+}
+
+function findDbMutations(absoluteFile) {
+  const program = ts.createProgram([absoluteFile], {
+    allowJs: false,
+    noEmit: true,
+    noLib: true,
+    noResolve: true,
+    target: ts.ScriptTarget.Latest,
+  });
+  const source = program.getSourceFile(absoluteFile);
+  if (!source) return [];
+  const checker = program.getTypeChecker();
+  const dbSymbols = new Set();
+  const poolSymbols = new Set();
+  const clientSymbols = new Set();
+  const namespaceSymbols = new Set();
+  const txSymbols = new Set();
+  const functionAliases = new Map();
+  const nodes = [];
+
+  function walk(node) {
+    nodes.push(node);
+    ts.forEachChild(node, walk);
+  }
+  walk(source);
+
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== "@workspace/db" ||
+      statement.importClause?.isTypeOnly
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) {
+      const symbol = symbolAt(checker, bindings.name);
+      if (symbol) namespaceSymbols.add(symbol);
+    } else if (bindings && ts.isNamedImports(bindings)) {
+      for (const element of bindings.elements) {
+        if (!element.isTypeOnly && (element.propertyName ?? element.name).text === "db") {
+          const symbol = symbolAt(checker, element.name);
+          if (symbol) dbSymbols.add(symbol);
+        } else if (
+          !element.isTypeOnly &&
+          (element.propertyName ?? element.name).text === "pool"
+        ) {
+          const symbol = symbolAt(checker, element.name);
+          if (symbol) poolSymbols.add(symbol);
+        }
+      }
+    }
+  }
+
+  const hasSymbol = (set, node) => set.has(symbolAt(checker, unwrapExpression(node)));
+  const isWorkspaceDbImport = (node) => {
+    node = unwrapExpression(node);
+    return (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteral(node.arguments[0]) &&
+      node.arguments[0].text === "@workspace/db"
+    );
+  };
+  const isNamespace = (node) => hasSymbol(namespaceSymbols, node);
+  const isDb = (node) => {
+    node = unwrapExpression(node);
+    if (hasSymbol(dbSymbols, node)) return true;
+    const property = propertyParts(node);
+    return property?.name === "db" && isNamespace(property.receiver);
+  };
+  const isPool = (node) => {
+    node = unwrapExpression(node);
+    if (hasSymbol(poolSymbols, node)) return true;
+    const property = propertyParts(node);
+    return property?.name === "pool" && isNamespace(property.receiver);
+  };
+  const isClient = (node) => hasSymbol(clientSymbols, node);
+  const isTx = (node) => hasSymbol(txSymbols, node);
+  const addIdentifierSymbol = (set, node) => {
+    if (!ts.isIdentifier(node)) return false;
+    const symbol = symbolAt(checker, node);
+    if (!symbol || set.has(symbol)) return false;
+    set.add(symbol);
+    return true;
+  };
+
+  function trackBinding(name, initializer) {
+    if (ts.isIdentifier(name)) {
+      if (isNamespace(initializer) || isWorkspaceDbImport(initializer)) {
+        return addIdentifierSymbol(namespaceSymbols, name);
+      }
+      if (isDb(initializer)) return addIdentifierSymbol(dbSymbols, name);
+      if (isPool(initializer)) return addIdentifierSymbol(poolSymbols, name);
+      if (isClient(initializer)) return addIdentifierSymbol(clientSymbols, name);
+      if (isTx(initializer)) return addIdentifierSymbol(txSymbols, name);
+      const property = propertyParts(initializer);
+      if (
+        ts.isCallExpression(unwrapExpression(initializer)) &&
+        propertyParts(unwrapExpression(initializer).expression)?.name === "connect" &&
+        isPool(propertyParts(unwrapExpression(initializer).expression).receiver)
+      ) {
+        return addIdentifierSymbol(clientSymbols, name);
+      }
+      if (
+        property &&
+        (MUTATION_METHODS.has(property.name) ||
+          property.name === "execute" ||
+          property.name === "query") &&
+        (isDb(property.receiver) ||
+          isTx(property.receiver) ||
+          ((isPool(property.receiver) || isClient(property.receiver)) &&
+            property.name === "query"))
+      ) {
+        const symbol = symbolAt(checker, name);
+        if (symbol && !functionAliases.has(symbol)) {
+          functionAliases.set(symbol, property.name);
+          return true;
+        }
+      }
+      return false;
+    }
+    if (!ts.isObjectBindingPattern(name)) return false;
+    let changed = false;
+    for (const element of name.elements) {
+      if (!ts.isIdentifier(element.name)) continue;
+      const propertyName = bindingPropertyName(element);
+      if (
+        (isNamespace(initializer) || isWorkspaceDbImport(initializer)) &&
+        propertyName === "db"
+      ) {
+        changed = addIdentifierSymbol(dbSymbols, element.name) || changed;
+      } else if (
+        (isNamespace(initializer) || isWorkspaceDbImport(initializer)) &&
+        propertyName === "pool"
+      ) {
+        changed = addIdentifierSymbol(poolSymbols, element.name) || changed;
+      } else if (
+        (isDb(initializer) || isTx(initializer)) &&
+        propertyName &&
+        (MUTATION_METHODS.has(propertyName) || propertyName === "execute")
+      ) {
+        const symbol = symbolAt(checker, element.name);
+        if (symbol && !functionAliases.has(symbol)) {
+          functionAliases.set(symbol, propertyName);
+          changed = true;
+        }
+      }
+    }
+    return changed;
+  }
+
+  function transactionCallback(call) {
+    const property = propertyParts(call.expression);
+    if (
+      property?.name !== "transaction" ||
+      (!isDb(property.receiver) && !isTx(property.receiver))
+    ) {
+      return undefined;
+    }
+    const callback = unwrapExpression(call.arguments[0]);
+    if (
+      callback &&
+      (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))
+    ) {
+      return callback;
+    }
+    if (callback && ts.isIdentifier(callback)) {
+      const declaration = symbolAt(checker, callback)?.declarations?.find(
+        (item) =>
+          ts.isFunctionDeclaration(item) ||
+          ts.isFunctionExpression(item) ||
+          ts.isArrowFunction(item) ||
+          (ts.isVariableDeclaration(item) &&
+            item.initializer &&
+            (ts.isFunctionExpression(unwrapExpression(item.initializer)) ||
+              ts.isArrowFunction(unwrapExpression(item.initializer)))),
+      );
+      if (declaration && ts.isVariableDeclaration(declaration)) {
+        return unwrapExpression(declaration.initializer);
+      }
+      return declaration;
+    }
+    return undefined;
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const node of nodes) {
+      if (ts.isVariableDeclaration(node) && node.initializer) {
+        changed = trackBinding(node.name, node.initializer) || changed;
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      ) {
+        changed = trackBinding(node.left, node.right) || changed;
+      } else if (ts.isCallExpression(node)) {
+        const callback = transactionCallback(node);
+        const parameter = callback?.parameters[0]?.name;
+        if (parameter) {
+          changed = addIdentifierSymbol(txSymbols, parameter) || changed;
+        }
+      }
+    }
+  }
+
+  const mutations = [];
+  for (const node of nodes) {
+    if (!ts.isCallExpression(node)) continue;
+    const calledSymbol = symbolAt(checker, unwrapExpression(node.expression));
+    const aliasMethod = calledSymbol && functionAliases.get(calledSymbol);
+    if (
+      aliasMethod &&
+      (MUTATION_METHODS.has(aliasMethod) ||
+        ((aliasMethod === "execute" || aliasMethod === "query") &&
+          node.arguments[0] &&
+          isMutatingSql(node.arguments[0])))
+    ) {
+      mutations.push(node);
+      continue;
+    }
+    const property = propertyParts(node.expression);
+    if (
+      !property ||
+      (!isDb(property.receiver) &&
+        !isTx(property.receiver) &&
+        !isPool(property.receiver) &&
+        !isClient(property.receiver))
+    ) {
+      continue;
+    }
+    if (
+      ((isDb(property.receiver) || isTx(property.receiver)) &&
+        MUTATION_METHODS.has(property.name)) ||
+      ((property.name === "execute" || property.name === "query") &&
+        node.arguments[0] &&
+        isMutatingSql(node.arguments[0]))
+    ) {
+      mutations.push(node);
+    }
+  }
+  return mutations.map((node) => {
+    const position = source.getLineAndCharacterOfPosition(node.getStart(source));
+    return { line: position.line + 1, column: position.character + 1 };
+  });
 }
 
 function dbTestReferences(command) {
@@ -100,17 +566,29 @@ function validateDbCommand(scriptName, command, errors) {
 export async function validateDbTestWiring(projectRoot = process.cwd()) {
   const root = path.resolve(projectRoot);
   const apiRoot = path.join(root, API_DIR);
-  const [rootPackage, apiPackage, wrapper, dbTests] = await Promise.all([
+  const [rootPackage, apiPackage, wrapper, testFiles] = await Promise.all([
     readJson(path.join(root, "package.json")),
     readJson(path.join(apiRoot, "package.json")),
     readFile(
       path.join(root, "scripts", "validate-page-select-status-sync.sh"),
       "utf8",
     ),
-    findDbTests(path.join(apiRoot, "src"), apiRoot),
+    findTestFiles(path.join(apiRoot, "src"), apiRoot),
   ]);
+  const dbTests = testFiles.filter((file) => file.endsWith(".db.test.ts"));
   const errors = [];
   const registrations = new Map(dbTests.map((file) => [file, []]));
+
+  for (const file of testFiles) {
+    if (file.endsWith(".db.test.ts")) continue;
+    const mutations = findDbMutations(path.join(apiRoot, file));
+    if (mutations.length) {
+      const first = mutations[0];
+      errors.push(
+        `mutating DB test "${file}:${first.line}:${first.column}" must use the .db.test.ts suffix and safe API script registration`,
+      );
+    }
+  }
 
   for (const [name, value] of Object.entries(apiPackage.scripts ?? {})) {
     if (typeof value !== "string" || !value.includes(".db.test.ts")) continue;

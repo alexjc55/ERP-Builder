@@ -89,6 +89,239 @@ test("valid DB test wiring passes", async () => {
   });
 });
 
+test("a mutating test cannot evade wiring with a plain .test.ts suffix", async () => {
+  await withFixture(async ({ root, apiRoot }) => {
+    await writeFile(
+      path.join(apiRoot, "src", "routes", "misnamed.test.ts"),
+      `import { db } from "@workspace/db";
+await db.insert(usersTable).values({ name: "unsafe" });
+`,
+    );
+    await expectFailure(root, "must use the .db.test.ts suffix");
+  });
+});
+
+test("read-only DB use and unrelated mutations do not require DB wiring", async () => {
+  await withFixture(async ({ root, apiRoot }) => {
+    await writeFile(
+      path.join(apiRoot, "src", "routes", "read-only.test.ts"),
+      `import { db } from "@workspace/db";
+const rows = await db.select().from(usersTable);
+const unrelated = { delete() {}, update() {} };
+unrelated.delete();
+unrelated.update();
+`,
+    );
+    assert.deepEqual(await validateDbTestWiring(root), { dbTestCount: 1 });
+  });
+});
+
+test("mock-only DB-shaped objects do not require DB wiring", async () => {
+  await withFixture(async ({ root, apiRoot }) => {
+    await writeFile(
+      path.join(apiRoot, "src", "routes", "mock-only.test.ts"),
+      `import type { User } from "@workspace/db";
+const mockDb = {
+  insert: () => ({ values: () => undefined }),
+  delete: () => ({ where: () => undefined }),
+};
+mockDb.insert();
+mockDb.delete();
+`,
+    );
+    assert.deepEqual(await validateDbTestWiring(root), { dbTestCount: 1 });
+  });
+});
+
+test("DB aliases, destructuring, and namespace imports are recognized", async (t) => {
+  for (const [name, source] of [
+    [
+      "named import alias",
+      `import { db as database } from "@workspace/db";
+const connection = database;
+connection.update(usersTable).set({ name: "unsafe" });
+`,
+    ],
+    [
+      "method destructuring",
+      `import { db } from "@workspace/db";
+const { delete: remove } = db;
+remove(usersTable);
+`,
+    ],
+    [
+      "namespace destructuring",
+      `import * as workspaceDb from "@workspace/db";
+const { db: database } = workspaceDb;
+database.insert(usersTable);
+`,
+    ],
+    [
+      "namespace alias",
+      `import * as workspaceDb from "@workspace/db";
+const storage = workspaceDb;
+storage.db.update(usersTable);
+`,
+    ],
+    [
+      "dynamic import destructuring",
+      `const { db: database } = await import("@workspace/db");
+database.delete(usersTable);
+`,
+    ],
+    [
+      "dynamic namespace import",
+      `const storage = await import("@workspace/db");
+storage.db.insert(usersTable);
+`,
+    ],
+  ]) {
+    await t.test(name, async () => {
+      await withFixture(async ({ root, apiRoot }) => {
+        await writeFile(
+          path.join(apiRoot, "src", "routes", `${name.replaceAll(" ", "-")}.test.ts`),
+          source,
+        );
+        await expectFailure(root, "must use the .db.test.ts suffix");
+      });
+    });
+  }
+});
+
+test("transaction callback mutations are recognized", async () => {
+  await withFixture(async ({ root, apiRoot }) => {
+    await writeFile(
+      path.join(apiRoot, "src", "routes", "transaction.test.ts"),
+      `import { db } from "@workspace/db";
+await db.transaction(async (tx) => {
+  const transaction = tx;
+  await transaction.delete(usersTable);
+});
+`,
+    );
+    await expectFailure(root, "must use the .db.test.ts suffix");
+  });
+});
+
+test("raw SQL detects writes but permits SELECT and mutation words in literals", async (t) => {
+  await t.test("mutating SQL", async () => {
+    await withFixture(async ({ root, apiRoot }) => {
+      await writeFile(
+        path.join(apiRoot, "src", "routes", "raw-write.test.ts"),
+        `import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
+await db.execute(sql\`DELETE FROM users WHERE id = \${userId}\`);
+`,
+      );
+      await expectFailure(root, "must use the .db.test.ts suffix");
+    });
+  });
+
+  await t.test("read-only SQL", async () => {
+    await withFixture(async ({ root, apiRoot }) => {
+      await writeFile(
+        path.join(apiRoot, "src", "routes", "raw-read.test.ts"),
+        `import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
+await db.execute(sql\`SELECT 'delete is a label' AS label, update FROM audit_log\`);
+`,
+      );
+      assert.deepEqual(await validateDbTestWiring(root), { dbTestCount: 1 });
+    });
+  });
+
+  await t.test("data-modifying CTE", async () => {
+    await withFixture(async ({ root, apiRoot }) => {
+      await writeFile(
+        path.join(apiRoot, "src", "routes", "raw-cte-write.test.ts"),
+        `import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
+await db.execute(sql\`
+  WITH changed AS (DELETE FROM users WHERE id = \${userId} RETURNING id)
+  SELECT id FROM changed
+\`);
+`,
+      );
+      await expectFailure(root, "must use the .db.test.ts suffix");
+    });
+  });
+
+  await t.test("comment markers and commands inside quoted SQL stay read-only", async () => {
+    await withFixture(async ({ root, apiRoot }) => {
+      await writeFile(
+        path.join(apiRoot, "src", "routes", "raw-quoted-read.test.ts"),
+        `import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
+await db.execute(sql\`
+  SELECT '-- delete is text', $$/* update users */ DELETE FROM decoy$$,
+         "update", update(id), 'it''s still -- select text'
+  FROM audit_log
+\`);
+`,
+      );
+      assert.deepEqual(await validateDbTestWiring(root), { dbTestCount: 1 });
+    });
+  });
+});
+
+test("workspace pool and connected-client SQL mutations are recognized", async (t) => {
+  for (const [name, source] of [
+    [
+      "named pool alias",
+      `import { pool as databasePool } from "@workspace/db";
+await databasePool.query("UPDATE users SET active = false");
+`,
+    ],
+    [
+      "namespace pool",
+      `import * as storage from "@workspace/db";
+import { sql } from "drizzle-orm";
+await storage.pool.query(sql\`DELETE FROM users WHERE id = \${userId}\`);
+`,
+    ],
+    [
+      "dynamic pool destructuring",
+      `const { pool: databasePool } = await import("@workspace/db");
+await databasePool.query("INSERT INTO users(id) VALUES (1)");
+`,
+    ],
+    [
+      "connected client alias",
+      `import { pool } from "@workspace/db";
+const client = await pool.connect();
+const connection = client;
+await connection.query("TRUNCATE users");
+`,
+    ],
+  ]) {
+    await t.test(name, async () => {
+      await withFixture(async ({ root, apiRoot }) => {
+        await writeFile(
+          path.join(apiRoot, "src", "routes", `${name.replaceAll(" ", "-")}.test.ts`),
+          source,
+        );
+        await expectFailure(root, "must use the .db.test.ts suffix");
+      });
+    });
+  }
+});
+
+test("read-only workspace pool use and unrelated mock pools remain allowed", async () => {
+  await withFixture(async ({ root, apiRoot }) => {
+    await writeFile(
+      path.join(apiRoot, "src", "routes", "pool-read-only.test.ts"),
+      `import { pool } from "@workspace/db";
+await pool.query("SELECT update(id), 'delete' FROM audit_log");
+await pool.query("SELECT 1 /* outer DELETE /* nested UPDATE */ still comment */");
+await pool.end();
+const mockPool = { query: async () => undefined };
+await mockPool.query("DELETE FROM decoy");
+`,
+    );
+    assert.deepEqual(await validateDbTestWiring(root), { dbTestCount: 1 });
+  });
+});
+
 test("release gate is required", async () => {
   await withFixture(async ({ root, rootPackage }) => {
     rootPackage.scripts.release =
