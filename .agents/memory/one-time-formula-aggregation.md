@@ -16,3 +16,9 @@ Table column totals may evaluate a formula over aggregated source values rather 
 **Why:** The user needs overall production completion (total produced / total planned), not an unweighted average of order percentages. Dashboard/pivot measures have a separate user-selected aggregation; silently replacing that would change existing reports.
 
 **How to apply:** Keep table total settings backward-compatible by default and use the full filtered, authorized set for flat and group totals. Preserve the distinction between averaging row results and evaluating a formula after aggregating its inputs.
+
+Formula-over-totals must reference each dependency column's own total, including when that column is a formula; do not flatten formula chains into sums of primitive inputs.
+
+**Why:** The production percentage divides two calculated cost columns. Replacing sum(quantity × price) with sum(quantity) × sum(price) gives a wrong ratio even though simple numeric-input examples pass.
+
+**How to apply:** Resolve dependency totals with their own configured aggregation, row rounding and group suppression; retain cycle protection. Regression examples must include unequal quantities and prices and at least one formula-valued dependency.

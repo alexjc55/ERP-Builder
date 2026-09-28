@@ -1606,9 +1606,9 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   const visibleFields = fields.filter((f) => !hidden.has(f.fieldKey));
   // Formula aliases are an evaluation capability: never register a hidden formula
   // here, otherwise a visible formula can infer its output (and linked sources).
-  const toFormulaDef = (f: { fieldKey: string; formulaConfigJson: unknown }): FormulaFieldDef => {
-    const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
-    return { key: f.fieldKey, expression: cfg?.expression ?? "", decimals: cfg?.decimals ?? null };
+  const toFormulaDef = (f: { fieldKey: string; formulaConfigJson: unknown }): FormulaFieldDef & { totalMode?: "sum" | "average" | "formula" } => {
+    const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null; totalMode?: "sum" | "average" | "formula" } | null;
+    return { key: f.fieldKey, expression: cfg?.expression ?? "", decimals: cfg?.decimals ?? null, totalMode: cfg?.totalMode };
   };
   const entityFormulaDefs = visibleFields.filter((f) => f.fieldType === "function").map(toFormulaDef);
   const relationMeta = await buildRelationMeta(entityId, visibleFields);
@@ -2082,6 +2082,10 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     .filter((config): config is FormulaGroupConfig => config !== null);
   let formulaGroupWinners = new Map<string, Set<number>>();
   let pageFormulaGroupWinners = new Map<string, Set<number>>();
+  const totalSuppression = (recordId: number) => ({
+    suppressedEntityKeys: new Set([...formulaGroupWinners].filter(([, winners]) => !winners.has(recordId)).map(([key]) => key)),
+    suppressedPageKeys: new Set([...pageFormulaGroupWinners].filter(([, winners]) => !winners.has(recordId)).map(([key]) => key)),
+  });
   let formulaGroupRows: {
     id: number;
     createdAt: Date;
@@ -2339,6 +2343,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           visibleFields,
         );
         total.add({
+            ...totalSuppression(r.id),
             entityId,
             entityValues: vals,
             entityFormulas: entityFormulaDefs,
@@ -2507,6 +2512,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           for (const r of recRows) {
             const winners = pageFormulaGroupWinners.get(pf.fieldKey);
             total.add({
+                ...totalSuppression(r.id),
                 entityId,
                 entityValues: pageLinkedInputs.get(r.id) ?? ((r.values as Record<string, unknown> | null) ?? {}),
                 entityFormulas: entityFormulaDefs,
@@ -2927,6 +2933,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
         const expr = (cfg?.expression ?? "").trim();
         if (!expr) continue;
         addGroupFormula(b, f.fieldKey, cfg ?? {}, {
+            ...totalSuppression(r.id),
             entityId, entityValues: vals, entityFormulas: entityFormulaDefs,
             pageId: gPageId, pageValues: gPvByRec.get(r.id) ?? {},
             pageFormulas: gPfVisible.filter((field) => field.fieldType === "function").map(toFormulaDef), formulaOptions,
@@ -2943,6 +2950,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           const expr = (cfg?.expression ?? "").trim();
           if (!expr) continue;
           addGroupFormula(b, totalKey, cfg ?? {}, {
+              ...totalSuppression(r.id),
               entityId, entityValues: vals, entityFormulas: entityFormulaDefs,
               pageId: gPageId, pageValues: pvVals,
               pageFormulas: gPfVisible.filter((field) => field.fieldType === "function").map(toFormulaDef),

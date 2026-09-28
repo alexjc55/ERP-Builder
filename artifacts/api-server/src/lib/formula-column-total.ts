@@ -1,8 +1,15 @@
 import { cleanFpNoise, evaluateFormula, normalizeDecimals } from "@workspace/formula";
 import { buildQualifiedFormulaScope } from "./formula-runtime";
 
-type Scope = Parameters<typeof buildQualifiedFormulaScope>[0];
 type Config = { expression?: string; decimals?: number | null; totalMode?: "sum" | "average" | "formula" };
+type RuntimeScope = Parameters<typeof buildQualifiedFormulaScope>[0];
+type TotalDef = RuntimeScope["entityFormulas"][number] & Config;
+type Scope = Omit<RuntimeScope, "entityFormulas" | "pageFormulas"> & {
+  entityFormulas: TotalDef[];
+  pageFormulas?: TotalDef[];
+  suppressedEntityKeys?: ReadonlySet<string>;
+  suppressedPageKeys?: ReadonlySet<string>;
+};
 
 /**
  * Records-table aggregation only. Dashboard/pivot measures retain their explicit
@@ -16,7 +23,8 @@ export class FormulaColumnTotal {
   private context?: Scope;
   private entity: Record<string, unknown> = {};
   private page: Record<string, unknown> = {};
-  constructor(private config: Config) {}
+  private dependencies = new Map<string, FormulaColumnTotal | null>();
+  constructor(private config: Config, private ancestors = new Set<string>()) {}
 
   /** Legacy group sum cells remain absent when every row was empty/suppressed. */
   hasGroupValue(): boolean {
@@ -38,8 +46,7 @@ export class FormulaColumnTotal {
     if (this.config.totalMode === "formula") {
       const collect = (target: Record<string, unknown>, source: Record<string, unknown>, keys: Set<string>) => {
         for (const [key, raw] of Object.entries(source)) {
-          // Re-evaluate same-context formula chains over aggregate inputs rather
-          // than summing previously materialized row-level intermediate results.
+          // Formula columns have their own aggregation, not products of sums.
           if (keys.has(key)) continue;
           const n = typeof raw === "number" ? raw :
             typeof raw === "string" && raw.trim() !== "" ? Number(raw) : NaN;
@@ -52,11 +59,49 @@ export class FormulaColumnTotal {
       for (const f of scope.pageFormulas ?? []) entityKeys.add(`page:${scope.pageId}.${f.key}`);
       collect(this.entity, scope.entityValues, entityKeys);
       collect(this.page, scope.pageValues ?? {}, pageKeys);
+      const definitions = new Map<string, { def: TotalDef; id: string; suppressed: boolean }>();
+      const register = (defs: TotalDef[], prefix: string, suppressed?: ReadonlySet<string>) => {
+        for (const def of defs) {
+          const entry = { def, id: `${prefix}.${def.key}`, suppressed: suppressed?.has(def.key) ?? false };
+          definitions.set(def.key, entry);
+          definitions.set(entry.id, entry);
+        }
+      };
+      register(scope.entityFormulas, `entity:${scope.entityId}`, scope.suppressedEntityKeys);
+      if (scope.pageId != null) {
+        for (const key of Object.keys(scope.pageValues ?? {})) definitions.delete(key);
+      }
+      register(scope.pageFormulas ?? [], `page:${scope.pageId}`, scope.suppressedPageKeys);
+      for (const match of (this.config.expression ?? "").matchAll(/\{([^{}]+)\}/g)) {
+        const key = match[1].trim();
+        const entry = definitions.get(key);
+        if (!entry) continue;
+        if (!this.dependencies.has(key)) {
+          this.dependencies.set(key, this.ancestors.has(entry.id) ? null :
+            new FormulaColumnTotal(entry.def, new Set([...this.ancestors, entry.id])));
+        }
+        // Each referenced column totals its own rounded row results by default.
+        // Explicit average/formula modes are honored recursively, cycle-safe.
+      }
+      for (const [key, total] of this.dependencies) {
+        total?.add(scope, definitions.get(key)?.suppressed);
+      }
       this.count++;
       return;
     }
     try {
-      const out = evaluateFormula(this.config.expression ?? "", buildQualifiedFormulaScope(scope), scope.formulaOptions);
+      const entityValues = { ...scope.entityValues };
+      const pageValues = { ...scope.pageValues };
+      for (const key of scope.suppressedEntityKeys ?? []) {
+        entityValues[key] = entityValues[`entity:${scope.entityId}.${key}`] = 0;
+      }
+      for (const key of scope.suppressedPageKeys ?? []) {
+        pageValues[key] = 0;
+        entityValues[`page:${scope.pageId}.${key}`] = 0;
+      }
+      const out = evaluateFormula(this.config.expression ?? "", buildQualifiedFormulaScope({
+        ...scope, entityValues, pageValues,
+      }), scope.formulaOptions);
       if (typeof out === "number" && Number.isFinite(out)) {
         this.sum += this.round(out);
         this.count++;
@@ -70,7 +115,9 @@ export class FormulaColumnTotal {
       try {
         const scope = buildQualifiedFormulaScope({
           ...this.context, entityValues: this.entity, pageValues: this.page,
+          entityFormulas: [], pageFormulas: [],
         });
+        for (const [key, total] of this.dependencies) scope[key] = total?.value() ?? null;
         const out = evaluateFormula(this.config.expression ?? "", scope, this.context.formulaOptions);
         return typeof out === "number" && Number.isFinite(out) ? this.round(out) : 0;
       } catch { return 0; }

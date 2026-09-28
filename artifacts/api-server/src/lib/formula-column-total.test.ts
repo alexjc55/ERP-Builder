@@ -47,13 +47,15 @@ test("empty sets, zero divisors, and cycles remain finite", () => {
   assert.equal(cyclic.value(), 0);
 });
 
-test("formula chains recompute over totals, never sum materialized intermediates", () => {
-  const acc = new FormulaColumnTotal({ expression: "{ratio}*100", totalMode: "formula" });
-  rows.forEach(row => acc.add({
-    ...scope({ ...row, ratio: row.produced / row.planned }),
-    entityFormulas: [{ key: "ratio", expression: "{produced}/{planned}" }],
-  }));
-  assert.equal(acc.value(), 19);
+test("formula dependencies default to sum of row results, explicit modes override", () => {
+  for (const mode of [undefined, "sum", "average", "formula"] as const) {
+    const acc = new FormulaColumnTotal({ expression: "{ratio}*100", totalMode: "formula" });
+    rows.forEach(row => acc.add({
+      ...scope({ ...row, ratio: row.produced / row.planned }),
+      entityFormulas: [{ key: "ratio", expression: "{produced}/{planned}", totalMode: mode }],
+    }));
+    assert.equal(acc.value(), mode === "formula" ? 19 : mode === "average" ? 55 : 110);
+  }
 });
 
 test("page precedence, qualified references and materialized linked sources", () => {
@@ -61,12 +63,58 @@ test("page precedence, qualified references and materialized linked sources", ()
   rows.forEach(row => acc.add({
     ...scope({ planned: row.planned, produced: -1000, "linked:production": row.produced }),
     pageId: 9, pageValues: { produced: row.produced },
-    pageFormulas: [{ key: "ratio", expression: "{linked:production}/{entity:1.planned}" }],
+    pageFormulas: [{ key: "ratio", expression: "{linked:production}/{entity:1.planned}", totalMode: "formula" }],
   }));
   assert.equal(acc.value(), 19);
   const page = new FormulaColumnTotal({ expression, totalMode: "formula" });
   rows.forEach(row => page.add({ ...scope({ planned: row.planned, produced: -1000 }), pageId: 9, pageValues: { produced: row.produced } }));
   assert.equal(page.value(), 19);
+});
+
+test("production ratio uses rounded sum-of-products column totals, with page aliases", () => {
+  for (const qualified of [false, true]) {
+    const acc = new FormulaColumnTotal({
+      expression: qualified ? "{entity:1.production_cost}*100/{page:9.units_total_price}" :
+        "{production_cost}*100/{units_total_price}",
+      totalMode: "formula", decimals: 2,
+    });
+    for (const row of [
+      { quantity: 2, mnf_cost_unit: 3.24, unit_price: 10.24 },
+      { quantity: 5, mnf_cost_unit: 4.11, unit_price: 20.11 },
+    ]) acc.add({
+      ...scope(row), pageId: 9, pageValues: { price: row.unit_price },
+      entityFormulas: [{ key: "production_cost", expression: "{quantity}*{mnf_cost_unit}", decimals: 0 }],
+      pageFormulas: [{ key: "units_total_price", expression: "{entity:1.quantity}*{page:9.price}", decimals: 0 }],
+    });
+    // round(6.48)+round(20.55)=27; round(20.48)+round(100.55)=121.
+    // Not (2+5)*(3.24+4.11) / ((2+5)*(10.24+20.11)).
+    assert.equal(acc.value(), 22.31);
+  }
+});
+
+test("dependency suppression applies independently, including averages and nested formula totals", () => {
+  for (const mode of ["sum", "average", "formula"] as const) {
+    const acc = new FormulaColumnTotal({ expression: "{page:9.outer}", totalMode: "formula" });
+    [10, 30].forEach((x, i) => acc.add({
+      ...scope({ x }), pageId: 9,
+      entityFormulas: [{ key: "inner", expression: "{x}", totalMode: mode }],
+      pageFormulas: [{ key: "outer", expression: "{entity:1.inner}*2", totalMode: "formula" }],
+      suppressedEntityKeys: new Set(i ? ["inner"] : []),
+    }));
+    assert.equal(acc.value(), mode === "average" ? 10 : 20);
+  }
+});
+
+test("explicit formula-mode dependency cycles terminate", () => {
+  const acc = new FormulaColumnTotal({ expression: "{a}", totalMode: "formula" });
+  acc.add({
+    ...scope({}),
+    entityFormulas: [
+      { key: "a", expression: "{b}", totalMode: "formula" },
+      { key: "b", expression: "{a}", totalMode: "formula" },
+    ],
+  });
+  assert.equal(acc.value(), 0);
 });
 
 test("once-per-group non-winners stay zero; aggregate inputs only use winners", () => {
