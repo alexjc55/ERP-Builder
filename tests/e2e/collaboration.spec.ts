@@ -4,6 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import {
   db,
   pool,
+  auditLogTable,
   entitiesTable,
   entityFieldsTable,
   entityRecordsTable,
@@ -11,6 +12,7 @@ import {
   NO_ACCESS_PERMS,
   pagesTable,
   rolesTable,
+  systemEventsTable,
   usersTable,
 } from "@workspace/db";
 
@@ -101,18 +103,71 @@ test.beforeAll(async () => {
   fixture.userIds = users.map((user) => user.id);
 });
 
-test.afterAll(async () => {
+async function cleanupFixture() {
+  const errors: unknown[] = [];
   try {
-    if (fixture.userIds.length > 0) {
-      await db.delete(loginHistoryTable).where(inArray(loginHistoryTable.userId, fixture.userIds));
-      await db.delete(usersTable).where(inArray(usersTable.id, fixture.userIds));
+    // Recover exact run-scoped identities if setup inserted a row but failed
+    // before its RETURNING id could be recorded in fixture.
+    const users = await db.select({ id: usersTable.id }).from(usersTable)
+      .where(inArray(usersTable.email, Object.values(emails)));
+    const userIds = [...new Set([...fixture.userIds, ...users.map((user) => user.id)])];
+    const entities = await db.select({ id: entitiesTable.id }).from(entitiesTable)
+      .where(eq(entitiesTable.entityKey, `collaboration_e2e_${runId}`));
+    const entityIds = [...new Set([fixture.entityId, ...entities.map((entity) => entity.id)].filter((id) => id > 0))];
+    const pages = await db.select({ id: pagesTable.id }).from(pagesTable)
+      .where(eq(pagesTable.path, path));
+    const pageIds = [...new Set([fixture.pageId, ...pages.map((page) => page.id)].filter((id) => id > 0))];
+    const roleNames = [`Collaboration E2E open ${runId}`, `Collaboration E2E restricted ${runId}`];
+    const roles = await db.select({ id: rolesTable.id, nameJson: rolesTable.nameJson }).from(rolesTable);
+    const roleIds = [...new Set([
+      ...fixture.roleIds,
+      ...roles.filter((role) => roleNames.includes((role.nameJson as { en?: string }).en ?? ""))
+        .map((role) => role.id),
+    ])];
+
+    // Each stage runs even if an earlier stage fails, so a failed child delete
+    // cannot strand unrelated fixture rows (especially visible role options).
+    if (userIds.length > 0) {
+      try {
+        await db.delete(loginHistoryTable).where(inArray(loginHistoryTable.userId, userIds));
+        await db.delete(usersTable).where(inArray(usersTable.id, userIds));
+      } catch (error) { errors.push(error); }
     }
-    if (fixture.entityId > 0) await db.delete(entitiesTable).where(eq(entitiesTable.id, fixture.entityId));
-    if (fixture.pageId > 0) await db.delete(pagesTable).where(eq(pagesTable.id, fixture.pageId));
-    if (fixture.roleIds.length > 0) await db.delete(rolesTable).where(inArray(rolesTable.id, fixture.roleIds));
+    if (entityIds.length > 0) {
+      try {
+        await db.delete(systemEventsTable).where(inArray(systemEventsTable.entityId, entityIds));
+        await db.delete(auditLogTable).where(inArray(auditLogTable.entityId, entityIds));
+        await db.delete(entitiesTable).where(inArray(entitiesTable.id, entityIds));
+      } catch (error) { errors.push(error); }
+    }
+    if (pageIds.length > 0) {
+      try {
+        await db.delete(pagesTable).where(inArray(pagesTable.id, pageIds));
+      } catch (error) { errors.push(error); }
+    }
+    if (roleIds.length > 0) {
+      try {
+        await db.delete(rolesTable).where(inArray(rolesTable.id, roleIds));
+      } catch (error) { errors.push(error); }
+    }
+    const [remainingUsers, remainingEntities, remainingPages, remainingRoles] = await Promise.all([
+      db.select({ id: usersTable.id }).from(usersTable).where(inArray(usersTable.email, Object.values(emails))),
+      db.select({ id: entitiesTable.id }).from(entitiesTable).where(eq(entitiesTable.entityKey, `collaboration_e2e_${runId}`)),
+      db.select({ id: pagesTable.id }).from(pagesTable).where(eq(pagesTable.path, path)),
+      db.select({ id: rolesTable.id, nameJson: rolesTable.nameJson }).from(rolesTable)
+        .where(inArray(rolesTable.id, roleIds.length > 0 ? roleIds : [-1])),
+    ]);
+    if (remainingUsers.length || remainingEntities.length || remainingPages.length || remainingRoles.length) {
+      errors.push(new Error(`Collaboration E2E cleanup left rows: users=${remainingUsers.length}, entities=${remainingEntities.length}, pages=${remainingPages.length}, roles=${remainingRoles.length}`));
+    }
   } finally {
     await pool.end();
   }
+  if (errors.length) throw new AggregateError(errors, "Failed to fully clean collaboration E2E fixture");
+}
+
+test.afterAll(async () => {
+  await cleanupFixture();
 });
 
 test("two sessions preserve conflicts, redact coordinates, and reconnect once", async ({ browser }) => {
