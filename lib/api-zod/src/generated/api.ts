@@ -4009,6 +4009,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "value2": zod.string().optional()
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
+  "totalMode": zod.enum(['sum', 'average', 'formula']).optional().describe('Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values.'),
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({
   "kind": zod.enum(['pageLocal']),
@@ -4218,6 +4219,7 @@ export const CreateEntityFieldBody = zod.object({
   "value2": zod.string().optional()
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
+  "totalMode": zod.enum(['sum', 'average', 'formula']).optional().describe('Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values.'),
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({
   "kind": zod.enum(['pageLocal']),
@@ -4425,6 +4427,7 @@ export const GetFieldResponse = zod.object({
   "value2": zod.string().optional()
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
+  "totalMode": zod.enum(['sum', 'average', 'formula']).optional().describe('Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values.'),
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({
   "kind": zod.enum(['pageLocal']),
@@ -4624,6 +4627,7 @@ export const UpdateFieldBody = zod.object({
   "value2": zod.string().optional()
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
+  "totalMode": zod.enum(['sum', 'average', 'formula']).optional().describe('Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values.'),
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({
   "kind": zod.enum(['pageLocal']),
@@ -4823,6 +4827,7 @@ export const UpdateFieldResponse = zod.object({
   "value2": zod.string().optional()
 }).describe('One cross-field validation (\"fill\") rule. Distinct from conditional formatting (which is cosmetic): this is a HARD constraint on saving. Saving THIS field with a value (any non-empty value, or one of applyToValues when that list is non-empty) is allowed only when the field named conditionFieldKey (same entity) satisfies operator\/value (value2 is the upper bound for `between`). Otherwise the record save is rejected server-side with an auto-generated message.')).optional(),
   "formulaConfigJson": zod.object({
+  "totalMode": zod.enum(['sum', 'average', 'formula']).optional().describe('Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values.'),
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({
   "kind": zod.enum(['pageLocal']),
@@ -5039,6 +5044,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional().describe('Resolved rules inherited from formatInheritJson sources (response-only; apply after formatRulesJson).'),
   "formulaConfigJson": zod.object({
+  "totalMode": zod.enum(['sum', 'average', 'formula']).optional().describe('Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values.'),
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({
   "kind": zod.enum(['pageLocal']),
@@ -5242,6 +5248,7 @@ export const CreatePageFieldBody = zod.object({
   "fieldKey": zod.string().optional()
 }).describe('One source a field inherits conditional formatting from. Used when the field\'s value is copied from elsewhere by automations: at read time the source\'s rules are resolved server-side and appended after the field\'s own formatRulesJson. kind \"field\" inherits the source entity field\'s format rules (entityId + fieldKey required); kind \"status\" turns each of the source entity\'s record statuses into equals-rules painted with the status color (entityId required); kind \"pageField\" inherits a page-local field\'s format rules (pageId + fieldKey required).')).optional(),
   "formulaConfigJson": zod.object({
+  "totalMode": zod.enum(['sum', 'average', 'formula']).optional().describe('Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values.'),
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({
   "kind": zod.enum(['pageLocal']),
@@ -5436,6 +5443,7 @@ export const UpdatePageFieldBody = zod.object({
   "fieldKey": zod.string().optional()
 }).describe('One source a field inherits conditional formatting from. Used when the field\'s value is copied from elsewhere by automations: at read time the source\'s rules are resolved server-side and appended after the field\'s own formatRulesJson. kind \"field\" inherits the source entity field\'s format rules (entityId + fieldKey required); kind \"status\" turns each of the source entity\'s record statuses into equals-rules painted with the status color (entityId required); kind \"pageField\" inherits a page-local field\'s format rules (pageId + fieldKey required).')).optional(),
   "formulaConfigJson": zod.object({
+  "totalMode": zod.enum(['sum', 'average', 'formula']).optional().describe('Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values.'),
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({
   "kind": zod.enum(['pageLocal']),
@@ -5632,6 +5640,7 @@ export const UpdatePageFieldResponse = zod.object({
   "textColor": zod.string().optional()
 }).describe('One conditional-formatting rule. When a cell value matches operator\/value, the cell is painted cellColor and\/or the row rowColor, and the cell text is painted textColor. Rules are evaluated in order; first match wins per field. For the `between` operator, `value` is the lower bound and `value2` the upper bound (both inclusive).')).optional().describe('Resolved rules inherited from formatInheritJson sources (response-only; apply after formatRulesJson).'),
   "formulaConfigJson": zod.object({
+  "totalMode": zod.enum(['sum', 'average', 'formula']).optional().describe('Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values.'),
   "expression": zod.string().optional(),
   "sources": zod.array(zod.union([zod.object({
   "kind": zod.enum(['pageLocal']),
@@ -8656,13 +8665,13 @@ export const QueryEntityRecordsResponse = zod.object({
   "updatedAt": zod.coerce.date()
 })),
   "total": zod.number(),
-  "numericTotals": zod.record(zod.string(), zod.number()).optional().describe('Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages).'),
+  "numericTotals": zod.record(zod.string(), zod.number()).optional().describe('Totals for visible columns flagged showColumnTotal over the full filtered set (all pages). Formula fields use formulaConfigJson.totalMode (sum by default, average, or formula over summed source values).'),
   "pageFormulaValues": zod.record(zod.string(), zod.record(zod.string(), zod.unknown())).optional().describe('Server-materialized visible page formula values for returned rows, keyed first by record id and then page field key. Group-result non-winners are numeric zero.'),
   "groups": zod.array(zod.object({
   "key": zod.string().nullable().describe('Group key — the stored scalar value, or the linked record id as a string for a relation group field. Null = the \"no value\" group.'),
   "label": zod.string().nullish().describe('Human-readable group label (resolved linked-record projection for relation group fields). Null when the viewer may not see the projected value.'),
   "count": zod.number(),
-  "sums": zod.record(zod.string(), zod.number()).describe('Per-column sums for visible numeric\/formula columns flagged showColumnTotal (same keys as numericTotals), over this group\'s rows.'),
+  "sums": zod.record(zod.string(), zod.number()).describe('Per-column totals for visible numeric\/formula columns flagged showColumnTotal (same keys and calculation modes as numericTotals), over this group\'s rows.'),
   "values": zod.record(zod.string(), zod.unknown()).optional().describe('Per-column COMMON value — present for a column when every row in the group shares the same non-empty value. Keys match the sums keys (entity fieldKey \/ page-local `pf:{id}`). Only visible columns are included; relation\/lookup columns carry the projected value and are gated by the linked entity\'s field boundary (like the group label).')
 })).optional().describe('Present only when the query was sent with grouped=true on a mirror page with groupByFieldKey. One bucket per distinct group value over the FULL filtered set, ordered by label (the empty group last).'),
   "rowGroups": zod.record(zod.string(), zod.string().nullable()).optional().describe('Present only when the query was sent with withRowGroups=true on a grouped mirror page. Maps each returned record id (as a string key) to its group key (the same key space as RecordGroup.key; null = the \"no value\" group), so the client can render every group expanded.')

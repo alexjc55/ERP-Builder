@@ -175,6 +175,7 @@ export type FormulaFieldSource =
  * tokens (`{field_key}`) and structured sources with opaque qualified tokens.
  */
 export type FormulaFieldConfig = {
+  totalMode?: "sum" | "average" | "formula";
   expression?: string;
   decimals?: number | null;
   displayAffix?: string | null;

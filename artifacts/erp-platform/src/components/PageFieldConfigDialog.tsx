@@ -1,3 +1,4 @@
+import { FormulaTotalModeSelect, type FormulaTotalMode } from "./FormulaTotalModeSelect";
 import { useEffect, useState } from "react";
 import {
   useCreatePageField,
@@ -235,6 +236,7 @@ export function PageFieldConfigDialog({
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
   const [formatInherit, setFormatInherit] = useState<FormatInheritSource[]>([]);
   const [formula, setFormula] = useState("");
+  const [formulaTotalMode, setFormulaTotalMode] = useState<FormulaTotalMode>("sum");
   const [formulaSources, setFormulaSources] = useState<FormulaSource[]>([]);
   const [groupResult, setGroupResult] = useState<GroupResultConfig>({ enabled: false, fields: [] });
   const [formulaDecimals, setFormulaDecimals] = useState("");
@@ -287,6 +289,7 @@ export function PageFieldConfigDialog({
       setFormatInherit(Array.isArray(field.formatInheritJson) ? [...field.formatInheritJson] : []);
       const formulaConfig = field.formulaConfigJson as FormulaFieldConfig | null | undefined;
       setFormula(formulaConfig?.expression ?? "");
+      setFormulaTotalMode(formulaConfig?.totalMode ?? "sum");
       setFormulaSources(
         Array.isArray((formulaConfig as (FormulaFieldConfig & { sources?: FormulaSource[] }) | undefined)?.sources)
           ? [...((formulaConfig as FormulaFieldConfig & { sources: FormulaSource[] }).sources)]
@@ -339,6 +342,7 @@ export function PageFieldConfigDialog({
       setFormatRules([]);
       setFormatInherit([]);
       setFormula("");
+      setFormulaTotalMode("sum");
       setFormulaSources([]);
       setGroupResult({ enabled: false, fields: [] });
       setFormulaDecimals("");
@@ -572,6 +576,7 @@ export function PageFieldConfigDialog({
         fieldType === "function"
           ? {
               expression: formula.trim(),
+              totalMode: formulaTotalMode,
               ...(normalizeDecimals(formulaDecimals) != null
                 ? { decimals: normalizeDecimals(formulaDecimals) as number }
                 : {}),
@@ -1105,6 +1110,7 @@ export function PageFieldConfigDialog({
 
             {canTotal && showColumnTotal && (
               <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-2">
+                {fieldType === "function" && <FormulaTotalModeSelect value={formulaTotalMode} onChange={setFormulaTotalMode} />}
                 <p className="text-xs text-slate-500">
                   {t("fields.totalColorsHint", "Цвета ячейки итога столбца (необязательно)")}
                 </p>

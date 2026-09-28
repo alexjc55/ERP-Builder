@@ -3,6 +3,7 @@ import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitie
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { evaluateFormula, normalizeDecimals, cleanFpNoise, type FormulaFieldDef } from "@workspace/formula";
+import { FormulaColumnTotal } from "../lib/formula-column-total";
 import type { Request } from "express";
 import { requireAuth } from "../middlewares/auth";
 import {
@@ -2324,14 +2325,12 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       .filter((field) => field.fieldType === "function")
       .map(toFormulaDef);
     for (const f of formulaTotalFields) {
-      const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
+      const cfg = f.formulaConfigJson;
       const expr = (cfg?.expression ?? "").trim();
       if (!expr) continue;
-      const d = normalizeDecimals(cfg?.decimals);
-      let sum = 0;
+      const total = new FormulaColumnTotal(cfg ?? {});
       for (const r of allRows) {
         const winners = formulaGroupWinners.get(f.fieldKey);
-        if (winners && !winners.has(r.id)) continue;
         // Resolver inputs and aliases were assembled only from fields visible to
         // this viewer. Raw hidden values may exist in storage, but cannot become a
         // formula capability through a total.
@@ -2339,8 +2338,7 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           (r.values as Record<string, unknown> | null) ?? {},
           visibleFields,
         );
-        try {
-          const out = evaluateFormula(expr, buildQualifiedFormulaScope({
+        total.add({
             entityId,
             entityValues: vals,
             entityFormulas: entityFormulaDefs,
@@ -2348,21 +2346,9 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
             pageValues: totalCurrentPageValues.get(r.id),
             pageFormulas: totalPageFormulaDefs,
             formulaOptions,
-          }), formulaOptions);
-          if (typeof out === "number" && Number.isFinite(out)) {
-            // Round EACH per-row result to the field's configured decimals before
-            // summing, so the total equals the sum of the values the user actually
-            // sees per row (the client renders each cell via toFixed(decimals)).
-            // Summing raw then rounding once at the end would let `round(Σ raw)`
-            // drift from `Σ round(row)` and show a total that doesn't match the
-            // visible column.
-            sum += d != null ? Number(out.toFixed(d)) : cleanFpNoise(out);
-          }
-        } catch {
-          // Skip rows whose formula fails to parse/evaluate.
-        }
+          }, !!winners && !winners.has(r.id));
       }
-      numericTotals[f.fieldKey] = d != null ? Number(sum.toFixed(d)) : cleanFpNoise(sum);
+      numericTotals[f.fieldKey] = total.value();
     }
   }
 
@@ -2514,16 +2500,13 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           }
           numericTotals[totalKey] = sum;
         } else {
-          const cfg = pf.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
+          const cfg = pf.formulaConfigJson;
           const expr = (cfg?.expression ?? "").trim();
           if (!expr) continue;
-          const d = normalizeDecimals(cfg?.decimals);
-          let sum = 0;
+          const total = new FormulaColumnTotal(cfg ?? {});
           for (const r of recRows) {
             const winners = pageFormulaGroupWinners.get(pf.fieldKey);
-            if (winners && !winners.has(r.id)) continue;
-            try {
-              const out = evaluateFormula(expr, buildQualifiedFormulaScope({
+            total.add({
                 entityId,
                 entityValues: pageLinkedInputs.get(r.id) ?? ((r.values as Record<string, unknown> | null) ?? {}),
                 entityFormulas: entityFormulaDefs,
@@ -2531,15 +2514,9 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
                 pageValues: pvByRecord.get(r.id) ?? {},
                 pageFormulas: visiblePageAllFormulaRows.map(toFormulaDef),
                 formulaOptions,
-              }), formulaOptions);
-              // Round each per-row result to the configured decimals before summing
-              // so the total matches the sum of the per-row values the user sees.
-              if (typeof out === "number" && Number.isFinite(out)) sum += d != null ? Number(out.toFixed(d)) : cleanFpNoise(out);
-            } catch {
-              // Skip rows whose formula fails to parse/evaluate.
-            }
+              }, !!winners && !winners.has(r.id));
           }
-          numericTotals[totalKey] = d != null ? Number(sum.toFixed(d)) : cleanFpNoise(sum);
+          numericTotals[totalKey] = total.value();
         }
       }
       // Percent page fields: arithmetic mean over records that HAVE a value
@@ -2861,6 +2838,18 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       mixed: Set<string>;
     };
     const buckets = new Map<string, GroupBucket>();
+    const groupFormulaTotals = new Map<GroupBucket, Map<string, FormulaColumnTotal>>();
+    const addGroupFormula = (
+      bucket: GroupBucket, key: string,
+      config: ConstructorParameters<typeof FormulaColumnTotal>[0],
+      scope: Parameters<FormulaColumnTotal["add"]>[0], suppressed: boolean,
+    ) => {
+      let totals = groupFormulaTotals.get(bucket);
+      if (!totals) groupFormulaTotals.set(bucket, totals = new Map());
+      let total = totals.get(key);
+      if (!total) totals.set(key, total = new FormulaColumnTotal(config));
+      total.add(scope, suppressed);
+    };
     // Empty (null/'' /undefined) never yields a common value: a column shows a
     // group value only when EVERY row carries the same NON-empty value.
     const normCommon = (v: unknown): unknown => (v === undefined || v === null || v === "" ? null : v);
@@ -2934,22 +2923,14 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
       for (const f of totalFields) b.sums[f.fieldKey] = (b.sums[f.fieldKey] ?? 0) + numVal(vals[f.fieldKey]);
       for (const f of formulaTotalFields) {
         const winners = formulaGroupWinners.get(f.fieldKey);
-        if (winners && !winners.has(r.id)) continue;
-        const cfg = f.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
+        const cfg = f.formulaConfigJson;
         const expr = (cfg?.expression ?? "").trim();
         if (!expr) continue;
-        const d = normalizeDecimals(cfg?.decimals);
-        try {
-          const out = evaluateFormula(expr, buildQualifiedFormulaScope({
+        addGroupFormula(b, f.fieldKey, cfg ?? {}, {
             entityId, entityValues: vals, entityFormulas: entityFormulaDefs,
             pageId: gPageId, pageValues: gPvByRec.get(r.id) ?? {},
             pageFormulas: gPfVisible.filter((field) => field.fieldType === "function").map(toFormulaDef), formulaOptions,
-          }), formulaOptions);
-          if (typeof out === "number" && Number.isFinite(out))
-            b.sums[f.fieldKey] = (b.sums[f.fieldKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : cleanFpNoise(out));
-        } catch {
-          // Skip rows whose formula fails to parse/evaluate.
-        }
+          }, !!winners && !winners.has(r.id));
       }
       for (const pf of gPfSumFields) {
         const totalKey = `pf:${pf.id}`;
@@ -2958,23 +2939,15 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
           b.sums[totalKey] = (b.sums[totalKey] ?? 0) + numVal(pvVals[pf.fieldKey]);
         } else {
           const winners = pageFormulaGroupWinners.get(pf.fieldKey);
-          if (winners && !winners.has(r.id)) continue;
-          const cfg = pf.formulaConfigJson as { expression?: string; decimals?: number | null } | null;
+          const cfg = pf.formulaConfigJson;
           const expr = (cfg?.expression ?? "").trim();
           if (!expr) continue;
-          const d = normalizeDecimals(cfg?.decimals);
-          try {
-            const out = evaluateFormula(expr, buildQualifiedFormulaScope({
+          addGroupFormula(b, totalKey, cfg ?? {}, {
               entityId, entityValues: vals, entityFormulas: entityFormulaDefs,
               pageId: gPageId, pageValues: pvVals,
               pageFormulas: gPfVisible.filter((field) => field.fieldType === "function").map(toFormulaDef),
               formulaOptions,
-            }), formulaOptions);
-            if (typeof out === "number" && Number.isFinite(out))
-              b.sums[totalKey] = (b.sums[totalKey] ?? 0) + (d != null ? Number(out.toFixed(d)) : cleanFpNoise(out));
-          } catch {
-            // Skip rows whose formula fails to parse/evaluate.
-          }
+            }, !!winners && !winners.has(r.id));
         }
       }
       // page_ref group columns read the SOURCE page's value for this record.
@@ -3047,6 +3020,9 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
     }
     // Final per-group rounding for formula sums (matches the flat totals).
     for (const b of buckets.values()) {
+      for (const [key, total] of groupFormulaTotals.get(b) ?? []) {
+        if (total.hasGroupValue()) b.sums[key] = total.value();
+      }
       for (const f of formulaTotalFields) {
         const d = normalizeDecimals((f.formulaConfigJson as { decimals?: number | null } | null)?.decimals);
         if (b.sums[f.fieldKey] != null) b.sums[f.fieldKey] = d != null ? Number(b.sums[f.fieldKey]!.toFixed(d)) : cleanFpNoise(b.sums[f.fieldKey]!);

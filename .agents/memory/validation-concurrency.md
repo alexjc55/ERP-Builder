@@ -14,3 +14,9 @@ DB-test discovery must remain static; never execute or import fixture modules to
 **Why:** Runtime classification could perform the very unguarded mutation the inventory is intended to prevent. Static discovery catches naming mistakes but is not a sandbox for arbitrary helper functions or dynamically generated SQL.
 
 **How to apply:** Keep regression fixtures as inert source strings in temporary directories. Preserve explicit DB suffix/locked-command registration even when extending mutation inference.
+
+The workspace can carry a production environment label even while its configured database is the development database.
+
+**Why:** A guarded browser fixture skipped on that label; a read-only connection fingerprint matched the database selected explicitly through the development SQL tool.
+
+**How to apply:** Never assume the label is wrong or bypass fixture guards blindly. Confirm the actual database target independently before fixture writes; retain production guards in committed tests. A verified development target may use development labels only for the specific test process.

@@ -3169,6 +3169,18 @@ export interface FieldValidationRule {
   value2?: string;
 }
 
+/**
+ * Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values.
+ */
+export type FormulaFieldConfigTotalMode = typeof FormulaFieldConfigTotalMode[keyof typeof FormulaFieldConfigTotalMode];
+
+
+export const FormulaFieldConfigTotalMode = {
+  sum: 'sum',
+  average: 'average',
+  formula: 'formula',
+} as const;
+
 export type FormulaFieldRef = {
   scope: 'entity';
   fieldKey: string;
@@ -3243,6 +3255,8 @@ export type FormulaFieldSource = {
  * Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.
  */
 export interface FormulaFieldConfig {
+  /** Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values. */
+  totalMode?: FormulaFieldConfigTotalMode;
   expression?: string;
   /**
      * Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.
@@ -4917,7 +4931,7 @@ export interface RecordQuery {
 }
 
 /**
- * Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages).
+ * Totals for visible columns flagged showColumnTotal over the full filtered set (all pages). Formula fields use formulaConfigJson.totalMode (sum by default, average, or formula over summed source values).
  */
 export type RecordQueryResultNumericTotals = {[key: string]: number};
 
@@ -4932,7 +4946,7 @@ export type RecordQueryResultPageFormulaValues = {[key: string]: { [key: string]
 export type RecordQueryResultRowGroups = {[key: string]: string | null};
 
 /**
- * Per-column sums for visible numeric/formula columns flagged showColumnTotal (same keys as numericTotals), over this group's rows.
+ * Per-column totals for visible numeric/formula columns flagged showColumnTotal (same keys and calculation modes as numericTotals), over this group's rows.
  */
 export type RecordGroupSums = {[key: string]: number};
 
@@ -4953,7 +4967,7 @@ export interface RecordGroup {
      */
   label?: string | null;
   count: number;
-  /** Per-column sums for visible numeric/formula columns flagged showColumnTotal (same keys as numericTotals), over this group's rows. */
+  /** Per-column totals for visible numeric/formula columns flagged showColumnTotal (same keys and calculation modes as numericTotals), over this group's rows. */
   sums: RecordGroupSums;
   /** Per-column COMMON value — present for a column when every row in the group shares the same non-empty value. Keys match the sums keys (entity fieldKey / page-local `pf:{id}`). Only visible columns are included; relation/lookup columns carry the projected value and are gated by the linked entity's field boundary (like the group label). */
   values?: RecordGroupValues;
@@ -4962,7 +4976,7 @@ export interface RecordGroup {
 export interface RecordQueryResult {
   data: EntityRecord[];
   total: number;
-  /** Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages). */
+  /** Totals for visible columns flagged showColumnTotal over the full filtered set (all pages). Formula fields use formulaConfigJson.totalMode (sum by default, average, or formula over summed source values). */
   numericTotals?: RecordQueryResultNumericTotals;
   /** Server-materialized visible page formula values for returned rows, keyed first by record id and then page field key. Group-result non-winners are numeric zero. */
   pageFormulaValues?: RecordQueryResultPageFormulaValues;

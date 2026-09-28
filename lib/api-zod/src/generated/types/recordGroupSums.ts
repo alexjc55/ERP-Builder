@@ -7,6 +7,6 @@
  */
 
 /**
- * Per-column sums for visible numeric/formula columns flagged showColumnTotal (same keys as numericTotals), over this group's rows.
+ * Per-column totals for visible numeric/formula columns flagged showColumnTotal (same keys and calculation modes as numericTotals), over this group's rows.
  */
 export type RecordGroupSums = {[key: string]: number};

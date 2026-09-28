@@ -164,6 +164,9 @@ export function normalizeFormulaFieldSources(input: unknown): FormulaFieldSource
 export function validateFormulaFieldConfig(config: unknown): string[] {
   if (!isRecord(config)) return ["formulaConfigJson must be an object"];
   const errors: string[] = [];
+  if (config.totalMode !== undefined && !["sum", "average", "formula"].includes(String(config.totalMode))) {
+    errors.push("totalMode must be sum, average or formula");
+  }
   if (typeof config.expression === "string" && config.expression.length > FORMULA_CONFIG_LIMITS.expressionLength) {
     errors.push(`expression exceeds ${FORMULA_CONFIG_LIMITS.expressionLength} characters`);
   }

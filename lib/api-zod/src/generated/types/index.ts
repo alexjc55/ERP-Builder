@@ -211,6 +211,7 @@ export * from './formatOperator';
 export * from './formulaFieldConfig';
 export * from './formulaFieldConfigDisplayAffixPosition';
 export * from './formulaFieldConfigGroupResult';
+export * from './formulaFieldConfigTotalMode';
 export * from './formulaFieldRef';
 export * from './formulaFieldSource';
 export * from './generatedDocument';

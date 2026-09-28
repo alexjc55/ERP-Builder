@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { FormulaTotalModeSelect, type FormulaTotalMode } from "./FormulaTotalModeSelect";
 import {
   useCreateEntityField,
   useUpdateField,
@@ -222,6 +223,7 @@ export function FieldConfigDialog({
   }, [fieldType, allowedRoleIds, userOptions]);
   const [validationRules, setValidationRules] = useState<FieldValidationRule[]>([]);
   const [formula, setFormula] = useState("");
+  const [formulaTotalMode, setFormulaTotalMode] = useState<FormulaTotalMode>("sum");
   const [formulaSources, setFormulaSources] = useState<FormulaSource[]>([]);
   const [groupResult, setGroupResult] = useState<GroupResultConfig>({ enabled: false, fields: [] });
   const [formulaDecimals, setFormulaDecimals] = useState("");
@@ -291,6 +293,7 @@ export function FieldConfigDialog({
       setValidationRules(Array.isArray(field.validationRulesJson) ? field.validationRulesJson : []);
       const formulaConfig = field.formulaConfigJson as FormulaFieldConfig | null | undefined;
       setFormula(formulaConfig?.expression ?? "");
+      setFormulaTotalMode(formulaConfig?.totalMode ?? "sum");
       setFormulaSources(
         Array.isArray((formulaConfig as (FormulaFieldConfig & { sources?: FormulaSource[] }) | undefined)?.sources)
           ? [...((formulaConfig as FormulaFieldConfig & { sources: FormulaSource[] }).sources)]
@@ -347,6 +350,7 @@ export function FieldConfigDialog({
       setFormatInherit([]);
       setValidationRules([]);
       setFormula("");
+      setFormulaTotalMode("sum");
       setFormulaSources([]);
       setGroupResult({ enabled: false, fields: [] });
       setFormulaDecimals("");
@@ -570,6 +574,7 @@ export function FieldConfigDialog({
         fieldType === "function"
           ? {
               expression: formula.trim(),
+              totalMode: formulaTotalMode,
               ...(normalizeDecimals(formulaDecimals) != null
                 ? { decimals: normalizeDecimals(formulaDecimals) as number }
                 : {}),
@@ -1200,6 +1205,7 @@ export function FieldConfigDialog({
 
             {(fieldType === "number" || fieldType === "function" || fieldType === "percent") && showColumnTotal && (
               <div className="rounded-md border border-slate-100 bg-slate-50/50 p-3 space-y-2">
+                {fieldType === "function" && <FormulaTotalModeSelect value={formulaTotalMode} onChange={setFormulaTotalMode} />}
                 <p className="text-xs text-slate-500">
                   {t("fields.totalColorsHint", "Цвета ячейки итога столбца (необязательно)")}
                 </p>

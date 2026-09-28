@@ -14,7 +14,7 @@ import type { RecordQueryResultRowGroups } from './recordQueryResultRowGroups';
 export interface RecordQueryResult {
   data: EntityRecord[];
   total: number;
-  /** Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages). */
+  /** Totals for visible columns flagged showColumnTotal over the full filtered set (all pages). Formula fields use formulaConfigJson.totalMode (sum by default, average, or formula over summed source values). */
   numericTotals?: RecordQueryResultNumericTotals;
   /** Server-materialized visible page formula values for returned rows, keyed first by record id and then page field key. Group-result non-winners are numeric zero. */
   pageFormulaValues?: RecordQueryResultPageFormulaValues;

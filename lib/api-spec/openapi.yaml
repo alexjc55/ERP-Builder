@@ -7528,6 +7528,10 @@ components:
         rounds a numeric result to that many decimal places on display.
         `displayAffix` is optional plain text shown before or after the value.
       properties:
+        totalMode:
+          type: string
+          enum: [sum, average, formula]
+          description: Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values.
         expression:
           type: string
         sources:
@@ -10388,7 +10392,7 @@ components:
           type: object
           additionalProperties:
             type: number
-          description: Sum per numeric field flagged showColumnTotal, over the full filtered set (all pages).
+          description: Totals for visible columns flagged showColumnTotal over the full filtered set (all pages). Formula fields use formulaConfigJson.totalMode (sum by default, average, or formula over summed source values).
         pageFormulaValues:
           type: object
           additionalProperties:
@@ -10432,7 +10436,7 @@ components:
           type: object
           additionalProperties:
             type: number
-          description: Per-column sums for visible numeric/formula columns flagged showColumnTotal (same keys as numericTotals), over this group's rows.
+          description: Per-column totals for visible numeric/formula columns flagged showColumnTotal (same keys and calculation modes as numericTotals), over this group's rows.
         values:
           type: object
           additionalProperties: true

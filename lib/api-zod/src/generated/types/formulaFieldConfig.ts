@@ -7,12 +7,15 @@
  */
 import type { FormulaFieldConfigDisplayAffixPosition } from './formulaFieldConfigDisplayAffixPosition';
 import type { FormulaFieldConfigGroupResult } from './formulaFieldConfigGroupResult';
+import type { FormulaFieldConfigTotalMode } from './formulaFieldConfigTotalMode';
 import type { FormulaFieldSource } from './formulaFieldSource';
 
 /**
  * Display and formula configuration stored in formulaConfigJson for `number` and `function` fields. `expression` is used by function fields and safely references other fields of the same record via {field_key}; it is computed at read time and never stored. `decimals`, when set, rounds a numeric result to that many decimal places on display. `displayAffix` is optional plain text shown before or after the value.
  */
 export interface FormulaFieldConfig {
+  /** Column total calculation; defaults to sum of rounded numeric row results. Average ignores nonnumeric results. Formula evaluates the expression once over summed source values. */
+  totalMode?: FormulaFieldConfigTotalMode;
   expression?: string;
   /**
      * Qualified page-local and linked aggregate inputs made available to the expression under their opaque key.
