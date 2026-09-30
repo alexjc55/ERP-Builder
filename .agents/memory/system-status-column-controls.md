@@ -3,11 +3,11 @@ name: System status column controls
 description: Durable boundary between entity-owned status presentation, human status edits, and trusted system assignments.
 ---
 
-The system status column is entity metadata represented by the synthetic `__status__` token. Its label and position belong to the entity; a missing position preserves the historical placement after entity fields. Page-local field ordering and status-column visibility overrides remain separate concerns.
+The system status column is entity metadata represented by the synthetic `__status__` token. Its default label and position belong to the entity; mirror pages may override its position within their unified page column order. A legacy mirror order without the status token retains entity-based placement until an explicit reorder.
 
-**Why:** Treating status as a fixed table appendage makes headers, totals, grouped rows, inline creation, and normal rows drift apart. Mixing it with page-local metadata also makes the same entity inconsistent across pages.
+**Why:** Treating status as a fixed table appendage makes headers, totals, grouped rows, inline creation, and normal rows drift apart. Excluding status from mirror-page ordering prevented users from placing it between page-local columns; changing the entity order there also unexpectedly affected other pages.
 
-**How to apply:** Any table surface that renders entity columns must derive status placement from the same ordered-column sequence. Existing role/page hide flags may remove the status column from display but must not alter entity status metadata.
+**How to apply:** Any table surface must derive status placement from the same ordered-column sequence. Mirror-page reorder actions include status and persist page order without changing entity defaults. Existing role/page hide flags may remove the status column from display but must not alter entity status metadata.
 
 The manual-edit policy is a hard server boundary for every explicit human status choice, including ordinary create/update and interactive import. It has no super-admin bypass. It does not block omitted/default status assignment, select-to-status mappings, workflow/system actions, automations, or trusted inbound integrations.
 

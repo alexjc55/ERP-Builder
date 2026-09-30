@@ -5,6 +5,7 @@ import { draftRelationSelections } from "@/lib/relationSelections";
 import { columnGroupBodyStyle, resolveColumnGroupCellStyle } from "@/lib/columnGroupStyles";
 import { InlineListPicker } from "@/components/InlineListPicker";
 import { CompactStatus } from "@/components/CompactStatus";
+import { orderMirrorColumns, moveMirrorColumn } from "@/lib/mirrorColumnOrder";
 import { bulkErrorLabel } from "@/lib/bulkErrorLabel";
 import {
   useListEntityRecords,
@@ -2377,7 +2378,7 @@ export function EntityRecords({
   };
 
   // Mirror pages let a "pages" admin reorder columns (both source-entity and
-  // page-local) into ONE unified order, independent of the source entity's field
+  // page-local and status) into ONE unified order, independent of the source entity's field
   // sortOrder. Saved as page.mirrorColumnOrderJson (ordered tokens) via the page
   // update endpoint (which requires the "pages" cap server-side). On a regular
   // entity page this stays false and the existing per-group sortOrder reorder
@@ -6663,25 +6664,7 @@ export function EntityRecords({
       ),
     ];
     if (isMirror && mirrorColumnOrder && mirrorColumnOrder.length > 0) {
-      const idx = new Map(mirrorColumnOrder.map((tok, i) => [tok, i] as const));
-      const statusCol = base.find((c) => c.kind === "status");
-      const sorted: UnifiedCol[] = base
-        .filter((c): c is Exclude<UnifiedCol, { kind: "status" }> => c.kind !== "status")
-        .map((c, i) => ({ c, i }))
-        .sort((a, b) => {
-          const ia = idx.has(a.c.token) ? (idx.get(a.c.token) as number) : Number.MAX_SAFE_INTEGER;
-          const ib = idx.has(b.c.token) ? (idx.get(b.c.token) as number) : Number.MAX_SAFE_INTEGER;
-          return ia !== ib ? ia - ib : a.i - b.i;
-        })
-        .map((x) => x.c);
-      if (statusCol) {
-        const statusOrder = entity?.statusSortOrder ?? Number.MAX_SAFE_INTEGER;
-        const insertAt = sorted.findIndex(
-          (col) => col.kind === "entity" && col.field.sortOrder > statusOrder,
-        );
-        sorted.splice(insertAt < 0 ? sorted.length : insertAt, 0, statusCol);
-      }
-      return sorted;
+      return orderMirrorColumns(base, mirrorColumnOrder, entity?.statusSortOrder ?? Number.MAX_SAFE_INTEGER);
     }
     return base;
   }, [displayFields, displayedPageFields, showStatusColumn, entity?.statusSortOrder, isMirror, mirrorColumnOrder]);
@@ -7703,7 +7686,7 @@ export function EntityRecords({
                   <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0 ml-auto sm:ml-0" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="start" className="w-56 p-0">
+              <PopoverContent align="start" className="w-72 max-w-[calc(100vw-2rem)] p-0">
                 {/* Plain overflow div, NOT Radix ScrollArea (h-full viewport
                     breaks under max-height-only parent — list clips, no scroll). */}
                 <div className="max-h-64 overflow-y-auto">
@@ -7711,11 +7694,11 @@ export function EntityRecords({
                     {filterableStatuses.map((s: Status) => (
                       <label
                         key={s.id}
-                        className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer text-sm"
+                        className="flex min-w-0 items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 cursor-pointer text-sm"
                       >
-                        <Checkbox checked={statusFilter.includes(s.id)} onCheckedChange={() => toggleStatus(s.id)} />
+                        <Checkbox className="shrink-0" checked={statusFilter.includes(s.id)} onCheckedChange={() => toggleStatus(s.id)} />
                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: s.color }} />
-                        <span className="truncate">{ml(s.nameJson)}</span>
+                        <CompactStatus className="min-w-0 [overflow-wrap:anywhere]" name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />
                       </label>
                     ))}
                   </div>
@@ -8643,6 +8626,7 @@ export function EntityRecords({
                           { kind: "status" },
                         );
                         const statusIndex = entityOrder.findIndex((candidate) => candidate.kind === "status");
+                        const mirrorStatusIndex = orderedColumns.findIndex((candidate) => candidate.kind === "status");
                         return (
                           <th
                             key={STATUS_COLUMN_KEY}
@@ -8650,14 +8634,16 @@ export function EntityRecords({
                             style={colWidthStyle(STATUS_COLUMN_KEY)}
                           >
                             <div className="flex items-center justify-center gap-1">
-                              {setupMode && canConfigureColumns && (
+                              {setupMode && (isMirror ? canReorderMirrorColumns : canConfigureColumns) && (
                                 <>
                                   <Button
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7 text-slate-400"
-                                    disabled={statusIndex === 0 || reorderFieldsMutation.isPending}
-                                    onClick={() => moveEntityColumn(entityOrder, statusIndex, -1)}
+                                    disabled={isMirror ? mirrorStatusIndex === 0 || updateMirrorOrderMutation.isPending : statusIndex === 0 || reorderFieldsMutation.isPending}
+                                    onClick={() => isMirror
+                                      ? saveMirrorColumnOrder(moveMirrorColumn(orderedColumns, mirrorStatusIndex, -1))
+                                      : moveEntityColumn(entityOrder, statusIndex, -1)}
                                     title={t("records.moveColumnLeft", "Левее")}
                                   >
                                     <ChevronLeft className="w-3.5 h-3.5" />
@@ -8666,8 +8652,10 @@ export function EntityRecords({
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7 text-slate-400"
-                                    disabled={statusIndex === entityOrder.length - 1 || reorderFieldsMutation.isPending}
-                                    onClick={() => moveEntityColumn(entityOrder, statusIndex, 1)}
+                                    disabled={isMirror ? mirrorStatusIndex === orderedColumns.length - 1 || updateMirrorOrderMutation.isPending : statusIndex === entityOrder.length - 1 || reorderFieldsMutation.isPending}
+                                    onClick={() => isMirror
+                                      ? saveMirrorColumnOrder(moveMirrorColumn(orderedColumns, mirrorStatusIndex, 1))
+                                      : moveEntityColumn(entityOrder, statusIndex, 1)}
                                     title={t("records.moveColumnRight", "Правее")}
                                   >
                                     <ChevronRight className="w-3.5 h-3.5" />
@@ -8685,9 +8673,7 @@ export function EntityRecords({
                       const isPageCol = col.kind === "page";
                       const ci = displayFields.findIndex((x: Field) => x.id === fld.id);
                       const pi = displayedPageFields.findIndex((x: PageField) => x.id === fld.id);
-                      const mirrorMovableColumns = orderedColumns.filter(
-                        (candidate): candidate is Exclude<UnifiedCol, { kind: "status" }> => candidate.kind !== "status",
-                      );
+                      const mirrorMovableColumns = orderedColumns;
                       const mirrorIndex = mirrorMovableColumns.findIndex((candidate) => candidate.token === col.token);
                       // Setup-mode reorder arrows. On a mirror page columns reorder
                       // across the UNIFIED order (entity + page-local interleaved),
@@ -8702,12 +8688,7 @@ export function EntityRecords({
                               className="h-7 w-7 text-slate-400"
                               disabled={mirrorIndex === 0 || updateMirrorOrderMutation.isPending}
                               onClick={() => {
-                                const target = mirrorIndex - 1;
-                                if (target < 0) return;
-                                const next = [...mirrorMovableColumns];
-                                const [moved] = next.splice(mirrorIndex, 1);
-                                next.splice(target, 0, moved);
-                                saveMirrorColumnOrder(next.map((candidate) => candidate.token));
+                                saveMirrorColumnOrder(moveMirrorColumn(mirrorMovableColumns, mirrorIndex, -1));
                               }}
                               title={t("records.moveColumnLeft", "Левее")}
                             >
@@ -8719,12 +8700,7 @@ export function EntityRecords({
                               className="h-7 w-7 text-slate-400"
                               disabled={mirrorIndex === mirrorMovableColumns.length - 1 || updateMirrorOrderMutation.isPending}
                               onClick={() => {
-                                const target = mirrorIndex + 1;
-                                if (target >= mirrorMovableColumns.length) return;
-                                const next = [...mirrorMovableColumns];
-                                const [moved] = next.splice(mirrorIndex, 1);
-                                next.splice(target, 0, moved);
-                                saveMirrorColumnOrder(next.map((candidate) => candidate.token));
+                                saveMirrorColumnOrder(moveMirrorColumn(mirrorMovableColumns, mirrorIndex, 1));
                               }}
                               title={t("records.moveColumnRight", "Правее")}
                             >
