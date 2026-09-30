@@ -246,6 +246,8 @@ export function PageFieldConfigDialog({
   const [percentDecimals, setPercentDecimals] = useState("");
   const [relationId, setRelationId] = useState<number | null>(null);
   const [selectionMode, setSelectionMode] = useState<"single" | "multiple">("single");
+  const [showRelationStatus, setShowRelationStatus] = useState(false);
+  const [allowRelationCreate, setAllowRelationCreate] = useState(true);
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
   // relation + lookup: when set, the field projects a PAGE-LOCAL field of the
   // linked record instead of one of its entity fields (value read-only; a
@@ -312,6 +314,8 @@ export function PageFieldConfigDialog({
       );
       setRelationId(field.relationConfigJson?.relationId ?? null);
       setSelectionMode(field.relationConfigJson?.selectionMode ?? "single");
+      setShowRelationStatus(field.relationConfigJson?.showStatus ?? false);
+      setAllowRelationCreate(field.relationConfigJson?.allowCreate ?? true);
       setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
       setRelatedPageId(field.relationConfigJson?.relatedPageId ?? null);
       setRefSourcePageId(field.pageRefConfigJson?.sourcePageId ?? null);
@@ -354,6 +358,8 @@ export function PageFieldConfigDialog({
       setPercentDecimals("");
       setRelationId(null);
       setSelectionMode("single");
+      setShowRelationStatus(false);
+      setAllowRelationCreate(true);
       setRelatedFieldKey("");
       setRelatedPageId(null);
       setRefSourcePageId(null);
@@ -617,8 +623,8 @@ export function PageFieldConfigDialog({
             ? relatedPageId != null
               ? // Page-source relation fields project a page-local field (read-only
                 // display) while the link itself stays assignable.
-                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId, selectionMode }
-              : { relationId, relatedFieldKey: relatedFieldKey || null, selectionMode }
+                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId, selectionMode, showStatus: showRelationStatus, allowCreate: allowRelationCreate }
+              : { relationId, relatedFieldKey: relatedFieldKey || null, selectionMode, showStatus: showRelationStatus, allowCreate: allowRelationCreate }
             : {},
       permissionsJson: permissions,
       allowFormulaExport,
@@ -942,6 +948,16 @@ export function PageFieldConfigDialog({
                       <SelectItem value="multiple">Несколько записей</SelectItem>
                     </SelectContent>
                   </Select>
+                  {selectionMode === "multiple" && <div className="space-y-3 pt-2">
+                    <Label className="flex items-center gap-2">
+                      <Switch checked={showRelationStatus} onCheckedChange={setShowRelationStatus} />
+                      {t("fields.relationShowStatus", "Показывать статус и тег в списке")}
+                    </Label>
+                    <Label className="flex items-center gap-2">
+                      <Switch checked={allowRelationCreate} onCheckedChange={setAllowRelationCreate} />
+                      {t("fields.relationAllowCreate", "Разрешить создание связанной записи")}
+                    </Label>
+                  </div>}
                 </div>}
                 {relationId != null && relatedPages.length > 0 && (
                   <div className="space-y-1.5">

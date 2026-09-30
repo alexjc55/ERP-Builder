@@ -1,5 +1,16 @@
 import type { Relation, RelationFieldConfig } from "@workspace/db";
 
+/** A hidden status must not leak metadata even when its record remains visible. */
+export function canShowRelationStatus(
+  config: RelationFieldConfig | null | undefined,
+  statusId: number | null,
+  visibility: { hiddenStatusIds: number[]; hiddenRowStatusIds: number[] },
+): boolean {
+  return config?.showStatus === true && statusId != null
+    && !visibility.hiddenStatusIds.includes(statusId)
+    && !visibility.hiddenRowStatusIds.includes(statusId);
+}
+
 /** Direction/cardinality is metadata, never inferred from a projected label. */
 export function selectionDirection(
   relation: Pick<Relation, "sourceEntityId" | "targetEntityId" | "relationType">,

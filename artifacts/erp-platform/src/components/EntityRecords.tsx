@@ -506,6 +506,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                 <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                   {f.fieldType === "relation" && f.relationConfigJson?.selectionMode === "multiple" ? (
                     <MultipleRelationPicker entityId={entityId} fieldKey={f.fieldKey} recordId={record.id}
+                      showStatus={f.relationConfigJson?.showStatus} allowCreate={f.relationConfigJson?.allowCreate}
                       expectedVersion={record.version} ids={rel?.linkedRecordIds} members={rel?.members}
                       disabled={!relAssignable} dependent={relIsDependent} parentValue={relParentValue}
                       renderQuickCreate={f.relationConfigJson?.relatedPageId ? undefined : props => <QuickCreateRelatedRecordDialog {...props} pageId={pageId}
@@ -626,6 +627,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
               <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                 {pf.relationConfigJson?.selectionMode === "multiple" && pageId != null ? (
                   <MultipleRelationPicker entityId={entityId} pageId={pageId} pageField fieldKey={pf.fieldKey}
+                    showStatus={pf.relationConfigJson?.showStatus} allowCreate={pf.relationConfigJson?.allowCreate}
                     recordId={record.id} expectedVersion={record.version} ids={rel?.linkedRecordIds} members={rel?.members}
                     disabled={!relAssignable} onChanged={() => setRefreshTick(x => x + 1)}
                     onEditingChange={open => setEditingCell(open ? { recordId: record.id, fieldKey: pfKey } : null)} />
@@ -2965,6 +2967,8 @@ export function EntityRecords({
             pf.relationConfigJson?.relatedFieldKey,
             pf.relationConfigJson?.relatedPageId,
             pf.relationConfigJson?.selectionMode,
+            pf.relationConfigJson?.showStatus,
+            pf.relationConfigJson?.allowCreate,
           ]),
       ),
     [pageFields],
@@ -2981,6 +2985,8 @@ export function EntityRecords({
             f.relationConfigJson?.relationId,
             f.relationConfigJson?.relatedFieldKey,
             f.relationConfigJson?.selectionMode,
+            f.relationConfigJson?.showStatus,
+            f.relationConfigJson?.allowCreate,
             f.dependencyConfigJson,
           ]),
       ),
@@ -9144,6 +9150,7 @@ export function EntityRecords({
                           <td key={col.pinKey} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(col.pinKey, "#eff6ff"), ...colWidthStyle(col.pinKey) }}>
                             {editable && f.fieldType === "relation" && f.relationConfigJson?.selectionMode === "multiple" ? (
                               <MultipleRelationPicker entityId={entityId} fieldKey={f.fieldKey}
+                                showStatus={f.relationConfigJson?.showStatus} allowCreate={f.relationConfigJson?.allowCreate}
                                 value={newRow[f.fieldKey]} dependent={addRowRelInfo.dependent} parentValue={addRowRelInfo.parentValue}
                                 renderQuickCreate={f.relationConfigJson?.relatedPageId ? undefined : props => <QuickCreateRelatedRecordDialog {...props} pageId={permPageId}
                                   lockedFieldKey={addRowRelInfo.relatedFilterFieldKey} lockedValue={addRowRelInfo.parentValue} labelFieldKey={f.relationConfigJson?.relatedFieldKey} />}
@@ -10983,6 +10990,7 @@ function RecordFormBody({
             </Label>
             {field.fieldType === "relation" && field.relationConfigJson?.selectionMode === "multiple" ? (
               <MultipleRelationPicker entityId={entityId} fieldKey={field.fieldKey}
+                showStatus={field.relationConfigJson?.showStatus} allowCreate={field.relationConfigJson?.allowCreate}
                 recordId={mode === "edit" ? recordId ?? undefined : undefined} expectedVersion={expectedVersion}
                 value={form[field.fieldKey]} ids={relVal?.linkedRecordIds} members={relVal?.members}
                 disabled={access !== "edit" || relLocked || (mode === "edit" && !relVal?.editable)} dependent={dep.dependent} parentValue={dep.parentValue}

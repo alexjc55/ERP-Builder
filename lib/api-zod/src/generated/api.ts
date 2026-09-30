@@ -4082,6 +4082,8 @@ export const ListEntityFieldsResponseItem = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
+  "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
@@ -4293,6 +4295,8 @@ export const CreateEntityFieldBody = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
+  "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
@@ -4502,6 +4506,8 @@ export const GetFieldResponse = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
+  "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
@@ -4703,6 +4709,8 @@ export const UpdateFieldBody = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
+  "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
@@ -4904,6 +4912,8 @@ export const UpdateFieldResponse = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
+  "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
@@ -5118,6 +5128,8 @@ export const ListPageFieldsResponseItem = zod.object({
   "decimals": zod.number().min(listPageFieldsResponsePercentConfigJsonDecimalsMin).max(listPageFieldsResponsePercentConfigJsonDecimalsMax).nullish()
 }).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
+  "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
+  "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
@@ -5323,6 +5335,8 @@ export const CreatePageFieldBody = zod.object({
   "decimals": zod.number().min(createPageFieldBodyPercentConfigJsonDecimalsMin).max(createPageFieldBodyPercentConfigJsonDecimalsMax).nullish()
 }).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
+  "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
+  "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
@@ -5519,6 +5533,8 @@ export const UpdatePageFieldBody = zod.object({
   "decimals": zod.number().min(updatePageFieldBodyPercentConfigJsonDecimalsMin).max(updatePageFieldBodyPercentConfigJsonDecimalsMax).nullish()
 }).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
+  "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
+  "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
@@ -5717,6 +5733,8 @@ export const UpdatePageFieldResponse = zod.object({
   "decimals": zod.number().min(updatePageFieldResponsePercentConfigJsonDecimalsMin).max(updatePageFieldResponsePercentConfigJsonDecimalsMax).nullish()
 }).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
+  "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
+  "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
@@ -5922,7 +5940,8 @@ export const GetPageRelatedValuesBody = zod.object({
 })
 
 
-
+export const getPageRelatedValuesResponseValuesItemMembersItemStatusShowTagsDefault = true;
+export const getPageRelatedValuesResponseValuesItemMembersItemStatusPrimaryTagIdDefault = null;
 
 export const GetPageRelatedValuesResponse = zod.object({
   "columns": zod.array(zod.object({
@@ -5949,6 +5968,37 @@ export const GetPageRelatedValuesResponse = zod.object({
   "linkedRecordId": zod.number().nullish(),
   "linkedRecordIds": zod.array(zod.number()).optional(),
   "members": zod.array(zod.object({
+  "status": zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "statusKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "tagIds": zod.array(zod.number()).describe('Global status tag ids assigned to this status.'),
+  "showTags": zod.boolean().default(getPageRelatedValuesResponseValuesItemMembersItemStatusShowTagsDefault),
+  "primaryTagId": zod.number().nullable().default(getPageRelatedValuesResponseValuesItemMembersItemStatusPrimaryTagIdDefault),
+  "displayTags": zod.array(zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string()
+})).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
+  "isDefault": zod.boolean(),
+  "isFinal": zod.boolean(),
+  "isArchiveTrigger": zod.boolean(),
+  "archiveAfterDays": zod.number(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).optional().describe('Present only when showStatus is enabled and the related record and its current status are visible to the viewer.'),
   "id": zod.number().describe('The related entity record id (to link to).'),
   "label": zod.string().describe('Display label (the related field value as text).'),
   "value": zod.string().optional().describe('Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user\'s display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`.')
@@ -5973,15 +6023,49 @@ export const GetPageRelatedCandidatesBody = zod.object({
   "ignoreDependency": zod.boolean().optional().describe('When true, skip the dependent (cascading) parent-value narrowing and return all RBAC-visible candidates regardless of any dependencyConfig. Used by contexts without a row\/parent chain (e.g. the automations conditions editor) so a dependent relation field can still offer its full value list.')
 })
 
+export const getPageRelatedCandidatesResponseCandidatesItemStatusShowTagsDefault = true;
+export const getPageRelatedCandidatesResponseCandidatesItemStatusPrimaryTagIdDefault = null;
+
 export const GetPageRelatedCandidatesResponse = zod.object({
   "candidates": zod.array(zod.object({
+  "status": zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "statusKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "tagIds": zod.array(zod.number()).describe('Global status tag ids assigned to this status.'),
+  "showTags": zod.boolean().default(getPageRelatedCandidatesResponseCandidatesItemStatusShowTagsDefault),
+  "primaryTagId": zod.number().nullable().default(getPageRelatedCandidatesResponseCandidatesItemStatusPrimaryTagIdDefault),
+  "displayTags": zod.array(zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string()
+})).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
+  "isDefault": zod.boolean(),
+  "isFinal": zod.boolean(),
+  "isArchiveTrigger": zod.boolean(),
+  "archiveAfterDays": zod.number(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).optional().describe('Present only when showStatus is enabled and the related record and its current status are visible to the viewer.'),
   "id": zod.number().describe('The related entity record id (to link to).'),
   "label": zod.string().describe('Display label (the related field value as text).'),
   "value": zod.string().optional().describe('Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user\'s display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`.')
 })),
-  "relatedEntityId": zod.number().optional().describe('The id of the related entity these candidates belong to. Returned by the entity-keyed endpoint so the client can quick-create a new record in that entity and link it. Omitted by the page-keyed endpoint.'),
-  "relatedFieldKey": zod.string().optional().describe('The related entity field key used to build a candidate\'s display label. Returned by the entity-keyed endpoint so the client can derive the label of a freshly quick-created record (which is not yet in the candidate list). Omitted by the page-keyed endpoint.'),
-  "canCreate": zod.boolean().optional().describe('True when the viewer may create a record in the related entity (drives the in-place \"add record\" affordance in the picker).')
+  "relatedEntityId": zod.number().optional().describe('The id of the related entity these candidates belong to. Returned by the entity-keyed endpoint so the client can quick-create a new record in that entity and link it. Also returned by the page-keyed endpoint.'),
+  "relatedFieldKey": zod.string().optional().describe('The related entity field key used to build a candidate\'s display label. Returned by the entity-keyed endpoint so the client can derive the label of a freshly quick-created record (which is not yet in the candidate list). Also returned by the page-keyed endpoint.'),
+  "canCreate": zod.boolean().optional().describe('True when allowCreate is not false and the viewer may create a record in the related entity (drives the in-place \"add record\" affordance).')
 })
 
 
@@ -6004,10 +6088,44 @@ export const SetPageRelatedLinkBody = zod.object({
   "expectedVersion": zod.number().min(1).optional().describe('Expected entity_records.version of the base record.')
 })
 
+export const setPageRelatedLinkResponseMembersItemStatusShowTagsDefault = true;
+export const setPageRelatedLinkResponseMembersItemStatusPrimaryTagIdDefault = null;
+
 export const SetPageRelatedLinkResponse = zod.object({
   "linkedRecordId": zod.number().nullable().describe('The linked record id after the change (null if cleared).'),
   "linkedRecordIds": zod.array(zod.number()).optional(),
   "members": zod.array(zod.object({
+  "status": zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "statusKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "tagIds": zod.array(zod.number()).describe('Global status tag ids assigned to this status.'),
+  "showTags": zod.boolean().default(setPageRelatedLinkResponseMembersItemStatusShowTagsDefault),
+  "primaryTagId": zod.number().nullable().default(setPageRelatedLinkResponseMembersItemStatusPrimaryTagIdDefault),
+  "displayTags": zod.array(zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string()
+})).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
+  "isDefault": zod.boolean(),
+  "isFinal": zod.boolean(),
+  "isArchiveTrigger": zod.boolean(),
+  "archiveAfterDays": zod.number(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).optional().describe('Present only when showStatus is enabled and the related record and its current status are visible to the viewer.'),
   "id": zod.number().describe('The related entity record id (to link to).'),
   "label": zod.string().describe('Display label (the related field value as text).'),
   "value": zod.string().optional().describe('Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user\'s display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`.')
@@ -6136,7 +6254,8 @@ export const GetEntityRelatedValuesBody = zod.object({
 })
 
 
-
+export const getEntityRelatedValuesResponseValuesItemMembersItemStatusShowTagsDefault = true;
+export const getEntityRelatedValuesResponseValuesItemMembersItemStatusPrimaryTagIdDefault = null;
 
 export const GetEntityRelatedValuesResponse = zod.object({
   "columns": zod.array(zod.object({
@@ -6163,6 +6282,37 @@ export const GetEntityRelatedValuesResponse = zod.object({
   "linkedRecordId": zod.number().nullish(),
   "linkedRecordIds": zod.array(zod.number()).optional(),
   "members": zod.array(zod.object({
+  "status": zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "statusKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "tagIds": zod.array(zod.number()).describe('Global status tag ids assigned to this status.'),
+  "showTags": zod.boolean().default(getEntityRelatedValuesResponseValuesItemMembersItemStatusShowTagsDefault),
+  "primaryTagId": zod.number().nullable().default(getEntityRelatedValuesResponseValuesItemMembersItemStatusPrimaryTagIdDefault),
+  "displayTags": zod.array(zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string()
+})).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
+  "isDefault": zod.boolean(),
+  "isFinal": zod.boolean(),
+  "isArchiveTrigger": zod.boolean(),
+  "archiveAfterDays": zod.number(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).optional().describe('Present only when showStatus is enabled and the related record and its current status are visible to the viewer.'),
   "id": zod.number().describe('The related entity record id (to link to).'),
   "label": zod.string().describe('Display label (the related field value as text).'),
   "value": zod.string().optional().describe('Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user\'s display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`.')
@@ -6187,15 +6337,49 @@ export const GetEntityRelatedCandidatesBody = zod.object({
   "ignoreDependency": zod.boolean().optional().describe('When true, skip the dependent (cascading) parent-value narrowing and return all RBAC-visible candidates regardless of any dependencyConfig. Used by contexts without a row\/parent chain (e.g. the automations conditions editor) so a dependent relation field can still offer its full value list.')
 })
 
+export const getEntityRelatedCandidatesResponseCandidatesItemStatusShowTagsDefault = true;
+export const getEntityRelatedCandidatesResponseCandidatesItemStatusPrimaryTagIdDefault = null;
+
 export const GetEntityRelatedCandidatesResponse = zod.object({
   "candidates": zod.array(zod.object({
+  "status": zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "statusKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "tagIds": zod.array(zod.number()).describe('Global status tag ids assigned to this status.'),
+  "showTags": zod.boolean().default(getEntityRelatedCandidatesResponseCandidatesItemStatusShowTagsDefault),
+  "primaryTagId": zod.number().nullable().default(getEntityRelatedCandidatesResponseCandidatesItemStatusPrimaryTagIdDefault),
+  "displayTags": zod.array(zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string()
+})).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
+  "isDefault": zod.boolean(),
+  "isFinal": zod.boolean(),
+  "isArchiveTrigger": zod.boolean(),
+  "archiveAfterDays": zod.number(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).optional().describe('Present only when showStatus is enabled and the related record and its current status are visible to the viewer.'),
   "id": zod.number().describe('The related entity record id (to link to).'),
   "label": zod.string().describe('Display label (the related field value as text).'),
   "value": zod.string().optional().describe('Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user\'s display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`.')
 })),
-  "relatedEntityId": zod.number().optional().describe('The id of the related entity these candidates belong to. Returned by the entity-keyed endpoint so the client can quick-create a new record in that entity and link it. Omitted by the page-keyed endpoint.'),
-  "relatedFieldKey": zod.string().optional().describe('The related entity field key used to build a candidate\'s display label. Returned by the entity-keyed endpoint so the client can derive the label of a freshly quick-created record (which is not yet in the candidate list). Omitted by the page-keyed endpoint.'),
-  "canCreate": zod.boolean().optional().describe('True when the viewer may create a record in the related entity (drives the in-place \"add record\" affordance in the picker).')
+  "relatedEntityId": zod.number().optional().describe('The id of the related entity these candidates belong to. Returned by the entity-keyed endpoint so the client can quick-create a new record in that entity and link it. Also returned by the page-keyed endpoint.'),
+  "relatedFieldKey": zod.string().optional().describe('The related entity field key used to build a candidate\'s display label. Returned by the entity-keyed endpoint so the client can derive the label of a freshly quick-created record (which is not yet in the candidate list). Also returned by the page-keyed endpoint.'),
+  "canCreate": zod.boolean().optional().describe('True when allowCreate is not false and the viewer may create a record in the related entity (drives the in-place \"add record\" affordance).')
 })
 
 
@@ -6218,10 +6402,44 @@ export const SetEntityRelatedLinkBody = zod.object({
   "expectedVersion": zod.number().min(1).optional().describe('Expected entity_records.version of the base record.')
 })
 
+export const setEntityRelatedLinkResponseMembersItemStatusShowTagsDefault = true;
+export const setEntityRelatedLinkResponseMembersItemStatusPrimaryTagIdDefault = null;
+
 export const SetEntityRelatedLinkResponse = zod.object({
   "linkedRecordId": zod.number().nullable().describe('The linked record id after the change (null if cleared).'),
   "linkedRecordIds": zod.array(zod.number()).optional(),
   "members": zod.array(zod.object({
+  "status": zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "statusKey": zod.string(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string(),
+  "tagIds": zod.array(zod.number()).describe('Global status tag ids assigned to this status.'),
+  "showTags": zod.boolean().default(setEntityRelatedLinkResponseMembersItemStatusShowTagsDefault),
+  "primaryTagId": zod.number().nullable().default(setEntityRelatedLinkResponseMembersItemStatusPrimaryTagIdDefault),
+  "displayTags": zod.array(zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string()
+})).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
+  "isDefault": zod.boolean(),
+  "isFinal": zod.boolean(),
+  "isArchiveTrigger": zod.boolean(),
+  "archiveAfterDays": zod.number(),
+  "sortOrder": zod.number(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).optional().describe('Present only when showStatus is enabled and the related record and its current status are visible to the viewer.'),
   "id": zod.number().describe('The related entity record id (to link to).'),
   "label": zod.string().describe('Display label (the related field value as text).'),
   "value": zod.string().optional().describe('Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user\'s display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`.')

@@ -11,6 +11,10 @@ import type { RelationFieldConfigSelectionMode } from './relationFieldConfigSele
  * Config for a relation-type page field (surfaces one field of a linked related record).
  */
 export interface RelationFieldConfig {
+  /** Show visible related-record statuses in candidates and members. Omission means false. */
+  showStatus?: boolean;
+  /** Offer creation of related records in the picker, subject to create permission. Omission means true. */
+  allowCreate?: boolean;
   /** Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links. */
   selectionMode?: RelationFieldConfigSelectionMode;
   /** @nullable */

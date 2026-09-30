@@ -3368,6 +3368,10 @@ export const RelationFieldConfigSelectionMode = {
  * Config for a relation-type page field (surfaces one field of a linked related record).
  */
 export interface RelationFieldConfig {
+  /** Show visible related-record statuses in candidates and members. Omission means false. */
+  showStatus?: boolean;
+  /** Offer creation of related records in the picker, subject to create permission. Omission means true. */
+  allowCreate?: boolean;
   /** Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links. */
   selectionMode?: RelationFieldConfigSelectionMode;
   /** @nullable */
@@ -3538,7 +3542,37 @@ export interface PageRelatedColumn {
   writeThrough?: boolean;
 }
 
+export type StatusDisplayTagsItem = {
+  id: number;
+  nameJson: MultilingualText;
+  color: string;
+};
+
+export interface Status {
+  id: number;
+  entityId: number;
+  statusKey: string;
+  nameJson: MultilingualText;
+  color: string;
+  /** Global status tag ids assigned to this status. */
+  tagIds: number[];
+  showTags: boolean;
+  primaryTagId: number | null;
+  /** Tags shown on this status; assignments in tagIds remain unchanged. */
+  readonly displayTags: readonly StatusDisplayTagsItem[];
+  isDefault: boolean;
+  isFinal: boolean;
+  isArchiveTrigger: boolean;
+  archiveAfterDays: number;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PageRelatedCandidate {
+  /** Present only when showStatus is enabled and the related record and its current status are visible to the viewer. */
+  status?: Status;
   /** The related entity record id (to link to). */
   id: number;
   /** Display label (the related field value as text). */
@@ -3579,11 +3613,11 @@ export interface PageRelatedCandidatesInput {
 
 export interface PageRelatedCandidates {
   candidates: PageRelatedCandidate[];
-  /** The id of the related entity these candidates belong to. Returned by the entity-keyed endpoint so the client can quick-create a new record in that entity and link it. Omitted by the page-keyed endpoint. */
+  /** The id of the related entity these candidates belong to. Returned by the entity-keyed endpoint so the client can quick-create a new record in that entity and link it. Also returned by the page-keyed endpoint. */
   relatedEntityId?: number;
-  /** The related entity field key used to build a candidate's display label. Returned by the entity-keyed endpoint so the client can derive the label of a freshly quick-created record (which is not yet in the candidate list). Omitted by the page-keyed endpoint. */
+  /** The related entity field key used to build a candidate's display label. Returned by the entity-keyed endpoint so the client can derive the label of a freshly quick-created record (which is not yet in the candidate list). Also returned by the page-keyed endpoint. */
   relatedFieldKey?: string;
-  /** True when the viewer may create a record in the related entity (drives the in-place "add record" affordance in the picker). */
+  /** True when allowCreate is not false and the viewer may create a record in the related entity (drives the in-place "add record" affordance). */
   canCreate?: boolean;
 }
 
@@ -3867,34 +3901,6 @@ export interface BulkPageRecordFieldUpdate {
   recordIds: number[];
   /** Expected versions keyed by record id. For page_ref, each value is the actual source page_record_values version from fieldVersions[fieldKey]; otherwise it is the base page row version. */
   expectedVersions?: BulkPageRecordFieldUpdateExpectedVersions;
-}
-
-export type StatusDisplayTagsItem = {
-  id: number;
-  nameJson: MultilingualText;
-  color: string;
-};
-
-export interface Status {
-  id: number;
-  entityId: number;
-  statusKey: string;
-  nameJson: MultilingualText;
-  color: string;
-  /** Global status tag ids assigned to this status. */
-  tagIds: number[];
-  showTags: boolean;
-  primaryTagId: number | null;
-  /** Tags shown on this status; assignments in tagIds remain unchanged. */
-  readonly displayTags: readonly StatusDisplayTagsItem[];
-  isDefault: boolean;
-  isFinal: boolean;
-  isArchiveTrigger: boolean;
-  archiveAfterDays: number;
-  sortOrder: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface StatusInput {

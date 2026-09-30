@@ -5,6 +5,14 @@ description: Durable decisions for entity-to-entity relations and record links (
 
 # Relations engine
 
+## Picker display options do not grant permissions
+
+Status/tag display is opt-in, and disabling related-record creation hides the picker affordance rather than revoking entity-wide creation rights.
+
+**Why:** The user needs per-field presentation controls; those must not become a second, inconsistent authorization system.
+
+**How to apply:** Apply record/status visibility before enriching members or candidates with status tags, and combine the field's creation toggle with existing create permission.
+
 ## Multiple dependent relations are normalized ID snapshots
 
 `relationConfigJson.selectionMode: "multiple"` uses one `record_links` row per selected member, never a JSON label list or quantities. It requires a cardinality permitting multiple links on the field's side; never silently repurpose an existing many-to-one relation. The existing `dependencyConfigJson` pair (`dependsOnFieldKey`, `relatedFilterFieldKey`) identifies a single parent relation and the candidate's relation to the SAME entity. Match linked record IDs, not projected names/numbers (labels can repeat).

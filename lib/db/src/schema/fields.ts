@@ -228,6 +228,8 @@ export type SelectOption = {
  * writes a row in `record_links`. Shared by entity fields and page fields.
  */
 export type RelationFieldConfig = {
+  showStatus?: boolean;
+  allowCreate?: boolean;
   selectionMode?: "single" | "multiple";
   relationId?: number | null;
   relatedFieldKey?: string | null;

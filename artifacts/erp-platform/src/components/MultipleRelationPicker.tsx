@@ -4,17 +4,23 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { relationDraftIds } from "@/lib/relationSelections";
+import { Search } from "lucide-react";
+import { CompactStatus } from "./CompactStatus";
+import { useML, useT } from "@/lib/i18n";
 
 export function MultipleRelationPicker(props: {
   entityId: number; fieldKey: string; pageId?: number; pageField?: boolean;
   recordId?: number; expectedVersion?: number; ids?: number[];
   members?: PageRelatedCandidate[]; value?: unknown; disabled?: boolean;
+  showStatus?: boolean; allowCreate?: boolean;
   dependent?: boolean; parentValue?: string | null;
   onChange?: (value: string) => void; onChanged?: (version?: number) => void;
   onEditingChange?: (open: boolean) => void;
   renderQuickCreate?: (props: { open: boolean; onOpenChange: (open: boolean) => void; relatedEntityId: number; onCreated: (id: number, label: string | null) => void }) => ReactNode;
 }) {
   const { entityId, fieldKey, recordId, pageId, pageField, parentValue, dependent } = props;
+  const t = useT();
+  const ml = useML();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
   const [candidates, setCandidates] = useState<PageRelatedCandidate[]>([]);
@@ -23,6 +29,7 @@ export function MultipleRelationPicker(props: {
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createEntityId, setCreateEntityId] = useState<number | null>(null);
+  const [candidateRevision, setCandidateRevision] = useState(0);
   const entityCandidates = useGetEntityRelatedCandidates().mutateAsync;
   const pageCandidates = useGetPageRelatedCandidates().mutateAsync;
   const entityLink = useSetEntityRelatedLink();
@@ -54,7 +61,7 @@ export function MultipleRelationPicker(props: {
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : "Не удалось загрузить записи"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [open, entityId, pageId, pageField, fieldKey, dependent, parentValue, gated, props.disabled, entityCandidates, pageCandidates]);
+  }, [open, entityId, pageId, pageField, fieldKey, dependent, parentValue, gated, props.disabled, props.showStatus, props.allowCreate, candidateRevision, entityCandidates, pageCandidates]);
   const save = async () => {
     setError("");
     try {
@@ -74,30 +81,42 @@ export function MultipleRelationPicker(props: {
     }
   };
   const visible = props.disabled ? props.members ?? [] : candidates;
+  const filtered = visible.filter(c => c.label.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
   const labels = new Map([...(props.members ?? []), ...candidates].map(c => [c.id, c.label]));
   return <>
     <button type="button" className="text-sm text-blue-700 underline underline-offset-4" onClick={() => changeOpen(true)}>
-      {ids.length} записей
+      {ids.length}
     </button>
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>Связанные записи ({selected.length})</DialogTitle></DialogHeader>
         {gated && <p role="status">Сначала выберите родительскую запись.</p>}
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-        {!props.disabled && <Input aria-label="Поиск связанных записей" value={search} onChange={e => setSearch(e.target.value)} />}
+        <label className="block space-y-1.5 text-sm font-medium">
+          <span>{t("relations.searchRecords", "Поиск связанных записей")}</span>
+          <span className="relative block">
+            <Search aria-hidden="true" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input type="search" className="border-slate-400 ps-9" placeholder={t("relations.searchPlaceholder", "Введите название для поиска…")}
+              value={search} onChange={e => setSearch(e.target.value)} />
+          </span>
+        </label>
         {!props.disabled && <div className="flex gap-2">
           <Button type="button" variant="outline" disabled={loading || busy || !!gated || !!error} onClick={() => setSelected(candidates.map(c => c.id))}>Выбрать все ({candidates.length})</Button>
           <Button type="button" variant="ghost" disabled={busy} onClick={() => setSelected([])}>Очистить</Button>
         </div>}
-        {!props.disabled && !gated && !loading && !error && createEntityId != null && props.renderQuickCreate &&
+        {props.allowCreate !== false && !props.disabled && !gated && !loading && !error && createEntityId != null && props.renderQuickCreate &&
           <Button type="button" variant="outline" onClick={() => setCreateOpen(true)}>Создать связанную запись</Button>}
         <div className="max-h-72 overflow-y-auto space-y-2">
-          {loading ? <p role="status">Загрузка…</p> : visible.filter(c => c.label.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map(c =>
+          {loading ? <p role="status">Загрузка…</p> : filtered.map(c =>
             <label key={c.id} className="flex items-center gap-2 rounded border p-2 text-sm">
               {!props.disabled && <input type="checkbox" checked={selected.includes(c.id)} disabled={busy || !!gated} onChange={e => setSelected(old => e.target.checked ? [...old, c.id] : old.filter(id => id !== c.id))} />}
-              <span>{c.label || `#${c.id}`}</span>
+              <span className="min-w-0 flex-1 break-words">{c.label || `#${c.id}`}</span>
+              {props.showStatus && c.status && <CompactStatus name={ml(c.status.nameJson)} color={c.status.color}
+                displayTags={c.status.displayTags} ml={ml} className="max-w-[45%] shrink-0" />}
             </label>)}
-          {!loading && !error && visible.length === 0 && <p className="text-sm text-muted-foreground">Нет доступных записей</p>}
+          {!loading && !error && filtered.length === 0 && <p role="status" className="text-sm text-muted-foreground">
+            {search ? t("relations.noSearchResults", "Ничего не найдено") : t("relations.noAvailableRecords", "Нет доступных записей")}
+          </p>}
           {!props.disabled && selected.filter(id => !candidates.some(c => c.id === id)).map(id =>
             <div key={id} className="text-sm">{labels.get(id) ?? `#${id}`} <button type="button" disabled={busy} onClick={() => setSelected(old => old.filter(v => v !== id))}>Удалить</button></div>)}
         </div>
@@ -107,12 +126,13 @@ export function MultipleRelationPicker(props: {
         </div>
       </DialogContent>
     </Dialog>
-    {createEntityId != null && props.renderQuickCreate?.({
+    {props.allowCreate !== false && createEntityId != null && props.renderQuickCreate?.({
       open: createOpen, onOpenChange: setCreateOpen, relatedEntityId: createEntityId,
       onCreated: (id, label) => {
         setCandidates(old => [...old.filter(c => c.id !== id), { id, label: label ?? `#${id}` }]);
         setSelected(old => [...new Set([...old, id])]);
         setCreateOpen(false);
+        setCandidateRevision(value => value + 1);
       },
     })}
   </>;

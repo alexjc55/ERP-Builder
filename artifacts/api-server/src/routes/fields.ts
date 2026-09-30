@@ -113,7 +113,7 @@ async function validateEntityRelationConfig(
     const pageCheck = await validateRelatedPageSource(relatedPageId, relatedEntityId, relatedFieldKey);
     if ("error" in pageCheck) return pageCheck;
     // Page-source lookups are always read-only — never carry writeThrough.
-    return { ok: true, cleaned: { relationId, relatedFieldKey, relatedPageId, selectionMode: cfg?.selectionMode } };
+    return { ok: true, cleaned: { relationId, relatedFieldKey, relatedPageId, selectionMode: cfg?.selectionMode, showStatus: cfg?.showStatus, allowCreate: cfg?.allowCreate } };
   }
 
   const [rf] = await db
@@ -137,7 +137,7 @@ async function validateEntityRelationConfig(
   ) {
     return { error: "Формулу с групповым результатом нельзя использовать как источник подстановки" };
   }
-  const cleaned: RelationFieldConfig = { relationId, relatedFieldKey, selectionMode: cfg?.selectionMode };
+  const cleaned: RelationFieldConfig = { relationId, relatedFieldKey, selectionMode: cfg?.selectionMode, showStatus: cfg?.showStatus, allowCreate: cfg?.allowCreate };
   // writeThrough is a lookup-only flag: when set, the (read-only) lookup cell
   // becomes a gateway that opens the linked record's full editor in the related
   // entity. It is meaningless for relation fields, so callers gate it via

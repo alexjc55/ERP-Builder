@@ -5,8 +5,11 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { Status } from './status';
 
 export interface PageRelatedCandidate {
+  /** Present only when showStatus is enabled and the related record and its current status are visible to the viewer. */
+  status?: Status;
   /** The related entity record id (to link to). */
   id: number;
   /** Display label (the related field value as text). */

@@ -8165,6 +8165,9 @@ components:
       type: object
       required: [id, label]
       properties:
+        status:
+          $ref: "#/components/schemas/Status"
+          description: Present only when showStatus is enabled and the related record and its current status are visible to the viewer.
         id:
           type: integer
           description: The related entity record id (to link to).
@@ -8193,19 +8196,19 @@ components:
           description: >-
             The id of the related entity these candidates belong to. Returned by
             the entity-keyed endpoint so the client can quick-create a new record
-            in that entity and link it. Omitted by the page-keyed endpoint.
+            in that entity and link it. Also returned by the page-keyed endpoint.
         relatedFieldKey:
           type: string
           description: >-
             The related entity field key used to build a candidate's display
             label. Returned by the entity-keyed endpoint so the client can derive
             the label of a freshly quick-created record (which is not yet in the
-            candidate list). Omitted by the page-keyed endpoint.
+            candidate list). Also returned by the page-keyed endpoint.
         canCreate:
           type: boolean
           description: >-
-            True when the viewer may create a record in the related entity (drives
-            the in-place "add record" affordance in the picker).
+            True when allowCreate is not false and the viewer may create a record
+            in the related entity (drives the in-place "add record" affordance).
 
     PageRelatedLinkInput:
       type: object
@@ -8328,6 +8331,12 @@ components:
       type: object
       description: Config for a relation-type page field (surfaces one field of a linked related record).
       properties:
+        showStatus:
+          type: boolean
+          description: Show visible related-record statuses in candidates and members. Omission means false.
+        allowCreate:
+          type: boolean
+          description: Offer creation of related records in the picker, subject to create permission. Omission means true.
         selectionMode:
           type: string
           enum: [single, multiple]

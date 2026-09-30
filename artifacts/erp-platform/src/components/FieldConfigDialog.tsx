@@ -167,6 +167,8 @@ export function FieldConfigDialog({
   const { data: userOptions = [] } = useListUserOptions();
   const [relationId, setRelationId] = useState<number | null>(null);
   const [selectionMode, setSelectionMode] = useState<"single" | "multiple">("single");
+  const [showRelationStatus, setShowRelationStatus] = useState(false);
+  const [allowRelationCreate, setAllowRelationCreate] = useState(true);
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
   // lookup-only: when on, clicking a lookup cell opens the source record's
   // full editor (gated server-side by the viewer's update perm on that entity).
@@ -317,6 +319,8 @@ export function FieldConfigDialog({
       setLockAfterCreate(field.lockAfterCreate ?? false);
       setRelationId(field.relationConfigJson?.relationId ?? null);
       setSelectionMode(field.relationConfigJson?.selectionMode ?? "single");
+      setShowRelationStatus(field.relationConfigJson?.showStatus ?? false);
+      setAllowRelationCreate(field.relationConfigJson?.allowCreate ?? true);
       setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
       setWriteThrough(field.relationConfigJson?.writeThrough ?? false);
       setRelatedPageId(field.relationConfigJson?.relatedPageId ?? null);
@@ -363,6 +367,8 @@ export function FieldConfigDialog({
       setLockAfterCreate(false);
       setRelationId(null);
       setSelectionMode("single");
+      setShowRelationStatus(false);
+      setAllowRelationCreate(true);
       setRelatedFieldKey("");
       setWriteThrough(false);
       setRelatedPageId(null);
@@ -621,8 +627,8 @@ export function FieldConfigDialog({
             ? relatedPageId != null
               ? // Page-source relation fields project a page-local field (read-only
                 // display) while the link itself stays assignable.
-                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId, selectionMode }
-              : { relationId, relatedFieldKey: relatedFieldKey || null, selectionMode }
+                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId, selectionMode, showStatus: showRelationStatus, allowCreate: allowRelationCreate }
+              : { relationId, relatedFieldKey: relatedFieldKey || null, selectionMode, showStatus: showRelationStatus, allowCreate: allowRelationCreate }
             : {},
       isKey:
         fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && fieldType !== "created_at"
@@ -752,6 +758,16 @@ export function FieldConfigDialog({
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">Эта сторона связи должна допускать несколько записей. Каждая выбранная запись сохраняется отдельно.</p>
+                  {selectionMode === "multiple" && <div className="space-y-3 pt-2">
+                    <Label className="flex items-center gap-2">
+                      <Switch checked={showRelationStatus} onCheckedChange={setShowRelationStatus} />
+                      {t("fields.relationShowStatus", "Показывать статус и тег в списке")}
+                    </Label>
+                    <Label className="flex items-center gap-2">
+                      <Switch checked={allowRelationCreate} onCheckedChange={setAllowRelationCreate} />
+                      {t("fields.relationAllowCreate", "Разрешить создание связанной записи")}
+                    </Label>
+                  </div>}
                 </div>}
                 {relationId != null && relatedPages.length > 0 && (
                   <div className="space-y-1.5">

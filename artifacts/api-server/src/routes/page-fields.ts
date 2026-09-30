@@ -7,6 +7,7 @@ import {
   entitiesTable,
   entityFieldsTable,
   entityRecordsTable,
+  entityStatusesTable,
   relationsTable,
   recordLinksTable,
   usersTable,
@@ -24,7 +25,8 @@ import {
 } from "@workspace/db";
 import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
 import { replaceSingleRelationLink, emitLinkChangedEvents } from "../lib/record-links";
-import { selectionDirection, normalizeSelection } from "../lib/relation-selection-policy";
+import { selectionDirection, normalizeSelection, canShowRelationStatus } from "../lib/relation-selection-policy";
+import { enrichStatusTags } from "../lib/status-display";
 import { validateVisibleSelection } from "../lib/record-relation-selections";
 import { sanitizeOptionsInput, normalizeOptions, optionValues, optionNumbers, mappedStatusForChangedValues, type SelectOption } from "../lib/selectOptions";
 import { validateSelectStatusMappings } from "../lib/select-status-mappings";
@@ -232,7 +234,7 @@ async function validateRelationFieldConfig(
   if (relatedPageId != null) {
     const pageCheck = await validateRelatedPageSource(relatedPageId, relatedEntityId, relatedFieldKey);
     if ("error" in pageCheck) return pageCheck;
-    return { ok: true, cleaned: { relationId, relatedFieldKey, relatedPageId, selectionMode: cfg?.selectionMode } };
+    return { ok: true, cleaned: { relationId, relatedFieldKey, relatedPageId, selectionMode: cfg?.selectionMode, showStatus: cfg?.showStatus, allowCreate: cfg?.allowCreate } };
   }
 
   const [rf] = await db
@@ -258,7 +260,7 @@ async function validateRelationFieldConfig(
   }
   // Entity-source: strip any stray relatedPageId/writeThrough. Page fields never
   // offer write-through (no per-page nav affordance), so it is always dropped.
-  return { ok: true, cleaned: { relationId, relatedFieldKey, selectionMode: cfg?.selectionMode } };
+  return { ok: true, cleaned: { relationId, relatedFieldKey, selectionMode: cfg?.selectionMode, showStatus: cfg?.showStatus, allowCreate: cfg?.allowCreate } };
 }
 
 /**
@@ -3344,10 +3346,12 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
       }
     }
 
+    const memberStatuses = await relationMemberStatuses([...linkedMap.keys()], relatedEntityId, cfg, perms);
     for (const recordId of allowedIds) {
       const rawLinkedId = linkMap.get(recordId) ?? null;
       if (cfg?.selectionMode === "multiple") {
         const members = linkRows.filter(link => link.from === recordId && linkedMap.has(link.to)).map(link => ({
+          ...(memberStatuses.has(link.to) ? { status: memberStatuses.get(link.to)! } : {}),
           id: link.to, label: candidateLabel(relatedPageId != null ? pageValuesMap.get(link.to)?.[relatedFieldKey] : linkedMap.get(link.to)?.[relatedFieldKey]),
         }));
         values.push({ recordId, fieldKey: pf.fieldKey, value: members.length, linkedRecordId: null,
@@ -3433,6 +3437,39 @@ function candidateLabel(v: unknown): string {
   if (v == null) return "";
   const t = typeof v;
   return t === "string" || t === "number" || t === "boolean" ? String(v) : "";
+}
+
+/** Only accepts IDs that have already passed the related row/field boundary.
+ * Rechecks status row hiding so metadata cannot escape through this enrichment.
+ */
+async function relationMemberStatuses(
+  ids: number[], entityId: number, config: RelationFieldConfig | null | undefined,
+  perms: Awaited<ReturnType<typeof getPermissions>>,
+) {
+  type DisplayStatus = Awaited<ReturnType<typeof enrichStatusTags<typeof entityStatusesTable.$inferSelect>>>[number];
+  const result = new Map<number, DisplayStatus>();
+  if (config?.showStatus !== true || ids.length === 0) return result;
+  const visibility = effectiveStatusVisibility(perms, entityId);
+  const rows = await db.select({ recordId: entityRecordsTable.id, status: entityStatusesTable })
+    .from(entityRecordsTable)
+    .innerJoin(entityStatusesTable, and(
+      eq(entityRecordsTable.statusId, entityStatusesTable.id),
+      eq(entityStatusesTable.entityId, entityId),
+    ))
+    .where(and(eq(entityRecordsTable.entityId, entityId), idArrayAny(entityRecordsTable.id, ids)));
+  const visible = rows.filter(row => canShowRelationStatus(config, row.status.id, visibility));
+  const statuses = await enrichStatusTags([...new Map(visible.map(row => [row.status.id, row.status])).values()]);
+  const byId = new Map(statuses.map(status => [status.id, status]));
+  for (const row of visible) result.set(row.recordId, byId.get(row.status.id)!);
+  return result;
+}
+
+async function withRelationMemberStatuses<T extends { id: number }>(
+  members: T[], entityId: number, config: RelationFieldConfig | null | undefined,
+  perms: Awaited<ReturnType<typeof getPermissions>>,
+) {
+  const statuses = await relationMemberStatuses(members.map(member => member.id), entityId, config, perms);
+  return members.map(member => statuses.has(member.id) ? { ...member, status: statuses.get(member.id)! } : member);
 }
 
 export async function loadCandidateRows(
@@ -3688,7 +3725,11 @@ router.post("/pages/:pageId/related-candidates", requireAuth, async (req, res): 
   if (candHiddenRowWhere) conds.push(candHiddenRowWhere);
   const q = body.data.q?.trim();
   const candidates = await loadCandidateRows(relatedEntityId, relatedFieldKey, relatedPageId, conds, q, body.data.all);
-  res.json({ candidates });
+  res.json({
+    candidates: await withRelationMemberStatuses(candidates, relatedEntityId, pageField.relationConfigJson, perms),
+    relatedEntityId, relatedFieldKey,
+    canCreate: pageField.relationConfigJson?.allowCreate !== false && canRecord(perms, relatedEntityId, "create"),
+  });
 });
 
 /**
@@ -3852,7 +3893,10 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
   // enforced above (relatedAccess !== "hidden" is required to reach this point).
   // For page-source the value is read from the linked record's page_record_values.
   const value = await loadLinkedValue(relatedPageId, relatedFieldKey, linkedRecordId, linkedValues);
-  const members = await selectedMembers(linkedRecordIds, relatedPageId, relatedFieldKey, selectedValues);
+  const members = await withRelationMemberStatuses(
+    await selectedMembers(linkedRecordIds, relatedPageId, relatedFieldKey, selectedValues),
+    relatedEntityId, pageField.relationConfigJson, perms,
+  );
   res.json({ linkedRecordId, linkedRecordIds, members, value: pageField.relationConfigJson?.selectionMode === "multiple" ? members.length : value, version: replaced.version });
 });
 
@@ -4602,11 +4646,13 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
       ? new Map<number, Record<string, unknown>>()
       : projectedPageValuesByPage.get(relatedPageId) ?? new Map<number, Record<string, unknown>>();
 
+    const memberStatuses = await relationMemberStatuses([...linkedMap.keys()], relatedEntityId, cfg, perms);
     for (const recordId of allowedIds) {
       const rawLinkedId = linkMap.get(recordId) ?? null;
       if (cfg?.selectionMode === "multiple") {
         const ids = memberMapByRelation.get(relation.id)?.get(recordId) ?? [];
         const members = ids.filter(id => linkedMap.has(id)).map(id => ({
+          ...(memberStatuses.has(id) ? { status: memberStatuses.get(id)! } : {}),
           id, label: candidateLabel(relatedPageId != null ? pageValuesMap.get(id)?.[relatedFieldKey] : linkedMap.get(id)?.[relatedFieldKey]),
         }));
         values.push({ recordId, fieldKey: f.fieldKey, value: members.length, linkedRecordId: null,
@@ -4702,7 +4748,7 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
     candidates: [] as { id: number; label: string; value?: string }[],
     relatedEntityId,
     relatedFieldKey,
-    canCreate: canRecord(perms, relatedEntityId, "create"),
+    canCreate: field.relationConfigJson?.allowCreate !== false && canRecord(perms, relatedEntityId, "create"),
   };
 
   // Dependent (cascading) relation field: when configured, narrow the candidate
@@ -4842,10 +4888,11 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
   // in-place "add record" affordance (create a record in the related entity and
   // link it without leaving the picker).
   res.json({
-    candidates: finalCandidates,
+    candidates: userProjection && body.data.ignoreDependency ? finalCandidates
+      : await withRelationMemberStatuses(finalCandidates, relatedEntityId, field.relationConfigJson, perms),
     relatedEntityId,
     relatedFieldKey,
-    canCreate: canRecord(perms, relatedEntityId, "create"),
+    canCreate: field.relationConfigJson?.allowCreate !== false && canRecord(perms, relatedEntityId, "create"),
   });
 });
 
@@ -5017,7 +5064,10 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
 
   // For page-source the value is read from the linked record's page_record_values.
   const value = await loadLinkedValue(relatedPageId, relatedFieldKey, linkedRecordId, linkedValues);
-  const members = await selectedMembers(linkedRecordIds, relatedPageId, relatedFieldKey, selectedValues);
+  const members = await withRelationMemberStatuses(
+    await selectedMembers(linkedRecordIds, relatedPageId, relatedFieldKey, selectedValues),
+    relatedEntityId, field.relationConfigJson, perms,
+  );
   res.json({ linkedRecordId, linkedRecordIds, members, value: field.relationConfigJson?.selectionMode === "multiple" ? members.length : value, version: replaced.version });
 });
 
