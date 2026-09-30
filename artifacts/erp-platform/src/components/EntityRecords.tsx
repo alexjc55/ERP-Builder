@@ -1,5 +1,7 @@
 import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useId, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { sameAggregateTopology } from "@/lib/aggregateSnapshot";
+import { groupUniverseKey, isAccordionSelectionChange } from "@/lib/groupQueryScope";
+import { fullFilteredGroupTotals, isGroupExpanded, toggleCollapsedGroup } from "@/lib/groupAccordion";
 import { MultipleRelationPicker } from "./MultipleRelationPicker";
 import { draftRelationSelections } from "@/lib/relationSelections";
 import { columnGroupBodyStyle, resolveColumnGroupCellStyle } from "@/lib/columnGroupStyles";
@@ -3617,6 +3619,9 @@ export function EntityRecords({
   }, [t]);
   const [total, setTotal] = useState(0);
   const [numericTotals, setNumericTotals] = useState<Record<string, number>>({});
+  // Keep the last server totals visible during accordion transitions, replacing
+  // them verbatim on response. Never reuse across filter/permission changes.
+  const [fullGroupTotals, setFullGroupTotals] = useState<{ key: string; values: Record<string, number> } | null>(null);
   // Totals are only rendered for the exact query whose response supplied them.
   // Keeping an old total visible during a newer filter/page request is worse
   // than a pending indicator: it looks authoritative while belonging to a
@@ -3641,6 +3646,7 @@ export function EntityRecords({
   // group key) is returned by the server in this mode so the client can render
   // each record under its own group header.
   const [expandAll, setExpandAll] = useState(Boolean(groupDefaultExpanded));
+  const [collapsedGroupKeys, setCollapsedGroupKeys] = useState<Set<string>>(() => new Set());
   const [rowGroupMap, setRowGroupMap] = useState<Record<string, string | null>>({});
   const aggregateTopologyRef = useRef({ groups, rowGroupMap });
   aggregateTopologyRef.current = { groups, rowGroupMap };
@@ -3687,6 +3693,7 @@ export function EntityRecords({
     setPageRequiredDialog(null);
     setTotal(0);
     setNumericTotals({});
+    setFullGroupTotals(null);
     setTotalsResultKey(null);
     setRecordsLoadError(null);
     setRecordsProjectionGeneration(0);
@@ -3805,6 +3812,7 @@ export function EntityRecords({
     setPageDateFilters({});
     setPage(1);
     setExpandedGroupKey(undefined);
+    setCollapsedGroupKeys(new Set());
   }, [entityId, pageId]);
 
   // Collapse the accordion when the page's group field changes (or grouping is
@@ -3813,6 +3821,7 @@ export function EntityRecords({
   useEffect(() => {
     setExpandedGroupKey(undefined);
     setExpandAll(Boolean(groupDefaultExpanded));
+    setCollapsedGroupKeys(new Set());
   }, [groupByFieldKey, groupDefaultExpanded]);
 
   // Auto-select after the exact main/mirror scope has loaded. Mirror pages with
@@ -4735,10 +4744,23 @@ export function EntityRecords({
       ]),
     [allFields, pageFields],
   );
+  const fullGroupTotalsKey = `${recordsScopeKey}:${groupByFieldKey ?? ""}:${recordsPermissionScopeKey}:${groupUniverseKey(recordQuery)}`;
   const recordsRenderKey = `${recordsResultKey}:${recordsPermissionScopeKey}`;
   const recordsRenderKeyRef = useRef<string | null>(null);
   const recordsPermissionKeyRef = useRef<string | null>(null);
+  const previousGroupQueryRef = useRef<{
+    scope: string; universe: string; permission: string; query: string; selection: string;
+  } | null>(null);
   useLayoutEffect(() => {
+    const nextGroupQuery = {
+      scope: `${recordsScopeKey}:${groupByFieldKey ?? ""}`,
+      universe: groupUniverseKey(recordQuery),
+      permission: recordsPermissionScopeKey,
+      query: queryKey,
+      selection: JSON.stringify([recordQuery.groupValue, recordQuery.withRowGroups]),
+    };
+    const accordionOnly = groupingActive && isAccordionSelectionChange(previousGroupQueryRef.current, nextGroupQuery);
+    previousGroupQueryRef.current = nextGroupQuery;
     if (recordsRenderKeyRef.current == null) {
       recordsRenderKeyRef.current = recordsRenderKey;
       recordsPermissionKeyRef.current = recordsPermissionScopeKey;
@@ -4756,6 +4778,20 @@ export function EntityRecords({
       pendingInlineWriteRef.current = null;
       setPendingInlineWriteKey(null);
       setPendingInlineDraft(null);
+    }
+    if (accordionOnly) {
+      // Keep the server's full-filtered group headers and the table mounted.
+      // The loadedGroupSig gate below withholds old-group rows while the new
+      // group's query/projections load; only its row slot shows a spinner.
+      // Still supersede pending reads so an old selection cannot win the race.
+      recordsRequestIdRef.current += 1;
+      pageValuesRequestIdRef.current += 1;
+      pageRelatedRequestIdRef.current += 1;
+      entityRelatedRequestIdRef.current += 1;
+      pendingRecordsPublicationRef.current = null;
+      setPendingRecordsPublicationId(null);
+      setRecordsLoadError(null);
+      return;
     }
     // Filter, pagination, sort, and view changes define a new row universe.
     // Unlike a same-query background refresh, the old rows must be withheld
@@ -4795,6 +4831,7 @@ export function EntityRecords({
     setTotalsResultKey(null);
     setRecordsLoadError(null);
     // Group common values and sums belong to the query just as rows do.
+    setFullGroupTotals(null);
     // Retention is only valid for a background refresh of that same scope.
     setGroups(null);
     setRowGroupMap({});
@@ -5165,6 +5202,8 @@ export function EntityRecords({
           // Group membership changes still wait for the atomic row bundle.
           setTotal(res.total);
           setNumericTotals(res.numericTotals ?? {});
+          const fullTotals = fullFilteredGroupTotals(res.groups, res.numericTotals ?? {}, Boolean(recordQuery.groupValue));
+          setFullGroupTotals(fullTotals == null ? null : { key: fullGroupTotalsKey, values: fullTotals });
           setGroups(res.groups ?? null);
           setTotalsResultKey(recordsResultKey);
         }
@@ -5176,6 +5215,8 @@ export function EntityRecords({
       setRecordsProjectionGeneration(requestId);
       setTotal(res.total);
       setNumericTotals(res.numericTotals ?? {});
+      const fullTotals = fullFilteredGroupTotals(res.groups, res.numericTotals ?? {}, Boolean(recordQuery.groupValue));
+      setFullGroupTotals(fullTotals == null ? null : { key: fullGroupTotalsKey, values: fullTotals });
       setTotalsResultKey(recordsResultKey);
       setRecordsLoadError(null);
       setPageFormulaValues(res.pageFormulaValues ?? {});
@@ -5216,6 +5257,7 @@ export function EntityRecords({
     permPageId,
     relationFieldsKey,
     recordsBootstrapReady,
+    fullGroupTotalsKey,
     recordsResultKey,
     recordsScopeKey,
     runQuery,
@@ -5456,6 +5498,8 @@ export function EntityRecords({
     setRecordsProjectionGeneration(pending.requestId);
     setTotal(response.total);
     setNumericTotals(response.numericTotals ?? {});
+    const fullTotals = fullFilteredGroupTotals(response.groups, response.numericTotals ?? {}, Boolean(recordQuery.groupValue));
+    setFullGroupTotals(fullTotals == null ? null : { key: fullGroupTotalsKey, values: fullTotals });
     setTotalsResultKey(recordsResultKey);
     setRecordsLoadError(null);
     setPageFormulaValues(response.pageFormulaValues ?? {});
@@ -5472,11 +5516,15 @@ export function EntityRecords({
     pendingRecordsPublicationId,
     permPageId,
     projectionBundleReady,
+    fullGroupTotalsKey,
     recordsResultKey,
     relationFieldsKey,
   ]);
 
   const totalsAuthoritative = totalsResultKey === recordsResultKey;
+  const retainedFullGroupTotals = groupingActive && fullGroupTotals?.key === fullGroupTotalsKey ? fullGroupTotals.values : null;
+  const headerNumericTotals = retainedFullGroupTotals ?? numericTotals;
+  const headerTotalsAuthoritative = retainedFullGroupTotals !== null || totalsAuthoritative;
   const renderProjectionState = useCallback((state: "pending" | "unavailable") => (
     <span
       data-testid="record-projection-state"
@@ -7096,7 +7144,7 @@ export function EntityRecords({
 
   const renderGroupRow = (g: RecordGroup) => {
     const gk = groupKeyOf(g);
-    const expanded = expandAll || expandedGroupKey === gk;
+    const expanded = isGroupExpanded(expandAll, collapsedGroupKeys, expandedGroupKey, gk);
     // Every group header carries a strong top border (border-t-2) so the start
     // of each group block is a clear line — this is what visually separates an
     // expanded group's data rows from the NEXT group's header. Expanded headers
@@ -7111,15 +7159,14 @@ export function EntityRecords({
         }`}
         style={{ backgroundColor: groupBg }}
         onClick={() => {
-          // In expand-all mode, clicking a header focuses just that group
-          // (leaves expand-all and opens the clicked one). Otherwise toggle it.
+          // Keep the expand-all row snapshot mounted; toggling one header only
+          // hides/reveals its own rows without a query or another group's state.
           if (expandAll) {
-            setExpandAll(false);
-            setExpandedGroupKey(gk);
+            setCollapsedGroupKeys(previous => toggleCollapsedGroup(previous, gk));
           } else {
             setExpandedGroupKey(expanded ? undefined : gk);
+            setPage(1);
           }
-          setPage(1);
         }}
       >
         {showBulk && <td style={bulkColStyle(groupBg)} onClick={(e) => e.stopPropagation()} />}
@@ -7572,23 +7619,29 @@ export function EntityRecords({
               type="button"
               variant="outline"
               onClick={() => {
+                if (expandAll && collapsedGroupKeys.size > 0) {
+                  setCollapsedGroupKeys(new Set());
+                  return;
+                }
                 if (expandAll) {
                   setExpandAll(false);
                   setExpandedGroupKey(undefined);
+                  setCollapsedGroupKeys(new Set());
                 } else {
                   setExpandAll(true);
                   setExpandedGroupKey(undefined);
+                  setCollapsedGroupKeys(new Set());
                 }
                 setPage(1);
               }}
               className="w-full sm:w-auto justify-center gap-2"
             >
-              {expandAll ? (
+              {expandAll && collapsedGroupKeys.size === 0 ? (
                 <ChevronsDownUp className="w-4 h-4 shrink-0" />
               ) : (
                 <ChevronsUpDown className="w-4 h-4 shrink-0" />
               )}
-              {expandAll
+              {expandAll && collapsedGroupKeys.size === 0
                 ? t("records.collapseAllGroups", "Свернуть все группы")
                 : t("records.expandAllGroups", "Развернуть все группы")}
             </Button>
@@ -8517,7 +8570,7 @@ export function EntityRecords({
                 style={borderColor ? ({ "--erp-table-border": borderColor } as CSSProperties) : undefined}
               >
                 <thead className="sticky top-0 z-20">
-                  {totalsAuthoritative && Object.keys(numericTotals).length > 0 && (
+                  {headerTotalsAuthoritative && Object.keys(headerNumericTotals).length > 0 && (
                     <tr style={{ backgroundColor: "#F8FAFC" }}>
                       {showBulk && (
                         <th style={{ ...bulkColStyle("#F8FAFC", true), borderTop: "1px solid #F8FAFC", borderBottom: "none" }} />
@@ -8533,15 +8586,15 @@ export function EntityRecords({
                           );
                         }
                         const totalKey = col.kind === "entity" ? col.field.fieldKey : col.pinKey;
-                        const hasTotal = numericTotals[totalKey] !== undefined;
+                        const hasTotal = headerNumericTotals[totalKey] !== undefined;
                         const fld = col.field;
                         const nextCol = orderedColumns[idx + 1];
                         const nextHasTotal = nextCol
-                          ? numericTotals[nextCol.kind === "entity" ? nextCol.field.fieldKey : nextCol.pinKey] !== undefined
+                          ? headerNumericTotals[nextCol.kind === "entity" ? nextCol.field.fieldKey : nextCol.pinKey] !== undefined
                           : false;
                         const prevCol = orderedColumns[idx - 1];
                         const prevHasTotal = prevCol
-                          ? numericTotals[prevCol.kind === "entity" ? prevCol.field.fieldKey : prevCol.pinKey] !== undefined
+                          ? headerNumericTotals[prevCol.kind === "entity" ? prevCol.field.fieldKey : prevCol.pinKey] !== undefined
                           : false;
                         // Totals strip (the row above the header): background and the
                         // "empty" vertical separators are #F8FAFC, so the empty part
@@ -8579,7 +8632,7 @@ export function EntityRecords({
                           >
                             {hasTotal ? (
                               <span className="font-bold whitespace-nowrap" style={{ color: textColor }}>
-                                {formatTotalValue(fld, numericTotals[totalKey])}
+                                {formatTotalValue(fld, headerNumericTotals[totalKey])}
                               </span>
                             ) : null}
                           </th>
@@ -9320,7 +9373,7 @@ export function EntityRecords({
                     return (
                       <Fragment key={record.id}>
                       {interleavedHeader && renderGroupRow(interleavedHeader)}
-                      <EntityRecordTableRow
+                      {(!expandAll || !collapsedGroupKeys.has(rowGroupMap[String(record.id)] ?? NULL_GROUP_KEY)) && <EntityRecordTableRow
                         context={recordRowContext}
                         record={record}
                         rowIndex={rowIndex}
@@ -9334,7 +9387,7 @@ export function EntityRecords({
                         pendingInlineWriteKey={pendingInlineWriteKey?.startsWith(`entity:${record.id}:`) || pendingInlineWriteKey?.startsWith(`page:${pageId}:${record.id}:`) ? pendingInlineWriteKey : null}
                         pendingInlineDraft={pendingInlineWriteKey?.startsWith(`entity:${record.id}:`) ? pendingInlineDraft : null}
                         inlineCommitResetKey={editingCell?.recordId === record.id ? inlineCommitResetKey : 0}
-                      />
+                      />}
                       </Fragment>
                     );
                   })}
