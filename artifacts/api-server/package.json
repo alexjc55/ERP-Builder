@@ -15,6 +15,8 @@
     "test:webhooks-db": "bash ../../scripts/with-validation-lock.sh env RUN_WEBHOOK_DB_TESTS=1 tsx --test --test-concurrency=1 src/lib/automation-webhook-payload.db.test.ts",
     "test:lifecycle": "tsx --test src/lib/bounded-ttl-cache.test.ts src/lib/collaboration.test.ts src/routes/roles-agent-cache-wiring.test.ts",
     "test:pivot-affix": "tsx --test src/routes/pivot-display-affix.test.ts",
+    "test:related-status-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/lib/automation-related-status.db.test.ts",
+    "test:relation-selection-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/lib/relation-selection.db.test.ts",
     "test:inbound-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/inbound-integrations.db.test.ts",
     "test:document-orphan-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/document-generation-orphan.db.test.ts",
     "test:import-status-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/import-status-permissions.db.test.ts",

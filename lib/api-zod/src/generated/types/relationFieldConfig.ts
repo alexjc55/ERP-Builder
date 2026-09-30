@@ -5,11 +5,14 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { RelationFieldConfigSelectionMode } from './relationFieldConfigSelectionMode';
 
 /**
  * Config for a relation-type page field (surfaces one field of a linked related record).
  */
 export interface RelationFieldConfig {
+  /** Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links. */
+  selectionMode?: RelationFieldConfigSelectionMode;
   /** @nullable */
   relationId?: number | null;
   /** @nullable */

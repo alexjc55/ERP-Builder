@@ -12,6 +12,7 @@ export type AutomationActionType = typeof AutomationActionType[keyof typeof Auto
 export const AutomationActionType = {
   set_field: 'set_field',
   change_status: 'change_status',
+  set_related_status: 'set_related_status',
   create_record: 'create_record',
   update_records_where: 'update_records_where',
   webhook: 'webhook',

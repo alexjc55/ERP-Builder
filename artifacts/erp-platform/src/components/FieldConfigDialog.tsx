@@ -166,6 +166,7 @@ export function FieldConfigDialog({
   const { data: localFolders = [] } = useListLocalFolders();
   const { data: userOptions = [] } = useListUserOptions();
   const [relationId, setRelationId] = useState<number | null>(null);
+  const [selectionMode, setSelectionMode] = useState<"single" | "multiple">("single");
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
   // lookup-only: when on, clicking a lookup cell opens the source record's
   // full editor (gated server-side by the viewer's update perm on that entity).
@@ -237,10 +238,7 @@ export function FieldConfigDialog({
   const [lockAfterCreate, setLockAfterCreate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Entity relation fields surface a single linked record's value and only
-  // make sense from the SOURCE side of a to-one relation (mirrors the Fields
-  // Builder). Target-side / N:N relations are not eligible here.
-  const relationFieldOptions = relationOptions.filter((o) => o.direction === "source");
+  const relationFieldOptions = relationOptions;
   const canUseRelation = relationFieldOptions.length > 0;
   const selectedRelation = relationFieldOptions.find((o) => o.relationId === relationId);
   // Pages of the related entity whose page-local fields a relation/lookup can project.
@@ -318,6 +316,7 @@ export function FieldConfigDialog({
       setIsKey(field.isKey ?? false);
       setLockAfterCreate(field.lockAfterCreate ?? false);
       setRelationId(field.relationConfigJson?.relationId ?? null);
+      setSelectionMode(field.relationConfigJson?.selectionMode ?? "single");
       setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
       setWriteThrough(field.relationConfigJson?.writeThrough ?? false);
       setRelatedPageId(field.relationConfigJson?.relatedPageId ?? null);
@@ -363,6 +362,7 @@ export function FieldConfigDialog({
       setIsKey(false);
       setLockAfterCreate(false);
       setRelationId(null);
+      setSelectionMode("single");
       setRelatedFieldKey("");
       setWriteThrough(false);
       setRelatedPageId(null);
@@ -621,8 +621,8 @@ export function FieldConfigDialog({
             ? relatedPageId != null
               ? // Page-source relation fields project a page-local field (read-only
                 // display) while the link itself stays assignable.
-                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId }
-              : { relationId, relatedFieldKey: relatedFieldKey || null }
+                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId, selectionMode }
+              : { relationId, relatedFieldKey: relatedFieldKey || null, selectionMode }
             : {},
       isKey:
         fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && fieldType !== "created_at"
@@ -742,6 +742,17 @@ export function FieldConfigDialog({
                     </SelectContent>
                   </Select>
                 </div>
+                {fieldType === "relation" && <div className="space-y-1.5">
+                  <Label>Выбор связанных записей</Label>
+                  <Select value={selectionMode} onValueChange={v => setSelectionMode(v as "single" | "multiple")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single">Одна запись</SelectItem>
+                      <SelectItem value="multiple">Несколько записей</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Эта сторона связи должна допускать несколько записей. Каждая выбранная запись сохраняется отдельно.</p>
+                </div>}
                 {relationId != null && relatedPages.length > 0 && (
                   <div className="space-y-1.5">
                     <Label>{t("fields.lookupSource", "Источник значения")}</Label>
@@ -845,7 +856,7 @@ export function FieldConfigDialog({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__none__">{t("fields.relatedFilterNone", "Без фильтра")}</SelectItem>
-                            {relatedFieldOptions.map((f) => (
+                            {(selectedRelation?.fields ?? []).map((f) => (
                               <SelectItem key={f.key} value={f.key}>{ml(f.label) || f.key}</SelectItem>
                             ))}
                           </SelectContent>

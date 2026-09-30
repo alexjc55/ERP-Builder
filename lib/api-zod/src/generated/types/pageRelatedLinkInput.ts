@@ -16,6 +16,8 @@ export interface PageRelatedLinkInput {
      * @nullable
      */
   linkedRecordId?: number | null;
+  /** Complete replacement selection for a multiple relation. Empty clears the selection. Mutually exclusive with linkedRecordId. */
+  linkedRecordIds?: number[];
   /**
      * Expected entity_records.version of the base record.
      * @minimum 1

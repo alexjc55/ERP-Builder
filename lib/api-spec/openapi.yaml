@@ -8106,6 +8106,14 @@ components:
           description: The related field's value (null if hidden for the viewer or no linked record).
         linkedRecordId:
           type: ["integer", "null"]
+        linkedRecordIds:
+          type: array
+          items:
+            type: integer
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/PageRelatedCandidate"
         editable:
           type: boolean
 
@@ -8132,6 +8140,9 @@ components:
         q:
           type: string
           description: Optional case-insensitive search over the candidate label (related field value).
+        all:
+          type: boolean
+          description: Return the complete permission-filtered matching candidate snapshot without the normal picker limit.
         parentValue:
           type: string
           nullable: true
@@ -8209,6 +8220,13 @@ components:
         linkedRecordId:
           type: ["integer", "null"]
           description: The related record to link to, or null to clear the existing link.
+        linkedRecordIds:
+          type: array
+          uniqueItems: true
+          description: Complete replacement selection for a multiple relation. Empty clears the selection. Mutually exclusive with linkedRecordId.
+          items:
+            type: integer
+            minimum: 1
         expectedVersion:
           type: integer
           minimum: 1
@@ -8221,6 +8239,14 @@ components:
         linkedRecordId:
           type: ["integer", "null"]
           description: The linked record id after the change (null if cleared).
+        linkedRecordIds:
+          type: array
+          items:
+            type: integer
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/PageRelatedCandidate"
         value:
           description: The related field value after the change (null if cleared or hidden).
         version:
@@ -8260,6 +8286,9 @@ components:
       properties:
         relationId:
           type: integer
+        relationType:
+          type: string
+          enum: [one_to_one, one_to_many, many_to_one, many_to_many]
         label:
           $ref: "#/components/schemas/MultilingualText"
         direction:
@@ -8299,6 +8328,10 @@ components:
       type: object
       description: Config for a relation-type page field (surfaces one field of a linked related record).
       properties:
+        selectionMode:
+          type: string
+          enum: [single, multiple]
+          description: Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.
         relationId:
           type: ["integer", "null"]
         relatedFieldKey:
@@ -9165,7 +9198,15 @@ components:
       properties:
         type:
           type: string
-          enum: [set_field, change_status, create_record, update_records_where, webhook, generate_document]
+          enum: [set_field, change_status, set_related_status, create_record, update_records_where, webhook, generate_document]
+        relationId:
+          type: integer
+          minimum: 1
+          description: Required for set_related_status; selects the normalized relation to traverse.
+        relationDirection:
+          type: string
+          enum: [forward, reverse]
+          description: Traversal direction for set_related_status. Required for self-relations.
         fieldKey:
           type: string
         value: {}
@@ -9404,6 +9445,11 @@ components:
       type: object
       required: [valuesJson]
       properties:
+        relationSelections:
+          type: array
+          description: Creation-time relation selections committed with the new record before its record.created event is emitted.
+          items:
+            $ref: "#/components/schemas/RecordRelationSelection"
         valuesJson:
           type: object
           additionalProperties: true
@@ -9416,6 +9462,20 @@ components:
             mirror page, send its page id so the server applies that page's
             record-rights override (if configured for the role) instead of the
             source entity's rights.
+
+    RecordRelationSelection:
+      type: object
+      required: [fieldKey, linkedRecordIds]
+      properties:
+        fieldKey:
+          type: string
+          minLength: 1
+        linkedRecordIds:
+          type: array
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
 
     BulkRecordsAction:
       type: object

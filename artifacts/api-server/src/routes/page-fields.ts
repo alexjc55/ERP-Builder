@@ -24,6 +24,8 @@ import {
 } from "@workspace/db";
 import { eq, asc, desc, and, ne, inArray, or, sql, type SQL } from "drizzle-orm";
 import { replaceSingleRelationLink, emitLinkChangedEvents } from "../lib/record-links";
+import { selectionDirection, normalizeSelection } from "../lib/relation-selection-policy";
+import { validateVisibleSelection } from "../lib/record-relation-selections";
 import { sanitizeOptionsInput, normalizeOptions, optionValues, optionNumbers, mappedStatusForChangedValues, type SelectOption } from "../lib/selectOptions";
 import { validateSelectStatusMappings } from "../lib/select-status-mappings";
 import { requireAuth } from "../middlewares/auth";
@@ -219,7 +221,7 @@ async function validateRelationFieldConfig(
   if (relationId == null || !relatedFieldKey) return { error: "Relation field requires relationId and relatedFieldKey" };
   const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
   if (!relation) return { error: "Relation not found" };
-  const direction = relationDirection(relation, eff.entityId);
+  const direction = selectionDirection(relation, eff.entityId, cfg);
   if (!direction) return { error: "Relation does not yield a single linked record for this page's entity" };
   const relatedEntityId = relatedEntityIdFor(relation, direction);
 
@@ -230,7 +232,7 @@ async function validateRelationFieldConfig(
   if (relatedPageId != null) {
     const pageCheck = await validateRelatedPageSource(relatedPageId, relatedEntityId, relatedFieldKey);
     if ("error" in pageCheck) return pageCheck;
-    return { ok: true, cleaned: { relationId, relatedFieldKey, relatedPageId } };
+    return { ok: true, cleaned: { relationId, relatedFieldKey, relatedPageId, selectionMode: cfg?.selectionMode } };
   }
 
   const [rf] = await db
@@ -256,7 +258,7 @@ async function validateRelationFieldConfig(
   }
   // Entity-source: strip any stray relatedPageId/writeThrough. Page fields never
   // offer write-through (no per-page nav affordance), so it is always dropped.
-  return { ok: true, cleaned: { relationId, relatedFieldKey } };
+  return { ok: true, cleaned: { relationId, relatedFieldKey, selectionMode: cfg?.selectionMode } };
 }
 
 /**
@@ -3180,7 +3182,7 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
 
     const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
     if (!relation) continue;
-    const direction = relationDirection(relation, entityId);
+    const direction = selectionDirection(relation, entityId, cfg);
     if (!direction) continue;
     const relatedEntityId = relatedEntityIdFor(relation, direction);
 
@@ -3344,6 +3346,14 @@ router.post("/pages/:pageId/related-values", requireAuth, async (req, res): Prom
 
     for (const recordId of allowedIds) {
       const rawLinkedId = linkMap.get(recordId) ?? null;
+      if (cfg?.selectionMode === "multiple") {
+        const members = linkRows.filter(link => link.from === recordId && linkedMap.has(link.to)).map(link => ({
+          id: link.to, label: candidateLabel(relatedPageId != null ? pageValuesMap.get(link.to)?.[relatedFieldKey] : linkedMap.get(link.to)?.[relatedFieldKey]),
+        }));
+        values.push({ recordId, fieldKey: pf.fieldKey, value: members.length, linkedRecordId: null,
+          linkedRecordIds: members.map(member => member.id), members, editable: columnEditable } as typeof values[number]);
+        continue;
+      }
       let value: unknown = null;
       // Assignability is column-wide and applies even when no link exists yet, so
       // empty cells are clickable to assign a link.
@@ -3425,12 +3435,13 @@ function candidateLabel(v: unknown): string {
   return t === "string" || t === "number" || t === "boolean" ? String(v) : "";
 }
 
-async function loadCandidateRows(
+export async function loadCandidateRows(
   relatedEntityId: number,
   relatedFieldKey: string,
   relatedPageId: number | null,
   conds: SQL[],
   q: string | undefined,
+  all = false,
 ): Promise<{ id: number; label: string }[]> {
   if (relatedPageId != null) {
     const searchConds = q
@@ -3455,7 +3466,7 @@ async function loadCandidateRows(
       .from(entityRecordsTable)
       .where(and(...searchConds))
       .orderBy(desc(entityRecordsTable.id))
-      .limit(50);
+      .limit(all ? 2147483647 : 50);
     const ids = rows.map((r) => r.id);
     const pvMap = new Map<number, Record<string, unknown>>();
     if (ids.length > 0) {
@@ -3478,11 +3489,23 @@ async function loadCandidateRows(
     .from(entityRecordsTable)
     .where(and(...searchConds))
     .orderBy(desc(entityRecordsTable.id))
-    .limit(50);
+    .limit(all ? 2147483647 : 50);
   return rows.map((r) => {
     const v = ((r.valuesJson as Record<string, unknown>) ?? {})[relatedFieldKey];
     return { id: r.id, label: candidateLabel(v) };
   });
+}
+
+async function selectedMembers(
+  ids: number[], relatedPageId: number | null, fieldKey: string,
+  selectedValues: Map<number, Record<string, unknown>>,
+) {
+  if (relatedPageId != null && ids.length) {
+    const rows = await db.select().from(pageRecordValuesTable).where(and(eq(pageRecordValuesTable.pageId, relatedPageId), idArrayAny(pageRecordValuesTable.recordId, ids)));
+    const byId = new Map(rows.map(row => [row.recordId, row.valuesJson as Record<string, unknown>]));
+    return ids.map(id => ({ id, label: candidateLabel(byId.get(id)?.[fieldKey]) }));
+  }
+  return ids.map(id => ({ id, label: candidateLabel(selectedValues.get(id)?.[fieldKey]) }));
 }
 
 /**
@@ -3554,7 +3577,7 @@ async function resolveRelationPageField(
   if (relationId == null || !relatedFieldKey) return { ok: false, status: 400, error: "Relation field is not configured" };
   const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
   if (!relation) return { ok: false, status: 400, error: "Relation not found" };
-  const direction = relationDirection(relation, eff.entityId);
+  const direction = selectionDirection(relation, eff.entityId, cfg);
   if (!direction) return { ok: false, status: 400, error: "Relation does not yield a single linked record" };
   const relatedEntityId = relatedEntityIdFor(relation, direction);
   // Page-source: the projected field is a PAGE-LOCAL field of the related
@@ -3664,7 +3687,7 @@ router.post("/pages/:pageId/related-candidates", requireAuth, async (req, res): 
   );
   if (candHiddenRowWhere) conds.push(candHiddenRowWhere);
   const q = body.data.q?.trim();
-  const candidates = await loadCandidateRows(relatedEntityId, relatedFieldKey, relatedPageId, conds, q);
+  const candidates = await loadCandidateRows(relatedEntityId, relatedFieldKey, relatedPageId, conds, q, body.data.all);
   res.json({ candidates });
 });
 
@@ -3695,7 +3718,13 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
   }
   const { entityId, pageField, relation, direction, relatedEntityId, relatedFieldKey, relatedPageId } = resolved;
   const baseRecordId = body.data.recordId;
-  const linkedRecordId = body.data.linkedRecordId ?? null;
+  let linkedRecordIds: number[];
+  try {
+    linkedRecordIds = normalizeSelection(body.data, pageField.relationConfigJson?.selectionMode === "multiple");
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message }); return;
+  }
+  const linkedRecordId = linkedRecordIds[0] ?? null;
 
   const perms = await getPermissions(req);
   const roleIds = await getUserRoleIds(req);
@@ -3740,7 +3769,8 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
   // When linking (not clearing), the related record must exist, belong to the
   // related entity, and be viewable by the viewer (record perm + own-row scope).
   let linkedValues: Record<string, unknown> | null = null;
-  if (linkedRecordId != null) {
+  const selectedValues = new Map<number, Record<string, unknown>>();
+  for (const linkedRecordId of linkedRecordIds) {
     if (!canRecord(perms, relatedEntityId, "view")) {
       res.status(403).json({ error: "Forbidden" });
       return;
@@ -3781,6 +3811,7 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
       return;
     }
     linkedValues = lv;
+    selectedValues.set(linkedRecordId, lv);
   }
 
   const replaced = await replaceSingleRelationLink({
@@ -3789,6 +3820,11 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
     baseRecordId,
     direction,
     linkedRecordId,
+    linkedRecordIds,
+    validate: async tx => {
+      await validateVisibleSelection(tx, req, relatedEntityId, linkedRecordIds);
+      await validateVisibleSelection(tx, req, entityId, [baseRecordId]);
+    },
     expectedVersion: body.data.expectedVersion,
   });
   if (!replaced.ok) {
@@ -3803,7 +3839,7 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
       entityId,
       baseRecordId,
       relatedEntityId,
-      affectedLinkedIds: [...replaced.previousLinkedIds, ...(linkedRecordId != null ? [linkedRecordId] : [])],
+      affectedLinkedIds: [...replaced.previousLinkedIds, ...linkedRecordIds],
       actorUserId: userId,
       changedFields: [body.data.fieldKey],
       version: replaced.version,
@@ -3816,7 +3852,8 @@ router.put("/pages/:pageId/related-link", requireAuth, async (req, res): Promise
   // enforced above (relatedAccess !== "hidden" is required to reach this point).
   // For page-source the value is read from the linked record's page_record_values.
   const value = await loadLinkedValue(relatedPageId, relatedFieldKey, linkedRecordId, linkedValues);
-  res.json({ linkedRecordId, value, version: replaced.version });
+  const members = await selectedMembers(linkedRecordIds, relatedPageId, relatedFieldKey, selectedValues);
+  res.json({ linkedRecordId, linkedRecordIds, members, value: pageField.relationConfigJson?.selectionMode === "multiple" ? members.length : value, version: replaced.version });
 });
 
 /**
@@ -3857,6 +3894,7 @@ type RelationOptionPage = {
 };
 type RelationOption = {
   relationId: number;
+  relationType: Relation["relationType"];
   label: unknown;
   direction: LinkDirection;
   relatedEntityId: number;
@@ -3925,7 +3963,7 @@ async function buildRelationOptions(entityId: number): Promise<RelationOption[]>
   const options: RelationOption[] = [];
 
   for (const relation of relations) {
-    const direction = relationDirection(relation, entityId);
+    const direction = relationDirection(relation, entityId) ?? selectionDirection(relation, entityId, { selectionMode: "multiple" });
     if (!direction) continue;
     const relatedEntityId = relatedEntityIdFor(relation, direction);
     const [relatedEntity] = await db
@@ -3945,6 +3983,7 @@ async function buildRelationOptions(entityId: number): Promise<RelationOption[]>
       .orderBy(asc(entityFieldsTable.sortOrder));
     options.push({
       relationId: relation.id,
+      relationType: relation.relationType,
       // For the target side show the inverse name so the label reads from the
       // referencing entity's perspective.
       label: direction === "target" ? relation.inverseNameJson : relation.nameJson,
@@ -4048,7 +4087,7 @@ async function resolveRelationEntityField(
   if (relationId == null || !relatedFieldKey) return { ok: false, status: 400, error: "Relation field is not configured" };
   const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId));
   if (!relation) return { ok: false, status: 400, error: "Relation not found" };
-  const direction = relationDirection(relation, entityId);
+  const direction = selectionDirection(relation, entityId, cfg);
   if (!direction) return { ok: false, status: 400, error: "Relation does not yield a single linked record" };
   const relatedEntityId = relatedEntityIdFor(relation, direction);
   // Page-source: the projected field is a PAGE-LOCAL field of the related
@@ -4322,7 +4361,7 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
   const relationDescriptors = relationFields.flatMap((field) => {
     const config = field.relationConfigJson as RelationFieldConfig | null;
     const relation = config?.relationId == null ? undefined : relationById.get(config.relationId);
-    const direction = relation ? relationDirection(relation, entityId) : null;
+    const direction = relation ? selectionDirection(relation, entityId, config) : null;
     const relatedFieldKey = config?.relatedFieldKey ?? null;
     if (!relation || !direction || !relatedFieldKey) return [];
     return [{
@@ -4375,21 +4414,29 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
         ))
     : [];
   const linkMapByRelation = new Map<number, Map<number, number>>();
+  const memberMapByRelation = new Map<number, Map<number, number[]>>();
   for (const descriptor of relationDescriptors) {
     const map = linkMapByRelation.get(descriptor.relation.id) ?? new Map<number, number>();
+    const members = new Map<number, number[]>();
     for (const link of allLinkRows) {
       if (link.relationId !== descriptor.relation.id) continue;
       const from = descriptor.direction === "source" ? link.sourceRecordId : link.targetRecordId;
       const to = descriptor.direction === "source" ? link.targetRecordId : link.sourceRecordId;
-      if (allowedIds.includes(from)) map.set(from, to);
+      if (allowedIds.includes(from)) {
+        map.set(from, to);
+        members.set(from, [...(members.get(from) ?? []), to]);
+      }
     }
     linkMapByRelation.set(descriptor.relation.id, map);
+    memberMapByRelation.set(descriptor.relation.id, members);
   }
 
   const linkedIdsByEntity = new Map<number, Set<number>>();
   for (const descriptor of relationDescriptors) {
     const ids = linkedIdsByEntity.get(descriptor.relatedEntityId) ?? new Set<number>();
-    for (const linkedId of linkMapByRelation.get(descriptor.relation.id)?.values() ?? []) ids.add(linkedId);
+    for (const members of memberMapByRelation.get(descriptor.relation.id)?.values() ?? []) {
+      for (const linkedId of members) ids.add(linkedId);
+    }
     linkedIdsByEntity.set(descriptor.relatedEntityId, ids);
   }
   const linkedMapByEntity = new Map<number, Map<number, Record<string, unknown>>>();
@@ -4557,6 +4604,15 @@ router.post("/entities/:entityId/related-values", requireAuth, async (req, res):
 
     for (const recordId of allowedIds) {
       const rawLinkedId = linkMap.get(recordId) ?? null;
+      if (cfg?.selectionMode === "multiple") {
+        const ids = memberMapByRelation.get(relation.id)?.get(recordId) ?? [];
+        const members = ids.filter(id => linkedMap.has(id)).map(id => ({
+          id, label: candidateLabel(relatedPageId != null ? pageValuesMap.get(id)?.[relatedFieldKey] : linkedMap.get(id)?.[relatedFieldKey]),
+        }));
+        values.push({ recordId, fieldKey: f.fieldKey, value: members.length, linkedRecordId: null,
+          linkedRecordIds: members.map(m => m.id), members, editable: columnEditable } as typeof values[number]);
+        continue;
+      }
       let value: unknown = null;
       const editable = columnEditable;
       let visible = false;
@@ -4681,8 +4737,11 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
       // The filter field on the related entity is itself a relation: match by the
       // linked record id (parentValue) via record_links on that relation.
       const fr = await resolveRelationEntityField(relatedEntityId, relatedFilterFieldKey);
+      const parent = await resolveRelationEntityField(entityId, dependsOnFieldKey);
+      const [parentField] = await db.select({ fieldType: entityFieldsTable.fieldType }).from(entityFieldsTable)
+        .where(and(eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.fieldKey, dependsOnFieldKey), eq(entityFieldsTable.isActive, true)));
       const parentId = Number(parentValue);
-      if (!fr.ok || !Number.isFinite(parentId)) {
+      if (!fr.ok || !parentField || (parentField.fieldType === "relation" && (!parent.ok || fr.relatedEntityId !== parent.relatedEntityId)) || !Number.isSafeInteger(parentId)) {
         res.json(emptyResult);
         return;
       }
@@ -4757,7 +4816,7 @@ router.post("/entities/:entityId/related-candidates", requireAuth, async (req, r
       }))
       .filter((c) => (needle ? c.label.toLowerCase().includes(needle) : true));
   } else {
-    const candidates = await loadCandidateRows(relatedEntityId, relatedFieldKey, relatedPageId, conds, q);
+    const candidates = await loadCandidateRows(relatedEntityId, relatedFieldKey, relatedPageId, conds, q, body.data.all);
     if (userProjection) {
       const ids = [...new Set(candidates.map((c) => Number(c.label)).filter((n) => Number.isInteger(n)))];
       if (ids.length > 0) {
@@ -4816,7 +4875,13 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
   const { field, relation, direction, relatedEntityId, relatedFieldKey, relatedPageId } = resolved;
   const entityId = params.data.entityId;
   const baseRecordId = body.data.recordId;
-  const linkedRecordId = body.data.linkedRecordId ?? null;
+  let linkedRecordIds: number[];
+  try {
+    linkedRecordIds = normalizeSelection(body.data, field.relationConfigJson?.selectionMode === "multiple");
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message }); return;
+  }
+  const linkedRecordId = linkedRecordIds[0] ?? null;
 
   const perms = await getPermissions(req);
   const roleIds = await getUserRoleIds(req);
@@ -4853,7 +4918,8 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
   }
 
   let linkedValues: Record<string, unknown> | null = null;
-  if (linkedRecordId != null) {
+  const selectedValues = new Map<number, Record<string, unknown>>();
+  for (const linkedRecordId of linkedRecordIds) {
     if (!canRecord(perms, relatedEntityId, "view")) {
       res.status(403).json({ error: "Forbidden" });
       return;
@@ -4894,6 +4960,7 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
       return;
     }
     linkedValues = lv;
+    selectedValues.set(linkedRecordId, lv);
 
     // Dependent (cascading) relation field: enforce that the chosen record matches
     // the base record's current parent value as a hard server boundary (the UI
@@ -4919,6 +4986,11 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
     baseRecordId,
     direction,
     linkedRecordId,
+    linkedRecordIds,
+    validate: async tx => {
+      await validateVisibleSelection(tx, req, relatedEntityId, linkedRecordIds);
+      await validateVisibleSelection(tx, req, entityId, [baseRecordId]);
+    },
     expectedVersion: body.data.expectedVersion,
   });
   if (!replaced.ok) {
@@ -4934,7 +5006,7 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
       entityId,
       baseRecordId,
       relatedEntityId,
-      affectedLinkedIds: [...replaced.previousLinkedIds, ...(linkedRecordId != null ? [linkedRecordId] : [])],
+      affectedLinkedIds: [...replaced.previousLinkedIds, ...linkedRecordIds],
       actorUserId: userId,
       changedFields: [body.data.fieldKey],
       version: replaced.version,
@@ -4945,7 +5017,8 @@ router.put("/entities/:entityId/related-link", requireAuth, async (req, res): Pr
 
   // For page-source the value is read from the linked record's page_record_values.
   const value = await loadLinkedValue(relatedPageId, relatedFieldKey, linkedRecordId, linkedValues);
-  res.json({ linkedRecordId, value, version: replaced.version });
+  const members = await selectedMembers(linkedRecordIds, relatedPageId, relatedFieldKey, selectedValues);
+  res.json({ linkedRecordId, linkedRecordIds, members, value: field.relationConfigJson?.selectionMode === "multiple" ? members.length : value, version: replaced.version });
 });
 
 export default router;

@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { PageRelatedCandidate } from './pageRelatedCandidate';
 
 export interface PageRelatedLinkResult {
   /**
@@ -12,6 +13,8 @@ export interface PageRelatedLinkResult {
      * @nullable
      */
   linkedRecordId: number | null;
+  linkedRecordIds?: number[];
+  members?: PageRelatedCandidate[];
   /** The related field value after the change (null if cleared or hidden). */
   value?: unknown;
   /** Current base record version, incremented once when the link actually changed. */

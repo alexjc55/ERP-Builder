@@ -16,6 +16,7 @@ import {
   useListEntityAutomationRuns,
   getListEntityAutomationRunsQueryKey,
   useListEntityStatuses,
+  useListEntityRelations,
   getListEntityStatusesQueryKey,
   useListEntityFields,
   getListEntityFieldsQueryKey,
@@ -158,6 +159,8 @@ type MappingDraft = {
 };
 type ActionDraft = {
   type: AutomationActionType;
+  relationId: string;
+  relationDirection: "forward" | "reverse" | "";
   fieldKey: string;
   value: string;
   statusId: string;
@@ -216,6 +219,7 @@ const TRIGGER_TYPES: { value: AutomationTriggerType; labelKey: string; label: st
 const ACTION_TYPES: { value: AutomationActionType; labelKey: string; label: string }[] = [
   { value: "set_field", labelKey: "auto.act.set_field", label: "Установить поле" },
   { value: "change_status", labelKey: "auto.act.change_status", label: "Сменить статус" },
+  { value: "set_related_status", labelKey: "auto.act.set_related_status", label: "Сменить статус связанных записей" },
   { value: "create_record", labelKey: "auto.act.create_record", label: "Создать запись" },
   { value: "update_records_where", labelKey: "auto.act.update_records_where", label: "Обновить записи (по условию)" },
   { value: "webhook", labelKey: "auto.act.webhook", label: "Webhook" },
@@ -229,6 +233,8 @@ function noValueOp(op: AutomationConditionOperator): boolean {
 function emptyAction(defaultFieldKey: string): ActionDraft {
   return {
     type: "set_field",
+    relationId: "",
+    relationDirection: "",
     fieldKey: defaultFieldKey,
     value: "",
     statusId: "",
@@ -607,6 +613,8 @@ export default function EntityAutomationsPage() {
 
   const actionToDraft = (a: AutomationAction): ActionDraft => ({
     type: a.type,
+    relationId: a.relationId == null ? "" : String(a.relationId),
+    relationDirection: a.relationDirection ?? "",
     fieldKey: a.fieldKey ?? "",
     value: a.value == null ? "" : String(a.value),
     statusId: a.statusId == null ? "" : String(a.statusId),
@@ -727,6 +735,12 @@ export default function EntityAutomationsPage() {
       } else if (a.type === "change_status") {
         if (!a.statusId) { toast({ title: t("auto.specifyStatus", "Укажите статус"), variant: "destructive" }); return; }
         builtActions.push({ type: "change_status", statusId: Number(a.statusId) });
+      } else if (a.type === "set_related_status") {
+        if (!a.relationId || !a.statusId) {
+          toast({ title: t("auto.relatedStatusRequired", "Выберите связь и статус связанных записей"), variant: "destructive" });
+          return;
+        }
+        builtActions.push({ type: "set_related_status", relationId: Number(a.relationId), statusId: Number(a.statusId), ...(a.relationDirection ? { relationDirection: a.relationDirection } : {}) });
       } else if (a.type === "create_record" || a.type === "update_records_where") {
         if (!a.targetEntityId) { toast({ title: t("auto.specifyTarget", "Укажите целевую сущность"), variant: "destructive" }); return; }
         if (a.type === "update_records_where" && a.match.some((c) => c.fieldKey && c.valueSource === "field" && !c.valueFieldKey)) {
@@ -1600,6 +1614,14 @@ function ActionCard({
   onTargetFieldsLoaded: (entityId: number, fields: Field[]) => void;
 }): ReactElement {
   const pageLabel = usePagePathLabel();
+  const { data: directRelations = [] } = useListEntityRelations(currentEntityId);
+  const relationOptions = directRelations.flatMap((relation) => [
+    ...(relation.sourceEntityId === currentEntityId ? [{ relation, direction: "forward" as const, targetId: relation.targetEntityId }] : []),
+    ...(relation.targetEntityId === currentEntityId ? [{ relation, direction: "reverse" as const, targetId: relation.sourceEntityId }] : []),
+  ]);
+  const selectedRelation = relationOptions.find((option) => String(option.relation.id) === draft.relationId && (draft.relationDirection ? option.direction === draft.relationDirection : option.relation.sourceEntityId !== option.relation.targetEntityId));
+  const relatedEntityId = selectedRelation?.targetId ?? 0;
+  const { data: relatedStatuses = [] } = useListEntityStatuses(relatedEntityId, { query: { enabled: draft.type === "set_related_status" && relatedEntityId > 0, queryKey: getListEntityStatusesQueryKey(relatedEntityId) } });
   const targetId = draft.targetEntityId ? Number(draft.targetEntityId) : 0;
   const crossEntity = draft.type === "create_record" || draft.type === "update_records_where";
   const { data: targetFieldsRaw = [] } = useListEntityFields(targetId, { query: { enabled: crossEntity && targetId > 0, queryKey: getListEntityFieldsQueryKey(targetId) } });
@@ -1692,6 +1714,26 @@ function ActionCard({
         </div>
       )}
 
+      {draft.type === "set_related_status" && (
+        <div className="flex flex-wrap items-center gap-2 pl-7">
+          <Select value={selectedRelation ? `${selectedRelation.relation.id}:${selectedRelation.direction}` : ""} onValueChange={(value) => {
+            const [relationId, direction] = value.split(":");
+            onChange({ relationId, relationDirection: direction as "forward" | "reverse", statusId: "" });
+          }}>
+            <SelectTrigger className="w-64"><SelectValue placeholder={t("auto.directRelation", "Прямая связь")} /></SelectTrigger>
+            <SelectContent>{relationOptions.map(({ relation, direction, targetId: id }) => (
+              <SelectItem key={`${relation.id}:${direction}`} value={`${relation.id}:${direction}`}>
+                {ml(direction === "forward" ? relation.nameJson : relation.inverseNameJson) || relation.relationKey} → {ml(entities.find((entity) => entity.id === id)?.nameJson)} ({direction === "forward" ? "→" : "←"})
+              </SelectItem>
+            ))}</SelectContent>
+          </Select>
+          <Select value={draft.statusId} disabled={!selectedRelation} onValueChange={(statusId) => onChange({ statusId })}>
+            <SelectTrigger className="w-44"><SelectValue placeholder={t("auto.status", "Статус")} /></SelectTrigger>
+            <SelectContent>{relatedStatuses.map((status) => <SelectItem key={status.id} value={String(status.id)}>{ml(status.nameJson)}</SelectItem>)}</SelectContent>
+          </Select>
+          <p className="w-full text-xs text-slate-500">{t("auto.directOnly", "Только записи, напрямую связанные с записью запуска. Нет связей — нет изменений.")}</p>
+        </div>
+      )}
       {draft.type === "change_status" && (
         <div className="flex items-center gap-1.5 pl-7">
           <span className="text-xs text-slate-500">{t("auto.toStatus", "В статус")}</span>

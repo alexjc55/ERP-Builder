@@ -6,8 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RecordInputValuesJson } from './recordInputValuesJson';
+import type { RecordRelationSelection } from './recordRelationSelection';
 
 export interface RecordInput {
+  /** Creation-time relation selections committed with the new record before its record.created event is emitted. */
+  relationSelections?: RecordRelationSelection[];
   valuesJson: RecordInputValuesJson;
   /** @nullable */
   statusId?: number | null;

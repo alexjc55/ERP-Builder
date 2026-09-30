@@ -34,7 +34,7 @@ export async function relationLinkLockViolation(
   relationId: number,
   baseRecordId: number,
   direction: "source" | "target",
-  newLinkedId: number | null,
+  newLinkedId: number | null | number[],
 ): Promise<string | null> {
   const candidates = await exec
     .select({
@@ -60,12 +60,12 @@ export async function relationLinkLockViolation(
     direction === "source" ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId;
   const linkedCol =
     direction === "source" ? recordLinksTable.targetRecordId : recordLinksTable.sourceRecordId;
-  const [existing] = await exec
+  const existing = await exec
     .select({ linkedId: linkedCol })
     .from(recordLinksTable)
-    .where(and(eq(recordLinksTable.relationId, relationId), eq(baseCol, baseRecordId)))
-    .limit(1);
-  if (existing && existing.linkedId !== newLinkedId) {
+    .where(and(eq(recordLinksTable.relationId, relationId), eq(baseCol, baseRecordId)));
+  const selected = Array.isArray(newLinkedId) ? newLinkedId : newLinkedId == null ? [] : [newLinkedId];
+  if (existing.length && (existing.length !== selected.length || existing.some(row => !selected.includes(row.linkedId)))) {
     const ru = (locked.nameJson as { ru?: string } | null)?.ru ?? locked.fieldKey;
     return `Поле «${ru}» нельзя изменить после создания записи`;
   }

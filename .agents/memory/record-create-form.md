@@ -12,5 +12,5 @@ description: RecordFormBody is the single form body for ALL record dialogs, incl
 **How to apply:**
 - Field-set computation must mirror the main form's `visibleFormFields`: `isActive` + sortOrder sort + `fieldAccess !== "hidden"` + per-role display-only hide (hidden for EVERY assigned role drops the field even for superAdmin).
 - Caller-specific behavior goes through props, not a fork: `lockedFieldKeys` forces read-only (scalar → disabled input; relation in create mode → read-only `#id` box, link set after create).
-- Create flows persist relation-picker selections AFTER create via set-link calls (relations never live in valuesJson; `formToValues` skips relation/lookup/function).
+- Create flows send entity relation-picker selections as `RecordInput.relationSelections` (including single parent selections). The server persists them parent-first atomically with the record BEFORE `record.created`; do not reintroduce separate post-create entity link calls. Relations never live in valuesJson; `formToValues` skips relation/lookup/function.
 - Quick-create mirrors the main create dialog's status logic: hidden-picker statuses dropped, default preselected unless hidden, and when the default is hidden + NO_STATUS the payload OMITS `statusId` so the server assigns the hidden default.

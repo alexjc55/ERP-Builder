@@ -4082,6 +4082,7 @@ export const ListEntityFieldsResponseItem = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
@@ -4292,6 +4293,7 @@ export const CreateEntityFieldBody = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
@@ -4500,6 +4502,7 @@ export const GetFieldResponse = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
@@ -4700,6 +4703,7 @@ export const UpdateFieldBody = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
@@ -4900,6 +4904,7 @@ export const UpdateFieldResponse = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
@@ -5113,6 +5118,7 @@ export const ListPageFieldsResponseItem = zod.object({
   "decimals": zod.number().min(listPageFieldsResponsePercentConfigJsonDecimalsMin).max(listPageFieldsResponsePercentConfigJsonDecimalsMax).nullish()
 }).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
+  "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
@@ -5317,6 +5323,7 @@ export const CreatePageFieldBody = zod.object({
   "decimals": zod.number().min(createPageFieldBodyPercentConfigJsonDecimalsMin).max(createPageFieldBodyPercentConfigJsonDecimalsMax).nullish()
 }).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
+  "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
@@ -5512,6 +5519,7 @@ export const UpdatePageFieldBody = zod.object({
   "decimals": zod.number().min(updatePageFieldBodyPercentConfigJsonDecimalsMin).max(updatePageFieldBodyPercentConfigJsonDecimalsMax).nullish()
 }).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
+  "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
@@ -5709,6 +5717,7 @@ export const UpdatePageFieldResponse = zod.object({
   "decimals": zod.number().min(updatePageFieldResponsePercentConfigJsonDecimalsMin).max(updatePageFieldResponsePercentConfigJsonDecimalsMax).nullish()
 }).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
+  "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
   "relationId": zod.number().nullish(),
   "relatedFieldKey": zod.string().nullish(),
   "relatedPageId": zod.number().nullish().describe('Supported for both relation and lookup fields. When set, the projected `relatedFieldKey` is read from this PAGE\'s page-local values (page_record_values keyed by the linked record) instead of the linked entity record\'s own fields. The page\'s effective entity must equal the relation\'s related entity, and `relatedFieldKey` must be a value-backed page field of that page. The projected value is always read-only (no write-through); a relation field\'s link itself stays assignable.'),
@@ -5938,6 +5947,12 @@ export const GetPageRelatedValuesResponse = zod.object({
   "fieldKey": zod.string(),
   "value": zod.unknown().optional().describe('The related field\'s value (null if hidden for the viewer or no linked record).'),
   "linkedRecordId": zod.number().nullish(),
+  "linkedRecordIds": zod.array(zod.number()).optional(),
+  "members": zod.array(zod.object({
+  "id": zod.number().describe('The related entity record id (to link to).'),
+  "label": zod.string().describe('Display label (the related field value as text).'),
+  "value": zod.string().optional().describe('Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user\'s display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`.')
+})).optional(),
   "editable": zod.boolean()
 }))
 })
@@ -5953,6 +5968,7 @@ export const GetPageRelatedCandidatesParams = zod.object({
 export const GetPageRelatedCandidatesBody = zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key (identifies which relation to list candidates for).'),
   "q": zod.string().optional().describe('Optional case-insensitive search over the candidate label (related field value).'),
+  "all": zod.boolean().optional().describe('Return the complete permission-filtered matching candidate snapshot without the normal picker limit.'),
   "parentValue": zod.string().nullish().describe('For a dependent (cascading) relation field, the current row\'s parent-field value used to narrow candidates: a scalar value, or a linked record id (as a string) when the parent is itself a relation field. Empty\/omitted yields no candidates when the field is dependent.'),
   "ignoreDependency": zod.boolean().optional().describe('When true, skip the dependent (cascading) parent-value narrowing and return all RBAC-visible candidates regardless of any dependencyConfig. Used by contexts without a row\/parent chain (e.g. the automations conditions editor) so a dependent relation field can still offer its full value list.')
 })
@@ -5979,15 +5995,23 @@ export const SetPageRelatedLinkParams = zod.object({
 
 
 
+
 export const SetPageRelatedLinkBody = zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key.'),
   "recordId": zod.number().describe('The base (page) record whose link is being set.'),
   "linkedRecordId": zod.number().nullish().describe('The related record to link to, or null to clear the existing link.'),
+  "linkedRecordIds": zod.array(zod.number().min(1)).optional().describe('Complete replacement selection for a multiple relation. Empty clears the selection. Mutually exclusive with linkedRecordId.'),
   "expectedVersion": zod.number().min(1).optional().describe('Expected entity_records.version of the base record.')
 })
 
 export const SetPageRelatedLinkResponse = zod.object({
   "linkedRecordId": zod.number().nullable().describe('The linked record id after the change (null if cleared).'),
+  "linkedRecordIds": zod.array(zod.number()).optional(),
+  "members": zod.array(zod.object({
+  "id": zod.number().describe('The related entity record id (to link to).'),
+  "label": zod.string().describe('Display label (the related field value as text).'),
+  "value": zod.string().optional().describe('Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user\'s display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`.')
+})).optional(),
   "value": zod.unknown().optional().describe('The related field value after the change (null if cleared or hidden).'),
   "version": zod.number().describe('Current base record version, incremented once when the link actually changed.')
 })
@@ -6003,6 +6027,7 @@ export const GetPageRelationOptionsParams = zod.object({
 export const GetPageRelationOptionsResponse = zod.object({
   "options": zod.array(zod.object({
   "relationId": zod.number(),
+  "relationType": zod.enum(['one_to_one', 'one_to_many', 'many_to_one', 'many_to_many']).optional(),
   "label": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -6055,6 +6080,7 @@ export const GetEntityRelationOptionsParams = zod.object({
 export const GetEntityRelationOptionsResponse = zod.object({
   "options": zod.array(zod.object({
   "relationId": zod.number(),
+  "relationType": zod.enum(['one_to_one', 'one_to_many', 'many_to_one', 'many_to_many']).optional(),
   "label": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -6135,6 +6161,12 @@ export const GetEntityRelatedValuesResponse = zod.object({
   "fieldKey": zod.string(),
   "value": zod.unknown().optional().describe('The related field\'s value (null if hidden for the viewer or no linked record).'),
   "linkedRecordId": zod.number().nullish(),
+  "linkedRecordIds": zod.array(zod.number()).optional(),
+  "members": zod.array(zod.object({
+  "id": zod.number().describe('The related entity record id (to link to).'),
+  "label": zod.string().describe('Display label (the related field value as text).'),
+  "value": zod.string().optional().describe('Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user\'s display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`.')
+})).optional(),
   "editable": zod.boolean()
 }))
 })
@@ -6150,6 +6182,7 @@ export const GetEntityRelatedCandidatesParams = zod.object({
 export const GetEntityRelatedCandidatesBody = zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key (identifies which relation to list candidates for).'),
   "q": zod.string().optional().describe('Optional case-insensitive search over the candidate label (related field value).'),
+  "all": zod.boolean().optional().describe('Return the complete permission-filtered matching candidate snapshot without the normal picker limit.'),
   "parentValue": zod.string().nullish().describe('For a dependent (cascading) relation field, the current row\'s parent-field value used to narrow candidates: a scalar value, or a linked record id (as a string) when the parent is itself a relation field. Empty\/omitted yields no candidates when the field is dependent.'),
   "ignoreDependency": zod.boolean().optional().describe('When true, skip the dependent (cascading) parent-value narrowing and return all RBAC-visible candidates regardless of any dependencyConfig. Used by contexts without a row\/parent chain (e.g. the automations conditions editor) so a dependent relation field can still offer its full value list.')
 })
@@ -6176,15 +6209,23 @@ export const SetEntityRelatedLinkParams = zod.object({
 
 
 
+
 export const SetEntityRelatedLinkBody = zod.object({
   "fieldKey": zod.string().describe('The relation page-field\'s own key.'),
   "recordId": zod.number().describe('The base (page) record whose link is being set.'),
   "linkedRecordId": zod.number().nullish().describe('The related record to link to, or null to clear the existing link.'),
+  "linkedRecordIds": zod.array(zod.number().min(1)).optional().describe('Complete replacement selection for a multiple relation. Empty clears the selection. Mutually exclusive with linkedRecordId.'),
   "expectedVersion": zod.number().min(1).optional().describe('Expected entity_records.version of the base record.')
 })
 
 export const SetEntityRelatedLinkResponse = zod.object({
   "linkedRecordId": zod.number().nullable().describe('The linked record id after the change (null if cleared).'),
+  "linkedRecordIds": zod.array(zod.number()).optional(),
+  "members": zod.array(zod.object({
+  "id": zod.number().describe('The related entity record id (to link to).'),
+  "label": zod.string().describe('Display label (the related field value as text).'),
+  "value": zod.string().optional().describe('Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user\'s display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`.')
+})).optional(),
   "value": zod.unknown().optional().describe('The related field value after the change (null if cleared or hidden).'),
   "version": zod.number().describe('Current base record version, incremented once when the link actually changed.')
 })
@@ -6835,6 +6876,7 @@ export const ListEntityAutomationsParams = zod.object({
 
 
 
+
 export const listEntityAutomationsResponseActionsJsonItemIdempotencyKeyMax = 200;
 
 
@@ -6916,7 +6958,9 @@ export const ListEntityAutomationsResponseItem = zod.object({
 })),
   "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "relationId": zod.number().min(1).optional().describe('Required for set_related_status; selects the normalized relation to traverse.'),
+  "relationDirection": zod.enum(['forward', 'reverse']).optional().describe('Traversal direction for set_related_status. Required for self-relations.'),
   "fieldKey": zod.string().optional(),
   "value": zod.unknown().optional(),
   "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('For set_field: where to write. \"entity\" (default when absent) sets the triggering entity record\'s field. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId).'),
@@ -7020,6 +7064,7 @@ export const CreateEntityAutomationParams = zod.object({
 export const createEntityAutomationBodyConditionsJsonDefault = [];
 export const createEntityAutomationBodyConditionConjunctionDefault = `and`;
 
+
 export const createEntityAutomationBodyActionsJsonItemIdempotencyKeyMax = 200;
 
 
@@ -7099,7 +7144,9 @@ export const CreateEntityAutomationBody = zod.object({
 })).default(createEntityAutomationBodyConditionsJsonDefault),
   "conditionConjunction": zod.enum(['and', 'or']).default(createEntityAutomationBodyConditionConjunctionDefault),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "relationId": zod.number().min(1).optional().describe('Required for set_related_status; selects the normalized relation to traverse.'),
+  "relationDirection": zod.enum(['forward', 'reverse']).optional().describe('Traversal direction for set_related_status. Required for self-relations.'),
   "fieldKey": zod.string().optional(),
   "value": zod.unknown().optional(),
   "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('For set_field: where to write. \"entity\" (default when absent) sets the triggering entity record\'s field. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId).'),
@@ -7220,6 +7267,7 @@ export const GetAutomationParams = zod.object({
 
 
 
+
 export const getAutomationResponseActionsJsonItemIdempotencyKeyMax = 200;
 
 
@@ -7301,7 +7349,9 @@ export const GetAutomationResponse = zod.object({
 })),
   "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "relationId": zod.number().min(1).optional().describe('Required for set_related_status; selects the normalized relation to traverse.'),
+  "relationDirection": zod.enum(['forward', 'reverse']).optional().describe('Traversal direction for set_related_status. Required for self-relations.'),
   "fieldKey": zod.string().optional(),
   "value": zod.unknown().optional(),
   "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('For set_field: where to write. \"entity\" (default when absent) sets the triggering entity record\'s field. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId).'),
@@ -7403,6 +7453,7 @@ export const UpdateAutomationParams = zod.object({
 
 
 
+
 export const updateAutomationBodyActionsJsonItemIdempotencyKeyMax = 200;
 
 
@@ -7482,7 +7533,9 @@ export const UpdateAutomationBody = zod.object({
 })).optional(),
   "conditionConjunction": zod.enum(['and', 'or']).optional(),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "relationId": zod.number().min(1).optional().describe('Required for set_related_status; selects the normalized relation to traverse.'),
+  "relationDirection": zod.enum(['forward', 'reverse']).optional().describe('Traversal direction for set_related_status. Required for self-relations.'),
   "fieldKey": zod.string().optional(),
   "value": zod.unknown().optional(),
   "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('For set_field: where to write. \"entity\" (default when absent) sets the triggering entity record\'s field. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId).'),
@@ -7574,6 +7627,7 @@ export const UpdateAutomationBody = zod.object({
 
 
 
+
 export const updateAutomationResponseActionsJsonItemIdempotencyKeyMax = 200;
 
 
@@ -7655,7 +7709,9 @@ export const UpdateAutomationResponse = zod.object({
 })),
   "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "relationId": zod.number().min(1).optional().describe('Required for set_related_status; selects the normalized relation to traverse.'),
+  "relationDirection": zod.enum(['forward', 'reverse']).optional().describe('Traversal direction for set_related_status. Required for self-relations.'),
   "fieldKey": zod.string().optional(),
   "value": zod.unknown().optional(),
   "targetFieldSource": zod.enum(['entity', 'page']).optional().describe('For set_field: where to write. \"entity\" (default when absent) sets the triggering entity record\'s field. \"page\" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId).'),
@@ -8047,7 +8103,15 @@ export const CreateEntityRecordParams = zod.object({
   "entityId": zod.coerce.number()
 })
 
+
+
+
+
 export const CreateEntityRecordBody = zod.object({
+  "relationSelections": zod.array(zod.object({
+  "fieldKey": zod.string().min(1),
+  "linkedRecordIds": zod.array(zod.number().min(1))
+})).optional().describe('Creation-time relation selections committed with the new record before its record.created event is emitted.'),
   "valuesJson": zod.record(zod.string(), zod.unknown()),
   "statusId": zod.number().nullish(),
   "pageId": zod.number().optional().describe('Optional mirror-page context. When this create is performed through a mirror page, send its page id so the server applies that page\'s record-rights override (if configured for the role) instead of the source entity\'s rights.')

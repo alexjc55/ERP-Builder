@@ -3354,9 +3354,22 @@ export interface UserFieldConfig {
 }
 
 /**
+ * Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.
+ */
+export type RelationFieldConfigSelectionMode = typeof RelationFieldConfigSelectionMode[keyof typeof RelationFieldConfigSelectionMode];
+
+
+export const RelationFieldConfigSelectionMode = {
+  single: 'single',
+  multiple: 'multiple',
+} as const;
+
+/**
  * Config for a relation-type page field (surfaces one field of a linked related record).
  */
 export interface RelationFieldConfig {
+  /** Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links. */
+  selectionMode?: RelationFieldConfigSelectionMode;
   /** @nullable */
   relationId?: number | null;
   /** @nullable */
@@ -3525,6 +3538,15 @@ export interface PageRelatedColumn {
   writeThrough?: boolean;
 }
 
+export interface PageRelatedCandidate {
+  /** The related entity record id (to link to). */
+  id: number;
+  /** Display label (the related field value as text). */
+  label: string;
+  /** Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user's display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`. */
+  value?: string;
+}
+
 export interface PageRelatedValue {
   recordId: number;
   fieldKey: string;
@@ -3532,6 +3554,8 @@ export interface PageRelatedValue {
   value?: unknown;
   /** @nullable */
   linkedRecordId?: number | null;
+  linkedRecordIds?: number[];
+  members?: PageRelatedCandidate[];
   editable: boolean;
 }
 
@@ -3545,19 +3569,12 @@ export interface PageRelatedCandidatesInput {
   fieldKey: string;
   /** Optional case-insensitive search over the candidate label (related field value). */
   q?: string;
+  /** Return the complete permission-filtered matching candidate snapshot without the normal picker limit. */
+  all?: boolean;
   /** For a dependent (cascading) relation field, the current row's parent-field value used to narrow candidates: a scalar value, or a linked record id (as a string) when the parent is itself a relation field. Empty/omitted yields no candidates when the field is dependent. */
   parentValue?: string | null;
   /** When true, skip the dependent (cascading) parent-value narrowing and return all RBAC-visible candidates regardless of any dependencyConfig. Used by contexts without a row/parent chain (e.g. the automations conditions editor) so a dependent relation field can still offer its full value list. */
   ignoreDependency?: boolean;
-}
-
-export interface PageRelatedCandidate {
-  /** The related entity record id (to link to). */
-  id: number;
-  /** Display label (the related field value as text). */
-  label: string;
-  /** Optional matching value distinct from the display label. Used when the projected related field is a `user` field: `label` is the user's display name while `value` is the user id (as a string), which is the raw projected value that automation conditions match against. When omitted the consumer should fall back to `label`. */
-  value?: string;
 }
 
 export interface PageRelatedCandidates {
@@ -3580,6 +3597,8 @@ export interface PageRelatedLinkInput {
      * @nullable
      */
   linkedRecordId?: number | null;
+  /** Complete replacement selection for a multiple relation. Empty clears the selection. Mutually exclusive with linkedRecordId. */
+  linkedRecordIds?: number[];
   /**
      * Expected entity_records.version of the base record.
      * @minimum 1
@@ -3593,6 +3612,8 @@ export interface PageRelatedLinkResult {
      * @nullable
      */
   linkedRecordId: number | null;
+  linkedRecordIds?: number[];
+  members?: PageRelatedCandidate[];
   /** The related field value after the change (null if cleared or hidden). */
   value?: unknown;
   /** Current base record version, incremented once when the link actually changed. */
@@ -3614,6 +3635,16 @@ export interface PageRelationOptionPage {
   fields: PageRelationOptionField[];
 }
 
+export type PageRelationOptionRelationType = typeof PageRelationOptionRelationType[keyof typeof PageRelationOptionRelationType];
+
+
+export const PageRelationOptionRelationType = {
+  one_to_one: 'one_to_one',
+  one_to_many: 'one_to_many',
+  many_to_one: 'many_to_one',
+  many_to_many: 'many_to_many',
+} as const;
+
 /**
  * Which side of the relation `entityId` sits on. "source" = this entity is the relation's source linking to one target (1:1 / N:1); "target" = the inverse single-link side (1:1 / 1:N). Entity `relation` fields are eligible only for "source" options.
  */
@@ -3627,6 +3658,7 @@ export const PageRelationOptionDirection = {
 
 export interface PageRelationOption {
   relationId: number;
+  relationType?: PageRelationOptionRelationType;
   label: MultilingualText;
   /** Which side of the relation `entityId` sits on. "source" = this entity is the relation's source linking to one target (1:1 / N:1); "target" = the inverse single-link side (1:1 / 1:N). Entity `relation` fields are eligible only for "source" options. */
   direction: PageRelationOptionDirection;
@@ -4185,10 +4217,22 @@ export type AutomationActionType = typeof AutomationActionType[keyof typeof Auto
 export const AutomationActionType = {
   set_field: 'set_field',
   change_status: 'change_status',
+  set_related_status: 'set_related_status',
   create_record: 'create_record',
   update_records_where: 'update_records_where',
   webhook: 'webhook',
   generate_document: 'generate_document',
+} as const;
+
+/**
+ * Traversal direction for set_related_status. Required for self-relations.
+ */
+export type AutomationActionRelationDirection = typeof AutomationActionRelationDirection[keyof typeof AutomationActionRelationDirection];
+
+
+export const AutomationActionRelationDirection = {
+  forward: 'forward',
+  reverse: 'reverse',
 } as const;
 
 /**
@@ -4216,6 +4260,13 @@ export const AutomationActionLanguage = {
 
 export interface AutomationAction {
   type: AutomationActionType;
+  /**
+     * Required for set_related_status; selects the normalized relation to traverse.
+     * @minimum 1
+     */
+  relationId?: number;
+  /** Traversal direction for set_related_status. Required for self-relations. */
+  relationDirection?: AutomationActionRelationDirection;
   fieldKey?: string;
   value?: unknown;
   /** For set_field: where to write. "entity" (default when absent) sets the triggering entity record's field. "page" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId). */
@@ -4377,7 +4428,15 @@ export const ArchiveFilter = {
 
 export type RecordInputValuesJson = { [key: string]: unknown };
 
+export interface RecordRelationSelection {
+  /** @minLength 1 */
+  fieldKey: string;
+  linkedRecordIds: number[];
+}
+
 export interface RecordInput {
+  /** Creation-time relation selections committed with the new record before its record.created event is emitted. */
+  relationSelections?: RecordRelationSelection[];
   valuesJson: RecordInputValuesJson;
   /** @nullable */
   statusId?: number | null;

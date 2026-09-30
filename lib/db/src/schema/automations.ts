@@ -151,6 +151,12 @@ export const automationActionSchema = z.discriminatedUnion("type", [
   }),
   /** Move the triggering record to a status directly (overrides «Процессы»). */
   z.object({ type: z.literal("change_status"), statusId: z.number().int() }),
+  z.object({
+    type: z.literal("set_related_status"),
+    relationId: z.number().int().positive(),
+    statusId: z.number().int().positive(),
+    relationDirection: z.enum(["forward", "reverse"]).optional(),
+  }),
   /** Create a new record on `targetEntityId` (this or another entity). */
   z.object({
     type: z.literal("create_record"),

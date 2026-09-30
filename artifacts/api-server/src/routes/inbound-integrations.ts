@@ -1,4 +1,5 @@
 import { randomBytes } from "crypto";
+import { guardedRelationRequiresFieldSurface } from "../lib/relation-selection-integrity";
 import { lookup } from "dns/promises";
 import { request as httpsRequest } from "https";
 import { Router, type IRouter, type Request } from "express";
@@ -581,6 +582,7 @@ async function applyStepLinks(tx: Executor, req: Request, step: InboundStep, res
     if (!targetId) throw new Error(`Step ${step.key}: link target result is missing`);
     const [relation] = await tx.select().from(relationsTable).where(eq(relationsTable.id, link.relationId)).limit(1);
     if (!relation) throw new Error(`Step ${step.key}: relation ${link.relationId} does not exist`);
+    if (await guardedRelationRequiresFieldSurface(tx, relation.id)) throw new Error(`Step ${step.key}: configured relation selections require the related-link field endpoint`);
     let sourceRecordId: number;
     let targetRecordId: number;
     let sourceEntityId: number;

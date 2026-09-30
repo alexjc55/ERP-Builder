@@ -1,5 +1,7 @@
 import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useId, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { sameAggregateTopology } from "@/lib/aggregateSnapshot";
+import { MultipleRelationPicker } from "./MultipleRelationPicker";
+import { draftRelationSelections } from "@/lib/relationSelections";
 import { columnGroupBodyStyle, resolveColumnGroupCellStyle } from "@/lib/columnGroupStyles";
 import { InlineListPicker } from "@/components/InlineListPicker";
 import { CompactStatus } from "@/components/CompactStatus";
@@ -483,7 +485,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
               const meta = entityRelatedColMeta.get(f.fieldKey);
               const rel = entityRelatedValues?.get(f.fieldKey);
               const relField = { ...f, fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"], optionsJson: meta?.optionsJson ?? [] } as unknown as Field;
-              const relAssignable = inlineEditEnabled && entityRelationsProjectionState === "ready" && !!meta?.editableColumn && !!rel?.editable && !relationFieldLocked(f, rel?.linkedRecordId);
+              const relAssignable = inlineEditEnabled && entityRelationsProjectionState === "ready" && !!meta?.editableColumn && !!rel?.editable && !relationFieldLocked(f, rel?.linkedRecordId ?? rel?.linkedRecordIds?.[0]);
               const keepRelationPickerMounted = relationIsEditingThis && !!meta?.editableColumn && !!rel?.editable;
               const relDep = f.dependencyConfigJson;
               const relDepParentKey = relDep?.dependsOnFieldKey;
@@ -502,7 +504,15 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
               const display = rel?.linkedRecordId == null ? <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span> : renderCellValue(relField, rel?.value, t, userNames, cellText, ml);
               return (
                 <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
-                  {relAssignable || keepRelationPickerMounted ? (
+                  {f.fieldType === "relation" && f.relationConfigJson?.selectionMode === "multiple" ? (
+                    <MultipleRelationPicker entityId={entityId} fieldKey={f.fieldKey} recordId={record.id}
+                      expectedVersion={record.version} ids={rel?.linkedRecordIds} members={rel?.members}
+                      disabled={!relAssignable} dependent={relIsDependent} parentValue={relParentValue}
+                      renderQuickCreate={f.relationConfigJson?.relatedPageId ? undefined : props => <QuickCreateRelatedRecordDialog {...props} pageId={pageId}
+                        lockedFieldKey={relDep?.relatedFilterFieldKey} lockedValue={relParentValue} labelFieldKey={f.relationConfigJson?.relatedFieldKey} />}
+                      onChanged={() => setRefreshTick(x => x + 1)}
+                      onEditingChange={open => setEditingCell(open ? { recordId: record.id, fieldKey: f.fieldKey } : null)} />
+                  ) : relAssignable || keepRelationPickerMounted ? (
                     <EntityRelationLinkPicker
                       entityId={entityId} fieldKey={f.fieldKey} recordId={record.id}
                       expectedVersion={record.version} currentLinkedId={rel?.linkedRecordId ?? null}
@@ -614,7 +624,12 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
             const display = rel?.linkedRecordId == null ? <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span> : renderCellValue(relField, rel?.value, t, userNames, cellText, ml);
             return (
               <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
-                {(relAssignable || keepRelationPickerMounted) && pageId != null ? (
+                {pf.relationConfigJson?.selectionMode === "multiple" && pageId != null ? (
+                  <MultipleRelationPicker entityId={entityId} pageId={pageId} pageField fieldKey={pf.fieldKey}
+                    recordId={record.id} expectedVersion={record.version} ids={rel?.linkedRecordIds} members={rel?.members}
+                    disabled={!relAssignable} onChanged={() => setRefreshTick(x => x + 1)}
+                    onEditingChange={open => setEditingCell(open ? { recordId: record.id, fieldKey: pfKey } : null)} />
+                ) : (relAssignable || keepRelationPickerMounted) && pageId != null ? (
                   <RelationLinkPicker pageId={pageId} fieldKey={pf.fieldKey} recordId={record.id} expectedVersion={record.version}
                     currentLinkedId={rel?.linkedRecordId ?? null} display={display} onChanged={() => setRefreshTick(x => x + 1)}
                     onEditingChange={open => setEditingCell(open ? { recordId: record.id, fieldKey: pfKey } : null)} disabled={!relAssignable} />
@@ -2949,6 +2964,7 @@ export function EntityRecords({
             pf.relationConfigJson?.relationId,
             pf.relationConfigJson?.relatedFieldKey,
             pf.relationConfigJson?.relatedPageId,
+            pf.relationConfigJson?.selectionMode,
           ]),
       ),
     [pageFields],
@@ -2964,6 +2980,8 @@ export function EntityRecords({
             f.permissionsJson,
             f.relationConfigJson?.relationId,
             f.relationConfigJson?.relatedFieldKey,
+            f.relationConfigJson?.selectionMode,
+            f.dependencyConfigJson,
           ]),
       ),
     [allFields],
@@ -5715,10 +5733,6 @@ export function EntityRecords({
       },
     },
   });
-  // Used to persist relation-field links chosen during a CREATE flow, once the
-  // base record exists (a link cannot be written before the record id is known).
-  const setEntityLinkMutation = useSetEntityRelatedLink();
-
   const openCreate = () => {
     setEditing(null);
     setDialogRelationEditing(false);
@@ -5812,30 +5826,6 @@ export function EntityRecords({
     return { dependent, parentValue, relatedFilterFieldKey: dep?.relatedFilterFieldKey ?? null };
   };
 
-  // After a base record is created, persist any relation-field selections made in
-  // a CREATE flow (modal or inline add-row). A relation link needs the new record
-  // id, so it cannot be written before create — we defer it to here. Best-effort
-  // per field; a failure is surfaced but does not undo the created record.
-  const persistPendingRelationLinks = async (recordId: number, src: FormState) => {
-    for (const rf of fields) {
-      if (rf.fieldType !== "relation") continue;
-      if (effFieldAccess(rf) !== "edit") continue;
-      const v = src[rf.fieldKey];
-      const linkedRecordId = typeof v === "number" ? v : v != null && v !== "" ? Number(v) : null;
-      if (linkedRecordId == null || !Number.isFinite(linkedRecordId)) continue;
-      try {
-        await setEntityLinkMutation.mutateAsync({ entityId, data: { fieldKey: rf.fieldKey, recordId, linkedRecordId } });
-      } catch (e) {
-        toast({
-          variant: "destructive",
-          title: t("records.linkFailed", "Не удалось изменить связь"),
-          description: e instanceof Error ? e.message : undefined,
-        });
-      }
-    }
-    setRefreshTick((x) => x + 1);
-  };
-
   const handleSubmit = () => {
     if (dialogRelationEditing) return;
     // Only send fields the user can see; hidden/view-only are preserved server-side.
@@ -5864,10 +5854,11 @@ export function EntityRecords({
         try {
           const created = await createMutation.mutateAsync({
             entityId,
-            data: buildCreateData(valuesJson, statusValue, statusManualEditable && statusDirty),
+            data: { ...buildCreateData(valuesJson, statusValue, statusManualEditable && statusDirty),
+              relationSelections: draftRelationSelections(fields.filter(f => effFieldAccess(f) === "edit"), form) },
           });
           if (created?.id != null) {
-            await persistPendingRelationLinks(created.id, form);
+            setRefreshTick(x => x + 1);
             if (await maybeRenameDriveFiles({ recordId: created.id, fields, values: valuesJson, uploaderEmail: user?.email, pageId: permPageId })) invalidate();
           }
         } catch {
@@ -6440,7 +6431,8 @@ export function EntityRecords({
       try {
         const created = await createMutation.mutateAsync({
           entityId,
-          data: buildCreateData(valuesJson, statusValue, newRowStatusDirty),
+          data: { ...buildCreateData(valuesJson, statusValue, newRowStatusDirty),
+            relationSelections: draftRelationSelections(fields.filter(f => effFieldAccess(f) === "edit"), newRow) },
         });
         if (created?.id != null) {
           if (hasPage && pageId != null && Object.keys(pageValuesJson).length > 0) {
@@ -6464,7 +6456,7 @@ export function EntityRecords({
             }
           }
           setNewPageRow({});
-          await persistPendingRelationLinks(created.id, newRow);
+          setRefreshTick(x => x + 1);
           // Final-values rename pass (page-local values merged for template resolution).
           if (await maybeRenameDriveFiles({ recordId: created.id, fields, values: { ...pageValuesJson, ...valuesJson }, uploaderEmail: user?.email })) invalidate();
         }
@@ -9150,7 +9142,13 @@ export function EntityRecords({
                         const addRowRelInfo = relCreateDepInfo(f, newRow);
                         return (
                           <td key={col.pinKey} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(col.pinKey, "#eff6ff"), ...colWidthStyle(col.pinKey) }}>
-                            {editable && f.fieldType === "relation" ? (
+                            {editable && f.fieldType === "relation" && f.relationConfigJson?.selectionMode === "multiple" ? (
+                              <MultipleRelationPicker entityId={entityId} fieldKey={f.fieldKey}
+                                value={newRow[f.fieldKey]} dependent={addRowRelInfo.dependent} parentValue={addRowRelInfo.parentValue}
+                                renderQuickCreate={f.relationConfigJson?.relatedPageId ? undefined : props => <QuickCreateRelatedRecordDialog {...props} pageId={permPageId}
+                                  lockedFieldKey={addRowRelInfo.relatedFilterFieldKey} lockedValue={addRowRelInfo.parentValue} labelFieldKey={f.relationConfigJson?.relatedFieldKey} />}
+                                onChange={value => setNewRow(prev => clearDependentDescendants({ ...prev, [f.fieldKey]: value }, f.fieldKey, fields))} />
+                            ) : editable && f.fieldType === "relation" ? (
                               <RelationCreatePicker
                                 entityId={entityId}
                                 fieldKey={f.fieldKey}
@@ -10143,6 +10141,8 @@ function RelationLinkPicker({
 
   const choose = async (linkedRecordId: number | null) => {
     if (disabled) return;
+    if (currentLinkedId != null && currentLinkedId !== linkedRecordId &&
+      !window.confirm("При смене родительской записи выбор зависимых записей будет очищен. Продолжить?")) return;
     try {
       const result = await linkMutation.mutateAsync({
         pageId,
@@ -10322,6 +10322,8 @@ function EntityRelationLinkPicker({
   const choose = async (linkedRecordId: number | null) => {
     if (disabled) return;
     try {
+      if (currentLinkedId != null && currentLinkedId !== linkedRecordId &&
+        !window.confirm("При смене родительской записи выбор зависимых записей будет очищен. Продолжить?")) return;
       const result = await linkMutation.mutateAsync({
         entityId,
         data: { fieldKey, recordId, linkedRecordId, expectedVersion },
@@ -10441,7 +10443,7 @@ function EntityRelationLinkPicker({
  * A relation link can only be written once the base record exists, so this picker
  * does not mutate: it just SELECTS (or quick-creates) a related record and reports
  * the chosen id via onChange. The caller persists the link after the base record
- * is created (see persistPendingRelationLinks). Mirrors EntityRelationLinkPicker's
+ * is created atomically via relationSelections. Mirrors EntityRelationLinkPicker's
  * candidate search + quick-create, including dependent (cascading) parent gating.
  */
 function RelationCreatePicker({
@@ -10517,6 +10519,8 @@ function RelationCreatePicker({
   }, [open, search, entityId, fieldKey, fetchCandidates, gated, dependent, parentValue]);
 
   const choose = (id: number | null, label: string | null) => {
+    if (value != null && value !== id &&
+      !window.confirm("При смене родительской записи выбор зависимых записей будет очищен. Продолжить?")) return;
     setSelfLabel(label);
     onChange(id);
     setOpen(false);
@@ -10956,7 +10960,7 @@ function RecordFormBody({
         const relVal = relByField.get(field.fieldKey);
         const callerLocked = lockedFieldKeys?.has(field.fieldKey) === true;
         const relLocked =
-          (mode === "edit" && relationFieldLocked(field, relVal?.linkedRecordId)) ||
+          (mode === "edit" && relationFieldLocked(field, relVal?.linkedRecordId ?? relVal?.linkedRecordIds?.[0])) ||
           (callerLocked && field.fieldType === "relation");
         // A lookup is always read-only (it projects a linked record's value); a
         // lockAfterCreate scalar becomes read-only in edit mode once it has a value.
@@ -10977,7 +10981,16 @@ function RecordFormBody({
                 </span>
               )}
             </Label>
-            {field.fieldType === "relation" ? (
+            {field.fieldType === "relation" && field.relationConfigJson?.selectionMode === "multiple" ? (
+              <MultipleRelationPicker entityId={entityId} fieldKey={field.fieldKey}
+                recordId={mode === "edit" ? recordId ?? undefined : undefined} expectedVersion={expectedVersion}
+                value={form[field.fieldKey]} ids={relVal?.linkedRecordIds} members={relVal?.members}
+                disabled={access !== "edit" || relLocked || (mode === "edit" && !relVal?.editable)} dependent={dep.dependent} parentValue={dep.parentValue}
+                renderQuickCreate={field.relationConfigJson?.relatedPageId ? undefined : props => <QuickCreateRelatedRecordDialog {...props} pageId={pageId}
+                  lockedFieldKey={dep.relatedFilterFieldKey} lockedValue={dep.parentValue} labelFieldKey={field.relationConfigJson?.relatedFieldKey} />}
+                onChange={value => setForm(prev => clearDependentDescendants({ ...prev, [field.fieldKey]: value }, field.fieldKey, allFields))}
+                onChanged={handleRelationChanged} onEditingChange={open => onRelationEditingChange?.(open)} />
+            ) : field.fieldType === "relation" ? (
               access === "edit" && !relLocked ? (
                 mode === "edit" && recordId != null ? (
                   <EntityRelationLinkPicker
@@ -11014,7 +11027,7 @@ function RecordFormBody({
                 )
               ) : mode === "create" && callerLocked ? (
                 // Caller-locked relation in a create flow: the link doesn't exist
-                // yet (set after create), so preview the prefilled target record's
+                // yet (committed atomically on create), so preview the prefilled target record's
                 // display field (not its raw #id).
                 roBox(
                   typeof form[field.fieldKey] === "number" ? (
@@ -11373,14 +11386,13 @@ function QuickCreateRelatedRecordDialog({
   const allowNoStatus = relatedEntity?.allowNoStatus ?? true;
   const { data: userOptions = [] } = useListUserOptions();
   const createMutation = useCreateEntityRecord();
-  const setLinkMutation = useSetEntityRelatedLink();
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
   const [statusDirty, setStatusDirty] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Is the locked dependency filter field a relation field on the related entity?
-  // If so it cannot live in valuesJson; we set it as a link after create.
+  // If so it cannot live in valuesJson; include it in atomic relationSelections.
   const relFields = useMemo(
     () => [...relFieldsRaw].filter((f: Field) => f.isActive).sort((a: Field, b: Field) => a.sortOrder - b.sortOrder),
     [relFieldsRaw],
@@ -11432,7 +11444,7 @@ function QuickCreateRelatedRecordDialog({
     // Same seeding as the main form's openCreate (incl. defaultToToday), plus the
     // locked dependency-filter prefill. A locked RELATION field keeps its linked
     // record id in the form so dependent children can resolve their parent; the
-    // link itself is written after create (relations never live in valuesJson).
+    // link itself is committed with create (relations never live in valuesJson).
     const initial: FormState = {};
     for (const f of relFields) initial[f.fieldKey] = initialForField(f);
     if (lockedFieldKey && lockedField && lockedValue != null) {
@@ -11464,7 +11476,8 @@ function QuickCreateRelatedRecordDialog({
           : { statusId: statusValue };
       const created = await createMutation.mutateAsync({
         entityId: relatedEntityId,
-        data: { valuesJson, ...statusPart, ...(pageId != null ? { pageId } : {}) },
+        data: { valuesJson, ...statusPart, ...(pageId != null ? { pageId } : {}),
+          relationSelections: draftRelationSelections(formFields.filter(f => quickFieldAccess(f, relatedEntityId) === "edit" || f.fieldKey === lockedFieldKey), form) },
       });
       newId = created.id;
       await maybeRenameDriveFiles({ recordId: newId, fields: formFields, values: valuesJson, uploaderEmail: quickUser?.email, pageId });
@@ -11491,57 +11504,7 @@ function QuickCreateRelatedRecordDialog({
       });
       return;
     }
-    // Step 2 — for a relation dependency filter field, set the link on the new
-    // record so it matches the parent (scalar values went in via valuesJson). The
-    // record already exists; a failure here leaves it created-but-unmatched, so we
-    // report that honestly rather than claiming creation failed.
-    if (lockedIsRelation && lockedFieldKey) {
-      const linkedRecordId = lockedValue == null || lockedValue === "" ? NaN : Number(lockedValue);
-      if (!Number.isFinite(linkedRecordId)) {
-        setSubmitting(false);
-        toast({
-          variant: "destructive",
-          title: t("records.relatedCreatedNotLinked", "Запись создана, но не привязана"),
-        });
-        return;
-      }
-      try {
-        await setLinkMutation.mutateAsync({
-          entityId: relatedEntityId,
-          data: { fieldKey: lockedFieldKey, recordId: newId, linkedRecordId },
-        });
-      } catch (e) {
-        setSubmitting(false);
-        toast({
-          variant: "destructive",
-          title: t("records.relatedCreatedNotLinked", "Запись создана, но не привязана"),
-          description: e instanceof Error ? e.message : undefined,
-        });
-        return;
-      }
-    }
-    // Step 3 — persist any OTHER relation selections made in the form, same as the
-    // main create dialog's persistPendingRelationLinks: best-effort per field, a
-    // failure is surfaced but does not undo the created record.
-    for (const rf of formFields) {
-      if (rf.fieldType !== "relation" || rf.fieldKey === lockedFieldKey) continue;
-      if (quickFieldAccess(rf, relatedEntityId) !== "edit") continue;
-      const v = form[rf.fieldKey];
-      const linkedRecordId = typeof v === "number" ? v : v != null && v !== "" ? Number(v) : null;
-      if (linkedRecordId == null || !Number.isFinite(linkedRecordId)) continue;
-      try {
-        await setLinkMutation.mutateAsync({
-          entityId: relatedEntityId,
-          data: { fieldKey: rf.fieldKey, recordId: newId, linkedRecordId },
-        });
-      } catch (e) {
-        toast({
-          variant: "destructive",
-          title: t("records.linkFailed", "Не удалось изменить связь"),
-          description: e instanceof Error ? e.message : undefined,
-        });
-      }
-    }
+    // All relation selections, including the locked parent, were committed atomically.
     setSubmitting(false);
     // Derive the new record's display label from the label field the caller named,
     // so the picker can show the name immediately (the record is not yet in the
@@ -11661,7 +11624,7 @@ function clearDependentDescendants<T extends Record<string, unknown>>(
 ): T {
   let next = values;
   for (const f of allFields) {
-    if (!isDependentField(f)) continue;
+    if (!isDependentField(f) && !(f.fieldType === "relation" && f.dependencyConfigJson?.dependsOnFieldKey)) continue;
     if (dependencyChainKeys(f, allFields).includes(changedKey) && f.fieldKey in next && next[f.fieldKey] !== "") {
       if (next === values) next = { ...values };
       (next as Record<string, unknown>)[f.fieldKey] = "";

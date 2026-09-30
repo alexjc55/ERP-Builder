@@ -1,7 +1,8 @@
 import { db, relationsTable, recordLinksTable, entityRecordsTable } from "@workspace/db";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 import { relationLinkLockViolation } from "./relation-lock";
 import { emitEvent, EVENT_RECORD_UPDATED } from "./events";
+import { assertSelectionDependencies, assertSelectedMemberParentChange, clearDependentSelections, collectDependentSelectionIds, RelationSelectionError, type SelectionTx } from "./relation-selection-integrity";
 
 /**
  * Shared core for every surface that WRITES record links. There are several
@@ -43,7 +44,7 @@ export function recordLinkUniqueMessage(err: unknown): string | null {
 
 export type ReplaceLinkResult =
   | { ok: true; previousLinkedIds: number[]; version: number; changed: boolean; versions: Record<string, number> }
-  | { ok: false; status: 400 | 409; error: string; currentVersion?: number };
+  | { ok: false; status: 400 | 403 | 409; error: string; currentVersion?: number };
 
 type LinkTx = Pick<typeof db, "select" | "update">;
 
@@ -78,21 +79,25 @@ export async function replaceSingleRelationLink(opts: {
   baseRecordId: number;
   direction: "source" | "target";
   linkedRecordId: number | null;
+  linkedRecordIds?: number[];
+  validate?: (tx: SelectionTx) => Promise<void>;
   expectedVersion?: number;
 }): Promise<ReplaceLinkResult> {
   const { relationId, entityId, baseRecordId, direction, linkedRecordId, expectedVersion } = opts;
+  const selectedIds = opts.linkedRecordIds ?? (linkedRecordId == null ? [] : [linkedRecordId]);
   let previousLinkedIds: number[] = [];
   let version = 1;
   let changed = false;
   let versions: Record<string, number> = {};
   try {
     const lockMsg = await db.transaction(async (tx) => {
-      const [locked] = await tx
+      const lockedRelations = await tx
         .select()
         .from(relationsTable)
-        .where(eq(relationsTable.id, relationId))
-        .limit(1)
+        .where(or(eq(relationsTable.sourceEntityId, entityId), eq(relationsTable.targetEntityId, entityId)))
+        .orderBy(asc(relationsTable.id))
         .for("update");
+      const locked = lockedRelations.find(relation => relation.id === relationId);
       if (!locked) throw new Error("relation_gone");
       const lockViolation = await relationLinkLockViolation(
         tx,
@@ -100,7 +105,7 @@ export async function replaceSingleRelationLink(opts: {
         relationId,
         baseRecordId,
         direction,
-        linkedRecordId,
+        selectedIds,
       );
       if (lockViolation) return lockViolation;
       // Remove the existing single link on the base record's side, then insert
@@ -115,7 +120,8 @@ export async function replaceSingleRelationLink(opts: {
       const affectedIds = [
         baseRecordId,
         ...previousLinkedIds,
-        ...(linkedRecordId == null ? [] : [linkedRecordId]),
+        ...selectedIds,
+        ...await collectDependentSelectionIds(tx, entityId, baseRecordId, relationId),
       ];
       const lockedRecords = await lockRecordsStable(tx, affectedIds);
       const base = lockedRecords.find((record) => record.id === baseRecordId && record.entityId === entityId);
@@ -124,9 +130,12 @@ export async function replaceSingleRelationLink(opts: {
       if (expectedVersion != null && base.version !== expectedVersion) {
         return { conflict: true as const, currentVersion: base.version };
       }
+      await opts.validate?.(tx);
+      await assertSelectionDependencies(tx, entityId, baseRecordId, relationId, selectedIds);
+      await assertSelectedMemberParentChange(tx, entityId, baseRecordId, relationId, selectedIds);
       if (
-        previousLinkedIds.length === (linkedRecordId == null ? 0 : 1) &&
-        (linkedRecordId == null || previousLinkedIds[0] === linkedRecordId)
+        previousLinkedIds.length === selectedIds.length &&
+        previousLinkedIds.every(id => selectedIds.includes(id))
       ) {
         return null;
       }
@@ -135,14 +144,16 @@ export async function replaceSingleRelationLink(opts: {
         .where(and(eq(recordLinksTable.relationId, relationId), eq(baseCol, baseRecordId)))
         .returning({ other: otherCol });
       previousLinkedIds = removed.map((r) => r.other);
-      if (linkedRecordId != null) {
-        await tx.insert(recordLinksTable).values({
+      if (selectedIds.length) {
+        await tx.insert(recordLinksTable).values(selectedIds.map(id => ({
           relationId,
           relationType: locked.relationType,
-          sourceRecordId: direction === "source" ? baseRecordId : linkedRecordId,
-          targetRecordId: direction === "source" ? linkedRecordId : baseRecordId,
-        });
+          sourceRecordId: direction === "source" ? baseRecordId : id,
+          targetRecordId: direction === "source" ? id : baseRecordId,
+        })));
       }
+      const clearedIds = await clearDependentSelections(tx, entityId, baseRecordId, relationId);
+      affectedIds.push(...clearedIds);
       versions = await touchLockedRecords(tx, affectedIds);
       version = versions[String(baseRecordId)]!;
       changed = true;
@@ -153,6 +164,7 @@ export async function replaceSingleRelationLink(opts: {
     }
     if (lockMsg) return { ok: false, status: 400, error: lockMsg };
   } catch (err) {
+    if (err instanceof RelationSelectionError) return { ok: false, status: err.status === 403 ? 403 : 400, error: err.message };
     const msg = recordLinkUniqueMessage(err);
     if (msg) return { ok: false, status: 409, error: msg };
     throw err;
@@ -180,6 +192,8 @@ export async function emitLinkChangedEvents(opts: {
   log?: { error: (obj: unknown, msg?: string) => void };
 }): Promise<void> {
   const affected = [...new Set(opts.affectedLinkedIds)];
+  const extraIds = Object.keys(opts.versions ?? {}).map(Number).filter(id => id !== opts.baseRecordId && !affected.includes(id));
+  const extras = extraIds.length ? await db.select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId }).from(entityRecordsTable).where(inArray(entityRecordsTable.id, extraIds)) : [];
   await emitEvent(
     [
       {
@@ -203,6 +217,10 @@ export async function emitLinkChangedEvents(opts: {
           changedFields: [],
           ...(opts.versions?.[String(rid)] != null ? { version: opts.versions[String(rid)] } : {}),
         },
+      })),
+      ...extras.map(record => ({
+        eventName: EVENT_RECORD_UPDATED, entityId: record.entityId, recordId: record.id,
+        payload: { actorUserId: opts.actorUserId, changedFields: [], version: opts.versions![String(record.id)] },
       })),
     ],
     opts.log,

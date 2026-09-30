@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { guardedRelationRequiresFieldSurface } from "../lib/relation-selection-integrity";
 import {
   db,
   entityRecordsTable,
@@ -351,6 +352,7 @@ async function applyRelations(
   }
   const changedEndpoints = new Set<number>();
   for (const a of ordered) {
+    if (await guardedRelationRequiresFieldSurface(tx, a.relationId)) throw new Error("Configured relation selections must be changed through the related-link field endpoint");
     const before = oldLinks.filter((link) => link.relationId === a.relationId).map((link) => link.targetRecordId).sort((x, y) => x - y);
     const after = [...new Set(a.targetIds)].sort((x, y) => x - y);
     if (before.length === after.length && before.every((id, index) => id === after[index])) continue;

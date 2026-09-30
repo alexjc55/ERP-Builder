@@ -1,4 +1,7 @@
 import { Router, type IRouter } from "express";
+import { createRecordRelationSelections } from "../lib/record-relation-selections";
+import { recordLinkUniqueMessage } from "../lib/record-links";
+import { RelationSelectionError, guardedRelationRequiresFieldSurface, clearDependentSelections } from "../lib/relation-selection-integrity";
 import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -4199,6 +4202,7 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
   // (per entity) so two concurrent creates can't both pass the check and insert a dup.
   const keyFields = fields.filter((f) => f.isKey);
   let record: typeof entityRecordsTable.$inferSelect;
+  let createdLinkTargets: { id: number; entityId: number; version: number }[] = [];
   try {
     record = await db.transaction(async (tx) => {
       const lockedUserRefError = await validateUserRefs(fields, result.values, tx);
@@ -4214,9 +4218,19 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
         .values({ entityId, valuesJson: result.values, statusId, statusChangedAt: new Date() })
         .returning();
       if (!rec) throw new Error("Failed to create record");
+      createdLinkTargets = await createRecordRelationSelections(tx, req, entityId, rec.id, body.data.relationSelections ?? []);
       return rec;
     });
   } catch (err) {
+    if (err instanceof RelationSelectionError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    const linkError = recordLinkUniqueMessage(err);
+    if (linkError) {
+      res.status(409).json({ error: linkError });
+      return;
+    }
     if (err instanceof UniqueKeyError) {
       res.status(409).json({ error: err.message });
       return;
@@ -4268,6 +4282,10 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
   );
 
   const createFormulaPageId = await resolvePageFormulaContextId(req, entityId, body.data.pageId);
+  if (createdLinkTargets.length) await emitEvent(createdLinkTargets.map(target => ({
+    eventName: EVENT_RECORD_UPDATED, entityId: target.entityId, recordId: target.id,
+    payload: { actorUserId: userId, changedFields: [], version: target.version },
+  })), req.log);
   const createPageFormulaContext = await loadPageFormulaResponseContext(req, entityId, createFormulaPageId, [record.id]);
   const createVisibleFormulaFields = [
     ...fields.filter((field) => !hidden.has(field.fieldKey)),
@@ -4977,6 +4995,11 @@ async function performRecordDelete(
       .orderBy(asc(entityRecordsTable.id)).for("update");
     const deleting = locked.find((record) => record.id === recordId && record.entityId === entityId);
     if (!deleting || (expectedVersion != null && deleting.version !== expectedVersion)) return null;
+    for (const link of links) {
+      const otherId = link.sourceRecordId === recordId ? link.targetRecordId : link.sourceRecordId;
+      const other = locked.find(row => row.id === otherId);
+      if (other) counterpartIds.push(...await clearDependentSelections(tx, other.entityId, other.id, link.relationId));
+    }
     const pageFileEntries = (await tx
       .select({ pageId: pageRecordValuesTable.pageId, valuesJson: pageRecordValuesTable.valuesJson })
       .from(pageRecordValuesTable)
@@ -5768,6 +5791,9 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
       .for("update");
     const links = participantLinks.filter((link) =>
       sourceIdSet.has(link.sourceRecordId) || sourceIdSet.has(link.targetRecordId));
+    for (const relationId of new Set(links.map(link => link.relationId))) {
+      if (await guardedRelationRequiresFieldSurface(tx, relationId)) throw new RelationSelectionError("Merging records with configured dependent selections is not supported; clear their selections first");
+    }
     const changedLinkedSurvivors = new Set<number>();
 
     // The target's CURRENT links per relation, to enforce dedupe + the partial
@@ -6003,6 +6029,10 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
   } catch (err) {
     if (err instanceof MergeRecordNotFoundError) {
       res.status(404).json({ error: "Record not found in this entity" });
+      return;
+    }
+    if (err instanceof RelationSelectionError) {
+      res.status(err.status).json({ error: err.message });
       return;
     }
     if (err instanceof UserReferenceBusyError) {

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { guardedRelationRequiresFieldSurface } from "../lib/relation-selection-integrity";
 import {
   db,
   relationsTable,
@@ -468,6 +469,7 @@ router.post("/records/:recordId/links", requireAuth, async (req, res): Promise<v
         .limit(1)
         .for("update");
       if (!relation) return { status: 400 as const, error: "Relation not found" };
+      if (await guardedRelationRequiresFieldSurface(tx, relationId)) return { status: 400 as const, error: "Use the related-link field endpoint for configured selections and dependent relations" };
       const lockedRecords = await lockRecordsStable(tx, [sourceRecordId, targetRecordId]);
       const sourceRecord = lockedRecords.find((record) => record.id === sourceRecordId);
       if (!sourceRecord) return { status: 404 as const, error: "Source record not found" };
@@ -656,6 +658,7 @@ router.delete("/links/:id", requireAuth, async (req, res): Promise<void> => {
     const srcViolation = await relationLinkLockViolation(
       tx, sourceRecord.entityId, lockedLink.relationId, lockedLink.sourceRecordId, "source", null,
     );
+    if (await guardedRelationRequiresFieldSurface(tx, lockedLink.relationId)) return { status: 400 as const, error: "Use the related-link field endpoint for configured selections and dependent relations", version: undefined };
     if (srcViolation) return { status: 400 as const, error: srcViolation, version: undefined };
     const tgtViolation = await relationLinkLockViolation(
       tx, relation.targetEntityId, lockedLink.relationId, lockedLink.targetRecordId, "target", null,

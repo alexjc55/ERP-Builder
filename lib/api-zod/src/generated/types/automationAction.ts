@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AutomationActionLanguage } from './automationActionLanguage';
+import type { AutomationActionRelationDirection } from './automationActionRelationDirection';
 import type { AutomationActionTargetFieldSource } from './automationActionTargetFieldSource';
 import type { AutomationActionType } from './automationActionType';
 import type { AutomationCondition } from './automationCondition';
@@ -14,6 +15,13 @@ import type { DocumentGenerationOutput } from './documentGenerationOutput';
 
 export interface AutomationAction {
   type: AutomationActionType;
+  /**
+     * Required for set_related_status; selects the normalized relation to traverse.
+     * @minimum 1
+     */
+  relationId?: number;
+  /** Traversal direction for set_related_status. Required for self-relations. */
+  relationDirection?: AutomationActionRelationDirection;
   fieldKey?: string;
   value?: unknown;
   /** For set_field: where to write. "entity" (default when absent) sets the triggering entity record's field. "page" writes a page-local field on a MIRROR page (`targetPageId`) of this entity at (targetPageId, recordId). */

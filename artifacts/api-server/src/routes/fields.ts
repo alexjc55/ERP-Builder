@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { validateSelectionDependencyConfig } from "../lib/relation-selection-integrity";
 import {
   db,
   entityFieldsTable,
@@ -67,8 +68,9 @@ const PERCENT_NUM_RE = /^-?[0-9]+(\.[0-9]+)?$/;
  * Note: page-fields keeps its own broader helper (it also allows the target side
  * of 1:1 / 1:N); entity relation fields are intentionally narrower.
  */
-function relationDirection(relation: Relation, entityId: number): "source" | null {
+function relationDirection(relation: Relation, entityId: number, multiple = false): "source" | null {
   const t = relation.relationType;
+  if (multiple) return relation.sourceEntityId === entityId && (t === "many_to_many" || t === "one_to_many") ? "source" : null;
   if (relation.sourceEntityId === entityId && (t === "one_to_one" || t === "many_to_one")) return "source";
   return null;
 }
@@ -100,7 +102,7 @@ async function validateEntityRelationConfig(
   if (relation.sourceEntityId !== entityId && relation.targetEntityId !== entityId) {
     return { error: "Связь не относится к этой сущности" };
   }
-  const direction = relationDirection(relation, entityId);
+  const direction = relationDirection(relation, entityId, cfg?.selectionMode === "multiple");
   if (!direction) return { error: "Связь не даёт одну связанную запись для этой сущности" };
   const relatedEntityId = direction === "source" ? relation.targetEntityId : relation.sourceEntityId;
 
@@ -111,7 +113,7 @@ async function validateEntityRelationConfig(
     const pageCheck = await validateRelatedPageSource(relatedPageId, relatedEntityId, relatedFieldKey);
     if ("error" in pageCheck) return pageCheck;
     // Page-source lookups are always read-only — never carry writeThrough.
-    return { ok: true, cleaned: { relationId, relatedFieldKey, relatedPageId } };
+    return { ok: true, cleaned: { relationId, relatedFieldKey, relatedPageId, selectionMode: cfg?.selectionMode } };
   }
 
   const [rf] = await db
@@ -135,7 +137,7 @@ async function validateEntityRelationConfig(
   ) {
     return { error: "Формулу с групповым результатом нельзя использовать как источник подстановки" };
   }
-  const cleaned: RelationFieldConfig = { relationId, relatedFieldKey };
+  const cleaned: RelationFieldConfig = { relationId, relatedFieldKey, selectionMode: cfg?.selectionMode };
   // writeThrough is a lookup-only flag: when set, the (read-only) lookup cell
   // becomes a gateway that opens the linked record's full editor in the related
   // entity. It is meaningless for relation fields, so callers gate it via
@@ -305,6 +307,10 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
       return;
     }
     relationConfig = check.cleaned;
+    if (parsed.data.fieldType === "relation") {
+      const dependencyError = await validateSelectionDependencyConfig(params.data.entityId, parsed.data.fieldKey, check.cleaned, parsed.data.dependencyConfigJson);
+      if (dependencyError) { res.status(400).json({ error: dependencyError }); return; }
+    }
   }
 
   const createOptions = sanitizeOptionsInput(parsed.data.optionsJson);
@@ -567,6 +573,11 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
       return;
     }
     relationConfigToPersist = check.cleaned;
+    if (nextType === "relation") {
+      const dependencyError = await validateSelectionDependencyConfig(current.entityId, body.fieldKey ?? current.fieldKey, check.cleaned,
+        "dependencyConfigJson" in body ? body.dependencyConfigJson : current.dependencyConfigJson);
+      if (dependencyError) { res.status(400).json({ error: dependencyError }); return; }
+    }
   }
 
   const sanitizedOptions = body.optionsJson != null ? sanitizeOptionsInput(body.optionsJson) : null;

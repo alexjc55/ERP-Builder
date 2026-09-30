@@ -7,6 +7,7 @@ import {
   entitiesTable,
   entityFieldsTable,
   entityStatusesTable,
+  relationsTable,
   pagesTable,
   pageFieldsTable,
   automationTriggerSchema,
@@ -24,6 +25,7 @@ import { eq, and, asc, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import { validateDocumentOutput } from "../lib/document-generation";
+import { relatedStatusTarget } from "../lib/automation-related-status";
 import {
   ListEntityAutomationsParams,
   CreateEntityAutomationParams,
@@ -236,6 +238,18 @@ async function validateSpec(
       }
     } else if (a.type === "change_status") {
       if (!statusIds.has(a.statusId)) return "Unknown status in change_status action";
+    } else if (a.type === "set_related_status") {
+      const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, a.relationId));
+      if (!relation) return "Unknown relation in set_related_status action";
+      try {
+        const target = relatedStatusTarget(relation, entityId, a.relationDirection);
+        const [status] = await db.select().from(entityStatusesTable).where(and(
+          eq(entityStatusesTable.id, a.statusId), eq(entityStatusesTable.entityId, target.entityId),
+        ));
+        if (!status) return "Status does not belong to related entity";
+      } catch (error) {
+        return error instanceof Error ? error.message : "Invalid related status action";
+      }
     } else if (a.type === "create_record" || a.type === "update_records_where") {
       const tk = await targetKeysFor(a.targetEntityId);
       if (!tk) return `Unknown target entity: ${a.targetEntityId}`;

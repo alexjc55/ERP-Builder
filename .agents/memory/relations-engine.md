@@ -5,6 +5,16 @@ description: Durable decisions for entity-to-entity relations and record links (
 
 # Relations engine
 
+## Multiple dependent relations are normalized ID snapshots
+
+`relationConfigJson.selectionMode: "multiple"` uses one `record_links` row per selected member, never a JSON label list or quantities. It requires a cardinality permitting multiple links on the field's side; never silently repurpose an existing many-to-one relation. The existing `dependencyConfigJson` pair (`dependsOnFieldKey`, `relatedFilterFieldKey`) identifies a single parent relation and the candidate's relation to the SAME entity. Match linked record IDs, not projected names/numbers (labels can repeat).
+
+`linkedRecordIds` replaces the complete selection through the existing related-link endpoints. `all:true` on candidates returns the entire permission-filtered snapshot, not the normal first 50 options. Later-created matching records are not automatically selected. Parent changes clear dependent snapshots recursively in the SAME transaction, with CAS/version touches and post-commit events. Hidden/unowned/unrelated candidates are rejected on writes, not just filtered from the picker.
+
+All writers must preserve this invariant. Raw pair-link writes, import/inbound pair writers, and merges currently fail closed for guarded relation configurations and direct callers to the field selection surface; do not remove these guards without implementing equivalent transactional dependency/RBAC/CAS handling. Reparenting a member that is already selected elsewhere is rejected if it would invalidate that snapshot. Record deletion clears dependent snapshots on the surviving side.
+
+Creation uses `RecordInput.relationSelections`, persisted parent-first inside the base-record transaction BEFORE the one `record.created` event. Do not restore post-create UI link writes for entity relation selections: create automations must see the complete initial relationship state.
+
 ## Links read endpoint boundary (Aug 2026)
 GET /records/:id/links enforces the FULL record read boundary: source visible like GET /records/:id; each linked record re-checked against ITS entity's view perm + own-scope + hidden-row statuses; hidden fields stripped via presentRecord; invisible rows silently dropped (never 403 — no existence leak). `?direction=both` opt-in returns reverse links with a `direction` field; default stays source-only for UI compatibility. **Why:** it previously returned raw target records with only requireAuth — a real leak once machine keys (AI agents) could call it.
 

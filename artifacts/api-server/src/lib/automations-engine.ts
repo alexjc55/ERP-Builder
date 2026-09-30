@@ -24,6 +24,7 @@ import {
   type AutomationAction,
   type AutomationMapping,
   type InsertAuditLog,
+  auditLogTable,
   automationTriggerSchema,
   automationConditionSchema,
   automationActionSchema,
@@ -76,6 +77,7 @@ import { isGoogleDriveModuleEnabled } from "./googleDrive";
 import { logger } from "./logger";
 import { lockAndValidateGdriveFileReferences } from "./gdrive-file-reference-lock";
 import { buildAutomationWebhookPayload } from "./automation-webhook-payload";
+import { relatedStatusTarget } from "./automation-related-status";
 
 /**
  * Stage 16 — Automations Engine (runtime).
@@ -546,6 +548,8 @@ export async function systemUpdateRecord(
   actorUserId: number | null,
   log: Log,
   options?: {
+    transaction?: Parameters<Parameters<typeof db.transaction>[0]>[0];
+    afterCommit?: (() => Promise<void>)[];
     requireEmptyFieldKey?: string;
     onLockedPreviousValues?: (values: Readonly<Record<string, unknown>>) => void;
   },
@@ -620,7 +624,7 @@ export async function systemUpdateRecord(
     if (Object.keys(update).length === 0) return false;
 
     const keyFields = fields.filter((f) => f.isKey);
-    const record = await db.transaction(async (tx) => {
+    const write = async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
       // The automation must merge over the row it is about to write, not a
       // snapshot read while an interactive editor was saving. Lock first, then
       // repeat the value-dependent checks against that locked state. This is a
@@ -672,7 +676,8 @@ export async function systemUpdateRecord(
       const [rec] = await tx.update(entityRecordsTable).set(update)
         .where(eq(entityRecordsTable.id, recordId)).returning();
       return rec;
-    });
+    };
+    const record = options?.transaction ? await write(options.transaction) : await db.transaction(write);
     if (!record) return false;
 
     const entries: InsertAuditLog[] = [];
@@ -694,7 +699,11 @@ export async function systemUpdateRecord(
         userId: actorUserId,
       });
     }
-    await writeAudit(entries, logger);
+    if (options?.transaction) {
+      if (entries.length) await options.transaction.insert(auditLogTable).values(entries);
+    } else {
+      await writeAudit(entries, logger);
+    }
 
     const events: EventInput[] = [
       { eventName: EVENT_RECORD_UPDATED, entityId, recordId: record.id, payload: { actorUserId, changedFields, version: record.version } },
@@ -707,15 +716,63 @@ export async function systemUpdateRecord(
         payload: { actorUserId, from: existing.statusId ?? null, to: record.statusId ?? null, version: record.version },
       });
     }
-    await emitEvent(events, logger);
+    if (options?.afterCommit) options.afterCommit.push(() => emitEvent(events, logger));
+    else await emitEvent(events, logger);
     return true;
   } catch (err) {
+    if (options?.transaction) throw err;
     if (err instanceof UniqueKeyError) {
       log.error({ recordId, error: err.message }, "Automation update duplicate key");
       return false;
     }
     log.error({ err, recordId }, "Automation update failed");
     return false;
+  }
+}
+
+/** Snapshot direct links once, lock targets in ID order, and commit all or none. */
+export async function systemSetRelatedStatus(
+  entityId: number,
+  recordId: number,
+  action: Extract<AutomationAction, { type: "set_related_status" }>,
+  actorUserId: number | null,
+  log: Log,
+): Promise<{ ok: boolean; matched: number; error?: string }> {
+  let matched = 0;
+  const afterCommit: (() => Promise<void>)[] = [];
+  try {
+    await db.transaction(async (tx) => {
+      // Nonblocking metadata locks fail closed instead of inverting writer lock order.
+      const [relation] = await tx.select().from(relationsTable).where(eq(relationsTable.id, action.relationId)).for("share", { noWait: true });
+      if (!relation) throw new Error("Related status relation no longer exists");
+      const target = relatedStatusTarget(relation, entityId, action.relationDirection);
+      const [status] = await tx.select().from(entityStatusesTable).where(and(eq(entityStatusesTable.id, action.statusId), eq(entityStatusesTable.entityId, target.entityId))).for("share", { noWait: true });
+      if (!status) throw new Error("Status does not belong to related entity");
+      const links = await tx.select().from(recordLinksTable).where(and(
+        eq(recordLinksTable.relationId, action.relationId),
+        eq(target.forward ? recordLinksTable.sourceRecordId : recordLinksTable.targetRecordId, recordId),
+      ));
+      const ids = [...new Set(links.map((link) => target.forward ? link.targetRecordId : link.sourceRecordId))].sort((a, b) => a - b);
+      matched = ids.length;
+      const lockIds = [...new Set([recordId, ...ids])].sort((a, b) => a - b);
+      const rows = await tx.select().from(entityRecordsTable).where(inArray(entityRecordsTable.id, lockIds)).orderBy(asc(entityRecordsTable.id)).for("update", { noWait: true });
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      if (byId.get(recordId)?.entityId !== entityId) throw new Error("Trigger record entity changed or record deleted");
+      for (const id of ids) {
+        const row = byId.get(id);
+        if (!row || row.entityId !== target.entityId) throw new Error("Linked record does not belong to related entity");
+        if (row.statusId === action.statusId) continue;
+        if (!await systemUpdateRecord(id, undefined, action.statusId, actorUserId, log, { transaction: tx, afterCommit })) {
+          throw new Error(`Related status validation failed for record ${id}`);
+        }
+      }
+    });
+    for (const publish of afterCommit) await publish();
+    return { ok: true, matched };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    log.error({ error: message, relationId: action.relationId }, "Related status action failed");
+    return { ok: false, matched, error: message };
   }
 }
 
@@ -1130,11 +1187,12 @@ async function runActions(
     automationId: number;
   },
   log: Log,
-): Promise<{ type: string; ok: boolean; matched?: number }[]> {
-  const summary: { type: string; ok: boolean; matched?: number }[] = [];
+): Promise<{ type: string; ok: boolean; matched?: number; error?: string }[]> {
+  const summary: { type: string; ok: boolean; matched?: number; error?: string }[] = [];
   for (const action of actions) {
     let ok = false;
     let matched: number | undefined;
+    let error: string | undefined;
     switch (action.type) {
       case "set_field":
         // A set_field can target a page-local field of the triggering record
@@ -1151,6 +1209,13 @@ async function runActions(
       case "change_status":
         ok = await systemUpdateRecord(ctx.recordId, undefined, action.statusId, ctx.actorUserId, log);
         break;
+      case "set_related_status": {
+        const result = await systemSetRelatedStatus(ctx.entityId, ctx.recordId, action, ctx.actorUserId, log);
+        ok = result.ok;
+        matched = result.matched;
+        error = result.error;
+        break;
+      }
       case "create_record": {
         const values = await buildMappedValues(action.mapping ?? [], {
           entityId: ctx.entityId,
@@ -1246,7 +1311,7 @@ async function runActions(
         break;
       }
     }
-    summary.push({ type: action.type, ok, ...(matched != null ? { matched } : {}) });
+    summary.push({ type: action.type, ok, ...(matched != null ? { matched } : {}), ...(error ? { error } : {}) });
   }
   return summary;
 }

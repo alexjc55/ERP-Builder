@@ -31,6 +31,12 @@ must edit BOTH `automations.ts` (zod enum/fields) and `openapi.yaml`, then
 
 ## System write path parity
 
+Changing statuses through a relation operates on a snapshot of directly linked records only, not all records sharing a parent. The batch is atomic; audit rows belong to its transaction and events publish only after commit. Self-relations require an explicit direction.
+
+**Why:** Delivery status changes must affect exactly its selected items, without partially advancing their statuses or recursively including the rest of the order.
+
+**How to apply:** Reuse system-write validation inside one transaction, revalidate relation/status ownership at execution, and record zero matches and failures explicitly.
+
 `systemUpdateRecord` (the AS-SYSTEM write used by set_field / update_records_where)
 must mirror the HTTP records-update pipeline except RBAC/transition checks. That
 includes the `lockAfterCreate` immutable-field guard on FINAL values — automations
@@ -102,6 +108,8 @@ record-values because an automation may write either storage channel. Never let 
 rapid second edit cancel the first edit's remaining refresh opportunity.
 
 ## Create-event ordering with relation links
+
+**Implemented resolution:** record-create requests now accept staged `relationSelections`; the server writes them parent-first in the creation transaction and emits the existing single `record.created` only after commit. Entity create/quick-create clients must use this contract, not the old separate post-create link calls. Ordinary later relation edits continue to emit `record.updated`. The historical failure below explains why the ordering is a hard invariant.
 
 Entity relation selections from the record-create UI are persisted after the base
 record exists, through the related-link endpoint. Therefore `record_created` fires

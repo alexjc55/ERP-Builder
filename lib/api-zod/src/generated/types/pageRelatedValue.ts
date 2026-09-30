@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { PageRelatedCandidate } from './pageRelatedCandidate';
 
 export interface PageRelatedValue {
   recordId: number;
@@ -13,5 +14,7 @@ export interface PageRelatedValue {
   value?: unknown;
   /** @nullable */
   linkedRecordId?: number | null;
+  linkedRecordIds?: number[];
+  members?: PageRelatedCandidate[];
   editable: boolean;
 }
