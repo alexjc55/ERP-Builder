@@ -18,6 +18,7 @@ import {
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -205,6 +206,7 @@ export default function EntityStatusesPage() {
   };
 
   const handleSubmit = () => {
+    if (color && !/^#[0-9a-f]{6}$/i.test(color)) return;
     const existingKeys = new Set(
       statuses.filter((s: Status) => s.id !== editingStatus?.id).map((s: Status) => s.statusKey),
     );
@@ -213,7 +215,7 @@ export default function EntityStatusesPage() {
     const payload = {
       statusKey: resolvedKey,
       nameJson: nameJson as MultilingualText,
-      color,
+      color: color || PRESET_COLORS[0],
       isDefault,
       isFinal,
       isArchiveTrigger,
@@ -453,8 +455,8 @@ export default function EntityStatusesPage() {
               </p>
             </div>
             <div className="space-y-1.5">
-              <Label>{t("statuses.color", "Цвет")}</Label>
-              <div className="flex items-center gap-2">
+              <ColorPickerControl label={t("statuses.color", "Цвет")} value={color} onChange={setColor} />
+              <div className="flex flex-wrap items-center gap-2">
                 {PRESET_COLORS.map((c) => (
                   <button
                     key={c}
@@ -465,12 +467,6 @@ export default function EntityStatusesPage() {
                     aria-label={c}
                   />
                 ))}
-                <Input
-                  type="color"
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                  className="w-12 h-8 p-1"
-                />
               </div>
             </div>
             <div className="space-y-1.5">
@@ -551,7 +547,7 @@ export default function EntityStatusesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("statuses.cancel", "Отмена")}</Button>
-            <Button onClick={handleSubmit} disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleSubmit} disabled={isPending || (!!color && !/^#[0-9a-f]{6}$/i.test(color))} className="bg-blue-600 hover:bg-blue-700">
               {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editingStatus ? t("statuses.save", "Сохранить") : t("statuses.create", "Создать")}
             </Button>
           </DialogFooter>
