@@ -29,7 +29,12 @@ function json(route: Route, body: unknown, status = 200) {
   return route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 }
 
-async function mockApi(page: Page, readonly = false, language: "en" | "he" = "en") {
+async function mockApi(
+  page: Page,
+  readonly = false,
+  language: "en" | "he" = "en",
+  options: { recordStatusIds?: [number, number]; tableStyle?: string } = {},
+) {
   const statuses = [makeStatus(1, "Tagged status", [81, 82]), makeStatus(2, "Untagged status", [])];
   const writes: Array<{ method: string; path: string; body: Record<string, unknown> }> = [];
   const unknown: string[] = [];
@@ -79,7 +84,8 @@ async function mockApi(page: Page, readonly = false, language: "en" | "he" = "en
     }]);
     if (method === "POST" && path === `/api/entities/${entityId}/records/query`) return respond({
       data: [1, 2].map((id) => ({
-        id, entityId, statusId: id, valuesJson: { title: id === 1 ? "Tagged record" : "Untagged record" },
+        id, entityId, statusId: options.recordStatusIds?.[id - 1] ?? id,
+        valuesJson: { title: id === 1 ? "Tagged record" : "Untagged record" },
         version: 1, archivedAt: null, createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z",
       })),
       total: 2, numericTotals: {},
@@ -94,7 +100,7 @@ async function mockApi(page: Page, readonly = false, language: "en" | "he" = "en
       "/api/admin/operational-alerts", "/api/google-drive/folders", "/api/local-folders",
     ].includes(path)) return respond([]);
     if (method === "GET" && path === "/api/settings") return respond({
-      defaultLanguage: "en", currencySymbol: "$", timeZone: "UTC", tableStyle: "plain",
+      defaultLanguage: "en", currencySymbol: "$", timeZone: "UTC", tableStyle: options.tableStyle ?? "plain",
       workingDays: [1, 2, 3, 4, 5], firstDayOfWeek: 1,
     });
     unknown.push(`${method} ${path}`);
@@ -215,6 +221,39 @@ test("read-only record status retains the preferred tag without exposing an edit
   await expect(page.getByTestId("text-status-readonly")).toContainText("Review");
   await expect(page.getByTestId("text-status-readonly")).not.toContainText("Urgent");
   expect(api.unknown).toEqual([]);
+});
+
+test("same status tint stays opaque and identical on alternating record rows", async ({ page }) => {
+  const api = await mockApi(page, true, "en", { recordStatusIds: [1, 1], tableStyle: "striped" });
+  await page.goto(`/admin/entities/${entityId}/records`);
+  const cells = [1, 2].map(id => page.locator(
+    `[data-testid="record-cell"][data-record-id="${id}"][data-field-key="__status__"]`,
+  ));
+  await expect(cells[0]).toContainText("Tagged status");
+  await expect(cells[1]).toContainText("Tagged status");
+  const appearance = await Promise.all(cells.map(cell => cell.evaluate(td => {
+    const row = td.closest("tr")!;
+    const background = getComputedStyle(td).backgroundColor;
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = background;
+    context.fillRect(0, 0, 1, 1);
+    return {
+      rowBackground: getComputedStyle(row).backgroundColor,
+      background,
+      alpha: context.getImageData(0, 0, 1, 1).data[3],
+      textColor: getComputedStyle(td.querySelector('[title="Tagged status"]')!).color,
+    };
+  })));
+  expect(appearance[0].rowBackground).not.toBe(appearance[1].rowBackground);
+  expect(appearance[0].alpha).toBe(255);
+  expect(appearance[1].alpha).toBe(255);
+  expect(appearance[0].background).toBe(appearance[1].background);
+  expect(appearance[0].textColor).toBe(appearance[1].textColor);
+  await page.screenshot({ path: "/tmp/status-tint.png" });
+  expect(api.unknown).toEqual([]);
+  expect(api.writes).toEqual([]);
 });
 
 test("RTL record cells stack tags above the status name", async ({ page }) => {

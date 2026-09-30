@@ -415,7 +415,9 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
             <td key={STATUS_COLUMN_KEY} className="px-4 py-3" style={{
               ...colWidthStyle(STATUS_COLUMN_KEY),
               ...(status && !(editingCell?.recordId === record.id && editingCell?.fieldKey === STATUS_COLUMN_KEY)
-                ? { backgroundColor: `${status.color}20` } : {}),
+                // Use an opaque tint: alpha colors reveal the alternating row
+                // backgrounds and make the same status appear different.
+                ? { backgroundColor: `color-mix(in srgb, ${status.color} 12.55%, white)` } : {}),
             }}>
               {statusManualEditable && editingCell?.recordId === record.id && editingCell?.fieldKey === STATUS_COLUMN_KEY ? (
                 <>
