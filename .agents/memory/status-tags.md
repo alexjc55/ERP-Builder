@@ -32,3 +32,9 @@ description: Shared tag registry semantics, permission composition, and safe con
 **Why:** The user found side-by-side chips consumed status width and pale tag colors disappeared against tinted cells.
 
 **How to apply:** Keep the tag caption contrast independent of the tag color; use tight line heights rather than ellipsis or fixed-height clipping to keep cells compact.
+
+In the list-option → status mapping editor, show tags only in the dropdown options, not in the selected value.
+
+**Why:** The user explicitly wants the closed mapping control to remain compact and show only the status name.
+
+**How to apply:** Render the selected label explicitly so the select does not copy the option's tag caption into its trigger.

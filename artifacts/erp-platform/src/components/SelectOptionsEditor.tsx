@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { CompactStatus } from "@/components/CompactStatus";
 import {
   Select,
   SelectContent,
@@ -116,6 +117,9 @@ export function SelectOptionsEditor({ value, onChange, t, statuses }: SelectOpti
       <div className="space-y-2">
         {value.map((opt, i) => {
           const lj = (opt.labelJson ?? {}) as MLValue;
+          const selectedStatus = statuses?.find(status => status.id === opt.statusId);
+          const noStatusLabel = t("fields.statusSyncNone", "Не менять статус");
+          const statusLabel = (status: Status) => getML(status.nameJson as MultilingualText, active) || `#${status.id}`;
           return (
             <div key={i} className="flex items-center gap-2">
               <div className="flex shrink-0 flex-col">
@@ -152,15 +156,21 @@ export function SelectOptionsEditor({ value, onChange, t, statuses }: SelectOpti
                   onValueChange={(selected) => updateStatus(i, selected)}
                 >
                   <SelectTrigger className="w-56 shrink-0">
-                    <SelectValue placeholder={t("fields.statusSyncNone", "Не менять статус")} />
+                    <SelectValue placeholder={noStatusLabel}>
+                      {selectedStatus ? statusLabel(selectedStatus) : opt.statusId ? `#${opt.statusId}` : noStatusLabel}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none__">
                       {t("fields.statusSyncNone", "Не менять статус")}
                     </SelectItem>
                     {statuses.map((status) => (
-                      <SelectItem key={status.id} value={String(status.id)}>
-                        {getML(status.nameJson as MultilingualText, active) || `#${status.id}`}
+                      <SelectItem key={status.id} value={String(status.id)} textValue={statusLabel(status)}>
+                        <CompactStatus
+                          name={statusLabel(status)}
+                          displayTags={status.displayTags}
+                          ml={text => getML(text, active)}
+                        />
                       </SelectItem>
                     ))}
                   </SelectContent>
