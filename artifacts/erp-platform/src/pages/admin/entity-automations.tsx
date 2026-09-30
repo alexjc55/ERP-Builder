@@ -95,6 +95,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { CompactStatus } from "@/components/CompactStatus";
 import { DriveNameTemplateEditor } from "@/components/DriveNameTemplateEditor";
 import { validDocumentFilenameTemplate, type DriveNameSection } from "@/lib/driveNaming";
 import { FormulaEditor } from "@/components/FormulaEditor";
@@ -130,6 +131,19 @@ const STATUS_KEY = "__status__";
 const RECORD_KEY = "__record_id__";
 /** Sentinel for the "any" status wildcard in status_changed trigger selects. */
 const ANY = "__any__";
+
+/** Keep the closed control compact; show server-filtered tag captions only in its menu. */
+function StatusDropdownOption({ status, ml }: {
+  status: Status;
+  ml: (value: MultilingualText | string | null | undefined) => string;
+}) {
+  const label = ml(status.nameJson);
+  return (
+    <SelectItem value={String(status.id)} textValue={label}>
+      <CompactStatus name={label} displayTags={status.displayTags} ml={ml} />
+    </SelectItem>
+  );
+}
 
 type ConditionDraft = {
   fieldKey: string;
@@ -891,11 +905,12 @@ export default function EntityAutomationsPage() {
   }): ReactElement => {
     const ph = t("auto.valuePlaceholder", "значение");
     if (statusKey) {
+      const selected = sts.find(s => String(s.id) === raw);
       return (
         <Select value={raw || ""} onValueChange={onChange}>
-          <SelectTrigger className="flex-1"><SelectValue placeholder={t("auto.status", "Статус")} /></SelectTrigger>
+          <SelectTrigger className="flex-1"><SelectValue placeholder={t("auto.status", "Статус")}>{selected ? ml(selected.nameJson) : undefined}</SelectValue></SelectTrigger>
           <SelectContent>
-            {sts.map((s) => (<SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>))}
+            {sts.map((s) => <StatusDropdownOption key={s.id} status={s} ml={ml} />)}
           </SelectContent>
         </Select>
       );
@@ -1260,18 +1275,18 @@ export default function EntityAutomationsPage() {
                 {triggerType === "status_changed" && (
                   <>
                     <Select value={trigFrom} onValueChange={setTrigFrom}>
-                      <SelectTrigger className="w-36"><SelectValue placeholder={t("auto.fromStatus", "Из статуса")} /></SelectTrigger>
+                      <SelectTrigger className="w-36"><SelectValue placeholder={t("auto.fromStatus", "Из статуса")}>{trigFrom === ANY ? t("auto.anyStatus", "Любой") : ml(statusById.get(Number(trigFrom))?.nameJson)}</SelectValue></SelectTrigger>
                       <SelectContent>
                         <SelectItem value={ANY}>{t("auto.anyStatus", "Любой")}</SelectItem>
-                        {statuses.map((s: Status) => (<SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>))}
+                        {statuses.map((s: Status) => <StatusDropdownOption key={s.id} status={s} ml={ml} />)}
                       </SelectContent>
                     </Select>
                     <span className="text-slate-400">→</span>
                     <Select value={trigTo} onValueChange={setTrigTo}>
-                      <SelectTrigger className="w-36"><SelectValue placeholder={t("auto.toStatus", "В статус")} /></SelectTrigger>
+                      <SelectTrigger className="w-36"><SelectValue placeholder={t("auto.toStatus", "В статус")}>{trigTo === ANY ? t("auto.anyStatus", "Любой") : ml(statusById.get(Number(trigTo))?.nameJson)}</SelectValue></SelectTrigger>
                       <SelectContent>
                         <SelectItem value={ANY}>{t("auto.anyStatus", "Любой")}</SelectItem>
-                        {statuses.map((s: Status) => (<SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>))}
+                        {statuses.map((s: Status) => <StatusDropdownOption key={s.id} status={s} ml={ml} />)}
                       </SelectContent>
                     </Select>
                   </>
@@ -1728,8 +1743,8 @@ function ActionCard({
             ))}</SelectContent>
           </Select>
           <Select value={draft.statusId} disabled={!selectedRelation} onValueChange={(statusId) => onChange({ statusId })}>
-            <SelectTrigger className="w-44"><SelectValue placeholder={t("auto.status", "Статус")} /></SelectTrigger>
-            <SelectContent>{relatedStatuses.map((status) => <SelectItem key={status.id} value={String(status.id)}>{ml(status.nameJson)}</SelectItem>)}</SelectContent>
+            <SelectTrigger className="w-44"><SelectValue placeholder={t("auto.status", "Статус")}>{ml(relatedStatuses.find(s => String(s.id) === draft.statusId)?.nameJson) || undefined}</SelectValue></SelectTrigger>
+            <SelectContent>{relatedStatuses.map((status) => <StatusDropdownOption key={status.id} status={status} ml={ml} />)}</SelectContent>
           </Select>
           <p className="w-full text-xs text-slate-500">{t("auto.directOnly", "Только записи, напрямую связанные с записью запуска. Нет связей — нет изменений.")}</p>
         </div>
@@ -1738,8 +1753,8 @@ function ActionCard({
         <div className="flex items-center gap-1.5 pl-7">
           <span className="text-xs text-slate-500">{t("auto.toStatus", "В статус")}</span>
           <Select value={draft.statusId} onValueChange={(v) => onChange({ statusId: v })}>
-            <SelectTrigger className="w-44"><SelectValue placeholder={t("auto.status", "Статус")} /></SelectTrigger>
-            <SelectContent>{currentStatuses.map((s) => (<SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>))}</SelectContent>
+            <SelectTrigger className="w-44"><SelectValue placeholder={t("auto.status", "Статус")}>{ml(currentStatuses.find(s => String(s.id) === draft.statusId)?.nameJson) || undefined}</SelectValue></SelectTrigger>
+            <SelectContent>{currentStatuses.map((s) => <StatusDropdownOption key={s.id} status={s} ml={ml} />)}</SelectContent>
           </Select>
         </div>
       )}
@@ -1756,10 +1771,10 @@ function ActionCard({
               <>
                 <span className="text-xs text-slate-500">{t("auto.statusOptional", "статус")}</span>
                 <Select value={draft.statusId || ANY} onValueChange={(v) => onChange({ statusId: v === ANY ? "" : v })}>
-                  <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-36"><SelectValue>{draft.statusId ? ml(targetStatuses.find(s => String(s.id) === draft.statusId)?.nameJson) : t("auto.defaultStatus", "По умолчанию")}</SelectValue></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ANY}>{t("auto.defaultStatus", "По умолчанию")}</SelectItem>
-                    {targetStatuses.map((s: Status) => (<SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>))}
+                    {targetStatuses.map((s: Status) => <StatusDropdownOption key={s.id} status={s} ml={ml} />)}
                   </SelectContent>
                 </Select>
               </>
