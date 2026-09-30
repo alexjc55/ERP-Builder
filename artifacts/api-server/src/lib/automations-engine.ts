@@ -555,14 +555,18 @@ export async function systemUpdateRecord(
   },
 ): Promise<boolean> {
   try {
-    let [existing] = await db
+    // A caller-owned transaction already holds a pool connection. Every read,
+    // including metadata preflight, must use it: a second pooled query can
+    // starve forever when concurrent actions occupy all pool connections.
+    const exec = options?.transaction ?? db;
+    let [existing] = await exec
       .select()
       .from(entityRecordsTable)
       .where(eq(entityRecordsTable.id, recordId))
       .limit(1);
     if (!existing) return false;
     const entityId = existing.entityId;
-    const fields = await loadActiveFields(entityId);
+    const fields = await loadActiveFields(entityId, exec);
     let existingValues = (existing.valuesJson as Record<string, unknown>) ?? {};
 
     const update: { valuesJson?: Record<string, unknown>; statusId?: number | null; statusChangedAt?: Date; archiveExempt?: boolean } = {};
@@ -573,7 +577,7 @@ export async function systemUpdateRecord(
       for (const f of fields) {
         candidate[f.fieldKey] = f.fieldKey in partialValues! ? partialValues![f.fieldKey] : existingValues[f.fieldKey];
       }
-      const gdrive = await isGoogleDriveModuleEnabled();
+      const gdrive = await isGoogleDriveModuleEnabled(exec);
       // System writes enforce required-ness only for the fields the automation
       // itself sets: a pre-existing empty required field (e.g. legacy imported
       // records) must not silently block an unrelated automation update.
@@ -582,12 +586,12 @@ export async function systemUpdateRecord(
         log.error({ recordId, error: result.error }, "Automation set_field validation failed");
         return false;
       }
-      const userRefErr = await validateUserRefs(fields, result.values);
+      const userRefErr = await validateUserRefs(fields, result.values, options?.transaction);
       if (userRefErr) {
         log.error({ recordId, error: userRefErr }, "Automation set_field user-ref invalid");
         return false;
       }
-      const depErr = await checkDependentValues(entityId, fields, result.values, recordId);
+      const depErr = await checkDependentValues(entityId, fields, result.values, recordId, options?.transaction);
       if (depErr) {
         log.error({ recordId, error: depErr }, "Automation set_field dependent-value invalid");
         return false;
@@ -609,7 +613,7 @@ export async function systemUpdateRecord(
     if (statusIdInput !== undefined) {
       if (statusIdInput === null) {
         update.statusId = null;
-      } else if (await statusBelongsToEntity(statusIdInput, entityId)) {
+      } else if (await statusBelongsToEntity(statusIdInput, entityId, exec)) {
         update.statusId = statusIdInput;
       } else {
         log.error({ recordId, statusIdInput }, "Automation change_status not in entity");
@@ -647,7 +651,7 @@ export async function systemUpdateRecord(
         for (const f of fields) {
           candidate[f.fieldKey] = f.fieldKey in partialValues! ? partialValues![f.fieldKey] : lockedValues[f.fieldKey];
         }
-        const result = validateValues(fields, candidate, await isGoogleDriveModuleEnabled(), lockedValues, new Set(Object.keys(partialValues!)));
+        const result = validateValues(fields, candidate, await isGoogleDriveModuleEnabled(tx), lockedValues, new Set(Object.keys(partialValues!)));
         if ("error" in result) throw new Error(`Automation set_field validation failed: ${result.error}`);
         const userRefErr = await validateUserRefs(fields, result.values, tx);
         if (userRefErr) throw new Error(`Automation set_field user-ref invalid: ${userRefErr}`);

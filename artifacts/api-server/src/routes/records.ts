@@ -516,8 +516,8 @@ export function validateValues(
   return { values: cleaned };
 }
 
-export async function loadActiveFields(entityId: number): Promise<EntityField[]> {
-  return db
+export async function loadActiveFields(entityId: number, exec: Pick<typeof db, "select"> = db): Promise<EntityField[]> {
+  return exec
     .select()
     .from(entityFieldsTable)
     .where(and(eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.isActive, true)))
@@ -1260,8 +1260,8 @@ export function checkImmutableFields(
 }
 
 /** Returns true if the status belongs to the given entity. */
-export async function statusBelongsToEntity(statusId: number, entityId: number): Promise<boolean> {
-  const [status] = await db
+export async function statusBelongsToEntity(statusId: number, entityId: number, exec: Pick<typeof db, "select"> = db): Promise<boolean> {
+  const [status] = await exec
     .select({ id: entityStatusesTable.id })
     .from(entityStatusesTable)
     .where(and(eq(entityStatusesTable.id, statusId), eq(entityStatusesTable.entityId, entityId)))

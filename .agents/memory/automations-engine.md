@@ -31,6 +31,19 @@ must edit BOTH `automations.ts` (zod enum/fields) and `openapi.yaml`, then
 
 ## System write path parity
 
+Every read inside a caller-owned transaction must use that transaction, including
+record/field/status preflight and module/reference/dependency helpers. Pass the
+executor explicitly; an internal helper's default global `db` is not safe here.
+
+**Why:** Bulk status events fan out automation runs. If all pool connections are
+held by transactions that request a second pooled connection, the entire API
+waits forever although PostgreSQL sees no lock-cycle deadlock. Ordinary value
+writes can cause the same starvation through module metadata reads under locks.
+
+**How to apply:** Thread `tx` through nested system-write helpers; keep audit on
+the transaction and defer events until commit. Test with an isolated one-connection
+pool and bounded acquisition timeout. Increasing the global pool is not a fix.
+
 Changing statuses through a relation operates on a snapshot of directly linked records only, not all records sharing a parent. The batch is atomic; audit rows belong to its transaction and events publish only after commit. Self-relations require an explicit direction.
 
 **Why:** Delivery status changes must affect exactly its selected items, without partially advancing their statuses or recursively including the rest of the order.

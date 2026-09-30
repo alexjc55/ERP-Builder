@@ -29,8 +29,8 @@ export const GOOGLE_DRIVE_MODULE_KEY = "google_drive";
  * A missing row (e.g. registry not yet seeded) is treated as enabled so the
  * feature is never silently broken by deploy ordering — disabling is explicit.
  */
-export async function isGoogleDriveModuleEnabled(): Promise<boolean> {
-  const [row] = await db
+export async function isGoogleDriveModuleEnabled(exec: Pick<typeof db, "select"> = db): Promise<boolean> {
+  const [row] = await exec
     .select({ isEnabled: modulesTable.isEnabled })
     .from(modulesTable)
     .where(eq(modulesTable.moduleKey, GOOGLE_DRIVE_MODULE_KEY));
