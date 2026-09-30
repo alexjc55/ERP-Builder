@@ -448,12 +448,12 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                 </>
               ) : (
                 <div
-                  className={`flex items-center gap-2 ${inlineEditEnabled && statusManualEditable ? "cursor-pointer rounded hover:bg-blue-50/60 -mx-1 px-1" : ""}`}
+                  className={`flex min-w-0 ${record.archivedAt ? "flex-col items-start gap-1" : "items-center gap-2"} ${inlineEditEnabled && statusManualEditable ? "cursor-pointer rounded hover:bg-blue-50/60 -mx-1 px-1" : ""}`}
                   onClick={inlineEditEnabled && statusManualEditable ? () => setEditingCell({ recordId: record.id, fieldKey: STATUS_COLUMN_KEY }) : undefined}
                   title={inlineEditEnabled && statusManualEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                 >
                   {status ? <CompactStatus name={ml(status.nameJson)} color={readableStatusTextColor(status.color)} displayTags={status.displayTags} ml={ml} /> : <span className="text-slate-300">—</span>}
-                  {record.archivedAt && <span className="inline-flex items-center gap-1 text-indigo-500 text-xs"><Archive className="w-3 h-3" /> {t("records.inArchive", "В архиве")}</span>}
+                  {record.archivedAt && <span className="inline-flex max-w-full items-center gap-1 whitespace-nowrap text-xs text-indigo-500"><Archive className="h-3 w-3 shrink-0" /> {t("records.inArchive", "В архиве")}</span>}
                 </div>
               )}
             </td>
