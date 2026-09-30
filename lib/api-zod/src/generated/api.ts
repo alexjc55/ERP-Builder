@@ -4082,6 +4082,11 @@ export const ListEntityFieldsResponseItem = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "countSuffixJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
   "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
   "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
@@ -4295,6 +4300,11 @@ export const CreateEntityFieldBody = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "countSuffixJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
   "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
   "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
@@ -4506,6 +4516,11 @@ export const GetFieldResponse = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "countSuffixJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
   "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
   "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
@@ -4709,6 +4724,11 @@ export const UpdateFieldBody = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "countSuffixJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
   "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
   "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
@@ -4912,6 +4932,11 @@ export const UpdateFieldResponse = zod.object({
   "relatedFilterFieldKey": zod.string().optional().describe('Relation fields only. The field key on the related entity whose value must match the parent field\'s value for a record to be offered as a link candidate.')
 }).optional().describe('Per-field configuration for a dependent (\"cascading\") field. When `dependsOnFieldKey` is set, this field is gated on the parent field: its picker is disabled until the parent has a value. For a `text` field, its option list is the distinct existing values of this field among records whose parent-chain matches the current row. For a `relation` field, `relatedFilterFieldKey` names a field on the RELATED entity; the candidate list is narrowed to related records whose that field matches the parent field\'s value in the row being edited.'),
   "relationConfigJson": zod.object({
+  "countSuffixJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
   "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
   "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
@@ -5128,6 +5153,11 @@ export const ListPageFieldsResponseItem = zod.object({
   "decimals": zod.number().min(listPageFieldsResponsePercentConfigJsonDecimalsMin).max(listPageFieldsResponsePercentConfigJsonDecimalsMax).nullish()
 }).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
+  "countSuffixJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
   "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
   "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
@@ -5335,6 +5365,11 @@ export const CreatePageFieldBody = zod.object({
   "decimals": zod.number().min(createPageFieldBodyPercentConfigJsonDecimalsMin).max(createPageFieldBodyPercentConfigJsonDecimalsMax).nullish()
 }).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
+  "countSuffixJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
   "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
   "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
@@ -5533,6 +5568,11 @@ export const UpdatePageFieldBody = zod.object({
   "decimals": zod.number().min(updatePageFieldBodyPercentConfigJsonDecimalsMin).max(updatePageFieldBodyPercentConfigJsonDecimalsMax).nullish()
 }).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
+  "countSuffixJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
   "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
   "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),
@@ -5733,6 +5773,11 @@ export const UpdatePageFieldResponse = zod.object({
   "decimals": zod.number().min(updatePageFieldResponsePercentConfigJsonDecimalsMin).max(updatePageFieldResponsePercentConfigJsonDecimalsMax).nullish()
 }).optional().describe('Per-field configuration for a `percent`-type field. The value is stored as a plain number (30 = 30%) so it works in formulas and can be averaged. `mode` chooses the input: `list` picks from numeric preset options (in optionsJson), `value` is free numeric entry. `decimals` rounds the displayed value\/average. Percent fields always aggregate as the AVERAGE over records that have a value, independent of showColumnTotal.'),
   "relationConfigJson": zod.object({
+  "countSuffixJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
   "showStatus": zod.boolean().optional().describe('Show visible related-record statuses in candidates and members. Omission means false.'),
   "allowCreate": zod.boolean().optional().describe('Offer creation of related records in the picker, subject to create permission. Omission means true.'),
   "selectionMode": zod.enum(['single', 'multiple']).optional().describe('Defaults to single. Multiple requires a relation cardinality permitting multiple linked records on this side and stores each selected member in record_links.'),

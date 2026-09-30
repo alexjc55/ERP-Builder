@@ -507,6 +507,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                   {f.fieldType === "relation" && f.relationConfigJson?.selectionMode === "multiple" ? (
                     <MultipleRelationPicker entityId={entityId} fieldKey={f.fieldKey} recordId={record.id}
                       showStatus={f.relationConfigJson?.showStatus} allowCreate={f.relationConfigJson?.allowCreate}
+                      countSuffixJson={f.relationConfigJson?.countSuffixJson}
                       expectedVersion={record.version} ids={rel?.linkedRecordIds} members={rel?.members}
                       disabled={!relAssignable} dependent={relIsDependent} parentValue={relParentValue}
                       renderQuickCreate={f.relationConfigJson?.relatedPageId ? undefined : props => <QuickCreateRelatedRecordDialog {...props} pageId={pageId}
@@ -628,6 +629,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                 {pf.relationConfigJson?.selectionMode === "multiple" && pageId != null ? (
                   <MultipleRelationPicker entityId={entityId} pageId={pageId} pageField fieldKey={pf.fieldKey}
                     showStatus={pf.relationConfigJson?.showStatus} allowCreate={pf.relationConfigJson?.allowCreate}
+                    countSuffixJson={pf.relationConfigJson?.countSuffixJson}
                     recordId={record.id} expectedVersion={record.version} ids={rel?.linkedRecordIds} members={rel?.members}
                     disabled={!relAssignable} onChanged={() => setRefreshTick(x => x + 1)}
                     onEditingChange={open => setEditingCell(open ? { recordId: record.id, fieldKey: pfKey } : null)} />
@@ -9151,6 +9153,7 @@ export function EntityRecords({
                             {editable && f.fieldType === "relation" && f.relationConfigJson?.selectionMode === "multiple" ? (
                               <MultipleRelationPicker entityId={entityId} fieldKey={f.fieldKey}
                                 showStatus={f.relationConfigJson?.showStatus} allowCreate={f.relationConfigJson?.allowCreate}
+                                countSuffixJson={f.relationConfigJson?.countSuffixJson}
                                 value={newRow[f.fieldKey]} dependent={addRowRelInfo.dependent} parentValue={addRowRelInfo.parentValue}
                                 renderQuickCreate={f.relationConfigJson?.relatedPageId ? undefined : props => <QuickCreateRelatedRecordDialog {...props} pageId={permPageId}
                                   lockedFieldKey={addRowRelInfo.relatedFilterFieldKey} lockedValue={addRowRelInfo.parentValue} labelFieldKey={f.relationConfigJson?.relatedFieldKey} />}
@@ -10991,6 +10994,7 @@ function RecordFormBody({
             {field.fieldType === "relation" && field.relationConfigJson?.selectionMode === "multiple" ? (
               <MultipleRelationPicker entityId={entityId} fieldKey={field.fieldKey}
                 showStatus={field.relationConfigJson?.showStatus} allowCreate={field.relationConfigJson?.allowCreate}
+                countSuffixJson={field.relationConfigJson?.countSuffixJson}
                 recordId={mode === "edit" ? recordId ?? undefined : undefined} expectedVersion={expectedVersion}
                 value={form[field.fieldKey]} ids={relVal?.linkedRecordIds} members={relVal?.members}
                 disabled={access !== "edit" || relLocked || (mode === "edit" && !relVal?.editable)} dependent={dep.dependent} parentValue={dep.parentValue}

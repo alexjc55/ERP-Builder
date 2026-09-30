@@ -169,6 +169,7 @@ export function FieldConfigDialog({
   const [selectionMode, setSelectionMode] = useState<"single" | "multiple">("single");
   const [showRelationStatus, setShowRelationStatus] = useState(false);
   const [allowRelationCreate, setAllowRelationCreate] = useState(true);
+  const [countSuffixJson, setCountSuffixJson] = useState<MLValue>({});
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
   // lookup-only: when on, clicking a lookup cell opens the source record's
   // full editor (gated server-side by the viewer's update perm on that entity).
@@ -321,6 +322,7 @@ export function FieldConfigDialog({
       setSelectionMode(field.relationConfigJson?.selectionMode ?? "single");
       setShowRelationStatus(field.relationConfigJson?.showStatus ?? false);
       setAllowRelationCreate(field.relationConfigJson?.allowCreate ?? true);
+      setCountSuffixJson(Object.fromEntries(Object.entries(field.relationConfigJson?.countSuffixJson ?? {}).map(([key, value]) => [key, value ?? ""])));
       setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
       setWriteThrough(field.relationConfigJson?.writeThrough ?? false);
       setRelatedPageId(field.relationConfigJson?.relatedPageId ?? null);
@@ -369,6 +371,7 @@ export function FieldConfigDialog({
       setSelectionMode("single");
       setShowRelationStatus(false);
       setAllowRelationCreate(true);
+      setCountSuffixJson({});
       setRelatedFieldKey("");
       setWriteThrough(false);
       setRelatedPageId(null);
@@ -627,8 +630,8 @@ export function FieldConfigDialog({
             ? relatedPageId != null
               ? // Page-source relation fields project a page-local field (read-only
                 // display) while the link itself stays assignable.
-                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId, selectionMode, showStatus: showRelationStatus, allowCreate: allowRelationCreate }
-              : { relationId, relatedFieldKey: relatedFieldKey || null, selectionMode, showStatus: showRelationStatus, allowCreate: allowRelationCreate }
+                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId, selectionMode, showStatus: showRelationStatus, allowCreate: allowRelationCreate, countSuffixJson }
+              : { relationId, relatedFieldKey: relatedFieldKey || null, selectionMode, showStatus: showRelationStatus, allowCreate: allowRelationCreate, countSuffixJson }
             : {},
       isKey:
         fieldType !== "file" && fieldType !== "function" && fieldType !== "relation" && fieldType !== "lookup" && fieldType !== "created_at"
@@ -759,6 +762,7 @@ export function FieldConfigDialog({
                   </Select>
                   <p className="text-xs text-muted-foreground">Эта сторона связи должна допускать несколько записей. Каждая выбранная запись сохраняется отдельно.</p>
                   {selectionMode === "multiple" && <div className="space-y-3 pt-2">
+                    <MultilingualInput label={t("relations.countSuffix", "Текст или символ после количества")} value={countSuffixJson} onChange={setCountSuffixJson} />
                     <Label className="flex items-center gap-2">
                       <Switch checked={showRelationStatus} onCheckedChange={setShowRelationStatus} />
                       {t("fields.relationShowStatus", "Показывать статус и тег в списке")}

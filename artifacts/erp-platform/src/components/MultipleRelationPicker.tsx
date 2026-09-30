@@ -7,12 +7,14 @@ import { relationDraftIds } from "@/lib/relationSelections";
 import { Search } from "lucide-react";
 import { CompactStatus } from "./CompactStatus";
 import { useML, useT } from "@/lib/i18n";
+import { AffixedNumericValue } from "./AffixedNumericValue";
 
 export function MultipleRelationPicker(props: {
   entityId: number; fieldKey: string; pageId?: number; pageField?: boolean;
   recordId?: number; expectedVersion?: number; ids?: number[];
   members?: PageRelatedCandidate[]; value?: unknown; disabled?: boolean;
   showStatus?: boolean; allowCreate?: boolean;
+  countSuffixJson?: { ru?: string; en?: string; he?: string };
   dependent?: boolean; parentValue?: string | null;
   onChange?: (value: string) => void; onChanged?: (version?: number) => void;
   onEditingChange?: (open: boolean) => void;
@@ -85,7 +87,7 @@ export function MultipleRelationPicker(props: {
   const labels = new Map([...(props.members ?? []), ...candidates].map(c => [c.id, c.label]));
   return <>
     <button type="button" className="text-sm text-blue-700 underline underline-offset-4" onClick={() => changeOpen(true)}>
-      {ids.length}
+      <AffixedNumericValue config={{ displayAffix: ml(props.countSuffixJson), displayAffixPosition: "after" }}>{ids.length}</AffixedNumericValue>
     </button>
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="max-w-lg">

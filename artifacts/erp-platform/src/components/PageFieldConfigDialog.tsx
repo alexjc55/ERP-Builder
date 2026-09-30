@@ -248,6 +248,7 @@ export function PageFieldConfigDialog({
   const [selectionMode, setSelectionMode] = useState<"single" | "multiple">("single");
   const [showRelationStatus, setShowRelationStatus] = useState(false);
   const [allowRelationCreate, setAllowRelationCreate] = useState(true);
+  const [countSuffixJson, setCountSuffixJson] = useState<MLValue>({});
   const [relatedFieldKey, setRelatedFieldKey] = useState("");
   // relation + lookup: when set, the field projects a PAGE-LOCAL field of the
   // linked record instead of one of its entity fields (value read-only; a
@@ -316,6 +317,7 @@ export function PageFieldConfigDialog({
       setSelectionMode(field.relationConfigJson?.selectionMode ?? "single");
       setShowRelationStatus(field.relationConfigJson?.showStatus ?? false);
       setAllowRelationCreate(field.relationConfigJson?.allowCreate ?? true);
+      setCountSuffixJson(Object.fromEntries(Object.entries(field.relationConfigJson?.countSuffixJson ?? {}).map(([key, value]) => [key, value ?? ""])));
       setRelatedFieldKey(field.relationConfigJson?.relatedFieldKey ?? "");
       setRelatedPageId(field.relationConfigJson?.relatedPageId ?? null);
       setRefSourcePageId(field.pageRefConfigJson?.sourcePageId ?? null);
@@ -360,6 +362,7 @@ export function PageFieldConfigDialog({
       setSelectionMode("single");
       setShowRelationStatus(false);
       setAllowRelationCreate(true);
+      setCountSuffixJson({});
       setRelatedFieldKey("");
       setRelatedPageId(null);
       setRefSourcePageId(null);
@@ -623,8 +626,8 @@ export function PageFieldConfigDialog({
             ? relatedPageId != null
               ? // Page-source relation fields project a page-local field (read-only
                 // display) while the link itself stays assignable.
-                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId, selectionMode, showStatus: showRelationStatus, allowCreate: allowRelationCreate }
-              : { relationId, relatedFieldKey: relatedFieldKey || null, selectionMode, showStatus: showRelationStatus, allowCreate: allowRelationCreate }
+                { relationId, relatedFieldKey: relatedFieldKey || null, relatedPageId, selectionMode, showStatus: showRelationStatus, allowCreate: allowRelationCreate, countSuffixJson }
+              : { relationId, relatedFieldKey: relatedFieldKey || null, selectionMode, showStatus: showRelationStatus, allowCreate: allowRelationCreate, countSuffixJson }
             : {},
       permissionsJson: permissions,
       allowFormulaExport,
@@ -949,6 +952,7 @@ export function PageFieldConfigDialog({
                     </SelectContent>
                   </Select>
                   {selectionMode === "multiple" && <div className="space-y-3 pt-2">
+                    <MultilingualInput label={t("relations.countSuffix", "Текст или символ после количества")} value={countSuffixJson} onChange={setCountSuffixJson} />
                     <Label className="flex items-center gap-2">
                       <Switch checked={showRelationStatus} onCheckedChange={setShowRelationStatus} />
                       {t("fields.relationShowStatus", "Показывать статус и тег в списке")}

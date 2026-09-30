@@ -229,6 +229,7 @@ export type SelectOption = {
  */
 export type RelationFieldConfig = {
   showStatus?: boolean;
+  countSuffixJson?: { ru?: string; en?: string; he?: string };
   allowCreate?: boolean;
   selectionMode?: "single" | "multiple";
   relationId?: number | null;

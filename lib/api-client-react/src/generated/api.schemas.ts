@@ -3368,6 +3368,7 @@ export const RelationFieldConfigSelectionMode = {
  * Config for a relation-type page field (surfaces one field of a linked related record).
  */
 export interface RelationFieldConfig {
+  countSuffixJson?: MultilingualText;
   /** Show visible related-record statuses in candidates and members. Omission means false. */
   showStatus?: boolean;
   /** Offer creation of related records in the picker, subject to create permission. Omission means true. */

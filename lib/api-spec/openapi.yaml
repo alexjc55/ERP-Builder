@@ -8331,6 +8331,8 @@ components:
       type: object
       description: Config for a relation-type page field (surfaces one field of a linked related record).
       properties:
+        countSuffixJson:
+          $ref: "#/components/schemas/MultilingualText"
         showStatus:
           type: boolean
           description: Show visible related-record statuses in candidates and members. Omission means false.

@@ -114,6 +114,11 @@ test("Delivery browser → real API → selected-only status automation", async 
     await choose("Выбор связанных записей", "Несколько записей");
     await fieldDialog.getByRole("switch", { name: "Показывать статус и тег в списке" }).check();
     await fieldDialog.getByRole("switch", { name: "Разрешить создание связанной записи" }).uncheck();
+    const suffixEditor = fieldDialog.locator("label").filter({ hasText: "Текст или символ после количества" }).locator("..");
+    for (const [lang, suffix] of [["RU", "изделий"], ["EN", "items"], ["HE", "פריטים"]]) {
+      await suffixEditor.getByRole("tab", { name: lang, exact: true }).click();
+      await suffixEditor.getByRole("textbox").fill(suffix);
+    }
     await choose("Depend|Зависит", "Order");
     await choose("Filter.*field|Поле фильтрации", "Order");
     await fieldDialog.getByRole("button", { name: /^(Save|Сохранить)$/ }).click();
@@ -122,6 +127,14 @@ test("Delivery browser → real API → selected-only status automation", async 
     await page.getByRole("row").filter({ hasText: "members" }).getByRole("button").nth(2).click();
     await expect(fieldDialog.getByRole("switch", { name: "Показывать статус и тег в списке" })).toBeChecked();
     await expect(fieldDialog.getByRole("switch", { name: "Разрешить создание связанной записи" })).not.toBeChecked();
+    for (const [lang, suffix] of [["RU", "изделий"], ["EN", "items"], ["HE", "פריטים"]]) {
+      await suffixEditor.getByRole("tab", { name: lang, exact: true }).click();
+      await expect(suffixEditor.getByRole("textbox")).toHaveValue(suffix);
+      await suffixEditor.getByRole("textbox").fill("");
+    }
+    // Clearing is an explicit metadata update, not an omitted stale suffix.
+    await fieldDialog.getByRole("button", { name: /^(Save|Сохранить)$/ }).click();
+    await expect(fieldDialog).toHaveCount(0);
     await page.goto(path);
     await page.getByRole("button", { name: /^(Add record|Добавить запись)$/ }).click();
     const dialog = page.getByRole("dialog").filter({ has: page.getByTestId("record-dialog-save") });

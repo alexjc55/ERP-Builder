@@ -18,13 +18,15 @@ test("entity and page create/edit schemas preserve relation picker options and r
     const configSchema = schema.shape.relationConfigJson;
     for (const showStatus of [true, false]) {
       for (const allowCreate of [true, false]) {
-        const config = { relationId: 1, relatedFieldKey: "name", selectionMode: "multiple", showStatus, allowCreate };
+        const config = { relationId: 1, relatedFieldKey: "name", selectionMode: "multiple", showStatus, allowCreate, countSuffixJson: { ru: "изделий", en: "items", he: "פריטים" } };
         assert.deepEqual(configSchema.parse(config), config);
       }
     }
     assert.deepEqual(configSchema.parse({}), {});
     assert.equal(configSchema.safeParse({ showStatus: "true" }).success, false);
     assert.equal(configSchema.safeParse({ allowCreate: 0 }).success, false);
+    assert.equal(configSchema.safeParse({ countSuffixJson: { ru: 5 } }).success, false);
+    assert.deepEqual(configSchema.parse({ countSuffixJson: {} }), { countSuffixJson: {} });
   }
 });
 

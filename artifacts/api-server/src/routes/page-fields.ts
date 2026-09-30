@@ -234,7 +234,7 @@ async function validateRelationFieldConfig(
   if (relatedPageId != null) {
     const pageCheck = await validateRelatedPageSource(relatedPageId, relatedEntityId, relatedFieldKey);
     if ("error" in pageCheck) return pageCheck;
-    return { ok: true, cleaned: { relationId, relatedFieldKey, relatedPageId, selectionMode: cfg?.selectionMode, showStatus: cfg?.showStatus, allowCreate: cfg?.allowCreate } };
+    return { ok: true, cleaned: { relationId, relatedFieldKey, relatedPageId, selectionMode: cfg?.selectionMode, showStatus: cfg?.showStatus, allowCreate: cfg?.allowCreate, countSuffixJson: cfg?.countSuffixJson } };
   }
 
   const [rf] = await db
@@ -260,7 +260,7 @@ async function validateRelationFieldConfig(
   }
   // Entity-source: strip any stray relatedPageId/writeThrough. Page fields never
   // offer write-through (no per-page nav affordance), so it is always dropped.
-  return { ok: true, cleaned: { relationId, relatedFieldKey, selectionMode: cfg?.selectionMode, showStatus: cfg?.showStatus, allowCreate: cfg?.allowCreate } };
+  return { ok: true, cleaned: { relationId, relatedFieldKey, selectionMode: cfg?.selectionMode, showStatus: cfg?.showStatus, allowCreate: cfg?.allowCreate, countSuffixJson: cfg?.countSuffixJson } };
 }
 
 /**

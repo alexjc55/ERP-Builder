@@ -13,11 +13,19 @@ test("multi selector uses full snapshot, saves normalized IDs with CAS, and expo
   const writes = [];
   let candidateRequest;
   let failSave = false;
+  let language = "ru";
+  await page.addInitScript(() => localStorage.setItem("erp_token", "isolated-intercepted-test"));
   const candidates = Array.from({ length: 135 }, (_, i) => ({ id: i + 1, label: `Item ${i + 1}`,
     status: i === 0 ? { id: 4, nameJson: { ru: "Готово" }, color: "#123456",
       displayTags: [{ id: 8, nameJson: { ru: "Производство" }, color: "#ffffff" }] } : null }));
   await page.route("**/api/**", async route => {
     const data = route.request().postDataJSON();
+    if (route.request().url().endsWith("/auth/me")) {
+      if (data?.language) language = data.language;
+      return route.fulfill({json:{id:1, language, isSuperAdmin:true, roles:[]}});
+    }
+    if (route.request().url().endsWith("/settings")) return route.fulfill({json:{defaultLanguage:"ru"}});
+    if (route.request().url().includes("/translations")) return route.fulfill({json:[]});
     if (route.request().url().includes("related-candidates")) {
       candidateRequest = data;
       return route.fulfill({ json: { candidates, relatedEntityId: 2, canCreate: true } });
@@ -50,14 +58,19 @@ test("multi selector uses full snapshot, saves normalized IDs with CAS, and expo
       const i18nUrl = componentSource.match(/from "([^"]*\\/lib\\/i18n\\.tsx[^"]*)"/)[1];
       const i18nSource = await (await fetch(i18nUrl)).text();
       const authUrl = i18nSource.match(/from "([^"]*\\/lib\\/auth\\.tsx[^"]*)"/)[1];
-      const {I18nProvider} = await import(i18nUrl);
+      const {I18nProvider, useLang} = await import(i18nUrl);
       const {AuthProvider} = await import(authUrl);
       const root = createRoot(document.getElementById("root"));
       const client = new QueryClient({defaultOptions:{mutations:{retry:false}}});
       let key = 0;
+      const Picker = props => {
+        const {setLang} = useLang();
+        window.setPickerLanguage = setLang;
+        return React.createElement(MultipleRelationPicker, props);
+      };
       window.renderPicker = (props = {}) => root.render(React.createElement(QueryClientProvider,
         {client}, React.createElement(AuthProvider, null, React.createElement(I18nProvider, null,
-        React.createElement(MultipleRelationPicker, {key:++key, entityId:1, fieldKey:"items", recordId:10,
+        React.createElement(Picker, {key:++key, entityId:1, fieldKey:"items", recordId:10,
           renderQuickCreate: () => null,
           expectedVersion:7, ids:[1], members:[{id:1,label:"Item 1"}], dependent:true, parentValue:"99", ...props})))));
       window.renderPicker();
@@ -120,6 +133,28 @@ test("multi selector uses full snapshot, saves normalized IDs with CAS, and expo
     await page.getByText("Производство", { exact: true }).waitFor();
     await page.getByRole("searchbox", { name: "Поиск связанных записей" }).fill("nothing matches");
     assert.equal(await page.getByText("Item 1", { exact: true }).count(), 0);
+    await page.getByRole("button", { name: "Закрыть", exact: true }).click();
+    for (const [lang, suffix] of [["ru", "изделий"], ["en", "items"], ["he", "פריטים"]]) {
+      await page.evaluate(({lang}) => {
+        window.setPickerLanguage(lang);
+        window.renderPicker({disabled:true, countSuffixJson:{ru:"изделий",en:"items",he:"פריטים"}});
+      }, {lang});
+      const count = page.getByRole("button", {name:`1 ${suffix}`, exact:true});
+      await count.waitFor();
+      assert.equal(await count.locator("[data-affix-part=number]").getAttribute("dir"), "ltr");
+      assert.equal(await count.locator("[data-affix-position]").getAttribute("data-affix-position"), "after");
+      assert.equal(await count.locator("[data-affix-part]").evaluateAll(nodes => nodes.map(n => n.textContent).join("|")), `1|${suffix}`);
+      if (lang === "he") {
+        assert.equal(await count.evaluate(el => getComputedStyle(el).direction), "rtl");
+        if (process.env.SUFFIX_SCREENSHOT) await page.screenshot({path:process.env.SUFFIX_SCREENSHOT});
+      }
+    }
+    await page.evaluate(() => window.renderPicker({recordId:undefined, ids:[], countSuffixJson:{ru:"",en:"",he:""}}));
+    await page.getByRole("button", {name:"0",exact:true}).waitFor();
+    assert.equal(await page.locator("[data-affix-part=affix]").count(), 0);
+    await page.evaluate(() => window.renderPicker({countSuffixJson:{ru:"шт."}}));
+    await page.getByRole("button", {name:"1 шт.",exact:true}).waitFor();
+    assert.equal(writes.length, 2, "Display suffix never changes normalized link writes");
     assert.deepEqual(browserErrors, []);
   } finally {
     await browser.close();

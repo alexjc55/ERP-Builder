@@ -5,6 +5,8 @@ description: Cross-surface rules for plain text shown before or after number and
 
 Numeric value affixes are display-only metadata for `number` and numeric `function` results. Keep the stored value, formula result, filters, sorting, and aggregates numeric. Unsupported field types must not retain affix metadata.
 
+Multiple relation counts use separate `relationConfigJson.countSuffixJson` multilingual metadata (RU/EN/HE), not numeric-field formula configuration. Resolve with the shared multilingual fallback and render using the same isolated numeric renderer with semantic `after`. Empty suffixes leave just the count; never append suffixes to link IDs, members, or selection values.
+
 **Why:** Concatenating the text into the value breaks arithmetic and query behavior. Physical left/right positioning also fails under Hebrew RTL, and some pivot/dashboard surfaces do not otherwise have the source field configuration available at render time.
 
 **How to apply:** Store semantic `before`/`after`, render the already-formatted numeric token separately with LTR isolation inside a direction-inheriting inline container, and apply the affix only when a formula result is actually numeric. Any new aggregate surface must carry the display metadata alongside its numeric result rather than changing the number.
