@@ -10446,7 +10446,7 @@ export const getBulkUpdateRecordFieldUrl = () => {
 }
 
 /**
- * @summary Atomically set one editable entity field to one value for selected records. Every record is checked against the same validation, scope, immutability, dependent-field, cross-field and uniqueness boundaries as a single-record update.
+ * @summary Atomically set one editable entity field or the system status for selected records. Status changes enforce manual-edit and workflow rules. Every record is checked against the same validation, scope, immutability, dependent-field, cross-field and uniqueness boundaries as a single-record update.
  */
 export const bulkUpdateRecordField = async (bulkRecordFieldUpdate: BulkRecordFieldUpdate, options?: RequestInit): Promise<BulkFieldUpdateResult> => {
 
@@ -10495,7 +10495,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type BulkUpdateRecordFieldMutationError = ErrorType<unknown>
 
     /**
- * @summary Atomically set one editable entity field to one value for selected records. Every record is checked against the same validation, scope, immutability, dependent-field, cross-field and uniqueness boundaries as a single-record update.
+ * @summary Atomically set one editable entity field or the system status for selected records. Status changes enforce manual-edit and workflow rules. Every record is checked against the same validation, scope, immutability, dependent-field, cross-field and uniqueness boundaries as a single-record update.
  */
 export const useBulkUpdateRecordField = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkUpdateRecordField>>, TError,{data: BodyType<BulkRecordFieldUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}

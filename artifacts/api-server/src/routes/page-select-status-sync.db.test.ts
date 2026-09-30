@@ -2398,6 +2398,106 @@ test("page-local select mappings synchronize entity status atomically", async (t
     }
   });
 
+  await t.test("explicit bulk system status is atomic, permission-aware and versioned", async () => {
+    const selected = [ids.one, ids.two];
+    const restorePolicy = async () => {
+      await db.update(entitiesTable).set({ statusManualEditPolicy: "allowed", statusManualEditUserIds: [] }).where(eq(entitiesTable.id, ids.entity));
+      await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) }).where(eq(rolesTable.id, ids.role));
+    };
+    const snapshot = () => Promise.all(selected.map(rollbackSnapshot));
+    const send = async (extra: Record<string, unknown> = {}) => request("/records/bulk-field", {
+      entityId: ids.entity, statusId: ids.done, recordIds: selected, pageId: ids.targetPage,
+      expectedVersions: Object.fromEntries(await Promise.all(selected.map(async id => [id, (await record(id)).version]))),
+      ...extra,
+    }, "POST");
+    try {
+      await restorePolicy();
+      await reset();
+      let before = await snapshot();
+      let response = await send({ fieldKey: "name", value: "mixed" });
+      assert.equal(response.status, 400);
+      assert.deepEqual(await snapshot(), before);
+
+      await db.update(entitiesTable).set({ statusManualEditPolicy: "disabled_all" }).where(eq(entitiesTable.id, ids.entity));
+      assert.equal((await send()).status, 403);
+      assert.deepEqual(await snapshot(), before);
+      await db.update(rolesTable).set({ permissionsJson: { ...permissions([ids.targetPage, ids.sourcePage]), superAdmin: true } }).where(eq(rolesTable.id, ids.role));
+      assert.equal((await send()).status, 403, "manual policy has no super-admin bypass");
+      assert.deepEqual(await snapshot(), before);
+      await restorePolicy();
+      await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage], [ids.done]) }).where(eq(rolesTable.id, ids.role));
+      assert.equal((await send()).status, 403);
+      assert.deepEqual(await snapshot(), before);
+      await restorePolicy();
+
+      assert.equal((await send({ statusId: 2147483647 })).status, 400);
+      assert.deepEqual(await snapshot(), before);
+      await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage], [], [ids.base]) }).where(eq(rolesTable.id, ids.role));
+      assert.equal((await send()).status, 404, "hidden source row rejects complete selection");
+      assert.deepEqual(await snapshot(), before);
+      await restorePolicy();
+      const deniedPage = permissions([ids.targetPage, ids.sourcePage]);
+      deniedPage.records[mirrorPermKey(ids.targetPage)] = { view: true, create: false, update: false, delete: false };
+      await db.update(rolesTable).set({ permissionsJson: deniedPage }).where(eq(rolesTable.id, ids.role));
+      assert.equal((await send()).status, 403, "mirror page update override enforced");
+      assert.deepEqual(await snapshot(), before);
+      await restorePolicy();
+
+      assert.equal((await send({ expectedVersions: { [ids.one]: (await record(ids.one)).version, [ids.two]: 1 } })).status, 409);
+      assert.deepEqual(await snapshot(), before);
+
+      const [transition] = await db.insert(entityTransitionsTable).values({
+        entityId: ids.entity, fromStatusId: null, toStatusId: ids.done,
+        allowedRoleIds: [2147483647],
+        actionsJson: [{ type: "set_field", fieldKey: "workflow_note", value: "Bulk workflow" }],
+      }).returning();
+      assert.equal((await send()).status, 403);
+      assert.deepEqual(await snapshot(), before);
+      await db.update(entityTransitionsTable).set({ allowedRoleIds: [ids.role] }).where(eq(entityTransitionsTable.id, transition!.id));
+      response = await send();
+      assert.equal(response.status, 200, JSON.stringify(response.body));
+      const after = await snapshot();
+      for (let i = 0; i < selected.length; i++) {
+        assert.equal(after[i]!.statusId, ids.done);
+        assert.equal(after[i]!.version, before[i]!.version + 1);
+        assert.equal((after[i]!.valuesJson as Record<string, unknown>).workflow_note, "Bulk workflow");
+        assert.ok(after[i]!.audits.some(a => a.fieldKey === "__status__"));
+        assert.ok(after[i]!.events.some(e => e.eventName === "status.changed"));
+        assert.ok(after[i]!.events.some(e => e.eventName === "record.updated"));
+      }
+      assert.equal((await send()).status, 200);
+      assert.deepEqual(await snapshot(), after, "same-status no-op has no versions, audit or events");
+
+      await reset();
+      await db.insert(entityTransitionsTable).values({
+        entityId: ids.entity, fromStatusId: ids.base, toStatusId: ids.done,
+        actionsJson: [{ type: "set_field", fieldKey: "name", value: "changed immutable" }],
+      });
+      await db.update(entityFieldsTable).set({ lockAfterCreate: true }).where(and(eq(entityFieldsTable.entityId, ids.entity), eq(entityFieldsTable.fieldKey, "name")));
+      before = await snapshot();
+      try {
+        assert.equal((await send()).status, 422);
+        assert.deepEqual(await snapshot(), before, "workflow cannot alter immutable data");
+      } finally {
+        await db.update(entityFieldsTable).set({ lockAfterCreate: false }).where(and(eq(entityFieldsTable.entityId, ids.entity), eq(entityFieldsTable.fieldKey, "name")));
+      }
+
+      await reset();
+      await db.insert(entityTransitionsTable).values({
+        entityId: ids.entity, fromStatusId: ids.base, toStatusId: ids.done,
+        actionsJson: [{ type: "set_field", fieldKey: "workflow_note", value: "Would change" }],
+        requiredFieldKeys: ["name"],
+      });
+      await db.update(entityRecordsTable).set({ valuesJson: { name: "", owner: ids.user } }).where(eq(entityRecordsTable.id, ids.two));
+      before = await snapshot();
+      assert.equal((await send()).status, 400);
+      assert.deepEqual(await snapshot(), before, "late row validation rolls back every effect");
+    } finally {
+      await restorePolicy();
+      await reset();
+    }
+  });
+
   await t.test("bulk archive mapping applies actions and emits complete effects for every record", async () => {
     await reset();
     await db.delete(entityTransitionsTable).where(eq(entityTransitionsTable.entityId, ids.entity));

@@ -2958,8 +2958,8 @@ paths:
       operationId: bulkUpdateRecordField
       tags: [records]
       summary: >-
-        Atomically set one editable entity field to one value for selected
-        records. Every record is checked against the same validation, scope,
+        Atomically set one editable entity field or the system status for selected
+        records. Status changes enforce manual-edit and workflow rules. Every record is checked against the same validation, scope,
         immutability, dependent-field, cross-field and uniqueness boundaries as
         a single-record update.
       requestBody:
@@ -9538,13 +9538,18 @@ components:
 
     BulkRecordFieldUpdate:
       type: object
-      required: [entityId, fieldKey, value, recordIds]
+      required: [entityId, recordIds]
+      description: Supply either fieldKey and value, or statusId (never both).
       properties:
         entityId:
           type: integer
         fieldKey:
           type: string
         value: {}
+        statusId:
+          type: integer
+          minimum: 1
+          description: Explicit human system-status assignment, subject to manual policy and per-row workflow permissions.
         recordIds:
           type: array
           items:

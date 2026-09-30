@@ -8530,8 +8530,9 @@ export const BulkRecordsActionResponse = zod.object({
 
 
 /**
- * @summary Atomically set one editable entity field to one value for selected records. Every record is checked against the same validation, scope, immutability, dependent-field, cross-field and uniqueness boundaries as a single-record update.
+ * @summary Atomically set one editable entity field or the system status for selected records. Status changes enforce manual-edit and workflow rules. Every record is checked against the same validation, scope, immutability, dependent-field, cross-field and uniqueness boundaries as a single-record update.
  */
+
 export const bulkUpdateRecordFieldBodyRecordIdsMax = 500;
 
 
@@ -8539,12 +8540,13 @@ export const bulkUpdateRecordFieldBodyRecordIdsMax = 500;
 
 export const BulkUpdateRecordFieldBody = zod.object({
   "entityId": zod.number(),
-  "fieldKey": zod.string(),
-  "value": zod.unknown(),
+  "fieldKey": zod.string().optional(),
+  "value": zod.unknown().optional(),
+  "statusId": zod.number().min(1).optional().describe('Explicit human system-status assignment, subject to manual policy and per-row workflow permissions.'),
   "recordIds": zod.array(zod.number()).min(1).max(bulkUpdateRecordFieldBodyRecordIdsMax),
   "pageId": zod.number().optional().describe('Optional mirror-page context: applies that page\'s record-rights and field-access overrides.'),
   "expectedVersions": zod.record(zod.string(), zod.number().min(1)).optional().describe('Expected entity_records.version keyed by record id.')
-})
+}).describe('Supply either fieldKey and value, or statusId (never both).')
 
 export const BulkUpdateRecordFieldResponse = zod.object({
   "updatedIds": zod.array(zod.number()),

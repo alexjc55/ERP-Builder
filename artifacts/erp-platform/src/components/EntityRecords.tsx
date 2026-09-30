@@ -5898,6 +5898,17 @@ export function EntityRecords({
     !bulkEditClear &&
     (bulkEditValue === "" || bulkEditValue === undefined || bulkEditValue === null);
   const submitBulkFieldUpdate = () => {
+    if (bulkEditFieldToken === "system:status") {
+      if (!statusManualEditable || !canUpdate || !bulkStatusOptions.some(status => status.id === Number(bulkEditValue))) return;
+      bulkEntityFieldMutation.mutate({
+        data: {
+          entityId, statusId: Number(bulkEditValue), recordIds: [...selectedIds],
+          ...(permPageId != null ? { pageId: permPageId } : {}),
+          expectedVersions: Object.fromEntries(records.filter(record => selectedIds.has(record.id)).map(record => [record.id, record.version])),
+        },
+      });
+      return;
+    }
     if (!selectedBulkEditableField) return;
     if (
       selectedBulkEditableField.kind === "page" &&
@@ -6366,6 +6377,19 @@ export function EntityRecords({
     ]);
     return dropHidden(statuses.filter((s: Status) => ids.has(s.id)), cur);
   }, [workflowActiveForRecord, dropHidden, statuses, transitions, userRoleIds]);
+
+  // Intersect each selected row's transitions, including wildcard fallback.
+  // The server repeats these checks while locking the complete batch.
+  const bulkStatusOptions = statuses.filter(status =>
+    !hiddenStatusIds.has(status.id) && !hiddenRowStatusIds.has(status.id) &&
+    records.filter(record => selectedIds.has(record.id)).every(record => {
+      if (!workflowActiveForRecord(record) || record.statusId === status.id) return true;
+      const transition = transitions.find(tr => tr.fromStatusId === record.statusId && tr.toStatusId === status.id)
+        ?? transitions.find(tr => tr.fromStatusId == null && tr.toStatusId === status.id);
+      return transition != null && (!transition.allowedRoleIds?.length || transition.allowedRoleIds.some(id => userRoleIds.includes(id)));
+    }),
+  );
+  const canBulkEditStatus = statusManualEditable && showStatusColumn && canUpdate;
 
   const startAddRow = () => {
     if (hasWritablePageValueFields && !guardPageLocalWrite(() => {})) return;
@@ -6851,7 +6875,7 @@ export function EntityRecords({
   // select rows for the atomic "Edit fields" operation even when the role hides
   // the actions column. Archive/delete/merge retain their existing gate.
   const bulkFieldEditAvailable =
-    !setupMode && !showPivot && canUpdate && bulkEditableFields.length > 0;
+    !setupMode && !showPivot && canUpdate && (bulkEditableFields.length > 0 || canBulkEditStatus);
   const bulkRecordActionsAvailable =
     !setupMode && !showPivot && showActionsColumn && (canUpdate || canDelete);
   const bulkAvailable = bulkFieldEditAvailable || bulkRecordActionsAvailable;
@@ -9583,6 +9607,7 @@ export function EntityRecords({
                   <SelectValue placeholder={t("records.bulkEditChooseField", "Выберите поле")} />
                 </SelectTrigger>
                 <SelectContent>
+                  {canBulkEditStatus && <SelectItem value="system:status">{t("records.status", "Статус")}</SelectItem>}
                   {bulkEditableFields.map((candidate) => (
                     <SelectItem key={candidate.token} value={candidate.token}>
                       {candidate.kind === "page"
@@ -9595,6 +9620,22 @@ export function EntityRecords({
               </Select>
             </div>
 
+            {bulkEditFieldToken === "system:status" && (
+              <div className="space-y-1.5">
+                <Label>{t("records.bulkEditValue", "Новое значение")}</Label>
+                <Select value={String(bulkEditValue || "")} onValueChange={setBulkEditValue} disabled={bulkFieldMutationPending}>
+                  <SelectTrigger><SelectValue placeholder={t("records.selectStatus", "Выберите статус")}>{ml(statuses.find(status => String(status.id) === String(bulkEditValue))?.nameJson) || undefined}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    {bulkStatusOptions.map(status => (
+                      <SelectItem key={status.id} value={String(status.id)} textValue={ml(status.nameJson)}>
+                        <CompactStatus name={ml(status.nameJson)} displayTags={status.displayTags} ml={ml} />
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {bulkStatusOptions.length === 0 && <p className="text-sm text-muted-foreground">{t("records.noCommonStatus", "Нет общего доступного статуса для выбранных записей")}</p>}
+              </div>
+            )}
             {selectedBulkEditableField && (
               <>
                 <div className="space-y-1.5">
@@ -9638,7 +9679,8 @@ export function EntityRecords({
             <Button
               onClick={submitBulkFieldUpdate}
               disabled={
-                !selectedBulkEditableField ||
+                (!selectedBulkEditableField && (bulkEditFieldToken !== "system:status" || !canBulkEditStatus)) ||
+                (bulkEditFieldToken === "system:status" && !bulkStatusOptions.some(status => status.id === Number(bulkEditValue))) ||
                 bulkFieldValueMissing ||
                 bulkFieldMutationPending ||
                 selectedBulkPageWriteBlocked ||

@@ -11,6 +11,10 @@ description: Multi-select record actions — partial archive/delete behavior and
 
 ## Atomic one-field edit
 
+The atomic endpoint also accepts an explicit `statusId` instead of a field/value pair. Never represent the system status as a scalar entity field: manual policy (including administrators), target visibility, workflow role permissions/actions and all selected rows' CAS/scope checks apply. Its audits commit inside the same transaction and status/update events publish only afterward. Same-status rows are true no-ops, not an opportunity to normalize unrelated stored values.
+
+**Why:** JSONB file-key ordering can make validation appear to change unchanged fields and falsely advance a repeated status assignment's version. The UI intersects transitions across selected records (specific transition wins over wildcard) and keeps status available even when no scalar field is editable.
+
 - Atomic edit is deliberately a separate operation from partial archive/delete. It changes exactly one editable entity or page-local field to one shared value across manually selected rows; unsupported computed, relation/lookup, system, file, locked, hidden, and dependent target fields stay excluded.
 
 - **Why:** archive/delete reports individual outcomes by design, but a shared correction such as setting a payment field needs a trustworthy all-or-nothing result. Reusing the partial endpoint would allow a silently mixed state.

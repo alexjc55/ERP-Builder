@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { createRecordRelationSelections } from "../lib/record-relation-selections";
 import { recordLinkUniqueMessage } from "../lib/record-links";
 import { RelationSelectionError, guardedRelationRequiresFieldSurface, clearDependentSelections } from "../lib/relation-selection-integrity";
-import { db, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable } from "@workspace/db";
+import { db, auditLogTable, entityRecordsTable, entityFieldsTable, entityStatusesTable, entitiesTable, usersTable, entityTransitionsTable, deletedFilesTable, pageFieldsTable, pageRecordValuesTable, pagesTable, relationsTable, recordLinksTable } from "@workspace/db";
 import { eq, asc, desc, and, or, sql, inArray, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { evaluateFormula, normalizeDecimals, cleanFpNoise, type FormulaFieldDef } from "@workspace/formula";
@@ -5231,39 +5231,48 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
     res.status(400).json({ error: body.error.message });
     return;
   }
-  const { entityId, fieldKey, value, pageId, expectedVersions } = body.data;
+  const { entityId, fieldKey, value, statusId, pageId, expectedVersions } = body.data;
+  const statusEdit = statusId !== undefined;
+  if (statusEdit && !Number.isSafeInteger(statusId)) {
+    res.status(400).json({ error: "statusId must be a positive integer" });
+    return;
+  }
+  if (statusEdit ? (fieldKey !== undefined || Object.hasOwn(body.data, "value")) : (!fieldKey || !Object.hasOwn(body.data, "value"))) {
+    res.status(400).json({ error: "Supply either statusId or fieldKey and value" });
+    return;
+  }
   const recordIds = [...new Set(body.data.recordIds)].sort((a, b) => a - b);
   if (!(await assertRecord(req, res, entityId, "update", pageId))) return;
 
   const [perms, fields] = await Promise.all([getPermissions(req), loadActiveFields(entityId)]);
   const field = fields.find((candidate) => candidate.fieldKey === fieldKey);
-  if (!field) {
+  if (!statusEdit && !field) {
     res.status(400).json({ error: `Unknown field: ${fieldKey}` });
     return;
   }
-  if (
+  if (field && (
     field.fieldType === "function" ||
     field.fieldType === "relation" ||
     field.fieldType === "lookup" ||
     field.fieldType === "created_at" ||
     field.fieldType === "file"
-  ) {
+  )) {
     res.status(400).json({ error: `Field "${fieldKey}" cannot be changed in bulk` });
     return;
   }
-  if (field.lockAfterCreate) {
+  if (field?.lockAfterCreate) {
     res.status(422).json({ error: `Поле «${fieldRuName(field)}» нельзя изменять массово` });
     return;
   }
   // A dependent field's valid option set can differ from row to row according
   // to its parent chain, so one shared picker/value is not a safe bulk contract.
-  if (field.dependencyConfigJson?.dependsOnFieldKey) {
+  if (field?.dependencyConfigJson?.dependsOnFieldKey) {
     res.status(400).json({ error: `Dependent field "${fieldKey}" cannot be changed in bulk` });
     return;
   }
 
   const { editable } = await fieldAccessContext(req, entityId, fields, pageId);
-  if (!editable.has(fieldKey)) {
+  if (!statusEdit && !editable.has(fieldKey!)) {
     res.status(403).json({ error: `Field "${fieldKey}" is read-only for your role` });
     return;
   }
@@ -5284,8 +5293,31 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
     version: number;
   };
   let changedRows: ChangedRow[] = [];
+  const bulkAudits = (row: ChangedRow): InsertAuditLog[] => {
+    const entries: InsertAuditLog[] = diffValues(row.before, row.after, fields.map(candidate => candidate.fieldKey))
+      .map(change => ({ entityId, recordId: row.id, ...change, userId }));
+    if (row.beforeStatusId !== row.afterStatusId) entries.push({
+      entityId, recordId: row.id, fieldKey: AUDIT_STATUS,
+      oldValue: row.beforeStatusId == null ? null : String(row.beforeStatusId),
+      newValue: row.afterStatusId == null ? null : String(row.afterStatusId), userId,
+    });
+    if (row.beforeArchivedAt == null && row.afterArchivedAt != null) entries.push({
+      entityId, recordId: row.id, fieldKey: AUDIT_ARCHIVED, oldValue: "false", newValue: "true", userId,
+    });
+    return entries;
+  };
   try {
     changedRows = await db.transaction(async (tx) => {
+      if (statusEdit) {
+        const [policy] = await tx.select().from(entitiesTable).where(eq(entitiesTable.id, entityId)).for("share");
+        if (!policy || isManualStatusEditDisabled(policy.statusManualEditPolicy, policy.statusManualEditUserIds, userId)) {
+          throw new BulkFieldUpdateError(403, recordIds[0]!, "Manual status editing is disabled for this user");
+        }
+        const { hiddenStatusIds } = effectiveStatusVisibility(perms, entityId);
+        if (hiddenStatusIds.includes(statusId!)) {
+          throw new BulkFieldUpdateError(403, recordIds[0]!, "This status is not available to your role");
+        }
+      }
       const rows = await tx
         .select()
         .from(entityRecordsTable)
@@ -5332,8 +5364,11 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
       }[] = [];
       for (const recordId of recordIds) {
         const row = byId.get(recordId)!;
+        // A repeated status choice must not normalize unrelated stored values
+        // (notably file JSON key order) or advance versions/fire automations.
+        if (statusEdit && row.statusId === statusId) continue;
         const before = (row.valuesJson as Record<string, unknown>) ?? {};
-        let candidate = { ...before, [fieldKey]: isEmpty(value) ? undefined : value };
+        let candidate = statusEdit ? { ...before } : { ...before, [fieldKey!]: isEmpty(value) ? undefined : value };
         let validated = validateValues(fields, candidate, gdriveModuleEnabled, before);
         if ("error" in validated) {
           throw new BulkFieldUpdateError(400, recordId, validated.error);
@@ -5341,11 +5376,11 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
         // Clear descendants only when the target's CANONICAL value actually
         // changes. Reapplying an already-stored parent value is a no-op and must
         // never erase its dependent children.
-        const targetChanged =
-          JSON.stringify(before[fieldKey] ?? null) !==
-          JSON.stringify(validated.values[fieldKey] ?? null);
+        const targetChanged = !statusEdit &&
+          JSON.stringify(before[fieldKey!] ?? null) !==
+          JSON.stringify(validated.values[fieldKey!] ?? null);
         if (targetChanged) {
-          candidate = clearDependentDescendantValues(validated.values, fieldKey, fields);
+          candidate = clearDependentDescendantValues(validated.values, fieldKey!, fields);
           validated = validateValues(fields, candidate, gdriveModuleEnabled, before);
           if ("error" in validated) {
             throw new BulkFieldUpdateError(400, recordId, validated.error);
@@ -5353,7 +5388,10 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
         }
         const mapped = mappedStatusForChangedValues(fields, before, validated.values);
         if ("error" in mapped) throw new BulkFieldUpdateError(422, recordId, mapped.error);
-        const mappedStatusId = mapped.statusId;
+        if (statusEdit && mapped.statusId != null && mapped.statusId !== statusId) {
+          throw new BulkFieldUpdateError(422, recordId, "Select mapping conflicts with requested status");
+        }
+        const mappedStatusId = statusEdit ? statusId : mapped.statusId;
         const statusChanging =
           mappedStatusId != null && mappedStatusId !== (row.statusId ?? null);
         if (mappedStatusId != null) {
@@ -5385,6 +5423,13 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
                     transition.fromStatusId === null && transition.toStatusId === mappedStatusId);
                 if (!match) {
                   throw new BulkFieldUpdateError(422, recordId, "This status change is not an allowed transition");
+                }
+                if (statusEdit) {
+                  const roleIds = await getUserRoleIds(req);
+                  const allowed = (match.allowedRoleIds as number[]) ?? [];
+                  if (allowed.length && !allowed.some(id => roleIds.includes(id))) {
+                    throw new BulkFieldUpdateError(403, recordId, "Your role is not allowed to perform this transition");
+                  }
                 }
                 const transitionValues = { ...validated.values };
                 for (const action of (match.actionsJson as {
@@ -5518,6 +5563,8 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
           version: updated.version,
         });
       }
+      const audits = changed.flatMap(bulkAudits);
+      if (audits.length) await tx.insert(auditLogTable).values(audits);
       return changed;
     });
   } catch (err) {
@@ -5536,33 +5583,11 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
     throw err;
   }
 
-  const auditEntries: InsertAuditLog[] = [];
   const events: Parameters<typeof emitEvent>[0] = [];
   for (const row of changedRows) {
     const changedFields = diffValues(row.before, row.after, fields.map((candidate) => candidate.fieldKey));
-    for (const change of changedFields) {
-      auditEntries.push({ entityId, recordId: row.id, ...change, userId });
-    }
     const statusChanged = row.beforeStatusId !== row.afterStatusId;
-    if (statusChanged) {
-      auditEntries.push({
-        entityId,
-        recordId: row.id,
-        fieldKey: AUDIT_STATUS,
-        oldValue: row.beforeStatusId != null ? String(row.beforeStatusId) : null,
-        newValue: row.afterStatusId != null ? String(row.afterStatusId) : null,
-        userId,
-      });
-    }
     if (row.beforeArchivedAt == null && row.afterArchivedAt != null) {
-      auditEntries.push({
-        entityId,
-        recordId: row.id,
-        fieldKey: AUDIT_ARCHIVED,
-        oldValue: "false",
-        newValue: "true",
-        userId,
-      });
       changedFields.push({
         fieldKey: ARCHIVED_CHANGED_FIELD,
         oldValue: "false",
@@ -5589,7 +5614,6 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
       });
     }
   }
-  if (auditEntries.length > 0) await writeAudit(auditEntries, req.log);
   if (events.length > 0) await emitEvent(events, req.log);
 
   res.json({ updatedIds: recordIds, versions: Object.fromEntries(changedRows.map((row) => [row.id, row.version])) });

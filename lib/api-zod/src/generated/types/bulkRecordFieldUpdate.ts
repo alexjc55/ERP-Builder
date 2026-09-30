@@ -7,10 +7,18 @@
  */
 import type { BulkRecordFieldUpdateExpectedVersions } from './bulkRecordFieldUpdateExpectedVersions';
 
+/**
+ * Supply either fieldKey and value, or statusId (never both).
+ */
 export interface BulkRecordFieldUpdate {
   entityId: number;
-  fieldKey: string;
-  value: unknown;
+  fieldKey?: string;
+  value?: unknown;
+  /**
+     * Explicit human system-status assignment, subject to manual policy and per-row workflow permissions.
+     * @minimum 1
+     */
+  statusId?: number;
   /**
      * @minItems 1
      * @maxItems 500
