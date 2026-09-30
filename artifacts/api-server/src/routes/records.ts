@@ -5368,7 +5368,17 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
         // (notably file JSON key order) or advance versions/fire automations.
         if (statusEdit && row.statusId === statusId) continue;
         const before = (row.valuesJson as Record<string, unknown>) ?? {};
-        let candidate = statusEdit ? { ...before } : { ...before, [fieldKey!]: isEmpty(value) ? undefined : value };
+        // Status edits must validate current fields, not reject historical keys
+        // left by deleted/inactive fields. Preserve those keys verbatim on write;
+        // never include them in validation, which must still reject unknown
+        // workflow action keys.
+        const activeKeys = new Set(fields.map(field => field.fieldKey));
+        const historicalValues = statusEdit
+          ? Object.fromEntries(Object.entries(before).filter(([key]) => !activeKeys.has(key)))
+          : {};
+        let candidate = statusEdit
+          ? Object.fromEntries(Object.entries(before).filter(([key]) => activeKeys.has(key)))
+          : { ...before, [fieldKey!]: isEmpty(value) ? undefined : value };
         let validated = validateValues(fields, candidate, gdriveModuleEnabled, before);
         if ("error" in validated) {
           throw new BulkFieldUpdateError(400, recordId, validated.error);
@@ -5495,7 +5505,7 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
           statusChangedAt?: Date;
           archiveExempt?: boolean;
           archivedAt?: Date;
-        } = { valuesJson: validated.values };
+        } = { valuesJson: { ...historicalValues, ...validated.values } };
         if (statusChanging && mappedStatusId != null) {
           updateData.statusId = mappedStatusId;
           updateData.statusChangedAt = new Date();
@@ -5516,7 +5526,7 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
           recordId,
           row,
           before,
-          after: validated.values,
+          after: updateData.valuesJson,
           statusChanging,
           updateData,
         });

@@ -5,6 +5,7 @@ import { draftRelationSelections } from "@/lib/relationSelections";
 import { columnGroupBodyStyle, resolveColumnGroupCellStyle } from "@/lib/columnGroupStyles";
 import { InlineListPicker } from "@/components/InlineListPicker";
 import { CompactStatus } from "@/components/CompactStatus";
+import { bulkErrorLabel } from "@/lib/bulkErrorLabel";
 import {
   useListEntityRecords,
   useGetRecord,
@@ -5709,7 +5710,11 @@ export function EntityRecords({
       title: (err as { status?: number })?.status === 409
         ? t("collaboration.conflict", "Данные изменились на сервере")
         : t("records.bulkFieldError", "Не удалось изменить выбранные записи"),
-      description: extractError(err),
+      description: bulkErrorLabel(
+        err, extractError(err), records, selectedIds,
+        displayFields.filter(field => effFieldAccess(field) !== "hidden"),
+        t("records.row", "Строка"),
+      ),
       variant: "destructive",
     });
   const bulkEntityFieldMutation = useBulkUpdateRecordField({

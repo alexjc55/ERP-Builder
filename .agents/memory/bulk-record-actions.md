@@ -11,6 +11,12 @@ description: Multi-select record actions — partial archive/delete behavior and
 
 ## Atomic one-field edit
 
+Bulk status-only edits validate the active-field projection, but merge untouched historical/deactivated keys back into storage. Unknown keys introduced by workflow actions still fail validation.
+
+**Why:** Archived records can retain values from deleted fields; an unrelated status change must neither reject nor erase that history.
+
+**How to apply:** Separate historical stored keys before validation, preserve them only when writing a status edit, and keep final workflow/required/immutable/reference checks on active fields. Error labels come client-side only from the selected loaded row's visible fields, never raw server values.
+
 The atomic endpoint also accepts an explicit `statusId` instead of a field/value pair. Never represent the system status as a scalar entity field: manual policy (including administrators), target visibility, workflow role permissions/actions and all selected rows' CAS/scope checks apply. Its audits commit inside the same transaction and status/update events publish only afterward. Same-status rows are true no-ops, not an opportunity to normalize unrelated stored values.
 
 **Why:** JSONB file-key ordering can make validation appear to change unchanged fields and falsely advance a repeated status assignment's version. The UI intersects transitions across selected records (specific transition wins over wildcard) and keeps status available even when no scalar field is editable.

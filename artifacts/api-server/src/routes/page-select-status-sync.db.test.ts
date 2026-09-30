@@ -2398,6 +2398,50 @@ test("page-local select mappings synchronize entity status atomically", async (t
     }
   });
 
+  await t.test("archived bulk status preserves orphan values but rejects unknown workflow and submitted keys", async () => {
+    await reset();
+    await db.delete(entityTransitionsTable).where(eq(entityTransitionsTable.entityId, ids.entity));
+    const [inactiveField] = await db.insert(entityFieldsTable).values({
+      entityId: ids.entity, fieldKey: "inactive_legacy", nameJson: { en: "Legacy" },
+      fieldType: "text", isActive: false,
+    }).returning();
+    const stored = (await record(ids.one)).valuesJson as Record<string, unknown>;
+    const historical = { project_manager: { legacy: ["kept", 12] }, inactive_legacy: "preserved" };
+    await db.update(entityRecordsTable).set({
+      valuesJson: { ...stored, ...historical }, archivedAt: new Date(),
+    }).where(eq(entityRecordsTable.id, ids.one));
+    const send = () => request("/records/bulk-field", {
+      entityId: ids.entity, statusId: ids.done, recordIds: [ids.one, ids.two], pageId: ids.targetPage,
+    }, "POST");
+    try {
+      const [transition] = await db.insert(entityTransitionsTable).values({
+        entityId: ids.entity, fromStatusId: ids.base, toStatusId: ids.done,
+        actionsJson: [{ type: "set_field", fieldKey: "project_manager", value: "unknown" }],
+      }).returning();
+      const before = await Promise.all([ids.one, ids.two].map(rollbackSnapshot));
+      const rejected = await send();
+      assert.equal(rejected.status, 400);
+      assert.equal(rejected.body.recordId, ids.one);
+      assert.match(String(rejected.body.error), /Unknown field: project_manager/);
+      assert.deepEqual(await Promise.all([ids.one, ids.two].map(rollbackSnapshot)), before);
+      await db.delete(entityTransitionsTable).where(eq(entityTransitionsTable.id, transition!.id));
+      const result = await send();
+      assert.equal(result.status, 200, JSON.stringify(result.body));
+      const updated = await record(ids.one);
+      assert.equal(updated.statusId, ids.done);
+      assert.deepEqual((updated.valuesJson as Record<string, unknown>).project_manager, historical.project_manager);
+      assert.equal((updated.valuesJson as Record<string, unknown>).inactive_legacy, historical.inactive_legacy);
+      assert.ok(updated.archivedAt);
+      const invalidField = await request("/records/bulk-field", {
+        entityId: ids.entity, fieldKey: "project_manager", value: "invalid", recordIds: [ids.one],
+      }, "POST");
+      assert.equal(invalidField.status, 400);
+    } finally {
+      await reset();
+      await db.delete(entityFieldsTable).where(eq(entityFieldsTable.id, inactiveField!.id));
+    }
+  });
+
   await t.test("explicit bulk system status is atomic, permission-aware and versioned", async () => {
     const selected = [ids.one, ids.two];
     const restorePolicy = async () => {
