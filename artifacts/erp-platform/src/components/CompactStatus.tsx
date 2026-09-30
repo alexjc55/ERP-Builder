@@ -20,22 +20,13 @@ export function CompactStatus({
   className?: string;
 }) {
   return (
-    <span className={`inline-flex min-w-0 max-w-full items-center gap-1.5 align-middle whitespace-nowrap ${className}`}>
-      <span className="min-w-[3.5rem] shrink truncate font-medium" style={color ? { color } : undefined} title={name}>{name}</span>
+    <span className={`inline-flex min-w-0 max-w-full flex-col items-start align-middle whitespace-normal text-start ${className}`}>
       {displayTags && displayTags.length > 0 && (
-        <span className="inline-flex min-w-0 max-w-[8rem] shrink items-center gap-1 overflow-hidden" title={displayTags.map(tag => ml(tag.nameJson)).join(", ")}>
-          {displayTags.map(tag => (
-            <span
-              key={tag.id}
-              className="inline-block min-w-0 max-w-[6rem] shrink truncate rounded border px-1 py-0 text-[10px] font-normal leading-4"
-              style={{ borderColor: `${tag.color}80`, backgroundColor: `${tag.color}18`, color: tag.color }}
-              title={ml(tag.nameJson)}
-            >
-              {ml(tag.nameJson)}
-            </span>
-          ))}
+        <span className="max-w-full text-[10px] font-normal leading-3 text-slate-600 [overflow-wrap:anywhere]" title={displayTags.map(tag => ml(tag.nameJson)).join(", ")}>
+          {displayTags.map(tag => ml(tag.nameJson)).join(" · ")}
         </span>
       )}
+      <span className="max-w-full font-medium leading-4 [overflow-wrap:anywhere]" style={color ? { color } : undefined} title={name}>{name}</span>
     </span>
   );
 }

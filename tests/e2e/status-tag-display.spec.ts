@@ -1,10 +1,11 @@
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 
 // Entire API is intercepted: this regression never reads or writes the shared database.
 const entityId = 987654;
 const tags = [
   { id: 81, nameJson: { en: "Urgent" }, color: "#b91c1c", applicableTo: ["statuses"], sortOrder: 0, isActive: true },
   { id: 82, nameJson: { en: "Review" }, color: "#1d4ed8", applicableTo: ["statuses"], sortOrder: 1, isActive: true },
+  { id: 83, nameJson: { en: "Pale label" }, color: "#FFE599", applicableTo: ["statuses"], sortOrder: 2, isActive: true },
 ];
 const entity = {
   id: entityId, entityKey: "status_display_browser_fixture", nameJson: { en: "Status display fixture" },
@@ -102,6 +103,20 @@ async function mockApi(page: Page, readonly = false, language: "en" | "he" = "en
   return { statuses, writes, unknown };
 }
 
+async function expectStackedStatus(container: Locator, name: string, labels: string) {
+  const tag = container.locator(`span[title="${labels}"]`).first();
+  const status = container.locator(`span[title="${name}"]`).first();
+  await expect(tag).toBeVisible();
+  await expect(status).toBeVisible();
+  const tagBox = await tag.boundingBox();
+  const statusBox = await status.boundingBox();
+  expect(tagBox).not.toBeNull();
+  expect(statusBox).not.toBeNull();
+  expect(statusBox!.y).toBeGreaterThanOrEqual(tagBox!.y + tagBox!.height - 1);
+  expect(await tag.evaluate(el => getComputedStyle(el).lineHeight)).toBe("12px");
+  expect(await status.evaluate(el => getComputedStyle(el).lineHeight)).toBe("16px");
+}
+
 test("status tag display all, preferred, and hidden persists across edits and reloads in the browser", async ({ page }) => {
   const api = await mockApi(page);
   const statusPath = `/admin/entities/${entityId}/statuses`;
@@ -140,18 +155,18 @@ test("status tag display all, preferred, and hidden persists across edits and re
   const tagged = page.getByTestId("record-cell").filter({ has: page.getByText("Tagged status", { exact: true }) }).first();
   await expect(tagged).toContainText("Urgent");
   await expect(tagged).toContainText("Review");
+  await expectStackedStatus(tagged, "Tagged status", "Urgent, Review");
   const untagged = page.getByTestId("record-cell").filter({ has: page.getByText("Untagged status", { exact: true }) }).first();
   await expect(untagged).not.toContainText("Urgent");
-  const allHeight = await tagged.evaluate(el => el.getBoundingClientRect().height);
-  const plainHeight = await untagged.evaluate(el => el.getBoundingClientRect().height);
-  expect(allHeight).toBe(plainHeight);
+  // Table layout can equalize row heights; verify the stacked lines themselves instead.
+  await expect(untagged.locator('span[title="Untagged status"]')).toBeVisible();
   await page.screenshot({ path: "/tmp/status-tag-record-cells.jpg" });
   await page.locator('[data-testid="record-edit-button"][data-record-id="1"]').click();
   const editDialog = page.getByRole("dialog");
   await expect(editDialog).toContainText("Urgent");
   await expect(editDialog).toContainText("Review");
   await editDialog.getByRole("combobox").last().click();
-  await expect(page.getByRole("option", { name: /Tagged status.*Urgent.*Review/ })).toBeVisible();
+   await expect(page.getByRole("option", { name: /Urgent.*Review.*Tagged status/ })).toBeVisible();
   await page.keyboard.press("Escape");
   await editDialog.getByRole("button", { name: /Cancel|Отмена/ }).click();
 
@@ -171,6 +186,7 @@ test("status tag display all, preferred, and hidden persists across edits and re
   const taggedStatusCell = page.locator('[data-testid="record-cell"][data-record-id="1"][data-field-key="__status__"]');
   await expect(taggedStatusCell).toContainText("Review");
   await expect(taggedStatusCell).not.toContainText("Urgent");
+  await expectStackedStatus(taggedStatusCell, "Tagged status", "Review");
 
   await page.goto(statusPath);
   dialog = await open();
@@ -201,7 +217,7 @@ test("read-only record status retains the preferred tag without exposing an edit
   expect(api.unknown).toEqual([]);
 });
 
-test("RTL record cells keep tagged and untagged row heights equal", async ({ page }) => {
+test("RTL record cells stack tags above the status name", async ({ page }) => {
   const api = await mockApi(page, false, "he");
   await page.goto(`/admin/entities/${entityId}/records`);
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
@@ -210,7 +226,61 @@ test("RTL record cells keep tagged and untagged row heights equal", async ({ pag
   await expect(tagged).toContainText("Urgent");
   await expect(tagged).toContainText("Review");
   await expect(plain).not.toContainText("Urgent");
-  expect(await tagged.evaluate(el => el.closest("tr")!.getBoundingClientRect().height))
-    .toBe(await plain.evaluate(el => el.closest("tr")!.getBoundingClientRect().height));
+  await expectStackedStatus(tagged, "Tagged status", "Urgent, Review");
+  await expect(plain.locator('span[title="Untagged status"]')).toBeVisible();
+  expect(api.unknown).toEqual([]);
+});
+
+test("narrow status cell wraps a long Russian status beneath a neutral pale tag in RTL", async ({ page }) => {
+  const api = await mockApi(page, true, "he");
+  const name = "Очень длинный статус для проверки переноса полного названия";
+  api.statuses[0].nameJson.en = name;
+  api.statuses[0].tagIds = [83];
+  await page.goto(`/admin/entities/${entityId}/records`);
+  await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+  const cell = page.locator('[data-testid="record-cell"][data-record-id="1"][data-field-key="__status__"]');
+  await expect(cell).toBeVisible();
+  await cell.evaluate(el => {
+    const td = el.closest("td")!;
+    td.style.width = "140px";
+    td.style.minWidth = "140px";
+    td.style.maxWidth = "140px";
+    td.style.boxSizing = "border-box";
+  });
+  await expectStackedStatus(cell, name, "Pale label");
+  const metrics = await cell.evaluate((el, statusName) => {
+    const td = el.closest("td")!;
+    const tag = el.querySelector<HTMLElement>('span[title="Pale label"]')!;
+    const nameEl = Array.from(el.querySelectorAll<HTMLElement>("span[title]")).find(node => node.title === statusName)!;
+    const tagStyle = getComputedStyle(tag);
+    const nameStyle = getComputedStyle(nameEl);
+    return {
+      width: td.getBoundingClientRect().width,
+      tagColor: tagStyle.color,
+      tagBackground: tagStyle.backgroundColor,
+      direction: getComputedStyle(nameEl).direction,
+      textAlign: nameStyle.textAlign,
+      nameHeight: nameEl.getBoundingClientRect().height,
+      nameScrollHeight: nameEl.scrollHeight,
+      nameClientHeight: nameEl.clientHeight,
+      overflow: nameStyle.textOverflow,
+      whiteSpace: nameStyle.whiteSpace,
+    };
+  }, name);
+  expect(metrics.width).toBeGreaterThanOrEqual(139);
+  expect(metrics.width).toBeLessThanOrEqual(141);
+  expect(metrics.nameHeight).toBeGreaterThan(16);
+  expect(metrics.nameScrollHeight).toBeLessThanOrEqual(metrics.nameClientHeight + 1);
+  expect(metrics.overflow).not.toBe("ellipsis");
+  expect(metrics.whiteSpace).not.toBe("nowrap");
+  expect(metrics.tagColor).toMatch(/^(oklch\(0\.446 0\.043 257\.281\)|rgb\(71, 85, 105\))$/);
+  expect(metrics.tagBackground).toBe("rgba(0, 0, 0, 0)");
+  expect(metrics.direction).toBe("rtl");
+  expect(metrics.textAlign).toBe("start");
+  await page.screenshot({ path: "/tmp/status-tags-stacked.png" });
+  await page.locator('[data-testid="record-edit-button"][data-record-id="1"]').click();
+  const readonly = page.getByTestId("text-status-readonly");
+  await expectStackedStatus(readonly, name, "Pale label");
+  expect(await readonly.evaluate(el => el.scrollHeight)).toBeLessThanOrEqual(await readonly.evaluate(el => el.clientHeight) + 1);
   expect(api.unknown).toEqual([]);
 });

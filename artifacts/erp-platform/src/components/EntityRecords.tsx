@@ -427,7 +427,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                       if (!o && pendingInlineWriteKey !== `entity:${record.id}:${STATUS_COLUMN_KEY}`) setEditingCell(null);
                     }}
                   >
-                    <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="min-h-8 h-auto w-44 whitespace-normal text-sm [&>span]:line-clamp-none [&>span]:whitespace-normal"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {!workflowActiveForRecord(record) && (allowNoStatus || record.statusId == null) && (
                         <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
@@ -9064,7 +9064,7 @@ export function EntityRecords({
                                     setNewRowStatusDirty(true);
                                   }}
                                 >
-                                  <SelectTrigger className="h-8 w-44 text-sm"><SelectValue /></SelectTrigger>
+                                  <SelectTrigger className="min-h-8 h-auto w-44 whitespace-normal text-sm [&>span]:line-clamp-none [&>span]:whitespace-normal"><SelectValue /></SelectTrigger>
                                   <SelectContent>
                                     {(allowNoStatus || newRowStatus === NO_STATUS) && (
                                       <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
@@ -9440,7 +9440,7 @@ export function EntityRecords({
                     setStatusDirty(true);
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="min-h-9 h-auto whitespace-normal [&>span]:line-clamp-none [&>span]:whitespace-normal">
                     <SelectValue placeholder={t("records.noStatus", "Без статуса")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -9452,7 +9452,7 @@ export function EntityRecords({
                     ))}
                   </SelectContent>
                 </Select> : (
-                  <div data-testid="text-status-readonly" className="h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600 overflow-hidden">
+                  <div data-testid="text-status-readonly" className="min-h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">
                     {statusId === NO_STATUS
                       ? t("records.noStatus", "Без статуса")
                       : (() => { const s = statusById.get(Number(statusId)); return s && <CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />; })()}
@@ -11294,7 +11294,7 @@ function RecordEditModal({
                     setStatusDirty(true);
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="min-h-9 h-auto whitespace-normal [&>span]:line-clamp-none [&>span]:whitespace-normal">
                     <SelectValue placeholder={t("records.noStatus", "Без статуса")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -11306,7 +11306,7 @@ function RecordEditModal({
                     ))}
                   </SelectContent>
                 </Select> : (
-                  <div data-testid="text-linked-status-readonly" className="h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600 overflow-hidden">
+                  <div data-testid="text-linked-status-readonly" className="min-h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">
                     {statusId === NO_STATUS
                       ? t("records.noStatus", "Без статуса")
                       : (() => { const s = statuses.find((status: Status) => status.id === Number(statusId)); return s && <CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />; })()}
@@ -11586,7 +11586,7 @@ function QuickCreateRelatedRecordDialog({
                     setStatusDirty(true);
                   }}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="min-h-9 h-auto whitespace-normal [&>span]:line-clamp-none [&>span]:whitespace-normal">
                     <SelectValue placeholder={t("records.noStatus", "Без статуса")} />
                   </SelectTrigger>
                   <SelectContent>
@@ -11598,7 +11598,7 @@ function QuickCreateRelatedRecordDialog({
                     ))}
                   </SelectContent>
                 </Select> : (
-                  <div data-testid="text-quick-status-readonly" className="h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600 overflow-hidden">
+                  <div data-testid="text-quick-status-readonly" className="min-h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">
                     {statusId === NO_STATUS
                       ? t("records.noStatus", "Без статуса")
                       : (() => { const s = relStatuses.find((status: Status) => status.id === Number(statusId)); return s && <CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />; })()}

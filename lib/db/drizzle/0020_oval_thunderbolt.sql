@@ -1,5 +1,5 @@
-ALTER TABLE "entity_statuses" ADD COLUMN "show_tags" boolean DEFAULT true NOT NULL;--> statement-breakpoint
-ALTER TABLE "entity_statuses" ADD COLUMN "primary_tag_id" integer;--> statement-breakpoint
+ALTER TABLE "entity_statuses" ADD COLUMN IF NOT EXISTS "show_tags" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "entity_statuses" ADD COLUMN IF NOT EXISTS "primary_tag_id" integer;--> statement-breakpoint
 INSERT INTO "translations" ("translation_key", "translations_json")
 VALUES
   ('statuses.showTags', '{"ru":"Показывать теги","en":"Show tags","he":"הצגת תגיות"}'::jsonb),

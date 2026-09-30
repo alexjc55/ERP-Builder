@@ -26,3 +26,9 @@ description: Shared tag registry semantics, permission composition, and safe con
 **Why:** Compact status cells must not change the category membership used by access restrictions, filters, or widgets.
 
 **How to apply:** Preserve all assignments regardless of display mode, derive visible tags centrally, and clear the preferred choice when its assignment is removed.
+
+**Rule:** Render display tags as small neutral text above the full status name, not colored chips beside it. Allow the status name to wrap instead of truncating it.
+
+**Why:** The user found side-by-side chips consumed status width and pale tag colors disappeared against tinted cells.
+
+**How to apply:** Keep the tag caption contrast independent of the tag color; use tight line heights rather than ellipsis or fixed-height clipping to keep cells compact.
