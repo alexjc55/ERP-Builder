@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { CompactStatus, type DisplayStatusTag } from "@/components/CompactStatus";
 import {
   useGetDashboardData,
   getGetDashboardDataQueryKey,
@@ -752,15 +753,14 @@ function renderTableCell(value: unknown, fieldType: string): string {
   return String(value);
 }
 
-/** Render a single status-column cell as a colored badge (value = {name,color}). */
+/** Render a projected status value and its viewer-filtered display tags. */
 function StatusCell({ value }: { value: unknown }) {
+  const ml = useML();
   if (value == null || typeof value !== "object") return <span className="text-slate-400">—</span>;
-  const s = value as { name?: string; color?: string };
+  const s = value as { name?: string; color?: string; displayTags?: readonly DisplayStatusTag[] };
   if (!s.name) return <span className="text-slate-400">—</span>;
   return (
-    <Badge style={{ backgroundColor: s.color || undefined }} className="border-0 text-white font-normal">
-      {s.name}
-    </Badge>
+    <CompactStatus name={s.name} color={s.color} displayTags={s.displayTags} ml={ml} />
   );
 }
 

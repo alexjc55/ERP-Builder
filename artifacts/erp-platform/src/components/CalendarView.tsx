@@ -16,6 +16,7 @@ import {
   type PageRelatedValue,
 } from "@workspace/api-client-react";
 import { useT } from "@/lib/i18n";
+import { CompactStatus } from "@/components/CompactStatus";
 import {
   getCalendarWeekDays,
   normalizeFirstDayOfWeek,
@@ -472,14 +473,15 @@ export function CalendarView({
       >
         <span className={`block font-medium ${compact ? "truncate" : "break-words"}`}>{ev.title}</span>
         {!compact && showStatusOnCard && status && (
-          <span className="flex items-center gap-1 break-words text-[11px] opacity-80">
+          <span className="flex min-w-0 items-center gap-1 text-[11px] opacity-80">
             {status.color && (
               <span
                 className="inline-block h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: status.color }}
               />
             )}
-            <span className="font-semibold">{t("calendar.statusLabel", "Статус")}:</span> {ml(status.nameJson)}
+            <span className="font-semibold shrink-0">{t("calendar.statusLabel", "Статус")}:</span>
+            <CompactStatus name={ml(status.nameJson)} displayTags={status.displayTags} ml={ml} />
           </span>
         )}
         {!compact &&

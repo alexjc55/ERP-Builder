@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -86,6 +87,8 @@ export default function EntityStatusesPage() {
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
   const [tagIds, setTagIds] = useState<number[]>([]);
+  const [showTags, setShowTags] = useState(true);
+  const [primaryTagId, setPrimaryTagId] = useState<number | null>(null);
 
   const { data: entities = [] } = useListEntities();
   const entity = entities.find((e: Entity) => e.id === entityId);
@@ -186,6 +189,8 @@ export default function EntityStatusesPage() {
     setSortOrder(statuses.length + 1);
     setIsActive(true);
     setTagIds([]);
+    setShowTags(true);
+    setPrimaryTagId(null);
     setDialogOpen(true);
   };
 
@@ -202,6 +207,8 @@ export default function EntityStatusesPage() {
     setSortOrder(status.sortOrder);
     setIsActive(status.isActive);
     setTagIds(status.tagIds);
+    setShowTags(status.showTags ?? true);
+    setPrimaryTagId(status.primaryTagId ?? null);
     setDialogOpen(true);
   };
 
@@ -223,6 +230,8 @@ export default function EntityStatusesPage() {
       sortOrder,
       isActive,
       tagIds: [...new Set(tagIds)],
+      showTags,
+      primaryTagId: primaryTagId != null && tagIds.includes(primaryTagId) ? primaryTagId : null,
     };
     if (editingStatus) {
       updateMutation.mutate({ id: editingStatus.id, data: payload });
@@ -473,9 +482,8 @@ export default function EntityStatusesPage() {
               <Label>{t("statuses.order", "Порядок")}</Label>
               <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
             </div>
-            {statusTags.length > 0 && (
               <div className="space-y-2">
-                <Label>{t("statuses.tags", "Теги")}</Label>
+                {statusTags.length > 0 && <Label>{t("statuses.tags", "Теги")}</Label>}
                 <div className="flex flex-wrap gap-2">
                   {statusTags.map((tag) => {
                     const selected = tagIds.includes(tag.id);
@@ -486,7 +494,10 @@ export default function EntityStatusesPage() {
                         variant={selected ? "default" : "outline"}
                         size="sm"
                         className={selected ? "bg-slate-700 hover:bg-slate-800" : ""}
-                        onClick={() => setTagIds((current) => selected ? current.filter((id) => id !== tag.id) : [...current, tag.id])}
+                        onClick={() => {
+                          setTagIds((current) => selected ? current.filter((id) => id !== tag.id) : [...current, tag.id]);
+                          if (selected && primaryTagId === tag.id) setPrimaryTagId(null);
+                        }}
                       >
                         <span className="w-2 h-2 rounded-full me-1.5" style={{ backgroundColor: tag.color }} />
                         {ml(tag.nameJson)}
@@ -494,12 +505,30 @@ export default function EntityStatusesPage() {
                     );
                   })}
                 </div>
-                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <div className="flex items-center gap-2">
+                  <Switch id="status-show-tags" checked={showTags} onCheckedChange={setShowTags} />
+                  <Label htmlFor="status-show-tags">{t("statuses.showTags", "Показывать теги")}</Label>
+                </div>
+                {showTags && tagIds.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="status-primary-tag">{t("statuses.primaryTag", "Основной тег")}</Label>
+                    <Select value={primaryTagId == null ? "all" : String(primaryTagId)} onValueChange={value => setPrimaryTagId(value === "all" ? null : Number(value))}>
+                      <SelectTrigger id="status-primary-tag"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t("statuses.allTagsDisplay", "Все теги")}</SelectItem>
+                        {statusTags.filter(tag => tagIds.includes(tag.id)).map(tag => (
+                          <SelectItem key={tag.id} value={String(tag.id)}>{ml(tag.nameJson)}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-500">{t("statuses.tagDisplayHint", "Выберите один тег для отображения или показывайте все назначенные теги.")}</p>
+                  </div>
+                )}
+                {statusTags.length > 0 && <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                   <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                   <span>{t("statuses.tagsWarning", "Изменение тегов может изменить ограничения доступа к статусу и состав показателей/виджетов.")}</span>
-                </div>
+                </div>}
               </div>
-            )}
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
               <div className="flex items-center gap-2">
                 <Switch checked={isDefault} onCheckedChange={setIsDefault} id="status-default" />

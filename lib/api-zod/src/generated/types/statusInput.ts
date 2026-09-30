@@ -13,6 +13,9 @@ export interface StatusInput {
   color?: string;
   /** Global tags to assign; assignment replaces the status's current tag set. */
   tagIds?: number[];
+  showTags?: boolean;
+  /** Must be one of the assigned tagIds when non-null. */
+  primaryTagId?: number | null;
   isDefault?: boolean;
   isFinal?: boolean;
   isArchiveTrigger?: boolean;

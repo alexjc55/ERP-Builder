@@ -8676,7 +8676,7 @@ components:
 
     Status:
       type: object
-      required: [id, entityId, statusKey, nameJson, color, tagIds, isDefault, isFinal, isArchiveTrigger, archiveAfterDays, sortOrder, isActive, createdAt, updatedAt]
+      required: [id, entityId, statusKey, nameJson, color, tagIds, showTags, primaryTagId, displayTags, isDefault, isFinal, isArchiveTrigger, archiveAfterDays, sortOrder, isActive, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -8693,6 +8693,27 @@ components:
           items:
             type: integer
           description: Global status tag ids assigned to this status.
+        showTags:
+          type: boolean
+          default: true
+        primaryTagId:
+          type: integer
+          nullable: true
+          default: null
+        displayTags:
+          type: array
+          readOnly: true
+          description: Tags shown on this status; assignments in tagIds remain unchanged.
+          items:
+            type: object
+            required: [id, nameJson, color]
+            properties:
+              id:
+                type: integer
+              nameJson:
+                $ref: "#/components/schemas/MultilingualText"
+              color:
+                type: string
         isDefault:
           type: boolean
         isFinal:
@@ -8728,6 +8749,14 @@ components:
             type: integer
           default: []
           description: Global tags to assign; assignment replaces the status's current tag set.
+        showTags:
+          type: boolean
+          default: true
+        primaryTagId:
+          type: integer
+          nullable: true
+          default: null
+          description: Must be one of the assigned tagIds when non-null.
         isDefault:
           type: boolean
           default: false
@@ -8761,6 +8790,13 @@ components:
           items:
             type: integer
           description: When supplied, replaces the status's current global tag set.
+        showTags:
+          type: boolean
+          description: Omitted value preserves the current preference.
+        primaryTagId:
+          type: integer
+          nullable: true
+          description: Must be assigned; null clears the preference. Removing its assignment also clears it.
         isDefault:
           type: boolean
         isFinal:

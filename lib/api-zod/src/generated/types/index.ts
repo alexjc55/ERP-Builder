@@ -408,6 +408,7 @@ export * from './selectOption';
 export * from './sortSpec';
 export * from './sortSpecDirection';
 export * from './status';
+export * from './statusDisplayTagsItem';
 export * from './statusesReorderInput';
 export * from './statusesReorderInputItemsItem';
 export * from './statusInput';

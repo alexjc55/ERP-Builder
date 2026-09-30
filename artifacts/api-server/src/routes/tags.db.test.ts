@@ -82,6 +82,23 @@ after(async () => {
 });
 
 test("global status tags enforce CRUD, assignment, safe deletion and admin capability", async (t) => {
+  await t.test("status display preference migration provides columns and UI translations", async () => {
+    const columns = await db.execute(sql`
+      SELECT column_name, column_default, is_nullable
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'entity_statuses'
+        AND column_name IN ('show_tags', 'primary_tag_id')
+    `);
+    assert.equal(columns.rows.length, 2);
+    assert.equal(columns.rows.find((row) => row.column_name === "show_tags")?.column_default, "true");
+    assert.equal(columns.rows.find((row) => row.column_name === "show_tags")?.is_nullable, "NO");
+    assert.equal(columns.rows.find((row) => row.column_name === "primary_tag_id")?.is_nullable, "YES");
+    const translations = await db.execute(sql`
+      SELECT translation_key FROM translations WHERE translation_key IN
+        ('statuses.showTags', 'statuses.primaryTag', 'statuses.allTagsDisplay', 'statuses.tagDisplayHint')
+    `);
+    assert.equal(translations.rows.length, 4);
+  });
   const roles = await db.insert(rolesTable).values([
     { nameJson: { en: `${runId} allowed` }, permissionsJson: permissions(true, true, true) },
     { nameJson: { en: `${runId} denied` }, permissionsJson: permissions(false, true) },
@@ -128,15 +145,45 @@ test("global status tags enforce CRUD, assignment, safe deletion and admin capab
     assert.equal(second.status, 201);
     const secondTagId = (await second.json() as { id: number }).id;
     ids.tags.push(secondTagId);
+    const invalidCreate = await request(`/entities/${ids.entity}/statuses`, {
+      method: "POST",
+      body: { statusKey: "invalid_primary", nameJson: { en: "Invalid" }, tagIds: [tagId], primaryTagId: secondTagId },
+    });
+    assert.equal(invalidCreate.status, 400);
     const createStatus = await request(`/entities/${ids.entity}/statuses`, {
       method: "POST",
-      body: { statusKey: "tagged", nameJson: { en: "Tagged" }, tagIds: [tagId, tagId, secondTagId] },
+      body: { statusKey: "tagged", nameJson: { en: "Tagged" }, tagIds: [tagId, tagId, secondTagId], primaryTagId: tagId },
     });
     assert.equal(createStatus.status, 201);
-    const status = await createStatus.json() as { id: number; tagIds: number[] };
+    const status = await createStatus.json() as { id: number; tagIds: number[]; showTags: boolean; primaryTagId: number | null; displayTags: Array<{ id: number; nameJson: unknown; color: string }> };
     assert.deepEqual(status.tagIds, [tagId, secondTagId]);
+    assert.equal(status.showTags, true);
+    assert.equal(status.primaryTagId, tagId);
+    assert.deepEqual(status.displayTags.map((tag) => tag.id), [tagId]);
+    assert.deepEqual(status.displayTags[0]?.nameJson, { en: "Renamed" });
     const list = await request(`/entities/${ids.entity}/statuses`);
-    assert.deepEqual((await list.json() as Array<{ tagIds: number[] }>)[0]!.tagIds, [tagId, secondTagId]);
+    assert.deepEqual((await list.json() as Array<{ tagIds: number[]; displayTags: Array<{ id: number }> }>)[0]!.tagIds, [tagId, secondTagId]);
+    const hidden = await request(`/statuses/${status.id}`, { method: "PUT", body: { showTags: false } });
+    assert.equal(hidden.status, 200);
+    assert.deepEqual((await hidden.json() as typeof status).displayTags, []);
+    const readHidden = await request(`/statuses/${status.id}`);
+    const hiddenStatus = await readHidden.json() as typeof status;
+    assert.deepEqual(hiddenStatus.tagIds, [tagId, secondTagId]);
+    assert.equal(hiddenStatus.primaryTagId, tagId);
+    assert.deepEqual(hiddenStatus.displayTags, []);
+    const invalidUpdate = await request(`/statuses/${status.id}`, { method: "PUT", body: { primaryTagId: 2147483647 } });
+    assert.equal(invalidUpdate.status, 400);
+    const reassign = await request(`/statuses/${status.id}`, { method: "PUT", body: { showTags: true, tagIds: [secondTagId] } });
+    assert.equal(reassign.status, 200);
+    const reassigned = await reassign.json() as typeof status;
+    assert.equal(reassigned.primaryTagId, null);
+    assert.deepEqual(reassigned.displayTags.map((tag) => tag.id), [secondTagId]);
+    const restore = await request(`/statuses/${status.id}`, { method: "PUT", body: { tagIds: [tagId, secondTagId], primaryTagId: secondTagId } });
+    assert.equal(restore.status, 200);
+    assert.deepEqual((await restore.json() as typeof status).displayTags.map((tag) => tag.id), [secondTagId]);
+    const all = await request(`/statuses/${status.id}`, { method: "PUT", body: { primaryTagId: null } });
+    assert.equal(all.status, 200);
+    assert.deepEqual((await all.json() as typeof status).displayTags.map((tag) => tag.id), [tagId, secondTagId]);
     const entityKey = String(ids.entity);
     const base = { view: true, create: false, update: false, delete: false };
     const [firstExpanded, secondExpanded] = await Promise.all([

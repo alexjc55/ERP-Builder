@@ -3837,6 +3837,12 @@ export interface BulkPageRecordFieldUpdate {
   expectedVersions?: BulkPageRecordFieldUpdateExpectedVersions;
 }
 
+export type StatusDisplayTagsItem = {
+  id: number;
+  nameJson: MultilingualText;
+  color: string;
+};
+
 export interface Status {
   id: number;
   entityId: number;
@@ -3845,6 +3851,10 @@ export interface Status {
   color: string;
   /** Global status tag ids assigned to this status. */
   tagIds: number[];
+  showTags: boolean;
+  primaryTagId: number | null;
+  /** Tags shown on this status; assignments in tagIds remain unchanged. */
+  readonly displayTags: readonly StatusDisplayTagsItem[];
   isDefault: boolean;
   isFinal: boolean;
   isArchiveTrigger: boolean;
@@ -3861,6 +3871,9 @@ export interface StatusInput {
   color?: string;
   /** Global tags to assign; assignment replaces the status's current tag set. */
   tagIds?: number[];
+  showTags?: boolean;
+  /** Must be one of the assigned tagIds when non-null. */
+  primaryTagId?: number | null;
   isDefault?: boolean;
   isFinal?: boolean;
   isArchiveTrigger?: boolean;
@@ -3876,6 +3889,10 @@ export interface StatusUpdate {
   color?: string;
   /** When supplied, replaces the status's current global tag set. */
   tagIds?: number[];
+  /** Omitted value preserves the current preference. */
+  showTags?: boolean;
+  /** Must be assigned; null clears the preference. Removing its assignment also clears it. */
+  primaryTagId?: number | null;
   isDefault?: boolean;
   isFinal?: boolean;
   isArchiveTrigger?: boolean;

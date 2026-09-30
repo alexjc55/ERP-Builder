@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MultilingualText } from './multilingualText';
+import type { StatusDisplayTagsItem } from './statusDisplayTagsItem';
 
 export interface Status {
   id: number;
@@ -15,6 +16,10 @@ export interface Status {
   color: string;
   /** Global status tag ids assigned to this status. */
   tagIds: number[];
+  showTags: boolean;
+  primaryTagId: number | null;
+  /** Tags shown on this status; assignments in tagIds remain unchanged. */
+  readonly displayTags: readonly StatusDisplayTagsItem[];
   isDefault: boolean;
   isFinal: boolean;
   isArchiveTrigger: boolean;

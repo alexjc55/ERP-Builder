@@ -2,6 +2,7 @@ import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallbac
 import { sameAggregateTopology } from "@/lib/aggregateSnapshot";
 import { columnGroupBodyStyle, resolveColumnGroupCellStyle } from "@/lib/columnGroupStyles";
 import { InlineListPicker } from "@/components/InlineListPicker";
+import { CompactStatus } from "@/components/CompactStatus";
 import {
   useListEntityRecords,
   useGetRecord,
@@ -432,7 +433,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                         <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
                       )}
                       {allowedStatusesForRecord(record).map(s => (
-                        <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
+                        <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} /></SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -446,7 +447,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                   onClick={inlineEditEnabled && statusManualEditable ? () => setEditingCell({ recordId: record.id, fieldKey: STATUS_COLUMN_KEY }) : undefined}
                   title={inlineEditEnabled && statusManualEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                 >
-                  {status ? <span className="inline-flex items-center font-medium" style={{ color: readableStatusTextColor(status.color) }}>{ml(status.nameJson)}</span> : <span className="text-slate-300">—</span>}
+                  {status ? <CompactStatus name={ml(status.nameJson)} color={readableStatusTextColor(status.color)} displayTags={status.displayTags} ml={ml} /> : <span className="text-slate-300">—</span>}
                   {record.archivedAt && <span className="inline-flex items-center gap-1 text-indigo-500 text-xs"><Archive className="w-3 h-3" /> {t("records.inArchive", "В архиве")}</span>}
                 </div>
               )}
@@ -7134,18 +7135,11 @@ export function EntityRecords({
                     </span>
                     <span className="text-xs font-normal text-slate-400">({g.count})</span>
                     {commonStatus && (
-                      <span className="ml-2 whitespace-nowrap" style={{ color: readableStatusTextColor(commonStatus.color) }}>
-                        {ml(commonStatus.nameJson)}
-                      </span>
+                      <CompactStatus className="ms-2" name={ml(commonStatus.nameJson)} color={readableStatusTextColor(commonStatus.color)} displayTags={commonStatus.displayTags} ml={ml} />
                     )}
                   </span>
                 ) : commonStatus ? (
-                    <span
-                      className={`inline-flex items-center whitespace-nowrap ${expanded ? "font-bold" : "font-medium"}`}
-                      style={{ color: readableStatusTextColor(commonStatus.color) }}
-                    >
-                      {ml(commonStatus.nameJson)}
-                    </span>
+                    <CompactStatus name={ml(commonStatus.nameJson)} color={readableStatusTextColor(commonStatus.color)} displayTags={commonStatus.displayTags} ml={ml} />
                   ) : null}
               </td>
             );
@@ -9076,14 +9070,12 @@ export function EntityRecords({
                                       <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
                                     )}
                                     {dropHidden(statuses).map((s: Status) => (
-                                      <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
+                                      <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} /></SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
                               ) : selectedStatus ? (
-                                <span style={{ color: readableStatusTextColor(selectedStatus.color) }}>
-                                  {ml(selectedStatus.nameJson)}
-                                </span>
+                                <CompactStatus name={ml(selectedStatus.nameJson)} color={readableStatusTextColor(selectedStatus.color)} displayTags={selectedStatus.displayTags} ml={ml} />
                               ) : (
                                 <span className="text-slate-300">—</span>
                               )}
@@ -9455,15 +9447,15 @@ export function EntityRecords({
                     {!workflowActive && (allowNoStatus || statusId === NO_STATUS) && <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>}
                     {selectableStatuses.map((s: Status) => (
                       <SelectItem key={s.id} value={String(s.id)}>
-                        {ml(s.nameJson)}
+                        <CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select> : (
-                  <div data-testid="text-status-readonly" className="h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  <div data-testid="text-status-readonly" className="h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600 overflow-hidden">
                     {statusId === NO_STATUS
                       ? t("records.noStatus", "Без статуса")
-                      : ml(statusById.get(Number(statusId))?.nameJson)}
+                      : (() => { const s = statusById.get(Number(statusId)); return s && <CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />; })()}
                   </div>
                 )}
                 {statusManualEditable && workflowActive && (
@@ -11310,14 +11302,14 @@ function RecordEditModal({
                       <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
                     )}
                     {visibleStatuses.map((s: Status) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
+                      <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} /></SelectItem>
                     ))}
                   </SelectContent>
                 </Select> : (
-                  <div data-testid="text-linked-status-readonly" className="h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  <div data-testid="text-linked-status-readonly" className="h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600 overflow-hidden">
                     {statusId === NO_STATUS
                       ? t("records.noStatus", "Без статуса")
-                      : ml(statuses.find((status: Status) => status.id === Number(statusId))?.nameJson)}
+                      : (() => { const s = statuses.find((status: Status) => status.id === Number(statusId)); return s && <CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />; })()}
                   </div>
                 )}
               </div>
@@ -11602,14 +11594,14 @@ function QuickCreateRelatedRecordDialog({
                       <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
                     )}
                     {selectableStatuses.map((s: Status) => (
-                      <SelectItem key={s.id} value={String(s.id)}>{ml(s.nameJson)}</SelectItem>
+                      <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} /></SelectItem>
                     ))}
                   </SelectContent>
                 </Select> : (
-                  <div data-testid="text-quick-status-readonly" className="h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  <div data-testid="text-quick-status-readonly" className="h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600 overflow-hidden">
                     {statusId === NO_STATUS
                       ? t("records.noStatus", "Без статуса")
-                      : ml(relStatuses.find((status: Status) => status.id === Number(statusId))?.nameJson)}
+                      : (() => { const s = relStatuses.find((status: Status) => status.id === Number(statusId)); return s && <CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />; })()}
                   </div>
                 )}
               </div>

@@ -6301,6 +6301,9 @@ export const ListEntityStatusesParams = zod.object({
   "entityId": zod.coerce.number()
 })
 
+export const listEntityStatusesResponseShowTagsDefault = true;
+export const listEntityStatusesResponsePrimaryTagIdDefault = null;
+
 export const ListEntityStatusesResponseItem = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
@@ -6312,6 +6315,17 @@ export const ListEntityStatusesResponseItem = zod.object({
 }),
   "color": zod.string(),
   "tagIds": zod.array(zod.number()).describe('Global status tag ids assigned to this status.'),
+  "showTags": zod.boolean().default(listEntityStatusesResponseShowTagsDefault),
+  "primaryTagId": zod.number().nullable().default(listEntityStatusesResponsePrimaryTagIdDefault),
+  "displayTags": zod.array(zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string()
+})).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
   "isArchiveTrigger": zod.boolean(),
@@ -6332,6 +6346,8 @@ export const CreateEntityStatusParams = zod.object({
 })
 
 export const createEntityStatusBodyTagIdsDefault = [];
+export const createEntityStatusBodyShowTagsDefault = true;
+export const createEntityStatusBodyPrimaryTagIdDefault = null;
 export const createEntityStatusBodyIsDefaultDefault = false;
 export const createEntityStatusBodyIsFinalDefault = false;
 export const createEntityStatusBodyIsArchiveTriggerDefault = false;
@@ -6349,6 +6365,8 @@ export const CreateEntityStatusBody = zod.object({
 }),
   "color": zod.string().optional(),
   "tagIds": zod.array(zod.number()).default(createEntityStatusBodyTagIdsDefault).describe('Global tags to assign; assignment replaces the status\'s current tag set.'),
+  "showTags": zod.boolean().default(createEntityStatusBodyShowTagsDefault),
+  "primaryTagId": zod.number().nullish().default(createEntityStatusBodyPrimaryTagIdDefault).describe('Must be one of the assigned tagIds when non-null.'),
   "isDefault": zod.boolean().default(createEntityStatusBodyIsDefaultDefault),
   "isFinal": zod.boolean().default(createEntityStatusBodyIsFinalDefault),
   "isArchiveTrigger": zod.boolean().default(createEntityStatusBodyIsArchiveTriggerDefault),
@@ -6365,6 +6383,9 @@ export const GetStatusParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getStatusResponseShowTagsDefault = true;
+export const getStatusResponsePrimaryTagIdDefault = null;
+
 export const GetStatusResponse = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
@@ -6376,6 +6397,17 @@ export const GetStatusResponse = zod.object({
 }),
   "color": zod.string(),
   "tagIds": zod.array(zod.number()).describe('Global status tag ids assigned to this status.'),
+  "showTags": zod.boolean().default(getStatusResponseShowTagsDefault),
+  "primaryTagId": zod.number().nullable().default(getStatusResponsePrimaryTagIdDefault),
+  "displayTags": zod.array(zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string()
+})).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
   "isArchiveTrigger": zod.boolean(),
@@ -6407,6 +6439,8 @@ export const UpdateStatusBody = zod.object({
 }).optional(),
   "color": zod.string().optional(),
   "tagIds": zod.array(zod.number()).optional().describe('When supplied, replaces the status\'s current global tag set.'),
+  "showTags": zod.boolean().optional().describe('Omitted value preserves the current preference.'),
+  "primaryTagId": zod.number().nullish().describe('Must be assigned; null clears the preference. Removing its assignment also clears it.'),
   "isDefault": zod.boolean().optional(),
   "isFinal": zod.boolean().optional(),
   "isArchiveTrigger": zod.boolean().optional(),
@@ -6414,6 +6448,9 @@ export const UpdateStatusBody = zod.object({
   "sortOrder": zod.number().optional(),
   "isActive": zod.boolean().optional()
 })
+
+export const updateStatusResponseShowTagsDefault = true;
+export const updateStatusResponsePrimaryTagIdDefault = null;
 
 export const UpdateStatusResponse = zod.object({
   "id": zod.number(),
@@ -6426,6 +6463,17 @@ export const UpdateStatusResponse = zod.object({
 }),
   "color": zod.string(),
   "tagIds": zod.array(zod.number()).describe('Global status tag ids assigned to this status.'),
+  "showTags": zod.boolean().default(updateStatusResponseShowTagsDefault),
+  "primaryTagId": zod.number().nullable().default(updateStatusResponsePrimaryTagIdDefault),
+  "displayTags": zod.array(zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "color": zod.string()
+})).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
   "isArchiveTrigger": zod.boolean(),

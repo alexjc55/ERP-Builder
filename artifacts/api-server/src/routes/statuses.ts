@@ -13,6 +13,7 @@ import {
   DeleteStatusParams,
   ReorderStatusesBody,
 } from "@workspace/api-zod";
+import { enrichStatusTags } from "../lib/status-display";
 
 const router: IRouter = Router();
 
@@ -68,19 +69,6 @@ async function validateStatusTagIds(value: unknown): Promise<{ tagIds: number[] 
   return { tagIds };
 }
 
-async function withTagIds(statuses: EntityStatus[]): Promise<Array<EntityStatus & { tagIds: number[] }>> {
-  if (statuses.length === 0) return [];
-  const ids = statuses.map((status) => status.id);
-  const links = await db.select().from(statusTagsTable).where(inArray(statusTagsTable.statusId, ids));
-  const byStatus = new Map<number, number[]>();
-  for (const link of links) {
-    const tagIds = byStatus.get(link.statusId) ?? [];
-    tagIds.push(link.tagId);
-    byStatus.set(link.statusId, tagIds);
-  }
-  return statuses.map((status) => ({ ...status, tagIds: byStatus.get(status.id) ?? [] }));
-}
-
 router.get("/entities/:entityId/statuses", requireAuth, async (req, res): Promise<void> => {
   const params = ListEntityStatusesParams.safeParse(req.params);
   if (!params.success) {
@@ -99,7 +87,7 @@ router.get("/entities/:entityId/statuses", requireAuth, async (req, res): Promis
     .where(eq(entityStatusesTable.entityId, params.data.entityId))
     .orderBy(asc(entityStatusesTable.sortOrder));
 
-  res.json(await withTagIds(statuses));
+  res.json(await enrichStatusTags(statuses));
 });
 
 router.post("/entities/:entityId/statuses", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
@@ -138,6 +126,10 @@ router.post("/entities/:entityId/statuses", requireAuth, requireAdmin("entities"
     res.status(400).json({ error: tagCheck.error });
     return;
   }
+  if (parsed.data.primaryTagId != null && !tagCheck.tagIds.includes(parsed.data.primaryTagId)) {
+    res.status(400).json({ error: "primaryTagId must belong to assigned tagIds" });
+    return;
+  }
 
   try {
     const status = await db.transaction(async (tx) => {
@@ -157,7 +149,7 @@ router.post("/entities/:entityId/statuses", requireAuth, requireAdmin("entities"
       }
       return { ...created, tagIds: tagCheck.tagIds };
     });
-    res.status(201).json(status);
+    res.status(201).json((await enrichStatusTags([status]))[0]);
   } catch (err) {
     const constraint = uniqueViolationConstraint(err);
     if (constraint !== null) {
@@ -237,7 +229,7 @@ router.get("/statuses/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  res.json((await withTagIds([status]))[0]);
+  res.json((await enrichStatusTags([status]))[0]);
 });
 
 router.put("/statuses/:id", requireAuth, requireAdmin("entities"), async (req, res): Promise<void> => {
@@ -283,6 +275,7 @@ router.put("/statuses/:id", requireAuth, requireAdmin("entities"), async (req, r
 
   if (body.nameJson != null) updateData.nameJson = body.nameJson;
   if (body.color != null) updateData.color = body.color;
+  if (body.showTags !== undefined) updateData.showTags = body.showTags;
   if (body.isDefault != null) updateData.isDefault = body.isDefault;
   if (body.isFinal != null) updateData.isFinal = body.isFinal;
   if (body.isArchiveTrigger != null) updateData.isArchiveTrigger = body.isArchiveTrigger;
@@ -305,11 +298,19 @@ router.put("/statuses/:id", requireAuth, requireAdmin("entities"), async (req, r
     tagIds = tagCheck.tagIds;
   }
 
+  if (body.primaryTagId !== undefined) updateData.primaryTagId = body.primaryTagId;
   if (Object.keys(updateData).length === 0 && tagIds === undefined) {
     res.status(400).json({ error: "No fields to update" });
     return;
   }
-  const existingTagIds = tagIds === undefined ? (await withTagIds([current]))[0].tagIds : tagIds;
+  const existingTagIds = tagIds === undefined ? (await enrichStatusTags([current]))[0].tagIds : tagIds;
+  if (body.primaryTagId != null && !existingTagIds.includes(body.primaryTagId)) {
+    res.status(400).json({ error: "primaryTagId must belong to assigned tagIds" });
+    return;
+  }
+  if (tagIds !== undefined && body.primaryTagId === undefined && current.primaryTagId != null && !tagIds.includes(current.primaryTagId)) {
+    updateData.primaryTagId = null;
+  }
 
   try {
     const status = await db.transaction(async (tx) => {
@@ -334,7 +335,7 @@ router.put("/statuses/:id", requireAuth, requireAdmin("entities"), async (req, r
       }
       return { ...updated, tagIds: existingTagIds };
     });
-    res.json(status);
+    res.json((await enrichStatusTags([status]))[0]);
   } catch (err) {
     const constraint = uniqueViolationConstraint(err);
     if (constraint !== null) {

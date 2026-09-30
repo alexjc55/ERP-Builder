@@ -14,6 +14,8 @@ export const entityStatusesTable = pgTable(
     statusKey: text("status_key").notNull(),
     nameJson: jsonb("name_json").notNull().default({}),
     color: text("color").notNull().default("#6b7280"),
+    showTags: boolean("show_tags").notNull().default(true),
+    primaryTagId: integer("primary_tag_id"),
     isDefault: boolean("is_default").notNull().default(false),
     isFinal: boolean("is_final").notNull().default(false),
     isArchiveTrigger: boolean("is_archive_trigger").notNull().default(false),

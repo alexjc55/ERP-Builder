@@ -141,6 +141,13 @@
       "when": 1790088986931,
       "tag": "0019_bent_ricochet",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790753482658,
+      "tag": "0020_oval_thunderbolt",
+      "breakpoints": true
     }
   ]
 }

@@ -68,4 +68,8 @@ test("dashboard metric tag filters OR tags, AND status ids, and return zero when
   // Direct status selection narrows the tag match (AND, never a second OR).
   assert.equal(await metric("count", [alpha!], [statuses[0]!.id]), 1);
   assert.equal(await metric("sum", [alpha!], [statuses[2]!.id]), 0);
+  await db.update(entityStatusesTable).set({ showTags: false, primaryTagId: beta! }).where(eq(entityStatusesTable.id, statuses[0]!.id));
+  // Display-only preferences cannot narrow tag-based filtering.
+  assert.equal(await metric("count", [alpha!]), 2);
+  assert.equal(await metric("count", [beta!]), 2);
 });

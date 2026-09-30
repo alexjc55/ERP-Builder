@@ -32,6 +32,7 @@ import {
 } from "./pivot-compute";
 import { requireAdmin, getPermissions, getUserRoleIds } from "../middlewares/permissions";
 import { lockStatusTagReferences } from "../lib/status-tag-lock";
+import { enrichStatusTags } from "../lib/status-display";
 import {
   ListDashboardWidgetsParams,
   CreateDashboardWidgetParams,
@@ -1329,13 +1330,13 @@ async function computeTableData(
     : allRecords;
 
   // Resolve status name/color only when the status column is requested.
-  const statusById = new Map<number, { name: string; color: string }>();
+  const statusById = new Map<number, { name: string; color: string; displayTags: Array<{ id: number; nameJson: unknown; color: string }> }>();
   if (wantsStatus) {
     const sts = await db
-      .select({ id: entityStatusesTable.id, nameJson: entityStatusesTable.nameJson, color: entityStatusesTable.color })
+      .select({ id: entityStatusesTable.id, nameJson: entityStatusesTable.nameJson, color: entityStatusesTable.color, showTags: entityStatusesTable.showTags, primaryTagId: entityStatusesTable.primaryTagId })
       .from(entityStatusesTable)
       .where(eq(entityStatusesTable.entityId, t.entityId));
-    for (const s of sts) statusById.set(s.id, { name: resolveML(s.nameJson) || "—", color: s.color });
+    for (const s of await enrichStatusTags(sts)) statusById.set(s.id, { name: resolveML(s.nameJson) || "—", color: s.color, displayTags: s.displayTags });
   }
 
   // Related columns: each surfaces one field of the single linked record through a

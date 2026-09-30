@@ -20,3 +20,9 @@ description: Shared tag registry semantics, permission composition, and safe con
 **Why:** JSON references lack foreign keys; an unlocked check-then-delete can leave committed dangling restrictions during concurrent admin edits.
 
 **How to apply:** Keep reference checks and writes in the shared transaction-lock boundary. Renames preserve stable IDs; never silently detach references to make deletion succeed.
+
+**Rule:** A status can hide its displayed tags or display one preferred assigned tag; without a preferred tag it displays all. These are presentation preferences only.
+
+**Why:** Compact status cells must not change the category membership used by access restrictions, filters, or widgets.
+
+**How to apply:** Preserve all assignments regardless of display mode, derive visible tags centrally, and clear the preferred choice when its assignment is removed.

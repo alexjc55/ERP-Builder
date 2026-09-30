@@ -13,6 +13,10 @@ export interface StatusUpdate {
   color?: string;
   /** When supplied, replaces the status's current global tag set. */
   tagIds?: number[];
+  /** Omitted value preserves the current preference. */
+  showTags?: boolean;
+  /** Must be assigned; null clears the preference. Removing its assignment also clears it. */
+  primaryTagId?: number | null;
   isDefault?: boolean;
   isFinal?: boolean;
   isArchiveTrigger?: boolean;
