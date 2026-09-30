@@ -9,12 +9,15 @@ export type DisplayStatusTag = { id: number; nameJson: MultilingualText; color: 
 export function CompactStatus({
   name,
   color,
+  badgeColor,
   displayTags,
   ml,
   className = "",
 }: {
   name: string;
   color?: string | null;
+  /** Optional high-contrast badge for pickers; otherwise retain the usual colored text. */
+  badgeColor?: string | null;
   displayTags?: readonly DisplayStatusTag[] | null;
   ml: (value: MultilingualText | null | undefined) => string;
   className?: string;
@@ -26,7 +29,23 @@ export function CompactStatus({
           {displayTags.map(tag => ml(tag.nameJson)).join(" · ")}
         </span>
       )}
-      <span className="max-w-full font-medium leading-4 [overflow-wrap:anywhere]" style={color ? { color } : undefined} title={name}>{name}</span>
+      {badgeColor ? (
+        <span
+          className="inline-flex max-w-full items-start gap-1.5 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-medium leading-4 text-slate-900 [overflow-wrap:anywhere]"
+          style={{ backgroundColor: `color-mix(in srgb, ${badgeColor} 12%, white)` }}
+          title={name}
+        >
+          <span
+            data-status-color-dot
+            aria-hidden="true"
+            className="mt-1 h-2 w-2 shrink-0 rounded-full border border-slate-500/60"
+            style={{ backgroundColor: badgeColor }}
+          />
+          <span className="min-w-0 [overflow-wrap:anywhere]">{name}</span>
+        </span>
+      ) : (
+        <span className="max-w-full font-medium leading-4 [overflow-wrap:anywhere]" style={color ? { color } : undefined} title={name}>{name}</span>
+      )}
     </span>
   );
 }

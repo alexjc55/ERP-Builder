@@ -113,7 +113,7 @@ export function MultipleRelationPicker(props: {
             <label key={c.id} className="flex items-center gap-2 rounded border p-2 text-sm">
               {!props.disabled && <input type="checkbox" checked={selected.includes(c.id)} disabled={busy || !!gated} onChange={e => setSelected(old => e.target.checked ? [...old, c.id] : old.filter(id => id !== c.id))} />}
               <span className="min-w-0 flex-1 break-words">{c.label || `#${c.id}`}</span>
-              {props.showStatus && c.status && <CompactStatus name={ml(c.status.nameJson)} color={c.status.color}
+              {props.showStatus && c.status && <CompactStatus name={ml(c.status.nameJson)} badgeColor={c.status.color}
                 displayTags={c.status.displayTags} ml={ml} className="max-w-[45%] shrink-0" />}
             </label>)}
           {!loading && !error && filtered.length === 0 && <p role="status" className="text-sm text-muted-foreground">

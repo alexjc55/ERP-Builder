@@ -16,7 +16,7 @@ test("multi selector uses full snapshot, saves normalized IDs with CAS, and expo
   let language = "ru";
   await page.addInitScript(() => localStorage.setItem("erp_token", "isolated-intercepted-test"));
   const candidates = Array.from({ length: 135 }, (_, i) => ({ id: i + 1, label: `Item ${i + 1}`,
-    status: i === 0 ? { id: 4, nameJson: { ru: "Готово" }, color: "#123456",
+    status: i === 0 ? { id: 4, nameJson: { ru: "Готово" }, color: "#fff7ad",
       displayTags: [{ id: 8, nameJson: { ru: "Производство" }, color: "#ffffff" }] } : null }));
   await page.route("**/api/**", async route => {
     const data = route.request().postDataJSON();
@@ -77,6 +77,24 @@ test("multi selector uses full snapshot, saves normalized IDs with CAS, and expo
     </script></body></html>`,
   }));
   try {
+    const assertReadableStatus = async () => {
+      const label = page.getByText("Готово", { exact: true });
+      const tag = page.getByText("Производство", { exact: true });
+      const badge = label.locator("..");
+      const dot = badge.locator("[data-status-color-dot]");
+      await label.waitFor();
+      await tag.waitFor();
+      assert.ok(await badge.evaluate(el => el.classList.contains("text-slate-900") &&
+        getComputedStyle(el).color !== "rgb(255, 247, 173)"),
+      "Pale status color must not become the text color");
+      assert.equal(await dot.evaluate(el => getComputedStyle(el).backgroundColor), "rgb(255, 247, 173)",
+        "Dot keeps the assigned pale yellow status color");
+      assert.notEqual(await badge.evaluate(el => getComputedStyle(el).backgroundColor), "rgb(255, 255, 255)",
+        "Badge has a subtle assigned-color tint");
+      assert.ok((await tag.boundingBox()).y < (await badge.boundingBox()).y,
+        "Existing tag caption stays above the status badge");
+      assert.ok(await label.isVisible());
+    };
     await page.goto(`${process.env.FRONTEND_URL ?? "http://localhost:80"}/__relation_picker_test`);
     await page.waitForTimeout(2500);
     assert.deepEqual(browserErrors, [], "Isolated component must mount without runtime errors");
@@ -124,6 +142,7 @@ test("multi selector uses full snapshot, saves normalized IDs with CAS, and expo
     await page.getByRole("button", { name: "1", exact: true }).click();
     await page.getByText("Готово", { exact: true }).waitFor();
     await page.getByText("Производство", { exact: true }).waitFor();
+    await assertReadableStatus();
     assert.equal(await page.getByRole("button", { name: "Создать связанную запись" }).count(), 0);
     if (process.env.PICKER_SCREENSHOT) await page.screenshot({ path: process.env.PICKER_SCREENSHOT });
     await page.getByRole("button", { name: "Закрыть", exact: true }).click();
@@ -131,9 +150,27 @@ test("multi selector uses full snapshot, saves normalized IDs with CAS, and expo
     await page.getByRole("button", { name: "1", exact: true }).click();
     await page.getByText("Готово", { exact: true }).waitFor();
     await page.getByText("Производство", { exact: true }).waitFor();
+    await assertReadableStatus();
     await page.getByRole("searchbox", { name: "Поиск связанных записей" }).fill("nothing matches");
     assert.equal(await page.getByText("Item 1", { exact: true }).count(), 0);
     await page.getByRole("button", { name: "Закрыть", exact: true }).click();
+    const longHebrewStatus = "נמסר למחלקת הייצור לאחר אישור סופי";
+    await page.evaluate(({member, text}) => {
+      window.setPickerLanguage("he");
+      window.renderPicker({ disabled: true, showStatus: true, members: [{
+        ...member, status: { ...member.status, nameJson: { he: text }, displayTags: member.status.displayTags },
+      }] });
+    }, { member: candidates[0], text: longHebrewStatus });
+    await page.setViewportSize({ width: 350, height: 700 });
+    await page.getByRole("button", { name: "1", exact: true }).click();
+    const hebrewLabel = page.getByText(longHebrewStatus, { exact: true });
+    await hebrewLabel.waitFor();
+    assert.ok(await hebrewLabel.evaluate(el => el.getBoundingClientRect().width <= el.parentElement.getBoundingClientRect().width),
+      "Long RTL status wraps inside its badge");
+    assert.equal(await page.getByRole("dialog").evaluate(el => el.scrollWidth <= el.clientWidth), true,
+      "Long RTL status must not overflow the dialog");
+    await page.getByRole("button", { name: "Закрыть", exact: true }).click();
+    await page.setViewportSize({ width: 1280, height: 720 });
     for (const [lang, suffix] of [["ru", "изделий"], ["en", "items"], ["he", "פריטים"]]) {
       await page.evaluate(({lang}) => {
         window.setPickerLanguage(lang);
