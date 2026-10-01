@@ -20,3 +20,9 @@ The workspace can carry a production environment label even while its configured
 **Why:** A guarded browser fixture skipped on that label; a read-only connection fingerprint matched the database selected explicitly through the development SQL tool.
 
 **How to apply:** Never assume the label is wrong or bypass fixture guards blindly. Confirm the actual database target independently before fixture writes; retain production guards in committed tests. A verified development target may use development labels only for the specific test process.
+
+Release readiness must distinguish an intentionally skipped guarded DB suite from a passing suite. An execution gate must require positive completed-test counts and zero skipped/failed/cancelled/TODO results.
+
+**Why:** The low-level fixture opt-in protects data by skipping by default, but exit code zero alone falsely advertises report correctness. Auto-generating an approving fingerprint from the same unknown connection would defeat independent identity confirmation.
+
+**How to apply:** Require explicit independently verified development identity at the gate, preserve fixture-side checks, and invoke lock-owning package commands sequentially without another lock. Keep ordinary opt-in fixture commands separate from the readiness verdict.
