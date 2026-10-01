@@ -36,3 +36,13 @@ Ordinary low-level package commands retain their opt-in skip behavior.
 Child diagnostics are not echoed by the gate, to avoid leaking database
 connection details. For a failed suite, investigate its guarded package command
 in the same independently verified development environment.
+
+Each package runs in its own POSIX process group, without an outer lock.
+The five-minute timeout, SIGTERM/SIGINT, or excessive output stops that whole
+group: SIGTERM first, then SIGKILL after a two-second grace period, even if the
+package leader has already exited. No later suite starts after interruption.
+Normally completed suites retain their existing fixture teardown behavior.
+Forced termination is NOT proof of fixture cleanup or transaction rollback:
+inspect the independently confirmed development database before retrying.
+Descendants must not detach into separate process groups. This runner is for
+Linux/POSIX; SIGKILL of the orchestrator itself cannot be handled.

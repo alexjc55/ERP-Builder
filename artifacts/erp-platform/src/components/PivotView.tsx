@@ -163,29 +163,45 @@ export function PivotResultTable({
   );
 
   return (
-    <div className="relative overflow-auto rounded-lg border border-slate-200">
+    <div className="relative overflow-auto bg-white pb-3">
       {loading && (
         <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
           <Loader2 className="w-3 h-3 animate-spin" />
           {t("pivot.updating", "Обновление…")}
         </div>
       )}
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="bg-slate-50">
-            <th className="sticky left-0 z-[1] border-b border-r border-slate-200 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-600">
+      <table className="w-full text-sm">
+        <thead className="sticky top-0 z-20">
+          <tr className="bg-slate-50" data-testid="pivot-column-totals">
+            <th scope="row" className="sticky start-0 z-[1] bg-slate-50 px-4 py-2 text-start font-medium text-slate-500">
+              {t("pivot.colTotal", "Итого")}
+            </th>
+            {result.cols.map((c) => (
+              <td key={c.key} className="bg-[#d1fae5] px-4 py-2 text-center font-bold whitespace-nowrap tabular-nums text-[#047857]">
+                {withAffix(colTotal.get(c.key) ?? 0, c.key)}
+              </td>
+            ))}
+            {showRowTotal && (
+              <td className="bg-[#d1fae5] px-4 py-2 text-center font-bold whitespace-nowrap tabular-nums text-[#047857]">
+                {withAffix(result.grandTotal)}
+              </td>
+            )}
+          </tr>
+          <tr className="erp-main-header border-b border-slate-100 bg-slate-50 text-xs leading-snug">
+            <th scope="col" className="sticky start-0 z-[1] bg-slate-50 px-4 py-3 text-center font-medium text-slate-600">
               {hasCols ? "" : result.measureLabel}
             </th>
             {result.cols.map((c) => (
               <th
                 key={c.key}
-                className="border-b border-l border-slate-200 px-3 py-2 text-right font-semibold text-slate-600"
+                scope="col"
+                className="px-4 py-3 text-center font-medium text-slate-600"
               >
                 {c.label}
               </th>
             ))}
             {showRowTotal && (
-              <th className="border-b border-l-2 border-slate-300 bg-slate-100 px-3 py-2 text-right font-semibold text-slate-700">
+              <th scope="col" className="px-4 py-3 text-center font-medium text-slate-600">
                 {t("pivot.rowTotal", "Итого")}
               </th>
             )}
@@ -193,8 +209,8 @@ export function PivotResultTable({
         </thead>
         <tbody>
           {result.rows.map((r) => (
-            <tr key={r.key} className="even:bg-slate-50/40 hover:bg-blue-50/40">
-              <th className="sticky left-0 z-[1] border-r border-slate-200 bg-white px-3 py-2 text-left font-medium text-slate-700">
+            <tr key={r.key} className="group border-b border-slate-100 hover:bg-slate-50/50">
+              <th scope="row" className="sticky start-0 z-[1] bg-white px-4 py-2 text-center font-normal text-slate-700 group-hover:bg-slate-50">
                 {r.label}
               </th>
               {result.cols.map((c) => {
@@ -202,40 +218,20 @@ export function PivotResultTable({
                 return (
                   <td
                     key={c.key}
-                    className="border-l border-slate-100 px-3 py-2 text-right tabular-nums text-slate-700"
+                    className="px-4 py-2 text-center tabular-nums text-slate-700"
                   >
                     {v == null || v === 0 ? <span className="text-slate-300">—</span> : withAffix(v, c.key)}
                   </td>
                 );
               })}
               {showRowTotal && (
-                <td className="border-l-2 border-slate-300 bg-slate-50 px-3 py-2 text-right font-semibold tabular-nums text-slate-800">
+                <td className="px-4 py-2 text-center font-semibold tabular-nums text-slate-700">
                   {withAffix(rowTotal.get(r.key) ?? 0)}
                 </td>
               )}
             </tr>
           ))}
         </tbody>
-        <tfoot>
-          <tr className="border-t-2 border-slate-300 bg-slate-100">
-            <th className="sticky left-0 z-[1] border-r border-slate-200 bg-slate-100 px-3 py-2 text-left font-semibold text-slate-700">
-              {t("pivot.colTotal", "Итого")}
-            </th>
-            {result.cols.map((c) => (
-              <td
-                key={c.key}
-                className="border-l border-slate-200 px-3 py-2 text-right font-semibold tabular-nums text-slate-800"
-              >
-                {withAffix(colTotal.get(c.key) ?? 0, c.key)}
-              </td>
-            ))}
-            {showRowTotal && (
-              <td className="border-l-2 border-slate-300 bg-slate-200 px-3 py-2 text-right font-bold tabular-nums text-slate-900">
-                {withAffix(result.grandTotal)}
-              </td>
-            )}
-          </tr>
-        </tfoot>
       </table>
     </div>
   );

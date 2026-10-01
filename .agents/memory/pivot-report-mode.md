@@ -5,6 +5,15 @@ description: Durable invariants for the entity-based interactive pivot view type
 
 # Pivot report mode — durable decisions
 
+Pivot tables must use the ordinary records-table visual conventions, including the
+column totals strip above the column headers, not a separate footer-based design.
+
+**Why:** The user explicitly rejected a separate appearance for “Отчеты — По проектам”;
+report mode must not introduce a different table design.
+
+**How to apply:** Reuse records-grid spacing, header, separators, and total colors in
+shared pivot rendering. Keep aggregation and heterogeneous-measure semantics unchanged.
+
 Pivot started as a **view type** (`viewType: "pivot"` in a saved View's `configJson`) reusing the
 Views engine + the live records filter bar (Records page shows a Таблица⇄Сводная toggle, gated on the
 entity's `pivotEnabled` flag). It now ALSO exists as a dedicated **page type** — see "Pivot PAGE type"

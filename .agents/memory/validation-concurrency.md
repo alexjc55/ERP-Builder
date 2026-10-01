@@ -26,3 +26,9 @@ Release readiness must distinguish an intentionally skipped guarded DB suite fro
 **Why:** The low-level fixture opt-in protects data by skipping by default, but exit code zero alone falsely advertises report correctness. Auto-generating an approving fingerprint from the same unknown connection would defeat independent identity confirmation.
 
 **How to apply:** Require explicit independently verified development identity at the gate, preserve fixture-side checks, and invoke lock-owning package commands sequentially without another lock. Keep ordinary opt-in fixture commands separate from the readiness verdict.
+
+Stopping a validation launcher is not equivalent to stopping its descendant fixture runners, and stopping runners is not proof of database cleanup.
+
+**Why:** Package launchers can exit while descendants still execute and retain inherited lock descriptors. Forced termination bypasses JavaScript finally/after cleanup; committed fixture rows may remain.
+
+**How to apply:** Terminate the dedicated process group with bounded graceful escalation, including after leader exit. Test interruption using mock descendants and real file locks, not live DB writes. Require development-data inspection after forced termination rather than automatically retrying.

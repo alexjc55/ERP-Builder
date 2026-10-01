@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process";
+import { runValidationProcess } from "./run-validation-process.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -29,8 +29,8 @@ export function assertExecuted(output) {
 
 function runPackage(script, env) {
   // Each package command owns the shared lock. Never wrap this orchestrator in it.
-  return spawnSync("corepack", ["pnpm", "--filter", "@workspace/api-server", "run", script], {
-    cwd: root, env, encoding: "utf8", timeout: 300_000, maxBuffer: 16 * 1024 * 1024,
+  return runValidationProcess("corepack", ["pnpm", "--filter", "@workspace/api-server", "run", script], {
+    cwd: root, env,
   });
 }
 
@@ -48,7 +48,7 @@ export async function runValidation({ env = process.env, run = runPackage } = {}
     });
     if (child.error || child.signal || child.status !== 0) {
       // Do not echo arbitrary child diagnostics: DB driver errors can contain secrets.
-      throw new Error(`${script} failed (exit ${child.status}, signal ${child.signal ?? "none"}). No later suite started.`);
+      throw new Error(`${script} failed (exit ${child.status}, signal ${child.signal ?? "none"}). No later suite started. If interrupted, fixture cleanup is not guaranteed; inspect the confirmed development database before retrying.`);
     }
     try {
       results.push({ script, ...assertExecuted(child.stdout ?? "") });
