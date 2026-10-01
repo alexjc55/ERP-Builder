@@ -46,11 +46,11 @@ independent authorization of every dependency field and linked target.
 
 **How to apply:** Materialize visible scalar formulas transiently with qualified scopes, calendar options, linked inputs, bounded recursion, and page-aware row filtering. Reject computed aggregate/equality operands and grouped projection targets at save time and re-check at read time until those paths have equivalent full-set semantics.
 
-## Legacy flat relation/lookup references
+## Flat and qualified relation/lookup references
 
-**Rule:** A legacy flat formula reference to a relation/lookup field must be derived from the active field schema and resolved through the same permission-aware linked-source path as a structured source. Keep formula scope inputs separate from response values: current-page projections may shadow flat keys, but must not overwrite or remove a same-key entity scalar or leak a transient source token.
+**Rule:** Flat and same-entity qualified formula references to relation/lookup fields must resolve through the same permission-aware linked-source path as structured sources. Keep formula scope inputs separate from response values: current-page projections may shadow flat keys, but must not overwrite or deny explicitly qualified entity inputs or leak a transient source token.
 
-**Why:** Relation/lookup values are not stored in the record JSON. Treating a flat reference as an ordinary stored key makes the formula silently empty; flattening the projected value into response data can also erase a legitimate same-key entity value. Re-resolving a full target set once per base-row chunk multiplies target scans.
+**Why:** Relation/lookup values are not stored in the record JSON. Qualifying a reference disambiguates its source; it does not make that source a stored value. Treating either syntax as an ordinary stored key makes the formula silently empty; flattening projections can erase a legitimate same-key entity value. Re-resolving a full target set once per base-row chunk multiplies target scans.
 
 **How to apply:** Discover only referenced active relation/lookup fields, fail neutral on stale/invalid metadata, authorize every base/target resource and row, resolve the complete evaluation set once, and partition projected page inputs from entity inputs before building qualified scopes. SuperAdmin bypasses redundant grant rows but not schema existence.
 

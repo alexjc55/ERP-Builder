@@ -888,6 +888,39 @@ async function materializeDerivedPageTargets(options: {
       }
       linkedIdentityValues.set(target.field.id, values);
     }
+    // Only resolve metadata for lookups actually referenced by a direct formula.
+    // Reuse the related-values authorization boundary instead of querying an
+    // unguarded target field or guessing its type from the configured key.
+    const directEntityRelatedColumns: { fieldKey: string; relatedFieldType: string | null }[] = [];
+    for (const field of visibleEntityFields) {
+      if (field.fieldType !== "lookup" || !pageTargets.some((target) =>
+        target.effType === "function" && directEntityFormulaResultType({
+          formula: target.field,
+          entityId: options.entityId,
+          entityFields: [field],
+          pageFields: visiblePageFields,
+        }) === "lookup")) continue;
+      const config = field.relationConfigJson as {
+        relationId?: unknown;
+        relatedPageId?: unknown;
+        relatedFieldKey?: unknown;
+      } | null;
+      const relationId = Number(config?.relationId);
+      const relatedFieldKey = typeof config?.relatedFieldKey === "string" ? config.relatedFieldKey : "";
+      if (!Number.isInteger(relationId) || relationId <= 0 || !relatedFieldKey) continue;
+      const projection = await resolveChainValues(
+        options.entityId,
+        pageScopedRows.map((row) => row.id),
+        relationId,
+        relatedFieldKey,
+        typeof config?.relatedPageId === "number" ? config.relatedPageId : null,
+        { perms, roleIds, userId: options.req.user!.userId, req: options.req },
+        0,
+      );
+      if (projection.access !== "hidden") {
+        directEntityRelatedColumns.push({ fieldKey: field.fieldKey, relatedFieldType: projection.relatedFieldType });
+      }
+    }
     const directFormulaTypes = new Map<number, string>();
     for (const target of pageTargets) {
       if (target.effType !== "function") continue;
@@ -896,6 +929,7 @@ async function materializeDerivedPageTargets(options: {
         entityId: options.entityId,
         entityFields: visibleEntityFields,
         pageFields: visiblePageFields,
+        entityRelatedColumns: directEntityRelatedColumns,
       });
       if (inferred) directFormulaTypes.set(target.field.id, inferred);
     }
@@ -903,6 +937,7 @@ async function materializeDerivedPageTargets(options: {
     for (const target of pageTargets) {
       if (directFormulaTypes.get(target.field.id) !== "user") continue;
       for (const row of pageScopedRows) {
+        if (isDeniedFormulaProjection(pageValues.get(row.id), target.field.fieldKey)) continue;
         const raw = pageValues.get(row.id)?.[target.field.fieldKey];
         const id = typeof raw === "number" ? raw : Number(raw);
         if (Number.isInteger(id) && id > 0) directUserIds.add(id);

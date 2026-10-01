@@ -240,7 +240,12 @@ function deniedKeys(values: Record<string, unknown> | undefined): ReadonlySet<st
 /** Field references are deliberately extracted without evaluating an expression.
  * Invalid expressions remain the evaluator's concern and simply contribute no
  * dependency here. */
-function formulaReferenceKeys(fields: readonly FormulaConfiguredField[]): Set<string> {
+function sameEntityQualifiedFieldKey(token: string, entityId: number): string | undefined {
+  const match = /^entity:(\d+)\.(.+)$/.exec(token);
+  return match && Number(match[1]) === entityId ? match[2] : undefined;
+}
+
+function formulaReferenceKeys(fields: readonly FormulaConfiguredField[], entityId?: number): Set<string> {
   const keys = new Set<string>();
   for (const field of fields) {
     if (field.fieldType !== "function") continue;
@@ -251,9 +256,11 @@ function formulaReferenceKeys(fields: readonly FormulaConfiguredField[]): Set<st
     if (typeof config?.expression === "string") {
       for (const match of config.expression.matchAll(/\{([^{}]+)\}/g)) {
         const key = match[1].trim();
-        // Legacy references are flat. Qualified names already have an explicit
-        // namespace and must not be guessed as a relation field.
-        if (key && !key.includes(":") && !key.includes(".")) keys.add(key);
+        // Keep the token's namespace through discovery. Only the current
+        // entity's qualified references can request its derived lookup fields;
+        // foreign entity and other source tokens must never be guessed locally.
+        if (key && ((!key.includes(":") && !key.includes(".")) ||
+            (entityId != null && sameEntityQualifiedFieldKey(key, entityId) != null))) keys.add(key);
       }
     }
     if (Array.isArray(config?.groupResult?.fields)) {
@@ -298,9 +305,10 @@ export function qualifiedPageFormulaSources(
 }
 
 /**
- * Turn a legacy flat reference to a relation/lookup column into the same
- * permission-aware linked source used by structured formulas.  This is pure so
- * the security-sensitive discovery rules can be tested without a database.
+ * Turn flat or same-entity qualified relation/lookup references into the same
+ * permission-aware linked sources used by structured formulas. Qualified
+ * tokens select only entity metadata; current-page shadowing applies only to
+ * flat tokens. This is pure so discovery can be tested without a database.
  */
 export function legacyFormulaSourcesFromFields(
   fields: readonly LegacyRelationField[],
@@ -310,14 +318,20 @@ export function legacyFormulaSourcesFromFields(
   groupReferences: readonly FormulaGroupSourceReference[] = formulaGroupSourceReferences(fields),
 ): LinkedFormulaSource[] {
   const references = referencedKeys == null
-    ? formulaReferenceKeys(fields)
+    ? formulaReferenceKeys(fields, entityId)
     : new Set(referencedKeys);
   const relationById = new Map(relations.map((relation) => [relation.id, relation]));
   const result: LinkedFormulaSource[] = [];
   const effectiveFields = new Map<string, LegacyRelationField>();
-  for (const field of fields) effectiveFields.set(field.fieldKey, field);
-  for (const field of effectiveFields.values()) {
-    if (!references.has(field.fieldKey) || (field.fieldType !== "relation" && field.fieldType !== "lookup")) continue;
+  const entityFields = new Map<string, LegacyRelationField>();
+  for (const field of fields) {
+    effectiveFields.set(field.fieldKey, field);
+    if (field.scope === "entity") entityFields.set(field.fieldKey, field);
+  }
+  for (const key of references) {
+    const qualifiedFieldKey = sameEntityQualifiedFieldKey(key, entityId);
+    const field = qualifiedFieldKey == null ? effectiveFields.get(key) : entityFields.get(qualifiedFieldKey);
+    if (!field || (field.fieldType !== "relation" && field.fieldType !== "lookup")) continue;
     const config = field.relationConfigJson as {
       relationId?: unknown; relatedFieldKey?: unknown; relatedPageId?: unknown;
     } | null;
@@ -348,7 +362,7 @@ export function legacyFormulaSourcesFromFields(
       )
     ) continue;
     result.push({
-      key: field.fieldKey,
+      key,
       kind: "aggregate",
       targetEntityId,
       ...(relatedPageId == null ? {} : { targetPageId: relatedPageId }),
@@ -373,15 +387,22 @@ export function legacyFormulaSourcesFromFields(
   return result;
 }
 
-function legacySourceKeysOf(fields: readonly FormulaDependencyField[]): string[] {
-  const references = formulaReferenceKeys(fields);
+function legacySourceKeysOf(
+  entityFields: readonly FormulaDependencyField[],
+  pageFields: readonly FormulaDependencyField[],
+  entityId: number,
+): string[] {
+  const fields = [...entityFields, ...pageFields];
+  const references = formulaReferenceKeys(fields, entityId);
   // Page fields occur after entity fields at every call site, matching flat-key
   // formula scope shadowing. A relation/lookup dependency is transient input,
   // never an additional response value.
   const byKey = new Map<string, FormulaDependencyField>();
   for (const field of fields) byKey.set(field.fieldKey, field);
+  const entityByKey = new Map(entityFields.map((field) => [field.fieldKey, field]));
   return [...references].filter((key) => {
-    const field = byKey.get(key);
+    const qualifiedFieldKey = sameEntityQualifiedFieldKey(key, entityId);
+    const field = qualifiedFieldKey == null ? byKey.get(key) : entityByKey.get(qualifiedFieldKey);
     return field?.fieldType === "relation" || field?.fieldType === "lookup";
   });
 }
@@ -849,11 +870,13 @@ export async function mergeLinkedFormulaInputs(options: {
     source.pageId !== options.pageId ||
     source.key !== `page:${source.pageId}.${source.fieldKey}`
   );
-  // Old formulas stored only `{relation_or_lookup_key}`. Load the active schema
-  // for the keys actually referenced, rather than treating valuesJson as an
-  // authority (these fields are derived and never stored there). Page columns
-  // shadow entity columns just as buildQualifiedFormulaScope does.
-  const referencedKeys = [...formulaReferenceKeys(options.fields)];
+  // Lookup fields are derived, never authoritative stored values. Load their
+  // active schema for flat and same-entity qualified references, preserving
+  // the original tokens so page shadows cannot redirect an entity reference.
+  const referencedKeys = [...formulaReferenceKeys(options.fields, options.entityId)];
+  const metadataKeys = [...new Set(referencedKeys.map((key) =>
+    sameEntityQualifiedFieldKey(key, options.entityId) ?? key,
+  ))];
   let legacySources: LinkedFormulaSource[] = [];
   let legacyBaseResources = new Map<string, LinkedFormulaResource>();
   if (referencedKeys.length) {
@@ -866,7 +889,7 @@ export async function mergeLinkedFormulaInputs(options: {
         }).from(entityFieldsTable).where(and(
           eq(entityFieldsTable.entityId, options.entityId),
           eq(entityFieldsTable.isActive, true),
-          inArray(entityFieldsTable.fieldKey, referencedKeys),
+          inArray(entityFieldsTable.fieldKey, metadataKeys),
         )),
         options.pageId == null ? Promise.resolve([]) : db.select({
           fieldKey: pageFieldsTable.fieldKey,
@@ -875,7 +898,7 @@ export async function mergeLinkedFormulaInputs(options: {
         }).from(pageFieldsTable).where(and(
           eq(pageFieldsTable.pageId, options.pageId),
           eq(pageFieldsTable.isActive, true),
-          inArray(pageFieldsTable.fieldKey, referencedKeys),
+          inArray(pageFieldsTable.fieldKey, metadataKeys),
         )),
       ]);
       const candidates: LegacyRelationField[] = [
@@ -902,10 +925,14 @@ export async function mergeLinkedFormulaInputs(options: {
         formulaGroupSourceReferences(options.fields),
       );
       for (const source of legacySources) {
-        const candidate = [...candidates].reverse().find((field) => field.fieldKey === source.key)!;
+        const qualifiedFieldKey = sameEntityQualifiedFieldKey(source.key, options.entityId);
+        const candidate = [...candidates].reverse().find((field) =>
+          qualifiedFieldKey == null ? field.fieldKey === source.key
+            : field.scope === "entity" && field.fieldKey === qualifiedFieldKey,
+        )!;
         legacyBaseResources.set(source.key, candidate.scope === "entity"
-          ? { kind: "field", entityId: options.entityId, scope: "entity", fieldKey: source.key }
-          : { kind: "field", entityId: options.entityId, scope: "page", pageId: candidate.pageId!, fieldKey: source.key });
+          ? { kind: "field", entityId: options.entityId, scope: "entity", fieldKey: candidate.fieldKey }
+          : { kind: "field", entityId: options.entityId, scope: "page", pageId: candidate.pageId!, fieldKey: candidate.fieldKey });
       }
     } catch {
       // Schema discovery is optional derived data; retain neutral formula input.
@@ -1418,11 +1445,13 @@ function hasOwnValue(values: Record<string, unknown>, key: string): boolean {
 }
 
 function prepareMaterializationValues(options: {
+  entityId: number;
   rawEntityValues: Record<string, unknown>;
   rawPageValues: Record<string, unknown>;
   linkedValues: Record<string, unknown>;
   visibleEntityFields: readonly FormulaDependencyField[];
   visiblePageFields: readonly FormulaDependencyField[];
+  pageFieldKeys: ReadonlySet<string>;
   sourceKeys: readonly string[];
 }): {
   responseEntityValues: Record<string, unknown>;
@@ -1448,6 +1477,21 @@ function prepareMaterializationValues(options: {
   const pageFieldByKey = new Map(options.visiblePageFields.map((field) => [field.fieldKey, field]));
 
   for (const sourceKey of options.sourceKeys) {
+    const qualifiedFieldKey = sameEntityQualifiedFieldKey(sourceKey, options.entityId);
+    if (qualifiedFieldKey != null) {
+      // Only its owning, visible entity lookup may admit this capability.
+      // Never use a page shadow (or an absent/hidden field) to recreate it.
+      delete responseEntityValues[sourceKey];
+      delete responsePageValues[sourceKey];
+      const field = entityFieldByKey.get(qualifiedFieldKey);
+      if (field && (field.fieldType === "relation" || field.fieldType === "lookup")) {
+        delete responseEntityValues[qualifiedFieldKey];
+        if (hasOwnValue(options.linkedValues, sourceKey)) {
+          scopeEntityValues[qualifiedFieldKey] = options.linkedValues[sourceKey];
+        }
+      }
+      continue;
+    }
     const entityField = entityFieldByKey.get(sourceKey);
     const pageField = pageFieldByKey.get(sourceKey);
     const hasLinkedValue = hasOwnValue(options.linkedValues, sourceKey);
@@ -1458,6 +1502,11 @@ function prepareMaterializationValues(options: {
     }
     if (!pageField || pageField.fieldType === "relation" || pageField.fieldType === "lookup") {
       delete responsePageValues[sourceKey];
+    }
+    if (!pageField && options.pageFieldKeys.has(sourceKey)) {
+      // A hidden page shadow still owns the flat dependency. Its projection
+      // must never be routed into a visible same-key entity lookup.
+      continue;
     }
 
     // Current-page fields shadow entity fields for flat legacy references.
@@ -1539,25 +1588,29 @@ export function materializeVisibleEntityFormulas(options: {
   const dependencyFields = [...options.fields, ...(options.pageFields ?? [])];
   const sourceKeys = [
     ...formulaSourcesOf(dependencyFields).map((source) => source.key),
-    ...legacySourceKeysOf(dependencyFields),
+    ...legacySourceKeysOf(options.fields, options.pageFields ?? [], options.entityId),
   ];
   const out = new Map<number, Record<string, unknown>>();
   const visibleEntityFields = options.fields.filter((field) => !options.hidden.has(field.fieldKey));
   const visiblePageFields = (options.pageFields ?? []).filter(
     (field) => !options.hiddenPage?.has(field.fieldKey),
   );
+  const pageFieldKeys = new Set((options.pageFields ?? []).map((field) => field.fieldKey));
   for (const row of options.rows) {
-    const denied = new Set([
-      ...deniedKeys(options.linkedInputs?.get(row.id)),
-      ...deniedKeys(row.values),
-      ...deniedKeys(options.pageValues?.get(row.id)),
-    ]);
+    const denied = materializationDeniedInputs({
+      entityId: options.entityId, pageId: options.pageId,
+      entityFields: options.fields, pageFieldKeys,
+      linkedValues: options.linkedInputs?.get(row.id),
+      entityValues: row.values, pageValues: options.pageValues?.get(row.id),
+    });
     const prepared = prepareMaterializationValues({
+      entityId: options.entityId,
       rawEntityValues: row.values,
       rawPageValues: options.pageValues?.get(row.id) ?? {},
       linkedValues: options.linkedInputs?.get(row.id) ?? row.values,
       visibleEntityFields,
       visiblePageFields,
+      pageFieldKeys,
       sourceKeys,
     });
     const values = prepared.responseEntityValues;
@@ -1593,6 +1646,7 @@ export function materializeVisibleEntityFormulas(options: {
         formulas,
         pageFormulas,
         denied,
+        pageFieldKeys,
       );
       for (const key of deniedFormulas.entity) {
         values[key] = null;
@@ -1628,23 +1682,27 @@ export function materializeVisiblePageFormulas(options: {
   const dependencyFields = [...options.entityFields, ...options.pageFields];
   const sourceKeys = [
     ...formulaSourcesOf(dependencyFields).map((source) => source.key),
-    ...legacySourceKeysOf(dependencyFields),
+    ...legacySourceKeysOf(options.entityFields, options.pageFields, options.entityId),
   ];
   const out = new Map<number, Record<string, unknown>>();
   const visibleEntityFields = options.entityFields.filter((field) => !options.hiddenEntity.has(field.fieldKey));
   const visiblePageFields = options.pageFields.filter((field) => !options.hiddenPage.has(field.fieldKey));
+  const pageFieldKeys = new Set(options.pageFields.map((field) => field.fieldKey));
   for (const row of options.rows) {
-    const denied = new Set([
-      ...deniedKeys(options.linkedInputs?.get(row.id)),
-      ...deniedKeys(row.entityValues),
-      ...deniedKeys(row.pageValues),
-    ]);
+    const denied = materializationDeniedInputs({
+      entityId: options.entityId, pageId: options.pageId,
+      entityFields: options.entityFields, pageFieldKeys,
+      linkedValues: options.linkedInputs?.get(row.id),
+      entityValues: row.entityValues, pageValues: row.pageValues,
+    });
     const prepared = prepareMaterializationValues({
+      entityId: options.entityId,
       rawEntityValues: row.entityValues,
       rawPageValues: row.pageValues,
       linkedValues: options.linkedInputs?.get(row.id) ?? row.entityValues,
       visibleEntityFields,
       visiblePageFields,
+      pageFieldKeys,
       sourceKeys,
     });
     const pageValues = prepared.responsePageValues;
@@ -1665,6 +1723,7 @@ export function materializeVisiblePageFormulas(options: {
       entityFormulas,
       pageFormulas,
       denied,
+      pageFieldKeys,
     );
     for (const key of deniedFormulas.page) {
       pageValues[key] = null;
@@ -1675,12 +1734,49 @@ export function materializeVisiblePageFormulas(options: {
   return out;
 }
 
+function materializationDeniedInputs(options: {
+  entityId: number;
+  pageId?: number;
+  entityFields: readonly FormulaDependencyField[];
+  pageFieldKeys: ReadonlySet<string>;
+  linkedValues?: Record<string, unknown>;
+  entityValues: Record<string, unknown>;
+  pageValues?: Record<string, unknown>;
+}): Set<string> {
+  const denied = new Set(deniedKeys(options.linkedValues));
+  const entityKeys = new Set(options.entityFields.map((field) => field.fieldKey));
+  for (const key of [...denied]) {
+    if (key.includes(":") || key.includes(".")) continue;
+    // A denied flat page lookup must not taint a same-key qualified entity
+    // value. Conversely, qualifying a flat entity denial preserves propagation
+    // when another formula references that entity value explicitly.
+    if (options.pageId != null && options.pageFieldKeys.has(key)) denied.add(`page:${options.pageId}.${key}`);
+    else if (entityKeys.has(key)) denied.add(`entity:${options.entityId}.${key}`);
+  }
+  for (const [scope, values] of [
+    ["entity", options.entityValues], ["page", options.pageValues],
+  ] as const) {
+    for (const key of deniedKeys(values)) {
+      if (key.includes(":") || key.includes(".")) {
+        denied.add(key);
+        continue;
+      }
+      // Native maps already carry their ownership. Do not flatten an entity
+      // denial onto a legitimate page shadow while copying its policy marker.
+      denied.add(scope === "entity" ? `entity:${options.entityId}.${key}` : `page:${options.pageId}.${key}`);
+      if (scope === "page" || !options.pageFieldKeys.has(key)) denied.add(key);
+    }
+  }
+  return denied;
+}
+
 function formulaDeniedKeys(
   entityId: number,
   pageId: number | undefined,
   entityFormulas: readonly FormulaFieldDef[],
   pageFormulas: readonly FormulaFieldDef[],
   deniedInputs: ReadonlySet<string>,
+  pageFieldKeys: ReadonlySet<string>,
 ): { entity: Set<string>; page: Set<string> } {
   const entityByKey = new Map(entityFormulas.map((formula) => [formula.key, formula]));
   const pageByKey = new Map(pageFormulas.map((formula) => [formula.key, formula]));
@@ -1688,11 +1784,14 @@ function formulaDeniedKeys(
   const active = new Set<string>();
   const visit = (scope: "entity" | "page", key: string): boolean => {
     const id = `${scope}:${key}`;
+    if (deniedInputs.has(scope === "entity" ? `entity:${entityId}.${key}` : `page:${pageId}.${key}`)) return true;
     const cached = memo.get(id);
     if (cached != null) return cached;
     if (active.has(id)) return false;
     const formula = scope === "entity" ? entityByKey.get(key) : pageByKey.get(key);
-    if (!formula) return deniedInputs.has(key);
+    if (!formula) return deniedInputs.has(
+      scope === "entity" ? `entity:${entityId}.${key}` : `page:${pageId}.${key}`,
+    );
     active.add(id);
     let denied = false;
     for (const match of formula.expression.matchAll(/\{([^{}]+)\}/g)) {
@@ -1712,7 +1811,7 @@ function formulaDeniedKeys(
         continue;
       }
       if (!token.includes(":") && !token.includes(".")) {
-        if (pageByKey.has(token) ? visit("page", token) : visit("entity", token)) {
+        if (pageFieldKeys.has(token) ? visit("page", token) : visit("entity", token)) {
           denied = true;
           break;
         }

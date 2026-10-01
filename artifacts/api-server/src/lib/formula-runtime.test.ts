@@ -1,5 +1,17 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+import {
+  db,
+  pool,
+  entitiesTable,
+  entityFieldsTable,
+  entityRecordsTable,
+  pagesTable,
+  pageFieldsTable,
+  pageRecordValuesTable,
+  recordLinksTable,
+  relationsTable,
+} from "@workspace/db";
 import {
   canExportPageFieldToFormula,
   canUseRecordPageFormulaContext,
@@ -8,6 +20,7 @@ import {
   formulaSourcesOf,
   isExportedFormulaBasePageResource,
   legacyFormulaSourcesFromFields,
+  localFormulaDependencyClosure,
   isDeniedFormulaProjection,
   markDeniedFormulaProjection,
   materializeVisibleEntityFormulas,
@@ -15,7 +28,71 @@ import {
   mergeLinkedFormulaInputs,
   mergeLinkedFormulaInputsBatched,
 } from "./formula-runtime";
-import type { LinkedFormulaPermissionContext } from "./linked-formula-resolver";
+import { linkedFormulaResourceKey, type LinkedFormulaPermissionContext } from "./linked-formula-resolver";
+
+const managerLookup = {
+  fieldKey: "order_project_manager",
+  fieldType: "lookup",
+  relationConfigJson: { relationId: 25, relatedFieldKey: "project_manager" },
+};
+const managerFormula = {
+  fieldKey: "manager",
+  fieldType: "function",
+  formulaConfigJson: { expression: "{entity:72.order_project_manager}" },
+};
+
+function mockManagerFormulaDatabase(t: TestContext, recursive = false): void {
+  t.mock.method(pool, "query", () => { throw new Error("Real database access forbidden in formula unit tests"); });
+  t.mock.method(pool, "connect", () => { throw new Error("Real database connection forbidden in formula unit tests"); });
+  t.mock.method(db, "select", (selection?: Record<string, unknown>) => ({
+    from(table: unknown) {
+      let rows: Record<string, unknown>[];
+      if (table === entityFieldsTable) {
+        rows = [{ ...managerLookup, entityId: 72 }];
+        if (selection?.entityId) rows.push({ entityId: 74, fieldKey: "project_manager", fieldType: "user" });
+      } else if (table === pageFieldsTable) {
+        rows = [
+          { pageId: 1024, fieldKey: "order_project_manager", fieldType: "number" },
+          ...(recursive ? [{ ...managerFormula, pageId: 77 }] : []),
+        ];
+      } else if (table === entitiesTable) {
+        rows = [{ id: 72, pageId: null }, { id: 74, pageId: null }];
+      } else if (table === pagesTable) {
+        rows = [{ id: 1024, mirrorEntityId: 72 }, { id: 77, mirrorEntityId: 72 }];
+      } else if (table === relationsTable) {
+        rows = [{ id: 25, sourceEntityId: 72, targetEntityId: 74 }];
+      } else if (table === entityRecordsTable) {
+        rows = selection?.archivedAt
+          ? [{ id: 2, entityId: 74, values: { project_manager: 314 }, archivedAt: null }]
+          : [{ id: 1, entityId: 72, values: {} }];
+      } else if (table === recordLinksTable) {
+        rows = [{ relationId: 25, sourceRecordId: 1, targetRecordId: 2 }];
+      } else if (table === pageRecordValuesTable) {
+        rows = [];
+      } else {
+        throw new Error("Unexpected table read in formula unit tests");
+      }
+      return {
+        where() { return this; },
+        limit() { return this; },
+        then(resolve: (rows: Record<string, unknown>[]) => unknown, reject: (error: unknown) => unknown) {
+          return Promise.resolve(rows).then(resolve, reject);
+        },
+      };
+    },
+  }));
+}
+
+function managerPermissions(options: { deniedResource?: string; denyTargets?: boolean } = {}): LinkedFormulaPermissionContext {
+  return {
+    async authorizeResources(resources) {
+      return new Set(resources.map(linkedFormulaResourceKey).filter((key) => key !== options.deniedResource));
+    },
+    async filterRows(scope) {
+      return new Set(options.denyTargets && scope.entityId === 74 ? [] : scope.recordIds);
+    },
+  };
+}
 
 test("formula dependency reuse is request-owned, permission-partitioned, and clone-safe", async () => {
   const allowAll: LinkedFormulaPermissionContext = {
@@ -233,6 +310,227 @@ test("legacy source discovery accepts the pre-extracted keys used by the DB meta
     aggregate: "min",
     limit: 1,
   }]);
+});
+
+test("qualified entity lookup discovery ignores page shadows and foreign namespaces", () => {
+  const sources = legacyFormulaSourcesFromFields([
+    { ...managerLookup, scope: "entity" },
+    {
+      ...managerLookup,
+      scope: "page",
+      pageId: 1024,
+      relationConfigJson: { relationId: 26, relatedFieldKey: "other_manager" },
+    },
+    {
+      fieldKey: "copies", fieldType: "function", scope: "page", pageId: 1024,
+      formulaConfigJson: {
+        expression: "{entity:72.order_project_manager} + {order_project_manager} + {entity:74.order_project_manager} + {source:order_project_manager}",
+      },
+    },
+  ], [
+    { id: 25, sourceEntityId: 72, targetEntityId: 74 },
+    { id: 26, sourceEntityId: 72, targetEntityId: 75 },
+  ], 72);
+  assert.deepEqual(sources, [{
+    key: "entity:72.order_project_manager",
+    kind: "aggregate",
+    targetEntityId: 74,
+    value: { scope: "entity", fieldKey: "project_manager" },
+    join: { kind: "relation", relationId: 25, baseSide: "source" },
+    aggregate: "min",
+    limit: 1,
+  }, {
+    key: "order_project_manager",
+    kind: "aggregate",
+    targetEntityId: 75,
+    value: { scope: "entity", fieldKey: "other_manager" },
+    join: { kind: "relation", relationId: 26, baseSide: "source" },
+    aggregate: "min",
+    limit: 1,
+  }]);
+});
+
+test("qualified and flat user lookup formulas resolve equally without serializing projections", async (t) => {
+  mockManagerFormulaDatabase(t);
+  const flatFormula = { ...managerFormula, fieldKey: "flat", formulaConfigJson: { expression: "{order_project_manager}" } };
+  const fields = [managerLookup, managerFormula, flatFormula];
+  const linkedInputs = await mergeLinkedFormulaInputs({
+    entityId: 72,
+    rows: [{ id: 1, values: {} }],
+    fields,
+    permissions: managerPermissions(),
+    formulaOptions: { throwOnError: true },
+  });
+  assert.equal(linkedInputs.get(1)!["entity:72.order_project_manager"], 314);
+  assert.equal(linkedInputs.get(1)!.order_project_manager, 314);
+  const result = materializeVisibleEntityFormulas({
+    entityId: 72, rows: [{ id: 1, values: {} }], fields,
+    hidden: new Set(), linkedInputs,
+  }).get(1)!;
+  assert.deepEqual(result, { manager: 314, flat: 314 });
+});
+
+test("qualified entity lookup materializes beside a same-key page scalar, not through it", async (t) => {
+  mockManagerFormulaDatabase(t);
+  const entityFields = [managerLookup, managerFormula];
+  const pageFields = [
+    { fieldKey: "order_project_manager", fieldType: "number" },
+    { ...managerFormula, fieldKey: "qualified_copy" },
+    { ...managerFormula, fieldKey: "flat_copy", formulaConfigJson: { expression: "{order_project_manager}" } },
+  ];
+  const linkedInputs = await mergeLinkedFormulaInputs({
+    entityId: 72, pageId: 1024, rows: [{ id: 1, values: {} }],
+    fields: [...entityFields, ...pageFields], permissions: managerPermissions(),
+    formulaOptions: { throwOnError: true },
+  });
+  assert.equal(linkedInputs.get(1)!["entity:72.order_project_manager"], 314);
+  assert.equal("order_project_manager" in linkedInputs.get(1)!, false);
+  const entityValues = materializeVisibleEntityFormulas({
+    entityId: 72, pageId: 1024, rows: [{ id: 1, values: {} }], fields: entityFields,
+    pageFields, pageValues: new Map([[1, { order_project_manager: 9 }]]),
+    hidden: new Set(), hiddenPage: new Set(), linkedInputs,
+  }).get(1)!;
+  const pageValues = materializeVisiblePageFormulas({
+    entityId: 72, pageId: 1024,
+    rows: [{ id: 1, entityValues: {}, pageValues: { order_project_manager: 9 } }],
+    entityFields, pageFields, hiddenEntity: new Set(), hiddenPage: new Set(), linkedInputs,
+  }).get(1)!;
+  assert.deepEqual(entityValues, { manager: 314 });
+  assert.deepEqual(pageValues, { order_project_manager: 9, qualified_copy: 314, flat_copy: 9 });
+});
+
+test("qualified lookup source and target permissions deny transitive formula results", async (t) => {
+  for (const boundary of ["lookup field", "target field", "target rows"] as const) {
+    await t.test(boundary, async (t) => {
+      mockManagerFormulaDatabase(t);
+      const permissions = managerPermissions({
+        deniedResource: boundary === "lookup field" ? "field:72:entity:order_project_manager"
+          : boundary === "target field" ? "field:74:entity:project_manager" : undefined,
+        denyTargets: boundary === "target rows",
+      });
+      const entityFields = [managerLookup, managerFormula];
+      const pageFields = [
+        { fieldKey: "order_project_manager", fieldType: "number" },
+        { fieldKey: "chain", fieldType: "function", formulaConfigJson: { expression: "{entity:72.manager} + 1" } },
+        { fieldKey: "flat_copy", fieldType: "function", formulaConfigJson: { expression: "{order_project_manager}" } },
+      ];
+      const linkedInputs = await mergeLinkedFormulaInputs({
+        entityId: 72, pageId: 1024, rows: [{ id: 1, values: {} }],
+        fields: [...entityFields, ...pageFields], permissions,
+        formulaOptions: { throwOnError: true },
+      });
+      assert.equal(isDeniedFormulaProjection(linkedInputs.get(1), "entity:72.order_project_manager"), true);
+      const result = materializeVisiblePageFormulas({
+        entityId: 72, pageId: 1024,
+        rows: [{ id: 1, entityValues: {}, pageValues: { order_project_manager: 9 } }],
+        entityFields, pageFields,
+        hiddenEntity: new Set(boundary === "lookup field" ? ["order_project_manager"] : []),
+        hiddenPage: new Set(), linkedInputs,
+      }).get(1)!;
+      assert.equal(result.chain, null, "arithmetic cannot mask a denied lookup");
+      assert.equal(isDeniedFormulaProjection(result, "chain"), true);
+      assert.equal(result.flat_copy, 9, "entity denial must not taint the independent page scalar");
+      assert.equal(isDeniedFormulaProjection(result, "flat_copy"), false);
+    });
+  }
+});
+
+test("a hidden entity lookup is not re-admitted by a same-key visible page field", () => {
+  const values = materializeVisiblePageFormulas({
+    entityId: 72, pageId: 1024,
+    rows: [{ id: 1, entityValues: {}, pageValues: { order_project_manager: 9 } }],
+    entityFields: [managerLookup],
+    pageFields: [{ fieldKey: "order_project_manager", fieldType: "number" }, managerFormula],
+    hiddenEntity: new Set(["order_project_manager"]), hiddenPage: new Set(),
+    linkedInputs: new Map([[1, { "entity:72.order_project_manager": 314 }]]),
+  }).get(1)!;
+  assert.deepEqual(values, { order_project_manager: 9, manager: null });
+});
+
+test("flat page lookup denial does not taint an independent qualified entity lookup", () => {
+  const linked = { order_project_manager: null, "entity:72.order_project_manager": 314 };
+  markDeniedFormulaProjection(linked, "order_project_manager");
+  for (const hiddenPage of [new Set<string>(), new Set(["order_project_manager"])]) {
+    const result = materializeVisiblePageFormulas({
+      entityId: 72, pageId: 1024,
+      rows: [{ id: 1, entityValues: {}, pageValues: {} }],
+      entityFields: [managerLookup],
+      pageFields: [
+        { ...managerLookup, relationConfigJson: { relationId: 26, relatedFieldKey: "other_manager" } },
+        managerFormula,
+        { fieldKey: "flat", fieldType: "function", formulaConfigJson: { expression: "{order_project_manager} + 1" } },
+        { fieldKey: "page_qualified", fieldType: "function", formulaConfigJson: { expression: "{page:1024.order_project_manager} + 1" } },
+      ],
+      hiddenEntity: new Set(), hiddenPage, linkedInputs: new Map([[1, linked]]),
+    }).get(1)!;
+    assert.equal(result.manager, 314);
+    assert.equal(isDeniedFormulaProjection(result, "manager"), false);
+    assert.equal(result.flat, null);
+    assert.equal(result.page_qualified, null);
+    assert.equal(isDeniedFormulaProjection(result, "flat"), true);
+    assert.equal(isDeniedFormulaProjection(result, "page_qualified"), true);
+  }
+});
+
+test("native denied metadata retains its owning namespace beside a page scalar shadow", () => {
+  const entityValues = { amount: null };
+  markDeniedFormulaProjection(entityValues, "amount");
+  const result = materializeVisiblePageFormulas({
+    entityId: 72, pageId: 1024,
+    rows: [{ id: 1, entityValues, pageValues: { amount: 9 } }],
+    entityFields: [{ fieldKey: "amount", fieldType: "number" }],
+    pageFields: [
+      { fieldKey: "amount", fieldType: "number" },
+      { fieldKey: "entity_copy", fieldType: "function", formulaConfigJson: { expression: "{entity:72.amount} + 1" } },
+      { fieldKey: "page_copy", fieldType: "function", formulaConfigJson: { expression: "{amount}" } },
+    ],
+    hiddenEntity: new Set(), hiddenPage: new Set(),
+  }).get(1)!;
+  assert.equal(result.entity_copy, null);
+  assert.equal(isDeniedFormulaProjection(result, "entity_copy"), true);
+  assert.equal(result.page_copy, 9);
+  assert.equal(isDeniedFormulaProjection(result, "page_copy"), false);
+});
+
+test("flat entity lookup denial propagates to qualified formula references", () => {
+  const linked = { order_project_manager: null };
+  markDeniedFormulaProjection(linked, "order_project_manager");
+  const result = materializeVisibleEntityFormulas({
+    entityId: 72, rows: [{ id: 1, values: {} }], fields: [managerLookup, managerFormula],
+    hidden: new Set(), linkedInputs: new Map([[1, linked]]),
+  }).get(1)!;
+  assert.equal(result.manager, null);
+  assert.equal(isDeniedFormulaProjection(result, "manager"), true);
+});
+
+test("recursive cross-page formulas discover qualified entity lookups in their local dependency closure", async (t) => {
+  for (const denyTargets of [false, true]) {
+    await t.test(denyTargets ? "denied target rows" : "allowed target rows", async (t) => {
+      mockManagerFormulaDatabase(t, true);
+      assert.deepEqual(localFormulaDependencyClosure(managerFormula, 72, 77, [managerLookup], [managerFormula]), [
+        managerFormula, managerLookup,
+      ]);
+      const pageFields = [{
+        fieldKey: "recursive", fieldType: "function",
+        formulaConfigJson: { expression: "{page:77.manager} + 1" },
+      }];
+      const linkedInputs = await mergeLinkedFormulaInputs({
+        entityId: 72, pageId: 1024, rows: [{ id: 1, values: {} }],
+        fields: pageFields, permissions: managerPermissions({ denyTargets }),
+        formulaOptions: { throwOnError: true },
+      });
+      assert.equal(linkedInputs.get(1)!["page:77.manager"], denyTargets ? null : 314);
+      assert.equal(isDeniedFormulaProjection(linkedInputs.get(1), "page:77.manager"), denyTargets);
+      const result = materializeVisiblePageFormulas({
+        entityId: 72, pageId: 1024,
+        rows: [{ id: 1, entityValues: {}, pageValues: {} }],
+        entityFields: [managerLookup], pageFields,
+        hiddenEntity: new Set(), hiddenPage: new Set(), linkedInputs,
+      }).get(1)!;
+      assert.deepEqual(result, { recursive: denyTargets ? null : 315 });
+      assert.equal(isDeniedFormulaProjection(result, "recursive"), denyTargets);
+    });
+  }
 });
 
 test("only enabled, same-scope synthesized group links opt in to archived targets", () => {

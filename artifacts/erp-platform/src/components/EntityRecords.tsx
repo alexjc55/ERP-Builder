@@ -2708,38 +2708,6 @@ export function EntityRecords({
     [pageFields],
   );
 
-  // Formula evaluation always keeps raw values (including numeric user ids).
-  // Only a whole-expression direct reference may inherit its source type for
-  // presentation. This mirrors the API filter provenance rules, including
-  // qualified entity refs and legacy page-field shadowing.
-  const directEntityFormulaTypes = useMemo(() => {
-    const result = new Map<string, string>();
-    for (const formula of allFields) {
-      if (formula.fieldType !== "function") continue;
-      const type = directEntityFormulaResultType({
-        formula,
-        entityId,
-        entityFields: allFields,
-        pageFields,
-      });
-      if (type) result.set(formula.fieldKey, type);
-    }
-    return result;
-  }, [allFields, entityId, pageFields]);
-  const directPageFormulaTypes = useMemo(() => {
-    const result = new Map<string, string>();
-    for (const formula of pageFields) {
-      if (formula.fieldType !== "function") continue;
-      const type = directEntityFormulaResultType({
-        formula,
-        entityId,
-        entityFields: allFields,
-        pageFields,
-      });
-      if (type) result.set(formula.fieldKey, type);
-    }
-    return result;
-  }, [allFields, entityId, pageFields]);
   // Formula (`function`) fields can reference OTHER formula fields by key. Their
   // value is never stored, so we describe every formula field here and wrap each
   // record's values in `buildFormulaScope` (below) so a `{other_formula}` ref
@@ -2917,6 +2885,39 @@ export function EntityRecords({
     for (const c of entityRelatedColumns) m.set(c.fieldKey, c);
     return m;
   }, [entityRelatedColumns]);
+  // Keep raw formula values; use the existing permission-scoped projection's
+  // metadata only for presentation, including group-common values. Never infer
+  // lookup types from target keys or the sticky calendar type cache.
+  const directEntityFormulaTypes = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const formula of allFields) {
+      if (formula.fieldType !== "function") continue;
+      const type = directEntityFormulaResultType({
+        formula,
+        entityId,
+        entityFields: allFields,
+        pageFields,
+        entityRelatedColumns,
+      });
+      if (type) result.set(formula.fieldKey, type);
+    }
+    return result;
+  }, [allFields, entityId, pageFields, entityRelatedColumns]);
+  const directPageFormulaTypes = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const formula of pageFields) {
+      if (formula.fieldType !== "function") continue;
+      const type = directEntityFormulaResultType({
+        formula,
+        entityId,
+        entityFields: allFields,
+        pageFields,
+        entityRelatedColumns,
+      });
+      if (type) result.set(formula.fieldKey, type);
+    }
+    return result;
+  }, [allFields, entityId, pageFields, entityRelatedColumns]);
   // Sticky cache of a relation/lookup field's PROJECTED type, keyed by fieldKey. The related-values
   // fetch clears `entityRelatedColumns` whenever the current filter yields zero rows (see the fetch
   // effect below), which would otherwise make a lookup-of-date field flip back to the checklist UI
@@ -10696,23 +10697,6 @@ function RecordFormBody({
     () => new Map<number, string>(userOptions.map((u: UserOption) => [u.id, u.name])),
     [userOptions],
   );
-  const directFormFormulaTypes = useMemo(() => {
-    const result = new Map<string, string>();
-    for (const formula of allFields) {
-      if (formula.fieldType !== "function") continue;
-      const type = directEntityFormulaResultType({
-        formula,
-        entityId,
-        entityFields: allFields,
-        // Standalone nested forms do not receive page-field metadata. In that
-        // case conservatively reject legacy flat refs on a page; qualified
-        // entity refs remain safe and continue to resolve.
-        pageFields: formulaPageFields ?? (pageId == null ? [] : allFields),
-      });
-      if (type) result.set(formula.fieldKey, type);
-    }
-    return result;
-  }, [allFields, entityId, formulaPageFields, pageId]);
 
   // THIS record's relation/lookup values (edit mode only — a create has no record
   // yet). Self-fetched so relation fields render a live picker with the current
@@ -10729,6 +10713,24 @@ function RecordFormBody({
     for (const c of relCols) m.set(c.fieldKey, c);
     return m;
   }, [relCols]);
+  const directFormFormulaTypes = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const formula of allFields) {
+      if (formula.fieldType !== "function") continue;
+      const type = directEntityFormulaResultType({
+        formula,
+        entityId,
+        entityFields: allFields,
+        // Standalone nested forms do not receive page-field metadata. In that
+        // case conservatively reject legacy flat refs on a page; qualified
+        // entity refs remain safe and continue to resolve.
+        pageFields: formulaPageFields ?? (pageId == null ? [] : allFields),
+        entityRelatedColumns: relCols,
+      });
+      if (type) result.set(formula.fieldKey, type);
+    }
+    return result;
+  }, [allFields, entityId, formulaPageFields, pageId, relCols]);
 
   // Clear stale relation values the instant the edited record changes, so the
   // previous record's links never flash on the new one before the fetch resolves.
