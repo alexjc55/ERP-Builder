@@ -17,6 +17,8 @@ import {
   entityStatusesTable,
   pageRecordValuesTable,
   usersTable,
+  statusTagsTable,
+  tagsTable,
   type EntityField,
 } from "@workspace/db";
 import { and, eq, sql, inArray, type SQL } from "drizzle-orm";
@@ -26,6 +28,8 @@ import {
   evaluateFormula,
   type FormulaEvaluationOptions,
   type FormulaFieldDef,
+  cleanFpNoise,
+  normalizeDecimals,
 } from "@workspace/formula";
 import {
   relationValueScalar,
@@ -39,7 +43,8 @@ import {
   type PivotDisplayAffixField,
   type PivotMeasureDisplayAffix,
 } from "./pivot-display-affix";
-import { buildQualifiedFormulaScope } from "../lib/formula-runtime";
+import { buildQualifiedFormulaScope, localFormulaDependencyClosure, mergeLinkedFormulaInputsBatched } from "../lib/formula-runtime";
+import type { LinkedFormulaPermissionContext } from "../lib/linked-formula-resolver";
 import {
   materializeVisibleEntityFormulas,
   materializeVisiblePageFormulas,
@@ -71,11 +76,31 @@ const PIVOT_PERIOD_UNITS = new Set(["year", "quarter", "month", "day"]);
 const PIVOT_NUMERIC_RE = "^-?[0-9]+(\\.[0-9]+)?$";
 export const PIVOT_COL_ALL = "__all__";
 
+/** Axes are independent: two tag dimensions intentionally form a cartesian
+ * product. Totals sum contributions, not distinct source records. */
+export function expandPivotTagAxes(
+  grouped: { rk: string | null; ck: string | null; v: number }[],
+  tagsByStatus: ReadonlyMap<string, readonly string[]>,
+  rowTags: boolean,
+  colTags: boolean,
+): { rk: string | null; ck: string | null; v: number }[] {
+  const keys = (key: string | null) => {
+    const tags = [...new Set(tagsByStatus.get(key ?? "") ?? [])];
+    return tags.length ? tags : [""];
+  };
+  return grouped.flatMap(g => (rowTags ? keys(g.rk) : [g.rk]).flatMap(rk =>
+    (colTags ? keys(g.ck) : [g.ck]).map(ck => ({ rk, ck, v: g.v }))));
+}
+
 export function pivotMLName(nameJson: unknown): string {
   const n = (nameJson ?? {}) as Record<string, string>;
   return n.ru || n.en || n.he || "";
 }
 export function pivotRound(v: number): number {
+  if (!Number.isFinite(v)) throw new Error("Pivot sum exceeds the numeric range");
+  // These magnitudes have no representable fractional digits. Scaling them
+  // would only lose precision (or overflow a finite total to Infinity).
+  if (Math.abs(v) >= Number.MAX_SAFE_INTEGER) return v;
   return Math.round(v * 1e6) / 1e6;
 }
 
@@ -128,6 +153,7 @@ export interface PivotPageField extends Omit<PivotDisplayAffixField, "formulaCon
   pivotEnabled: boolean | null;
   fieldType: string;
   nameJson: unknown;
+  relationConfigJson?: unknown;
   formulaConfigJson?: (
     NonNullable<PivotDisplayAffixField["formulaConfigJson"]> & {
       groupResult?: {
@@ -157,6 +183,8 @@ export interface PivotComputeInput {
   formulaOptions?: FormulaEvaluationOptions;
   /** Batched linked/qualified formula inputs keyed by record id. */
   formulaInputs?: Map<number, Record<string, unknown>>;
+  /** The caller's exact authorization context; never default to SYSTEM here. */
+  formulaPermissions?: LinkedFormulaPermissionContext;
 }
 
 export interface PivotResultShape {
@@ -179,6 +207,7 @@ export type PivotComputeOutcome =
 
 type DimMeta =
   | { kind: "status" }
+  | { kind: "statusTag" }
   | { kind: "plain"; expr: SQL }
   | { kind: "user"; expr: SQL }
   | { kind: "date"; expr: SQL; period: string };
@@ -189,6 +218,14 @@ type DimMeta =
  * boundary). Returns a discriminated result so callers can map errors to 400.
  */
 export async function computePivot(input: PivotComputeInput): Promise<PivotComputeOutcome> {
+  try {
+    return await computePivotInternal(input);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Pivot computation failed" };
+  }
+}
+
+async function computePivotInternal(input: PivotComputeInput): Promise<PivotComputeOutcome> {
   const { entityId, pivot, entityFields, relationMeta, pageId, where } = input;
   // Non-records callers (dashboard/pivot pages) rely on this shared core to load
   // the singleton setting once. Records routes pass their request-scoped context.
@@ -338,6 +375,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
 
   const resolveDim = (dim: PivotDimInput): DimMeta | { error: string } => {
     if (dim.source === "status") return { kind: "status" };
+    if (dim.source === "statusTag") return { kind: "statusTag" };
     const key = dim.fieldKey ?? "";
     if (!key) return { error: "Pivot dimension requires fieldKey" };
     let ftype: string;
@@ -403,8 +441,79 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
   // (multi-measure mode only).
   type MeasurePlan =
     | { kind: "sql"; expr: SQL; label: string }
+    | { kind: "fieldFormula"; source: "entity" | "page"; fieldKey: string; label: string }
     | { kind: "formula"; expr: string; label: string; allowedKeys: string[] }
     | { kind: "calc"; expr: string; label: string };
+  // Configured-field SUM is different from the legacy arbitrary-expression
+  // measure: evaluate the selected identity strictly, then distribute its rounded
+  // row values. Group-result winners are picked BEFORE any axis expansion.
+  const configuredValues = new Map<string, Promise<Map<number, number>>>();
+  const configuredFieldValues = (plan: Extract<MeasurePlan, { kind: "fieldFormula" }>) => {
+    const identity = `${plan.source}:${plan.fieldKey}`;
+    let pending = configuredValues.get(identity);
+    if (pending) return pending;
+    pending = (async () => {
+      const fields = entityFields.filter(f => f.pivotEnabled);
+      const pageFields = (input.pageFields ?? []).filter(f => f.pivotEnabled);
+      const target = (plan.source === "entity" ? fields : pageFields).find(f => f.fieldKey === plan.fieldKey)!;
+      const strictOptions = { ...formulaOptions, throwOnError: true, ignoreStoredFormulaValues: true };
+      const raw = await db.select({
+        id: entityRecordsTable.id, createdAt: entityRecordsTable.createdAt, values: entityRecordsTable.valuesJson,
+      }).from(entityRecordsTable).where(where);
+      const rows = raw.map(row => {
+        const values: Record<string, unknown> = {};
+        for (const f of fields) {
+          if (f.fieldType !== "function") values[f.fieldKey] = (row.values as Record<string, unknown> | null)?.[f.fieldKey];
+          if (f.fieldType === SYSTEM_DATE_FIELD_TYPE) values[f.fieldKey] = row.createdAt.toISOString();
+        }
+        return { ...row, values };
+      });
+      const pageValues = new Map<number, Record<string, unknown>>();
+      if (pageId != null) for (let offset = 0; offset < rows.length; offset += 5000) {
+        const stored = await db.select().from(pageRecordValuesTable).where(and(
+          eq(pageRecordValuesTable.pageId, pageId),
+          inArray(pageRecordValuesTable.recordId, rows.slice(offset, offset + 5000).map(r => r.id)),
+        ));
+        for (const row of stored) {
+          const values: Record<string, unknown> = {};
+          for (const f of pageFields) if (f.fieldType !== "function") values[f.fieldKey] = (row.valuesJson as Record<string, unknown> | null)?.[f.fieldKey];
+          pageValues.set(row.recordId, values);
+        }
+      }
+      const closure = localFormulaDependencyClosure(target, entityId, pageId, fields, pageFields, plan.source);
+      const linkedInputs = input.formulaPermissions ? await mergeLinkedFormulaInputsBatched({
+        entityId, pageId, rows, fields: closure, permissions: input.formulaPermissions, formulaOptions: strictOptions,
+      }) : input.formulaInputs;
+      const configs = secureFormulaGroupConfigs({ fields: [target], entityFields: fields, pageFields, pageId });
+      const entityKeys = new Set(plan.source === "entity" ? [plan.fieldKey] : []);
+      const pageKeys = new Set(plan.source === "page" ? [plan.fieldKey] : []);
+      for (const config of configs) for (const ref of config.fields) (ref.scope === "entity" ? entityKeys : pageKeys).add(ref.fieldKey);
+      const entityResults = materializeVisibleEntityFormulas({
+        entityId, pageId, rows, fields, hidden: emptyHidden, pageFields, pageValues, hiddenPage: emptyHidden,
+        linkedInputs, formulaOptions: strictOptions, materializeKeys: entityKeys,
+      });
+      const pageResults = pageId == null ? new Map<number, Record<string, unknown>>() : materializeVisiblePageFormulas({
+        entityId, pageId, rows: rows.map(row => ({ id: row.id, entityValues: row.values, pageValues: pageValues.get(row.id) ?? {} })),
+        entityFields: fields, pageFields, hiddenEntity: emptyHidden, hiddenPage: emptyHidden,
+        linkedInputs, formulaOptions: strictOptions, materializeKeys: pageKeys,
+      });
+      const winners = formulaGroupResultWinners(rows.map(row => ({
+        id: row.id, createdAt: row.createdAt,
+        entityValues: { ...(linkedInputs?.get(row.id) ?? {}), ...entityResults.get(row.id) },
+        pageValues: pageId == null ? undefined : new Map([[pageId, { ...(linkedInputs?.get(row.id) ?? {}), ...pageResults.get(row.id) }]]),
+      })), configs);
+      const results = applyFormulaGroupResults(plan.source === "entity" ? entityResults : pageResults, winners);
+      const decimals = normalizeDecimals((target.formulaConfigJson as { decimals?: unknown } | null)?.decimals);
+      return new Map(rows.map(row => {
+        const value = results.get(row.id)?.[plan.fieldKey];
+        if (value == null || value === "") return [row.id, 0];
+        if (typeof value !== "number" || !Number.isFinite(value)) throw new Error(`Cannot sum formula "${plan.fieldKey}": every non-empty result must be a finite number.`);
+        return [row.id, decimals == null ? cleanFpNoise(value) : Number(value.toFixed(decimals))];
+      }));
+    })();
+    configuredValues.set(identity, pending);
+    return pending;
+  };
   // Only pivot-enabled, viewer-visible entity fields may feed a formula measure.
   // `entityFields` is already the viewer's visible set (or all-active for the
   // admin widget); restricting the per-record value map to these keys keeps
@@ -453,6 +562,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       const f = entFieldByKey.get(key);
       if (!f) return { error: `Unknown or hidden measure field: ${key}` };
       if (!f.pivotEnabled) return { error: `Field is not enabled for pivot: ${key}` };
+      if (f.fieldType === "function") return { kind: "fieldFormula", source: src, fieldKey: key, label: measureLabel(m, pivotMLName(f.nameJson)) };
       if (f.fieldType !== "number") return { error: `Measure field must be numeric: ${key}` };
       ve = sql`(${entityRecordsTable.valuesJson} ->> ${key})`;
       label = measureLabel(m, pivotMLName(f.nameJson));
@@ -460,6 +570,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       const pf = pageFieldByKey.get(key);
       if (!pf) return { error: `Unknown or hidden page measure field: ${key}` };
       if (!pf.pivotEnabled) return { error: `Page field is not enabled for pivot: ${key}` };
+      if (pf.fieldType === "function") return { kind: "fieldFormula", source: src, fieldKey: key, label: measureLabel(m, pivotMLName(pf.nameJson)) };
       if (pf.fieldType !== "number") return { error: `Measure field must be numeric: ${key}` };
       ve = pageLocalValueExpr(pageId!, key);
       label = measureLabel(m, pivotMLName(pf.nameJson));
@@ -474,7 +585,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
   const rowMeta = resolveDim(pivot.rows);
   if ("error" in rowMeta) return { ok: false, error: rowMeta.error };
 
-  const rowKeyExpr = rowMeta.kind === "status" ? sql`${entityRecordsTable.statusId}::text` : rowMeta.expr;
+  const rowKeyExpr = rowMeta.kind === "status" || rowMeta.kind === "statusTag" ? sql`${entityRecordsTable.statusId}::text` : rowMeta.expr;
 
   // Multi-measure mode (each measure is a column) takes precedence over the
   // single `measure` + optional `cols` dimension. The two are mutually exclusive
@@ -500,6 +611,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
     multiMeasure = true;
     const sqlPlans: { colKey: string; expr: SQL }[] = [];
     const formulaPlans: { colKey: string; expr: string; allowedKeys: string[] }[] = [];
+    const configuredPlans: { colKey: string; plan: Extract<MeasurePlan, { kind: "fieldFormula" }> }[] = [];
     const seen = new Set<string>();
     for (let i = 0; i < measuresInput.length; i++) {
       const m = measuresInput[i];
@@ -523,6 +635,9 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
         valueColKeys.push(colKey);
       } else if (plan.kind === "formula") {
         formulaPlans.push({ colKey, expr: plan.expr, allowedKeys: plan.allowedKeys });
+        valueColKeys.push(colKey);
+      } else if (plan.kind === "fieldFormula") {
+        configuredPlans.push({ colKey, plan });
         valueColKeys.push(colKey);
       } else {
         calcPlans.push({ colKey, expr: plan.expr });
@@ -551,6 +666,14 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
     }
 
     grouped = [];
+    if (configuredPlans.length > 0) {
+      const axisRows = await db.select({ id: entityRecordsTable.id, rk: sql<string | null>`${rowKeyExpr}` })
+        .from(entityRecordsTable).where(where);
+      for (const { colKey, plan } of configuredPlans) {
+        const values = await configuredFieldValues(plan);
+        for (const row of axisRows) grouped.push({ rk: row.rk, ck: colKey, v: values.get(row.id) ?? 0 });
+      }
+    }
     // One grouped query for all SQL measures (count / sum), aggregated per row.
     if (sqlPlans.length > 0) {
       const sel: Record<string, SQL> = { __rk: sql`${rowKeyExpr}` };
@@ -615,11 +738,18 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
     if (displayAffix) measureDisplayAffixes.push(displayAffix);
     const colKeyExpr = !colMeta
       ? null
-      : colMeta.kind === "status"
+      : colMeta.kind === "status" || colMeta.kind === "statusTag"
         ? sql`${entityRecordsTable.statusId}::text`
         : colMeta.expr;
 
-    if (measure.kind === "formula") {
+    if (measure.kind === "fieldFormula") {
+      const values = await configuredFieldValues(measure);
+      const axisRows = await db.select({
+        id: entityRecordsTable.id, rk: sql<string | null>`${rowKeyExpr}`,
+        ck: colKeyExpr ? sql<string | null>`${colKeyExpr}` : sql<string>`${PIVOT_COL_ALL}`,
+      }).from(entityRecordsTable).where(where);
+      grouped = axisRows.map(row => ({ rk: row.rk, ck: row.ck, v: values.get(row.id) ?? 0 }));
+    } else if (measure.kind === "formula") {
       // SQL can't compute the formula language, so pull per-record keys + the raw
       // values map (NO GROUP BY), evaluate in JS against the allowed-key-scoped
       // values, and emit one {rk,ck,v} per record. The shared loop below then
@@ -675,6 +805,24 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
   }
 
   // ---- Label resolution ----
+  const tagName = new Map<string, string>();
+  const tagOrder = new Map<string, number>();
+  if (rowMeta.kind === "statusTag" || colMeta?.kind === "statusTag") {
+    const assignments = await db.select({
+      statusId: statusTagsTable.statusId, tagId: tagsTable.id, nameJson: tagsTable.nameJson, sortOrder: tagsTable.sortOrder,
+    }).from(statusTagsTable)
+      .innerJoin(entityStatusesTable, eq(entityStatusesTable.id, statusTagsTable.statusId))
+      .innerJoin(tagsTable, eq(tagsTable.id, statusTagsTable.tagId))
+      .where(eq(entityStatusesTable.entityId, entityId));
+    const tagsByStatus = new Map<string, string[]>();
+    for (const tag of assignments) {
+      const statusKey = String(tag.statusId), tagKey = String(tag.tagId);
+      tagsByStatus.set(statusKey, [...(tagsByStatus.get(statusKey) ?? []), tagKey]);
+      tagName.set(tagKey, pivotMLName(tag.nameJson) || tagKey);
+      tagOrder.set(tagKey, tag.sortOrder);
+    }
+    grouped = expandPivotTagAxes(grouped, tagsByStatus, rowMeta.kind === "statusTag", colMeta?.kind === "statusTag");
+  }
   const statusName = new Map<number, string>();
   const statusOrder = new Map<number, number>();
   if (rowMeta.kind === "status" || colMeta?.kind === "status") {
@@ -699,7 +847,8 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
   // after the key sets are known). Falls back to the raw id if not found.
   const userName = new Map<string, string>();
   const labelFor = (meta: DimMeta, key: string): string => {
-    if (key === "") return meta.kind === "status" ? "(без статуса)" : "(пусто)";
+    if (key === "") return meta.kind === "status" ? "(без статуса)" : meta.kind === "statusTag" ? "Без тега" : "(пусто)";
+    if (meta.kind === "statusTag") return tagName.get(key) ?? key;
     if (meta.kind === "status") return statusName.get(Number(key)) ?? key;
     if (meta.kind === "user") return userName.get(key) ?? key;
     if (meta.kind === "date") return formatPeriod(key, meta.period);
@@ -711,6 +860,7 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       if (a === "") return 1;
       if (b === "") return -1;
       if (meta.kind === "status") return (statusOrder.get(Number(a)) ?? 0) - (statusOrder.get(Number(b)) ?? 0);
+      if (meta.kind === "statusTag") return (tagOrder.get(a) ?? 0) - (tagOrder.get(b) ?? 0) || (tagName.get(a) ?? a).localeCompare(tagName.get(b) ?? b) || Number(a) - Number(b);
       if (meta.kind === "date") return a < b ? -1 : a > b ? 1 : 0;
       if (meta.kind === "user")
         return (userName.get(a) ?? a).localeCompare(userName.get(b) ?? b, undefined, { numeric: true });
@@ -726,7 +876,9 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
     rowKeySet.add(rk);
     colKeySet.add(ck);
     const ck2 = rk + "\u0000" + ck;
-    cellMap.set(ck2, (cellMap.get(ck2) ?? 0) + Number(g.v ?? 0));
+    const total = (cellMap.get(ck2) ?? 0) + Number(g.v ?? 0);
+    if (!Number.isFinite(total)) return { ok: false, error: "Pivot sum exceeds the numeric range" };
+    cellMap.set(ck2, total);
   }
 
   if (rowMeta.kind === "user" || colMeta?.kind === "user") {
@@ -798,12 +950,14 @@ export async function computePivot(input: PivotComputeInput): Promise<PivotCompu
       if (v !== 0) cells.push({ rowKey: rk, colKey: ck, value: pivotRound(v) });
       rt += v;
       colTotal.set(ck, (colTotal.get(ck) ?? 0) + v);
+      if (!Number.isFinite(rt) || !Number.isFinite(colTotal.get(ck))) return { ok: false, error: "Pivot sum exceeds the numeric range" };
     }
     // In multi mode columns are heterogeneous measures, so a row total (sum
     // across measures) is meaningless — omit it. colTotals (per measure) stay.
     if (!multiMeasure) {
       rowTotals.push({ key: rk, value: pivotRound(rt) });
       grandTotal += rt;
+      if (!Number.isFinite(grandTotal)) return { ok: false, error: "Pivot sum exceeds the numeric range" };
     }
   }
 

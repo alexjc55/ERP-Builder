@@ -11,5 +11,6 @@ export type ChartConfigGroupByKind = typeof ChartConfigGroupByKind[keyof typeof 
 
 export const ChartConfigGroupByKind = {
   status: 'status',
+  statusTag: 'statusTag',
   field: 'field',
 } as const;

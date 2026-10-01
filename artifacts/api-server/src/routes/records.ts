@@ -3425,6 +3425,7 @@ router.post(
       where,
       formulaOptions,
       formulaInputs: pivotFormulaInputs,
+      formulaPermissions: pivotFormulaPermissions,
     });
     if (!outcome.ok) {
       res.status(400).json({ error: outcome.error });

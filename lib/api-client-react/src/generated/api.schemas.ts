@@ -1716,7 +1716,7 @@ export const PivotPageConfigSource = {
 } as const;
 
 /**
- * Grouping key source — an entity field, a page-local field, or the record status.
+ * Grouping key source — entity/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.
  */
 export type PivotDimensionSource = typeof PivotDimensionSource[keyof typeof PivotDimensionSource];
 
@@ -1725,6 +1725,7 @@ export const PivotDimensionSource = {
   entity: 'entity',
   page: 'page',
   status: 'status',
+  statusTag: 'statusTag',
 } as const;
 
 /**
@@ -1742,10 +1743,10 @@ export const PivotDimensionDatePeriod = {
 } as const;
 
 export interface PivotDimension {
-  /** Grouping key source — an entity field, a page-local field, or the record status. */
+  /** Grouping key source — entity/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions. */
   source: PivotDimensionSource;
   /**
-     * Field key for source=entity|page. Ignored for source=status.
+     * Field key for source=entity|page. Ignored for source=status|statusTag.
      * @nullable
      */
   fieldKey?: string | null;
@@ -1791,7 +1792,7 @@ export interface PivotMeasure {
      */
   source?: PivotMeasureSource;
   /**
-     * Numeric field key for agg=sum. Ignored for agg=count/formula/calc.
+     * Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count/formula/calc.
      * @nullable
      */
   fieldKey?: string | null;
@@ -2281,6 +2282,7 @@ export type ChartConfigGroupByKind = typeof ChartConfigGroupByKind[keyof typeof 
 
 export const ChartConfigGroupByKind = {
   status: 'status',
+  statusTag: 'statusTag',
   field: 'field',
 } as const;
 
@@ -2318,7 +2320,7 @@ export interface ChartConfig {
   groupBy: ChartConfigGroupBy;
   aggregation: ChartConfigAggregation;
   /**
-     * Numeric field to sum per bucket (required when aggregation = sum)
+     * Numeric or configured numeric-result formula field to sum per bucket (required when aggregation = sum).
      * @nullable
      */
   fieldKey?: string | null;
@@ -3681,6 +3683,8 @@ export interface PageRelationOptionField {
   key: string;
   label: MultilingualText;
   fieldType: string;
+  /** Included for aggregate options; true for active number fields and configured formulas (numeric results validated at runtime). */
+  supportsSum?: boolean;
 }
 
 /**
@@ -5373,6 +5377,13 @@ roleId?: number | null;
 isActive?: boolean | null;
 limit?: number;
 offset?: number;
+};
+
+export type GetEntityRelationOptionsParams = {
+/**
+ * Include group-result formulas and SUM eligibility for aggregate editors only. Default preserves single-record relation/lookup restrictions.
+ */
+forAggregation?: boolean;
 };
 
 export type ListEventsParams = {

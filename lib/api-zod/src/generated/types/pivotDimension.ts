@@ -9,10 +9,10 @@ import type { PivotDimensionDatePeriod } from './pivotDimensionDatePeriod';
 import type { PivotDimensionSource } from './pivotDimensionSource';
 
 export interface PivotDimension {
-  /** Grouping key source — an entity field, a page-local field, or the record status. */
+  /** Grouping key source — entity/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions. */
   source: PivotDimensionSource;
   /**
-     * Field key for source=entity|page. Ignored for source=status.
+     * Field key for source=entity|page. Ignored for source=status|statusTag.
      * @nullable
      */
   fieldKey?: string | null;

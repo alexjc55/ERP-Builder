@@ -40,6 +40,15 @@ test("strict shared scope distinguishes malformed/cyclic formulas from legitimat
   assert.equal(legacy.cycle, null);
 });
 
+test("aggregate strict arithmetic failures cannot turn into zero while legitimate empty results can", () => {
+  for (const expression of ["1 / 0", "1 % 0"]) {
+    const scope = buildFormulaScope({}, [{ key: "amount", expression }], { throwOnError: true });
+    assert.throws(() => sumFormulaMetricValues([scope.amount], "amount", 2), FormulaComputationError);
+  }
+  const empty = buildFormulaScope({}, [{ key: "amount", expression: "{missing}" }], { throwOnError: true });
+  assert.equal(sumFormulaMetricValues([empty.amount, ""], "amount", 2), 0);
+});
+
 test("strict recomputation preserves genuine page scalar shadows inside entity/page formula dependencies", () => {
   for (const strict of [false, true]) {
     const scope = buildQualifiedFormulaScope({

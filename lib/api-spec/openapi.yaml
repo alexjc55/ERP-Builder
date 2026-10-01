@@ -2004,6 +2004,12 @@ paths:
           required: true
           schema:
             type: integer
+        - name: forAggregation
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Include group-result formulas and SUM eligibility for aggregate editors only. Default preserves single-record relation/lookup restrictions.
       responses:
         "200":
           description: Qualifying single-link relations with their related entity fields
@@ -6740,7 +6746,7 @@ components:
           properties:
             kind:
               type: string
-              enum: [status, field]
+              enum: [status, statusTag, field]
             fieldKey:
               type: ["string", "null"]
               description: Field whose values form the chart buckets (when kind = field)
@@ -6749,7 +6755,7 @@ components:
           enum: [count, sum]
         fieldKey:
           type: ["string", "null"]
-          description: Numeric field to sum per bucket (required when aggregation = sum)
+          description: Numeric or configured numeric-result formula field to sum per bucket (required when aggregation = sum).
         statusIds:
           type: ["array", "null"]
           items:
@@ -8286,6 +8292,9 @@ components:
           $ref: "#/components/schemas/MultilingualText"
         fieldType:
           type: string
+        supportsSum:
+          type: boolean
+          description: Included for aggregate options; true for active number fields and configured formulas (numeric results validated at runtime).
 
     PageRelationOptionPage:
       type: object
@@ -10030,11 +10039,11 @@ components:
       properties:
         source:
           type: string
-          enum: [entity, page, status]
-          description: Grouping key source — an entity field, a page-local field, or the record status.
+          enum: [entity, page, status, statusTag]
+          description: Grouping key source — entity/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.
         fieldKey:
           type: ["string", "null"]
-          description: Field key for source=entity|page. Ignored for source=status.
+          description: Field key for source=entity|page. Ignored for source=status|statusTag.
         datePeriod:
           type: ["string", "null"]
           enum: [year, quarter, month, day, null]
@@ -10060,7 +10069,7 @@ components:
           description: For agg=sum, where the numeric field lives. Ignored for agg=count/formula/calc.
         fieldKey:
           type: ["string", "null"]
-          description: Numeric field key for agg=sum. Ignored for agg=count/formula/calc.
+          description: Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count/formula/calc.
         formula:
           type: ["string", "null"]
           description: >-

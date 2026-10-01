@@ -108,7 +108,7 @@ export type DraftFilter = { source: "entity" | "page"; field: string; operator: 
 export type DraftSort = { field: string; direction: SortSpecDirection };
 // Pivot dimension draft. Entity-views editors only use entity|status; the "page"
 // source is available where the editor has a page context (pivot PAGE custom config).
-export type DraftDim = { source: "entity" | "page" | "status"; fieldKey: string; datePeriod: PivotDimensionDatePeriod };
+export type DraftDim = { source: "entity" | "page" | "status" | "statusTag"; fieldKey: string; datePeriod: PivotDimensionDatePeriod };
 
 // Field types eligible as a pivot grouping dimension (discrete-ish values).
 export const PIVOT_DIM_TYPES = new Set(["text", "textarea", "number", "boolean", "date", "datetime", "select", "email", "url", "phone", "user", "relation", "lookup", "created_at"]);
@@ -120,6 +120,7 @@ export type PageDimField = { fieldKey: string; nameJson: unknown; fieldType: str
 /** Stored pivot dimension → editor draft. */
 export function dimToDraft(d: PivotDimension | undefined): DraftDim {
   if (!d || d.source === "status") return { source: "status", fieldKey: "", datePeriod: null };
+  if (d.source === "statusTag") return { source: "statusTag", fieldKey: "", datePeriod: null };
   return {
     source: d.source === "page" ? "page" : "entity",
     fieldKey: d.fieldKey ?? "",
@@ -135,7 +136,7 @@ export function dimToDraft(d: PivotDimension | undefined): DraftDim {
  * non-null only for date-like page fields).
  */
 export function draftToDim(d: DraftDim, dimFields?: Field[]): PivotDimension {
-  if (d.source === "status") return { source: "status" as PivotDimensionSource };
+  if (d.source === "status" || d.source === "statusTag") return { source: d.source as PivotDimensionSource };
   if (d.source === "page") {
     return { source: "page" as PivotDimensionSource, fieldKey: d.fieldKey, datePeriod: d.datePeriod };
   }
@@ -573,9 +574,10 @@ export function PivotDimEditor({
         : undefined;
   const isDate = selectedField ? isDateLikeType(selectedField.fieldType) : false;
   const selectValue =
-    dim.source === "status" ? "__status__" : dim.source === "page" ? (dim.fieldKey ? `p:${dim.fieldKey}` : "") : dim.fieldKey;
+    dim.source === "statusTag" ? "__statusTag__" : dim.source === "status" ? "__status__" : dim.source === "page" ? (dim.fieldKey ? `p:${dim.fieldKey}` : "") : dim.fieldKey;
   return (
     <div className="space-y-1.5">
+      {dim.source === "statusTag" && <p className="text-xs text-slate-500">{t("dash.tagGroupingHint", "Запись учитывается в каждом теге своего статуса. Итоги по тегам могут повторно учитывать записи. Записи без тегов — в группе «Без тега».")}</p>}
       <Label className="text-sm">{label}</Label>
       <div className="flex items-center gap-2">
         <Select
@@ -583,6 +585,8 @@ export function PivotDimEditor({
           onValueChange={(v) => {
             if (v === "__status__") {
               onChange({ source: "status", fieldKey: "", datePeriod: null });
+            } else if (v === "__statusTag__") {
+              onChange({ source: "statusTag", fieldKey: "", datePeriod: null });
             } else if (v.startsWith("p:")) {
               const key = v.slice(2);
               const f = pageDimFields.find((x) => x.fieldKey === key);
@@ -596,6 +600,7 @@ export function PivotDimEditor({
           <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder={t("pivot.selectDim", "поле…")} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__status__">{t("pivot.dimStatus", "Статус записи")}</SelectItem>
+            <SelectItem value="__statusTag__">{t("pivot.dimStatusTag", "Теги статусов")}</SelectItem>
             {dimFields.map((f) => (
               <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
             ))}

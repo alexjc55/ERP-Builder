@@ -216,6 +216,7 @@ export * from './formulaFieldConfigTotalMode';
 export * from './formulaFieldRef';
 export * from './formulaFieldSource';
 export * from './generatedDocument';
+export * from './getEntityRelationOptionsParams';
 export * from './getGoogleDriveNameTemplateParams';
 export * from './googleDriveAuthUrl';
 export * from './googleDriveConnectionInfo';

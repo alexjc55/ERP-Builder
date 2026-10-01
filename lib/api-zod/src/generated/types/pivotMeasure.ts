@@ -22,7 +22,7 @@ export interface PivotMeasure {
      */
   source?: PivotMeasureSource;
   /**
-     * Numeric field key for agg=sum. Ignored for agg=count/formula/calc.
+     * Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count/formula/calc.
      * @nullable
      */
   fieldKey?: string | null;

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isWidgetSumField } from "@/lib/widgetMetricFields";
 import { useQueries } from "@tanstack/react-query";
 import {
   useListEntityFields,
@@ -188,7 +189,7 @@ export function PivotPageConfig({
 
   // Fields the admin has opted into as pivot dims/measures.
   const pivotDimFields = fields.filter((f: Field) => f.pivotEnabled && PIVOT_DIM_TYPES.has(f.fieldType));
-  const pivotSumFields = fields.filter((f: Field) => f.pivotEnabled && f.fieldType === "number");
+  const pivotSumFields = fields.filter((f: Field) => f.pivotEnabled && isWidgetSumField(f));
   const pivotFormulaRefs: FormulaFieldRef[] = pivotSumFields.map((f: Field) => ({ key: f.fieldKey, label: ml(f.nameJson) }));
 
   // Page context for page-local dims/measures: only pages of THIS entity qualify
@@ -237,7 +238,7 @@ export function PivotPageConfig({
     .filter((f: PageField) => PIVOT_DIM_TYPES.has(f.fieldType) && f.fieldType !== "relation" && f.fieldType !== "lookup")
     .map((f: PageField) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson, fieldType: f.fieldType }));
   const pageSumFields = activePivotPageFields
-    .filter((f: PageField) => f.fieldType === "number")
+    .filter(isWidgetSumField)
     .map((f: PageField) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson as MultilingualText, source: "page" as const }));
 
   // Dropping/changing the page context clears page-sourced dims/measures.
@@ -261,6 +262,7 @@ export function PivotPageConfig({
   // Build the stored config and report it up whenever any input changes.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const lastReportedConfig = useRef<string | undefined>(undefined);
   const dimFieldsForBuild = useMemo(() => fields, [fields]);
   useEffect(() => {
     const storedFilters: FilterCondition[] = filters
@@ -296,7 +298,13 @@ export function PivotPageConfig({
         cfg.pageId = usesPage ? pivotPageId : null;
       }
     }
-    onChangeRef.current(cfg);
+    // Loading fields and translation callbacks can change reference identity on
+    // a parent render. Report semantic changes only, not a fresh equivalent cfg.
+    const serialized = JSON.stringify(cfg);
+    if (lastReportedConfig.current !== serialized) {
+      lastReportedConfig.current = serialized;
+      onChangeRef.current(cfg);
+    }
   }, [
     source,
     viewId,

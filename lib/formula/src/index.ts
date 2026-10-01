@@ -475,10 +475,12 @@ function evalNode(
           return toNum(l) * toNum(r);
         case "/": {
           const d = toNum(r);
+          if (d === 0 && options?.throwOnError) throw new FormulaComputationError("Division by zero.");
           return d === 0 ? null : toNum(l) / d;
         }
         case "%": {
           const d = toNum(r);
+          if (d === 0 && options?.throwOnError) throw new FormulaComputationError("Modulo by zero.");
           return d === 0 ? null : toNum(l) % d;
         }
         case "==":

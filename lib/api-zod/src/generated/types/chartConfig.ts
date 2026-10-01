@@ -16,7 +16,7 @@ export interface ChartConfig {
   groupBy: ChartConfigGroupBy;
   aggregation: ChartConfigAggregation;
   /**
-     * Numeric field to sum per bucket (required when aggregation = sum)
+     * Numeric or configured numeric-result formula field to sum per bucket (required when aggregation = sum).
      * @nullable
      */
   fieldKey?: string | null;

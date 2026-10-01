@@ -48,8 +48,17 @@ export function sumFormulaMetricValues(
 export async function computeFormulaMetricSum(options: {
   entityId: number; pageId?: number; fieldKey: string; where: SQL;
 }): Promise<number> {
+  const result = await materializeFormulaMetricValues(options);
+  return sumFormulaMetricValues(result.values.values(), options.fieldKey, result.decimals);
+}
+
+/** SYSTEM only. Materialize the full filtered universe once, BEFORE bucketing
+ * or repeating contributions for multiple tags/links. Group winners stay global. */
+export async function materializeFormulaMetricValues(options: {
+  entityId: number; pageId?: number; fieldKey: string; where: SQL;
+}): Promise<{ values: Map<number, number>; decimals: number | null }> {
   try {
-    return await materializeMetricSum(options);
+    return await materializeMetricValues(options);
   } catch (error) {
     if (error instanceof FormulaComputationError) {
       throw new DashboardFormulaMetricError(`Cannot sum formula "${options.fieldKey}": ${error.message}`);
@@ -58,9 +67,9 @@ export async function computeFormulaMetricSum(options: {
   }
 }
 
-async function materializeMetricSum(options: {
+async function materializeMetricValues(options: {
   entityId: number; pageId?: number; fieldKey: string; where: SQL;
-}): Promise<number> {
+}): Promise<{ values: Map<number, number>; decimals: number | null }> {
   const { entityId, fieldKey } = options;
   const [entity] = await db.select({ pageId: entitiesTable.pageId }).from(entitiesTable).where(eq(entitiesTable.id, entityId));
   const pageId = options.pageId ?? entity?.pageId ?? undefined;
@@ -132,5 +141,10 @@ async function materializeMetricSum(options: {
     }]]),
   }));
   const suppressed = applyFormulaGroupResults(results, formulaGroupResultWinners(groupingRows, groupConfigs));
-  return sumFormulaMetricValues(rows.map(row => suppressed.get(row.id)?.[fieldKey]), fieldKey, field.formulaConfigJson.decimals);
+  const decimals = normalizeDecimals(field.formulaConfigJson.decimals);
+  const values = new Map<number, number>();
+  for (const row of rows) {
+    values.set(row.id, sumFormulaMetricValues([suppressed.get(row.id)?.[fieldKey]], fieldKey, decimals));
+  }
+  return { values, decimals };
 }

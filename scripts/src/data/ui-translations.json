@@ -1,5 +1,23 @@
 [
   {
+    "key": "dash.groupByStatusTag",
+    "ru": "Тегам статусов",
+    "en": "Status tags",
+    "he": "תגיות סטטוס"
+  },
+  {
+    "key": "pivot.dimStatusTag",
+    "ru": "Теги статусов",
+    "en": "Status tags",
+    "he": "תגיות סטטוס"
+  },
+  {
+    "key": "dash.tagGroupingHint",
+    "ru": "Запись учитывается в каждом теге своего статуса. Итоги по тегам могут повторно учитывать записи. Записи без тегов — в группе «Без тега».",
+    "en": "A record contributes to every tag assigned to its status. Tag totals may count records more than once. Untagged records appear in “No tag”.",
+    "he": "כל רשומה נספרת בכל תגית המשויכת לסטטוס שלה. סיכומי התגיות עשויים לספור רשומות יותר מפעם אחת. רשומות ללא תגיות מופיעות בקבוצה ״ללא תגית״."
+  },
+  {
     "key": "dash.customColor",
     "ru": "Свой цвет",
     "en": "Custom color",

@@ -7,7 +7,7 @@
  */
 
 /**
- * Grouping key source — an entity field, a page-local field, or the record status.
+ * Grouping key source — entity/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.
  */
 export type PivotDimensionSource = typeof PivotDimensionSource[keyof typeof PivotDimensionSource];
 
@@ -16,4 +16,5 @@ export const PivotDimensionSource = {
   entity: 'entity',
   page: 'page',
   status: 'status',
+  statusTag: 'statusTag',
 } as const;

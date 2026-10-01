@@ -328,7 +328,7 @@ router.get("/pages/:id/pivot/data", requireAuth, async (req, res): Promise<void>
   // re-check at compute time that the context page still belongs to this entity
   // (bound page or mirror page); on mismatch skip it — a config that references
   // page fields then degrades to the empty result inside computePivot.
-  let pageFields: { fieldKey: string; pivotEnabled: boolean | null; fieldType: string; nameJson: unknown; formulaConfigJson: typeof pageFieldsTable.$inferSelect.formulaConfigJson }[] = [];
+  let pageFields: { fieldKey: string; pivotEnabled: boolean | null; fieldType: string; nameJson: unknown; formulaConfigJson: typeof pageFieldsTable.$inferSelect.formulaConfigJson; relationConfigJson: unknown }[] = [];
   let ctxPageId: number | undefined;
   if (cfg.source === "custom" && cfg.pageId != null) {
     const [ctxPage] = await db
@@ -347,6 +347,7 @@ router.get("/pages/:id/pivot/data", requireAuth, async (req, res): Promise<void>
           fieldType: pageFieldsTable.fieldType,
           nameJson: pageFieldsTable.nameJson,
           formulaConfigJson: pageFieldsTable.formulaConfigJson,
+          relationConfigJson: pageFieldsTable.relationConfigJson,
         })
         .from(pageFieldsTable)
         .where(and(eq(pageFieldsTable.pageId, cfg.pageId), eq(pageFieldsTable.isActive, true)));
@@ -381,11 +382,10 @@ router.get("/pages/:id/pivot/data", requireAuth, async (req, res): Promise<void>
     pageId: ctxPageId,
     where,
     formulaInputs,
+    formulaPermissions: systemFormulaPermissions,
   });
   if (!outcome.ok) {
-    // An invalid stored config (e.g. a field lost its pivot opt-in) degrades to an
-    // empty result rather than erroring the whole page.
-    res.json(emptyPivotResult());
+    res.status(422).json({ error: outcome.error });
     return;
   }
   res.json(outcome.result);

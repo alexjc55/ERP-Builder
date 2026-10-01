@@ -64,6 +64,7 @@ import {
   validateGdriveFileReferencesUnderLock,
 } from "../lib/gdrive-file-reference-lock";
 import { normalizeFormulaFieldConfig, validateFormulaFieldConfig } from "../lib/formula-field-config";
+import { relationOptionFields } from "../lib/relation-option-fields";
 import { validateFormulaGroupResultReferences } from "../lib/formula-group-result-config";
 import { validateFormulaSources } from "../lib/formula-source-validator";
 import {
@@ -3998,7 +3999,7 @@ async function pageSourcesForEntity(entityId: number): Promise<RelationOptionPag
   return result;
 }
 
-async function buildRelationOptions(entityId: number): Promise<RelationOption[]> {
+async function buildRelationOptions(entityId: number, forAggregation = false): Promise<RelationOption[]> {
   const relations = await db
     .select()
     .from(relationsTable)
@@ -4037,14 +4038,7 @@ async function buildRelationOptions(entityId: number): Promise<RelationOption[]>
       // Legacy databases can contain malformed empty field keys. They cannot be
       // selected or projected and Radix Select rejects value="", so omit them
       // at the API boundary instead of letting one bad row crash the editor.
-      fields: fields
-        .filter((f) =>
-          f.fieldKey.trim() !== "" &&
-          !(
-            f.fieldType === "function" &&
-            (f.formulaConfigJson as { groupResult?: { enabled?: unknown } } | null)?.groupResult?.enabled === true
-          ))
-        .map((f) => ({ key: f.fieldKey, label: f.nameJson, fieldType: f.fieldType })),
+      fields: relationOptionFields(fields, forAggregation),
       pages: await pageSourcesForEntity(relatedEntityId),
     });
   }
@@ -4078,7 +4072,12 @@ router.get("/entities/:entityId/relation-options", requireAuth, async (req, res)
     res.status(404).json({ error: "Entity not found" });
     return;
   }
-  res.json({ options: await buildRelationOptions(params.data.entityId) });
+  const aggregationParam = req.query.forAggregation;
+  if (aggregationParam != null && aggregationParam !== "true" && aggregationParam !== "false") {
+    res.status(400).json({ error: "forAggregation must be true or false" });
+    return;
+  }
+  res.json({ options: await buildRelationOptions(params.data.entityId, aggregationParam === "true") });
 });
 
 /**

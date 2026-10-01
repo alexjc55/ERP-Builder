@@ -179,7 +179,7 @@ export function FieldConfigDialog({
   // entity fields. The projected value is always read-only (no write-through);
   // a relation field's link itself stays assignable.
   const [relatedPageId, setRelatedPageId] = useState<number | null>(null);
-  const { data: relationOptionsData } = useGetEntityRelationOptions(entityId, {
+  const { data: relationOptionsData } = useGetEntityRelationOptions(entityId, undefined, {
     query: { enabled: open, queryKey: getGetEntityRelationOptionsQueryKey(entityId) },
   });
   const relationOptions = relationOptionsData?.options ?? [];

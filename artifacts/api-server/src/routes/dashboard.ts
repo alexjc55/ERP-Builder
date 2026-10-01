@@ -46,7 +46,7 @@ import {
   UpdateNotesContentBody,
 } from "@workspace/api-zod";
 import { globalPresenceSnapshot } from "../lib/collaboration";
-import { computeFormulaMetricSum, DashboardFormulaMetricError, isMetricSumField } from "../lib/dashboard-formula-metric";
+import { computeFormulaMetricSum, materializeFormulaMetricValues, sumFormulaMetricValues, DashboardFormulaMetricError, isMetricSumField } from "../lib/dashboard-formula-metric";
 import { validateSecondaryValue } from "../lib/widget-secondary-value";
 import {
   mergeLinkedFormulaInputs,
@@ -122,7 +122,7 @@ interface TableRelatedColumnSpec {
 interface ChartSpec {
   type: "bar" | "line" | "area" | "pie" | "donut";
   entityId: number;
-  groupBy: { kind: "status" | "field"; fieldKey?: string | null };
+  groupBy: { kind: "status" | "statusTag" | "field"; fieldKey?: string | null };
   aggregation: "count" | "sum";
   fieldKey?: string | null;
   statusIds?: number[] | null;
@@ -310,7 +310,7 @@ async function resolveRelationField(
   relationId: number,
   relatedFieldKey: string,
 ): Promise<
-  | { ok: true; relation: Relation; direction: LinkDirection; relatedEntityId: number; relatedFieldType: string }
+  | { ok: true; relation: Relation; direction: LinkDirection; relatedEntityId: number; relatedFieldType: string; relatedSumEligible: boolean }
   | { error: string }
 > {
   const [relation] = await db.select().from(relationsTable).where(eq(relationsTable.id, relationId)).limit(1);
@@ -319,7 +319,7 @@ async function resolveRelationField(
   if (!direction) return { error: `Relation ${relationId} does not yield a single linked record for entity ${entityId}` };
   const relatedEntityId = relatedEntityIdFor(relation, direction);
   const [rf] = await db
-    .select({ fieldType: entityFieldsTable.fieldType })
+    .select({ fieldType: entityFieldsTable.fieldType, formulaConfigJson: entityFieldsTable.formulaConfigJson })
     .from(entityFieldsTable)
     .where(
       and(
@@ -330,7 +330,7 @@ async function resolveRelationField(
     )
     .limit(1);
   if (!rf) return { error: `Related field "${relatedFieldKey}" not found on entity ${relatedEntityId}` };
-  return { ok: true, relation, direction, relatedEntityId, relatedFieldType: rf.fieldType };
+  return { ok: true, relation, direction, relatedEntityId, relatedFieldType: rf.fieldType, relatedSumEligible: isMetricSumField(rf) };
 }
 
 /**
@@ -429,7 +429,7 @@ function serializeWidget(w: DashboardWidget) {
  * existing entity, sum metrics need an existing numeric field, and metric keys
  * must be unique within the widget. Returns an error message or null.
  */
-async function validateChartConfig(chart: ChartSpec | null | undefined): Promise<string | null> {
+export async function validateChartConfig(chart: ChartSpec | null | undefined): Promise<string | null> {
   if (!chart) return "Chart config is required";
   const validTypes = ["bar", "line", "area", "pie", "donut"];
   if (!validTypes.includes(chart.type)) return `Invalid chart type: ${chart.type}`;
@@ -445,7 +445,7 @@ async function validateChartConfig(chart: ChartSpec | null | undefined): Promise
       if (!chart.groupBy.fieldKey) return "Group-by field is required";
       const pf = await resolvePageLocalField(chart.pageId, chart.groupBy.fieldKey);
       if (!pf) return `Group-by page field "${chart.groupBy.fieldKey}" not found`;
-    } else if (kind !== "status") {
+    } else if (kind !== "status" && kind !== "statusTag") {
       return "Invalid groupBy.kind";
     }
     if (chart.aggregation !== "sum" && chart.aggregation !== "count") {
@@ -457,7 +457,7 @@ async function validateChartConfig(chart: ChartSpec | null | undefined): Promise
     if (!chart.fieldKey) return "Page chart requires a field";
     const vpf = await resolvePageLocalField(chart.pageId, chart.fieldKey);
     if (!vpf) return `Page field "${chart.fieldKey}" not found`;
-    if (chart.aggregation === "sum" && vpf.fieldType !== "number") {
+    if (chart.aggregation === "sum" && !isMetricSumField(vpf)) {
       return `Page field "${chart.fieldKey}" is not numeric`;
     }
     return null;
@@ -479,19 +479,19 @@ async function validateChartConfig(chart: ChartSpec | null | undefined): Promise
       .where(and(eq(entityFieldsTable.entityId, chart.entityId), eq(entityFieldsTable.fieldKey, chart.groupBy.fieldKey)))
       .limit(1);
     if (!f) return `Group-by field "${chart.groupBy.fieldKey}" not found`;
-  } else if (kind !== "status") {
+  } else if (kind !== "status" && kind !== "statusTag") {
     return "Invalid groupBy.kind";
   }
 
   if (chart.aggregation === "sum") {
     if (!chart.fieldKey) return "Sum aggregation requires a numeric field";
     const [field] = await db
-      .select({ fieldType: entityFieldsTable.fieldType })
+      .select({ fieldType: entityFieldsTable.fieldType, formulaConfigJson: entityFieldsTable.formulaConfigJson })
       .from(entityFieldsTable)
-      .where(and(eq(entityFieldsTable.entityId, chart.entityId), eq(entityFieldsTable.fieldKey, chart.fieldKey)))
+      .where(and(eq(entityFieldsTable.entityId, chart.entityId), eq(entityFieldsTable.fieldKey, chart.fieldKey), eq(entityFieldsTable.isActive, true)))
       .limit(1);
     if (!field) return `Field "${chart.fieldKey}" not found on entity ${chart.entityId}`;
-    if (field.fieldType !== "number") return `Field "${chart.fieldKey}" is not numeric`;
+    if (!isMetricSumField(field)) return `Field "${chart.fieldKey}" is not numeric or a configured formula`;
   } else if (chart.aggregation !== "count") {
     return "Invalid aggregation";
   }
@@ -749,7 +749,7 @@ export async function validateMetricLike(m: {
     const resolved = await resolveRelationField(m.entityId, m.relationId, m.fieldKey ?? "");
     if (m.aggregation === "sum") {
       if ("error" in resolved) return resolved.error;
-      if (resolved.relatedFieldType !== "number") return `Related field "${m.fieldKey}" is not numeric`;
+      if (!resolved.relatedSumEligible) return `Related field "${m.fieldKey}" is not numeric or a configured formula`;
     } else if (m.fieldKey) {
       // count over links: a related field is optional, but if given it must exist.
       if ("error" in resolved) return resolved.error;
@@ -896,7 +896,7 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
   // page still belongs to this entity (degrade to null otherwise, mirroring the
   // pivot-opt-in recheck above), then load ALL its active page-local fields —
   // admin-authoritative, like the entity field set.
-  let pageFields: { fieldKey: string; pivotEnabled: boolean | null; fieldType: string; nameJson: unknown; formulaConfigJson: typeof pageFieldsTable.$inferSelect.formulaConfigJson }[] = [];
+  let pageFields: { fieldKey: string; pivotEnabled: boolean | null; fieldType: string; nameJson: unknown; formulaConfigJson: typeof pageFieldsTable.$inferSelect.formulaConfigJson; relationConfigJson: typeof pageFieldsTable.$inferSelect.relationConfigJson }[] = [];
   let pageId: number | undefined;
   if (spec.pageId != null) {
     const pageEntityId = await resolvePageEntityId(spec.pageId);
@@ -909,6 +909,7 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
         fieldType: pageFieldsTable.fieldType,
         nameJson: pageFieldsTable.nameJson,
         formulaConfigJson: pageFieldsTable.formulaConfigJson,
+        relationConfigJson: pageFieldsTable.relationConfigJson,
       })
       .from(pageFieldsTable)
       .where(and(eq(pageFieldsTable.pageId, spec.pageId), eq(pageFieldsTable.isActive, true)));
@@ -948,8 +949,10 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
     pageId,
     where,
     formulaInputs,
+    formulaPermissions: systemFormulaPermissions,
   });
-  return outcome.ok ? outcome.result : null;
+  if (!outcome.ok) throw new DashboardFormulaMetricError(`Cannot compute pivot: ${outcome.error}`);
+  return outcome.result;
 }
 
 async function validateConfig(
@@ -1055,7 +1058,7 @@ export async function computeMetric(m: WidgetMetricSpec): Promise<number> {
     let relatedEntityId: number;
     if (m.aggregation === "sum" && m.fieldKey) {
       const resolved = await resolveRelationField(m.entityId, m.relationId, m.fieldKey);
-      if ("error" in resolved) return 0;
+      if ("error" in resolved) throw new DashboardFormulaMetricError(`Related sum field "${m.fieldKey}" is unavailable: ${resolved.error}`);
       direction = resolved.direction;
       relatedEntityId = resolved.relatedEntityId;
     } else {
@@ -1085,6 +1088,19 @@ export async function computeMetric(m: WidgetMetricSpec): Promise<number> {
       const uniqueLinkedIds = Array.from(new Set(map.values()));
       if (uniqueLinkedIds.length === 0) return 0;
       const key = m.fieldKey;
+      const [field] = await db.select().from(entityFieldsTable).where(and(
+        eq(entityFieldsTable.entityId, relatedEntityId), eq(entityFieldsTable.fieldKey, key), eq(entityFieldsTable.isActive, true),
+      )).limit(1);
+      if (!field || !isMetricSumField(field)) throw new DashboardFormulaMetricError(`Related sum field "${key}" is unavailable or not numeric.`);
+      if (field.fieldType === "function") {
+        // Winners are selected once over the relevant unique nonarchived targets;
+        // only afterwards repeat each winner's value for every linking base row.
+        const result = await materializeFormulaMetricValues({
+          entityId: relatedEntityId, fieldKey: key,
+          where: and(eq(entityRecordsTable.entityId, relatedEntityId), inArray(entityRecordsTable.id, uniqueLinkedIds), isNull(entityRecordsTable.archivedAt))!,
+        });
+        return sumFormulaMetricValues([...map.values()].map(id => result.values.get(id)), key, result.decimals);
+      }
       const rows = await db
         .select({
           id: entityRecordsTable.id,
@@ -1133,9 +1149,30 @@ export async function computeMetric(m: WidgetMetricSpec): Promise<number> {
  * Group either by record status (colored, ordered by status order) or by the raw
  * value of a chosen field.
  */
-async function computeChartSeries(
+export async function computeChartSeries(
   c: ChartSpec,
 ): Promise<Array<{ label: string; value: number; color?: string | null }>> {
+  const pageId = c.source === "page" ? c.pageId ?? undefined : undefined;
+  const entityId = pageId != null ? await resolvePageEntityId(pageId) : c.entityId;
+  if (entityId == null) return [];
+  let formulaField = false;
+  if (c.aggregation === "sum") {
+    const field = pageId != null
+      ? await resolvePageLocalField(pageId, c.fieldKey ?? "")
+      : (await db.select().from(entityFieldsTable).where(and(
+        eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.fieldKey, c.fieldKey ?? ""), eq(entityFieldsTable.isActive, true),
+      )).limit(1))[0];
+    if (!field || !isMetricSumField(field)) throw new DashboardFormulaMetricError(`Chart sum field "${c.fieldKey}" is unavailable or not numeric.`);
+    formulaField = field.fieldType === "function";
+  }
+  if (formulaField || c.groupBy.kind === "statusTag") {
+    const conds = [eq(entityRecordsTable.entityId, entityId), isNull(entityRecordsTable.archivedAt)];
+    const statusIds = (c.statusIds ?? []).filter(Number.isInteger);
+    if (statusIds.length) conds.push(inArray(entityRecordsTable.statusId, statusIds));
+    const tagCondition = await statusTagWhere(entityId, c.statusTagIds);
+    if (tagCondition) conds.push(tagCondition);
+    return computeExpandedChartSeries(c, entityId, and(...conds)!, formulaField, pageId);
+  }
   // Page-local field source: group/aggregate the page's page-local field values over
   // the page's (resolved) entity records via a LEFT JOIN on page_record_values.
   // Group-by status still uses the record status; group-by field / sum use the
@@ -1194,7 +1231,7 @@ async function computeChartSeries(
       .from(entityRecordsTable)
       .leftJoin(pageRecordValuesTable, join)
       .where(and(...conds))
-      .groupBy(labelExpr)
+      .groupBy(sql`1`)
       .orderBy(sql`2 desc`)
       .limit(50);
     return rows.map((r) => ({ label: String(r.label ?? "—"), value: Number(r.v ?? 0), color: null }));
@@ -1255,10 +1292,86 @@ async function computeChartSeries(
     .select({ label: labelExpr, v: valueExpr })
     .from(entityRecordsTable)
     .where(and(...conds))
-    .groupBy(labelExpr)
+    .groupBy(sql`1`)
     .orderBy(sql`2 desc`)
     .limit(50);
   return rows.map((r) => ({ label: String(r.label ?? "—"), value: Number(r.v ?? 0), color: null }));
+}
+
+/** New formula/tag paths share the existing SQL source expressions. Ordinary
+ * numeric/count charts stay on their original SQL path. Membership is actual
+ * status_tags assignment, independent of status display preferences. */
+async function computeExpandedChartSeries(
+  c: ChartSpec, entityId: number, where: SQL, formulaField: boolean, pageId?: number,
+): Promise<Array<{ label: string; value: number; color?: string | null }>> {
+  const byTag = c.groupBy.kind === "statusTag";
+  const byStatus = c.groupBy.kind === "status";
+  const storage = pageId != null ? pageRecordValuesTable.valuesJson : entityRecordsTable.valuesJson;
+  const groupKey = c.groupBy.fieldKey ?? "";
+  let fieldLabel = sql<string>`COALESCE(NULLIF(${storage} ->> ${groupKey}, ''), '—')`;
+  if (!byTag && !byStatus && pageId == null) {
+    const [field] = await db.select({ fieldType: entityFieldsTable.fieldType }).from(entityFieldsTable)
+      .where(and(eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.fieldKey, groupKey))).limit(1);
+    if (field?.fieldType === "created_at") fieldLabel = sql<string>`to_char(${entityRecordsTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`;
+  }
+  const groupId = byTag ? sql<string>`COALESCE(${tagsTable.id}::text, 'untagged')`
+    : byStatus ? sql<string>`COALESCE(${entityStatusesTable.id}::text, 'none')` : fieldLabel;
+  const labelJson = byTag ? sql<unknown>`${tagsTable.nameJson}` : byStatus ? sql<unknown>`${entityStatusesTable.nameJson}` : sql<unknown>`NULL`;
+  const label = byTag || byStatus ? sql<string>`NULL` : fieldLabel;
+  const color = byTag ? sql<string | null>`${tagsTable.color}` : byStatus ? sql<string | null>`${entityStatusesTable.color}` : sql<string | null>`NULL`;
+  const order = byTag ? sql<number>`COALESCE(${tagsTable.sortOrder}, 2147483647)`
+    : byStatus ? sql<number>`COALESCE(${entityStatusesTable.sortOrder}, 2147483647)` : sql<number>`0`;
+  const valueKey = c.fieldKey ?? "";
+  const valueExpr = c.aggregation === "sum"
+    ? sql<number>`COALESCE(SUM(CASE WHEN (${storage} ->> ${valueKey}) ~ ${NUMERIC_RE} THEN (${storage} ->> ${valueKey})::numeric ELSE 0 END), 0)::float8`
+    : pageId != null && c.fieldKey
+      ? sql<number>`count(*) FILTER (WHERE NULLIF(${storage} ->> ${valueKey}, '') IS NOT NULL)::int`
+      : sql<number>`count(*)::int`;
+  const pageJoin = pageId != null ? and(eq(pageRecordValuesTable.recordId, entityRecordsTable.id), eq(pageRecordValuesTable.pageId, pageId)) : sql`false`;
+  const tagJoin = byTag ? eq(statusTagsTable.statusId, entityRecordsTable.statusId) : sql`false`;
+  const buckets = new Map<string, { label: string; value: number; color: string | null; order: number; values: number[] }>();
+  if (formulaField) {
+    // Materialize/suppress before membership expansion: a one-time result must
+    // never gain a second winner because two rows land in different buckets.
+    const computed = await materializeFormulaMetricValues({ entityId, pageId, fieldKey: valueKey, where });
+    const rows = await db.select({ id: entityRecordsTable.id, groupId, labelJson, label, color, order })
+      .from(entityRecordsTable)
+      .leftJoin(pageRecordValuesTable, pageJoin)
+      .leftJoin(entityStatusesTable, eq(entityStatusesTable.id, entityRecordsTable.statusId))
+      .leftJoin(statusTagsTable, tagJoin)
+      .leftJoin(tagsTable, eq(tagsTable.id, statusTagsTable.tagId))
+      .where(where);
+    for (const row of rows) {
+      // An insertion between the materialization read and grouping read is not
+      // part of this calculation's original universe.
+      if (!computed.values.has(row.id)) continue;
+      const bucket = buckets.get(row.groupId) ?? {
+        label: byTag ? resolveML(row.labelJson) || "Без тега" : byStatus ? resolveML(row.labelJson) || "—" : row.label,
+        value: 0, color: row.color, order: row.order, values: [],
+      };
+      bucket.values.push(computed.values.get(row.id)!);
+      buckets.set(row.groupId, bucket);
+    }
+    for (const bucket of buckets.values()) bucket.value = sumFormulaMetricValues(bucket.values, valueKey, computed.decimals);
+  } else {
+    const rows = await db.select({ groupId, labelJson, label, color, order, value: valueExpr })
+      .from(entityRecordsTable)
+      .leftJoin(pageRecordValuesTable, pageJoin)
+      .leftJoin(entityStatusesTable, eq(entityStatusesTable.id, entityRecordsTable.statusId))
+      .leftJoin(statusTagsTable, tagJoin)
+      .leftJoin(tagsTable, eq(tagsTable.id, statusTagsTable.tagId))
+      .where(where)
+      .groupBy(sql`1`, sql`2`, sql`4`, sql`5`);
+    for (const row of rows) buckets.set(row.groupId, {
+      label: resolveML(row.labelJson) || "Без тега", value: Number(row.value ?? 0),
+      color: row.color, order: row.order, values: [],
+    });
+  }
+  const entries = [...buckets.entries()];
+  entries.sort(byTag || byStatus
+    ? ([aid, a], [bid, b]) => a.order - b.order || aid.localeCompare(bid, undefined, { numeric: true })
+    : ([aid, a], [bid, b]) => b.value - a.value || aid.localeCompare(bid));
+  return (byTag || byStatus ? entries : entries.slice(0, 50)).map(([, { label, value, color }]) => ({ label, value, color }));
 }
 
 /**

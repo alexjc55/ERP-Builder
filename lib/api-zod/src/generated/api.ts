@@ -2371,20 +2371,20 @@ export const ListPagesResponseItem = zod.object({
   "viewId": zod.number().nullish().describe('The pivot view to source the config from when source=view.'),
   "pivot": zod.union([zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -2401,7 +2401,7 @@ export const ListPagesResponseItem = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -2499,20 +2499,20 @@ export const CreatePageBody = zod.object({
   "viewId": zod.number().nullish().describe('The pivot view to source the config from when source=view.'),
   "pivot": zod.union([zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -2529,7 +2529,7 @@ export const CreatePageBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -2623,20 +2623,20 @@ export const GetPageResponse = zod.object({
   "viewId": zod.number().nullish().describe('The pivot view to source the config from when source=view.'),
   "pivot": zod.union([zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -2653,7 +2653,7 @@ export const GetPageResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -2749,20 +2749,20 @@ export const UpdatePageBody = zod.object({
   "viewId": zod.number().nullish().describe('The pivot view to source the config from when source=view.'),
   "pivot": zod.union([zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -2779,7 +2779,7 @@ export const UpdatePageBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -2865,20 +2865,20 @@ export const UpdatePageResponse = zod.object({
   "viewId": zod.number().nullish().describe('The pivot view to source the config from when source=view.'),
   "pivot": zod.union([zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -2895,7 +2895,7 @@ export const UpdatePageResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -3047,11 +3047,11 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "type": zod.enum(['bar', 'line', 'area', 'pie', 'donut']),
   "entityId": zod.number(),
   "groupBy": zod.object({
-  "kind": zod.enum(['status', 'field']),
+  "kind": zod.enum(['status', 'statusTag', 'field']),
   "fieldKey": zod.string().nullish().describe('Field whose values form the chart buckets (when kind = field)')
 }),
   "aggregation": zod.enum(['count', 'sum']),
-  "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field to sum per bucket (required when aggregation = sum).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
@@ -3075,20 +3075,20 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "entityId": zod.number(),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -3105,7 +3105,7 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -3206,11 +3206,11 @@ export const CreateDashboardWidgetBody = zod.object({
   "type": zod.enum(['bar', 'line', 'area', 'pie', 'donut']),
   "entityId": zod.number(),
   "groupBy": zod.object({
-  "kind": zod.enum(['status', 'field']),
+  "kind": zod.enum(['status', 'statusTag', 'field']),
   "fieldKey": zod.string().nullish().describe('Field whose values form the chart buckets (when kind = field)')
 }),
   "aggregation": zod.enum(['count', 'sum']),
-  "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field to sum per bucket (required when aggregation = sum).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
@@ -3234,20 +3234,20 @@ export const CreateDashboardWidgetBody = zod.object({
   "entityId": zod.number(),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -3264,7 +3264,7 @@ export const CreateDashboardWidgetBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -3356,11 +3356,11 @@ export const CreateDashboardWidgetResponse = zod.object({
   "type": zod.enum(['bar', 'line', 'area', 'pie', 'donut']),
   "entityId": zod.number(),
   "groupBy": zod.object({
-  "kind": zod.enum(['status', 'field']),
+  "kind": zod.enum(['status', 'statusTag', 'field']),
   "fieldKey": zod.string().nullish().describe('Field whose values form the chart buckets (when kind = field)')
 }),
   "aggregation": zod.enum(['count', 'sum']),
-  "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field to sum per bucket (required when aggregation = sum).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
@@ -3384,20 +3384,20 @@ export const CreateDashboardWidgetResponse = zod.object({
   "entityId": zod.number(),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -3414,7 +3414,7 @@ export const CreateDashboardWidgetResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -3672,11 +3672,11 @@ export const UpdateDashboardWidgetBody = zod.object({
   "type": zod.enum(['bar', 'line', 'area', 'pie', 'donut']),
   "entityId": zod.number(),
   "groupBy": zod.object({
-  "kind": zod.enum(['status', 'field']),
+  "kind": zod.enum(['status', 'statusTag', 'field']),
   "fieldKey": zod.string().nullish().describe('Field whose values form the chart buckets (when kind = field)')
 }),
   "aggregation": zod.enum(['count', 'sum']),
-  "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field to sum per bucket (required when aggregation = sum).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
@@ -3700,20 +3700,20 @@ export const UpdateDashboardWidgetBody = zod.object({
   "entityId": zod.number(),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -3730,7 +3730,7 @@ export const UpdateDashboardWidgetBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -3822,11 +3822,11 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "type": zod.enum(['bar', 'line', 'area', 'pie', 'donut']),
   "entityId": zod.number(),
   "groupBy": zod.object({
-  "kind": zod.enum(['status', 'field']),
+  "kind": zod.enum(['status', 'statusTag', 'field']),
   "fieldKey": zod.string().nullish().describe('Field whose values form the chart buckets (when kind = field)')
 }),
   "aggregation": zod.enum(['count', 'sum']),
-  "fieldKey": zod.string().nullish().describe('Numeric field to sum per bucket (required when aggregation = sum)'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field to sum per bucket (required when aggregation = sum).'),
   "statusIds": zod.array(zod.number()).nullish().describe('Restrict to records in these statuses; empty\/null = all statuses'),
   "statusTagIds": zod.array(zod.number()).nullish().describe('Restrict to records whose status has any selected global tag; OR within tags and AND with statusIds.'),
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", groupBy.fieldKey \/ fieldKey refer to page-local fields of pageId.'),
@@ -3850,20 +3850,20 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "entityId": zod.number(),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -3880,7 +3880,7 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -6280,7 +6280,8 @@ export const GetPageRelationOptionsResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }),
-  "fieldType": zod.string()
+  "fieldType": zod.string(),
+  "supportsSum": zod.boolean().optional().describe('Included for aggregate options; true for active number fields and configured formulas (numeric results validated at runtime).')
 })),
   "pages": zod.array(zod.object({
   "pageId": zod.number(),
@@ -6296,7 +6297,8 @@ export const GetPageRelationOptionsResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }),
-  "fieldType": zod.string()
+  "fieldType": zod.string(),
+  "supportsSum": zod.boolean().optional().describe('Included for aggregate options; true for active number fields and configured formulas (numeric results validated at runtime).')
 }))
 }).describe('A page (bound or mirror) of the related entity whose page-local fields a lookup field may project instead of the linked record\'s own fields.')).describe('Pages (bound + mirror) of the related entity whose page-local value-backed fields a relation\/lookup field can project (via relatedPageId).')
 }))
@@ -6308,6 +6310,10 @@ export const GetPageRelationOptionsResponse = zod.object({
  */
 export const GetEntityRelationOptionsParams = zod.object({
   "entityId": zod.coerce.number()
+})
+
+export const GetEntityRelationOptionsQueryParams = zod.object({
+  "forAggregation": zod.coerce.boolean().optional().describe('Include group-result formulas and SUM eligibility for aggregate editors only. Default preserves single-record relation\/lookup restrictions.')
 })
 
 export const GetEntityRelationOptionsResponse = zod.object({
@@ -6333,7 +6339,8 @@ export const GetEntityRelationOptionsResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }),
-  "fieldType": zod.string()
+  "fieldType": zod.string(),
+  "supportsSum": zod.boolean().optional().describe('Included for aggregate options; true for active number fields and configured formulas (numeric results validated at runtime).')
 })),
   "pages": zod.array(zod.object({
   "pageId": zod.number(),
@@ -6349,7 +6356,8 @@ export const GetEntityRelationOptionsResponse = zod.object({
   "en": zod.string().optional(),
   "he": zod.string().optional()
 }),
-  "fieldType": zod.string()
+  "fieldType": zod.string(),
+  "supportsSum": zod.boolean().optional().describe('Included for aggregate options; true for active number fields and configured formulas (numeric results validated at runtime).')
 }))
 }).describe('A page (bound or mirror) of the related entity whose page-local fields a lookup field may project instead of the linked record\'s own fields.')).describe('Pages (bound + mirror) of the related entity whose page-local value-backed fields a relation\/lookup field can project (via relatedPageId).')
 }))
@@ -9161,20 +9169,20 @@ export const PivotEntityRecordsBody = zod.object({
   "viewId": zod.number().optional().describe('The named view this pivot belongs to, when one is selected. Absent means the entity\'s default pivot — the server then enforces the default pivot\'s role visibility (defaultPivotJson.visibleRoleIds).'),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -9191,7 +9199,7 @@ export const PivotEntityRecordsBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -9691,20 +9699,20 @@ export const ListEntityViewsResponseItem = zod.object({
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -9721,7 +9729,7 @@ export const ListEntityViewsResponseItem = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -9796,20 +9804,20 @@ export const CreateEntityViewBody = zod.object({
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -9826,7 +9834,7 @@ export const CreateEntityViewBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -9898,20 +9906,20 @@ export const ListMainEntityViewsResponseItem = zod.object({
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -9928,7 +9936,7 @@ export const ListMainEntityViewsResponseItem = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10003,20 +10011,20 @@ export const ListPageViewsResponseItem = zod.object({
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10033,7 +10041,7 @@ export const ListPageViewsResponseItem = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10108,20 +10116,20 @@ export const GetViewResponse = zod.object({
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10138,7 +10146,7 @@ export const GetViewResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10210,20 +10218,20 @@ export const UpdateViewBody = zod.object({
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10240,7 +10248,7 @@ export const UpdateViewBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10304,20 +10312,20 @@ export const UpdateViewResponse = zod.object({
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10334,7 +10342,7 @@ export const UpdateViewResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10434,20 +10442,20 @@ export const ListEntitiesResponseItem = zod.object({
 })).optional().describe('Filters applied to the records page when no view is selected (the main view).'),
   "defaultPivotJson": zod.union([zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10464,7 +10472,7 @@ export const ListEntitiesResponseItem = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10531,20 +10539,20 @@ export const CreateEntityBody = zod.object({
 })).optional(),
   "defaultPivotJson": zod.union([zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10561,7 +10569,7 @@ export const CreateEntityBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10628,20 +10636,20 @@ export const GetEntityResponse = zod.object({
 })).optional().describe('Filters applied to the records page when no view is selected (the main view).'),
   "defaultPivotJson": zod.union([zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10658,7 +10666,7 @@ export const GetEntityResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10726,20 +10734,20 @@ export const UpdateEntityBody = zod.object({
 })).optional(),
   "defaultPivotJson": zod.union([zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10756,7 +10764,7 @@ export const UpdateEntityBody = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10815,20 +10823,20 @@ export const UpdateEntityResponse = zod.object({
 })).optional().describe('Filters applied to the records page when no view is selected (the main view).'),
   "defaultPivotJson": zod.union([zod.object({
   "rows": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }),
   "cols": zod.object({
-  "source": zod.enum(['entity', 'page', 'status']).describe('Grouping key source — an entity field, a page-local field, or the record status.'),
-  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status.'),
+  "source": zod.enum(['entity', 'page', 'status', 'statusTag']).describe('Grouping key source — entity\/page field, record status, or assigned status tags. Tag memberships overlap; untagged records form a separate bucket and totals sum contributions.'),
+  "fieldKey": zod.string().nullish().describe('Field key for source=entity|page. Ignored for source=status|statusTag.'),
   "datePeriod": zod.union([zod.literal('year'),zod.literal('quarter'),zod.literal('month'),zod.literal('day'),zod.literal(null)]).nullish().describe('When the field is date\/datetime, bucket values by this period.')
 }).optional(),
   "measure": zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),
@@ -10845,7 +10853,7 @@ export const UpdateEntityResponse = zod.object({
   "agg": zod.enum(['count', 'sum', 'formula', 'calc']),
   "key": zod.string().nullish().describe('Stable identifier for this measure within a multi-measure pivot. Used as the column key and as the reference target for calc measures ({key}). Required (unique) in multi-measure mode; ignored for a single measure.'),
   "source": zod.union([zod.literal('entity'),zod.literal('page'),zod.literal(null)]).nullish().describe('For agg=sum, where the numeric field lives. Ignored for agg=count\/formula\/calc.'),
-  "fieldKey": zod.string().nullish().describe('Numeric field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
+  "fieldKey": zod.string().nullish().describe('Numeric or configured numeric-result formula field key for agg=sum. Ignored for agg=count\/formula\/calc.'),
   "formula": zod.string().nullish().describe('For agg=formula, an expression (same syntax as function fields) evaluated per record and SUMMED into each cell. References entity fields via {field_key}; only pivot-enabled, viewer-visible fields resolve (others are null), so hidden\/non-opted fields cannot leak. For agg=calc, an expression evaluated PER ROW over the other measures\' aggregated values, referenced via {measure_key}. Ignored for agg=count\/sum.'),
   "nameJson": zod.union([zod.object({
   "ru": zod.string().optional(),

@@ -11,4 +11,6 @@ export interface PageRelationOptionField {
   key: string;
   label: MultilingualText;
   fieldType: string;
+  /** Included for aggregate options; true for active number fields and configured formulas (numeric results validated at runtime). */
+  supportsSum?: boolean;
 }

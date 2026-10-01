@@ -1738,7 +1738,7 @@ type WidgetTypeChoice = "metric" | "formula" | "chart" | "table" | "notes" | "pi
 
 // Pivot dimension draft (dashboard widget editor: entity field, page-local field
 // or record status).
-type PivotDraftDim = { source: "entity" | "page" | "status"; fieldKey: string; datePeriod: PivotDimensionDatePeriod };
+type PivotDraftDim = { source: "entity" | "page" | "status" | "statusTag"; fieldKey: string; datePeriod: PivotDimensionDatePeriod };
 type PivotDraft = {
   entityId: number | null;
   rows: PivotDraftDim;
@@ -1776,7 +1776,7 @@ function pivotDraftFromConfig(spec: { entityId: number; pivot: PivotConfig; stat
   const dimToDraft = (d: PivotDimension | undefined): PivotDraftDim =>
     d && (d.source === "entity" || d.source === "page")
       ? { source: d.source, fieldKey: d.fieldKey ?? "", datePeriod: d.datePeriod ?? null }
-      : { source: "status", fieldKey: "", datePeriod: null };
+      : { source: d?.source === "statusTag" ? "statusTag" : "status", fieldKey: "", datePeriod: null };
   return {
     entityId: spec.entityId,
     rows: dimToDraft(spec.pivot.rows),
@@ -2109,12 +2109,12 @@ function WidgetEditorDialog({
         toast({ title: t("dash.pivotNeedsEntity", "Выберите сущность для сводной таблицы"), variant: "destructive" });
         return null;
       }
-      if (pivot.rows.source !== "status" && !pivot.rows.fieldKey) {
+      if (pivot.rows.source !== "status" && pivot.rows.source !== "statusTag" && !pivot.rows.fieldKey) {
         toast({ title: t("dash.pivotNeedsRows", "Выберите поле для строк сводной таблицы"), variant: "destructive" });
         return null;
       }
       const pvMulti = pivot.measures.length > 1;
-      if (pivot.colsOn && !pvMulti && pivot.cols.source !== "status" && !pivot.cols.fieldKey) {
+      if (pivot.colsOn && !pvMulti && pivot.cols.source !== "status" && pivot.cols.source !== "statusTag" && !pivot.cols.fieldKey) {
         toast({ title: t("dash.pivotNeedsCols", "Выберите поле для столбцов сводной таблицы"), variant: "destructive" });
         return null;
       }
@@ -2135,8 +2135,8 @@ function WidgetEditorDialog({
       // The PivotEditor keeps datePeriod non-null only for date-like dims, so the
       // draft value can be trusted here without re-resolving the field type.
       const draftToDim = (d: PivotDraftDim): PivotDimension =>
-        d.source === "status"
-          ? { source: "status" as PivotDimensionSource }
+        d.source === "status" || d.source === "statusTag"
+          ? { source: d.source as PivotDimensionSource }
           : {
               source: d.source as PivotDimensionSource,
               fieldKey: d.fieldKey,
@@ -2206,8 +2206,8 @@ function WidgetEditorDialog({
             // Page source aggregates a specific field for count (non-empty) and sum
             // alike; entity source only needs a field for sum.
             fieldKey: chart.source === "page" ? chart.fieldKey : (chart.aggregation === "sum" ? chart.fieldKey : null),
-             statusIds: chart.source === "page" ? null : (chart.statusIds.length > 0 ? chart.statusIds : null),
-             statusTagIds: chart.source === "page" ? null : (chart.statusTagIds.length > 0 ? chart.statusTagIds : null),
+             statusIds: chart.statusIds.length > 0 ? chart.statusIds : null,
+             statusTagIds: chart.statusTagIds.length > 0 ? chart.statusTagIds : null,
             showValues: chart.showValues,
             source: chart.source,
              pageId: chart.source === "page" ? chart.pageId : null,
@@ -2608,16 +2608,19 @@ function PivotWidgetDimEditor({
         : undefined;
   const isDate = selectedField ? isPivotDateType(selectedField.fieldType) : false;
   const selectValue =
-    dim.source === "status" ? "__status__" : dim.source === "page" ? (dim.fieldKey ? `p:${dim.fieldKey}` : "") : dim.fieldKey;
+    dim.source === "statusTag" ? "__statusTag__" : dim.source === "status" ? "__status__" : dim.source === "page" ? (dim.fieldKey ? `p:${dim.fieldKey}` : "") : dim.fieldKey;
   return (
     <div className="space-y-1.5">
       <p className="text-xs text-slate-400">{label}</p>
+      {dim.source === "statusTag" && <p className="text-xs text-slate-500">{t("dash.tagGroupingHint", "Запись учитывается в каждом теге своего статуса. Итоги по тегам могут повторно учитывать записи. Записи без тегов — в группе «Без тега».")}</p>}
       <div className="flex items-center gap-2">
         <Select
           value={selectValue}
           onValueChange={(v) => {
             if (v === "__status__") {
               onChange({ source: "status", fieldKey: "", datePeriod: null });
+            } else if (v === "__statusTag__") {
+              onChange({ source: "statusTag", fieldKey: "", datePeriod: null });
             } else if (v.startsWith("p:")) {
               const key = v.slice(2);
               const f = pageDimFields.find((x) => x.fieldKey === key);
@@ -2631,6 +2634,7 @@ function PivotWidgetDimEditor({
           <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder={t("pivot.selectDim", "поле…")} /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__status__">{t("pivot.dimStatus", "Статус записи")}</SelectItem>
+            <SelectItem value="__statusTag__">{t("pivot.dimStatusTag", "Теги статусов")}</SelectItem>
             {dimFields.map((f) => (
               <SelectItem key={f.fieldKey} value={f.fieldKey}>{ml(f.nameJson)}</SelectItem>
             ))}
@@ -2679,7 +2683,7 @@ function PivotEditor({
   });
   const activeFields = fields.filter((f: Field) => f.isActive);
   const dimFields = activeFields.filter((f: Field) => f.pivotEnabled && PIVOT_DIM_TYPES.has(f.fieldType));
-  const sumFields = activeFields.filter((f: Field) => f.pivotEnabled && f.fieldType === "number");
+  const sumFields = activeFields.filter((f: Field) => f.pivotEnabled && isWidgetSumField(f));
   const selectedEntity = entities.find((e) => e.id === pivot.entityId);
   const pivotEnabledEntity = selectedEntity?.pivotEnabled ?? false;
 
@@ -2699,7 +2703,7 @@ function PivotEditor({
     .filter((f: PageField) => PIVOT_DIM_TYPES.has(f.fieldType) && f.fieldType !== "relation" && f.fieldType !== "lookup")
     .map((f: PageField) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson, fieldType: f.fieldType }));
   const pageSumFields = activePivotPageFields
-    .filter((f: PageField) => f.fieldType === "number")
+    .filter(isWidgetSumField)
     .map((f: PageField) => ({ fieldKey: f.fieldKey, nameJson: f.nameJson as MultilingualText, source: "page" as const }));
 
   // Clear page-sourced dims/measures when the page context is dropped/changed.
@@ -2866,10 +2870,13 @@ function ChartEditor({
   const { data: fields = [] } = useListEntityFields(chart.entityId ?? 0, {
     query: { enabled: chart.source === "entity" && chart.entityId != null, queryKey: getListEntityFieldsQueryKey(chart.entityId ?? 0) },
   });
-  const { data: statuses = [] } = useListEntityStatuses(chart.entityId ?? 0, {
-    query: { enabled: chart.source === "entity" && chart.entityId != null, queryKey: getListEntityStatusesQueryKey(chart.entityId ?? 0) },
-  });
   const { data: pages = [] } = useListPages();
+  const sourceEntityId = chart.source === "page"
+    ? pages.find(p => p.id === chart.pageId)?.mirrorEntityId ?? entities.find(e => e.pageId === chart.pageId)?.id
+    : chart.entityId;
+  const { data: statuses = [] } = useListEntityStatuses(sourceEntityId ?? 0, {
+    query: { enabled: sourceEntityId != null, queryKey: getListEntityStatusesQueryKey(sourceEntityId ?? 0) },
+  });
   const { data: pageFields = [] } = useListPageFields(chart.pageId ?? 0, {
     query: { enabled: chart.source === "page" && chart.pageId != null, queryKey: getListPageFieldsQueryKey(chart.pageId ?? 0) },
   });
@@ -2878,8 +2885,8 @@ function ChartEditor({
   // the group-by / sum pickers render identically regardless of value source.
   const numericFields: { key: string; label: unknown }[] =
     chart.source === "page"
-      ? activePageFields.filter((f) => f.fieldType === "number").map((f) => ({ key: f.fieldKey, label: f.nameJson }))
-      : fields.filter((f: Field) => f.fieldType === "number").map((f: Field) => ({ key: f.fieldKey, label: f.nameJson }));
+      ? activePageFields.filter(isWidgetSumField).map((f) => ({ key: f.fieldKey, label: f.nameJson }))
+      : fields.filter(isWidgetSumField).map((f: Field) => ({ key: f.fieldKey, label: f.nameJson }));
   const groupableFields: { key: string; label: unknown }[] =
     chart.source === "page"
       ? activePageFields.filter((f) => f.fieldType !== "function" && f.fieldType !== "file").map((f) => ({ key: f.fieldKey, label: f.nameJson }))
@@ -2943,7 +2950,7 @@ function ChartEditor({
               <p className="text-xs text-slate-400">{t("dash.selectPage", "Страница")}</p>
               <Select
                 value={chart.pageId != null ? String(chart.pageId) : ""}
-                onValueChange={(v) => onChange({ pageId: Number(v), fieldKey: null, groupByFieldKey: null })}
+                onValueChange={(v) => onChange({ pageId: Number(v), fieldKey: null, groupByFieldKey: null, statusIds: [], statusTagIds: [] })}
               >
                 <SelectTrigger className="h-8"><SelectValue placeholder={t("dash.selectPage", "Страница")} /></SelectTrigger>
                 <SelectContent>
@@ -2979,6 +2986,7 @@ function ChartEditor({
             <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="status">{t("dash.groupByStatus", "Статусу")}</SelectItem>
+              <SelectItem value="statusTag">{t("dash.groupByStatusTag", "Тегам статусов")}</SelectItem>
               <SelectItem value="field">{t("dash.groupByField", "Полю")}</SelectItem>
             </SelectContent>
           </Select>
@@ -3046,7 +3054,10 @@ function ChartEditor({
         )}
       </div>
 
-      {chart.source === "entity" && chart.entityId != null && statuses.length > 0 && (
+      {chart.groupByKind === "statusTag" && (
+        <p className="text-xs text-slate-500">{t("dash.tagGroupingHint", "Запись учитывается в каждом теге своего статуса. Итоги по тегам могут повторно учитывать записи. Записи без тегов — в группе «Без тега».")}</p>
+      )}
+      {sourceEntityId != null && statuses.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs text-slate-400">{t("dash.statusFilter", "Статусы (пусто = все)")}</p>
           <div className="flex flex-wrap gap-1.5">
@@ -3065,7 +3076,7 @@ function ChartEditor({
           </div>
         </div>
       )}
-      {chart.source === "entity" && chart.entityId != null && (
+      {sourceEntityId != null && (
         <StatusTagMultiSelect
           value={chart.statusTagIds}
           statuses={statuses as TaggedStatus[]}
@@ -3102,7 +3113,7 @@ function TableEditor({
   const { data: statuses = [] } = useListEntityStatuses(table.entityId ?? 0, {
     query: { enabled: table.entityId != null, queryKey: getListEntityStatusesQueryKey(table.entityId ?? 0) },
   });
-  const { data: relationOptions } = useGetEntityRelationOptions(table.entityId ?? 0, {
+  const { data: relationOptions } = useGetEntityRelationOptions(table.entityId ?? 0, undefined, {
     query: { enabled: table.entityId != null, queryKey: getGetEntityRelationOptionsQueryKey(table.entityId ?? 0) },
   });
   const relations = relationOptions?.options ?? [];
@@ -3323,8 +3334,8 @@ function MetricEditor({
   const { data: statuses = [] } = useListEntityStatuses(metric.entityId ?? 0, {
     query: { enabled: metric.source === "entity" && metric.entityId != null, queryKey: getListEntityStatusesQueryKey(metric.entityId ?? 0) },
   });
-  const { data: relationOptions } = useGetEntityRelationOptions(metric.entityId ?? 0, {
-    query: { enabled: metric.source === "entity" && metric.entityId != null, queryKey: getGetEntityRelationOptionsQueryKey(metric.entityId ?? 0) },
+  const { data: relationOptions } = useGetEntityRelationOptions(metric.entityId ?? 0, { forAggregation: true }, {
+    query: { enabled: metric.source === "entity" && metric.entityId != null, queryKey: getGetEntityRelationOptionsQueryKey(metric.entityId ?? 0, { forAggregation: true }) },
   });
   const { data: pages = [] } = useListPages();
   const { data: pageFields = [] } = useListPageFields(metric.pageId ?? 0, {
@@ -3338,7 +3349,7 @@ function MetricEditor({
   const numericFields: { key: string; label: unknown }[] =
     metric.relationId != null
       ? (selectedRelation?.fields ?? [])
-          .filter((f) => f.fieldType === "number")
+          .filter((f) => f.supportsSum === true)
           .map((f) => ({ key: f.key, label: f.label }))
       : fields
           .filter(isWidgetSumField)
@@ -3836,15 +3847,15 @@ function NoteSourceEditor({
   const { data: statuses = [] } = useListEntityStatuses(source.entityId ?? 0, {
     query: { enabled: source.entityId != null, queryKey: getListEntityStatusesQueryKey(source.entityId ?? 0) },
   });
-  const { data: relationOptions } = useGetEntityRelationOptions(source.entityId ?? 0, {
-    query: { enabled: source.entityId != null && source.sourceKind === "metric", queryKey: getGetEntityRelationOptionsQueryKey(source.entityId ?? 0) },
+  const { data: relationOptions } = useGetEntityRelationOptions(source.entityId ?? 0, { forAggregation: true }, {
+    query: { enabled: source.entityId != null && source.sourceKind === "metric", queryKey: getGetEntityRelationOptionsQueryKey(source.entityId ?? 0, { forAggregation: true }) },
   });
   const relations = relationOptions?.options ?? [];
   const selectedRelation = relations.find((r) => r.relationId === source.relationId);
   const numericFields: { key: string; label: unknown }[] =
     source.relationId != null
-      ? (selectedRelation?.fields ?? []).filter((f) => f.fieldType === "number").map((f) => ({ key: f.key, label: f.label }))
-      : fields.filter((f: Field) => f.fieldType === "number").map((f: Field) => ({ key: f.fieldKey, label: f.nameJson }));
+      ? (selectedRelation?.fields ?? []).filter((f) => f.supportsSum === true).map((f) => ({ key: f.key, label: f.label }))
+      : fields.filter(isWidgetSumField).map((f: Field) => ({ key: f.fieldKey, label: f.nameJson }));
   const allFields = fields.map((f: Field) => ({ key: f.fieldKey, label: f.nameJson }));
 
   const toggleStatus = (sid: number) => {

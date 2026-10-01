@@ -94,6 +94,7 @@ import type {
   FilterValuesQuery,
   FilterValuesResult,
   GeneratedDocument,
+  GetEntityRelationOptionsParams,
   GetGoogleDriveNameTemplateParams,
   GoogleDriveAuthUrl,
   GoogleDriveConnectionInfo,
@@ -6926,20 +6927,29 @@ export function useGetPageRelationOptions<TData = Awaited<ReturnType<typeof getP
 
 
 
-export const getGetEntityRelationOptionsUrl = (entityId: number,) => {
+export const getGetEntityRelationOptionsUrl = (entityId: number,
+    params?: GetEntityRelationOptionsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/entities/${entityId}/relation-options`
+  return stringifiedParams.length > 0 ? `/api/entities/${entityId}/relation-options?${stringifiedParams}` : `/api/entities/${entityId}/relation-options`
 }
 
 /**
  * @summary List relations (and their candidate related fields) usable as a single-link related column for this entity (both directions)
  */
-export const getEntityRelationOptions = async (entityId: number, options?: RequestInit): Promise<PageRelationOptions> => {
+export const getEntityRelationOptions = async (entityId: number,
+    params?: GetEntityRelationOptionsParams, options?: RequestInit): Promise<PageRelationOptions> => {
 
-  return customFetch<PageRelationOptions>(getGetEntityRelationOptionsUrl(entityId),
+  return customFetch<PageRelationOptions>(getGetEntityRelationOptionsUrl(entityId,params),
   {
     ...options,
     method: 'GET'
@@ -6952,23 +6962,25 @@ export const getEntityRelationOptions = async (entityId: number, options?: Reque
 
 
 
-export const getGetEntityRelationOptionsQueryKey = (entityId: number,) => {
+export const getGetEntityRelationOptionsQueryKey = (entityId: number,
+    params?: GetEntityRelationOptionsParams,) => {
     return [
-    `/api/entities/${entityId}/relation-options`
+    `/api/entities/${entityId}/relation-options`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetEntityRelationOptionsQueryOptions = <TData = Awaited<ReturnType<typeof getEntityRelationOptions>>, TError = ErrorType<unknown>>(entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEntityRelationOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetEntityRelationOptionsQueryOptions = <TData = Awaited<ReturnType<typeof getEntityRelationOptions>>, TError = ErrorType<unknown>>(entityId: number,
+    params?: GetEntityRelationOptionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEntityRelationOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetEntityRelationOptionsQueryKey(entityId);
+  const queryKey =  queryOptions?.queryKey ?? getGetEntityRelationOptionsQueryKey(entityId,params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEntityRelationOptions>>> = ({ signal }) => getEntityRelationOptions(entityId, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getEntityRelationOptions>>> = ({ signal }) => getEntityRelationOptions(entityId,params, { signal, ...requestOptions });
 
 
 
@@ -6986,11 +6998,12 @@ export type GetEntityRelationOptionsQueryError = ErrorType<unknown>
  */
 
 export function useGetEntityRelationOptions<TData = Awaited<ReturnType<typeof getEntityRelationOptions>>, TError = ErrorType<unknown>>(
- entityId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEntityRelationOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ entityId: number,
+    params?: GetEntityRelationOptionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getEntityRelationOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetEntityRelationOptionsQueryOptions(entityId,options)
+  const queryOptions = getGetEntityRelationOptionsQueryOptions(entityId,params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

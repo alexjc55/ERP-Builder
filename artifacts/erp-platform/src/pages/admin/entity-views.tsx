@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef } from "react";
+import { isWidgetSumField } from "@/lib/widgetMetricFields";
 import { useParams, useLocation } from "wouter";
 import {
   useListEntityViews,
@@ -283,7 +284,7 @@ export default function EntityViewsPage() {
   );
   // Fields the admin has opted into as pivot dims/measures.
   const pivotDimFields = fields.filter((f: Field) => f.pivotEnabled && PIVOT_DIM_TYPES.has(f.fieldType));
-  const pivotSumFields = fields.filter((f: Field) => f.pivotEnabled && f.fieldType === "number");
+  const pivotSumFields = fields.filter((f: Field) => f.pivotEnabled && isWidgetSumField(f));
   // Date/datetime fields available to anchor records on a calendar view.
   const calendarDateFields = fields.filter((f: Field) => f.fieldType === "date" || f.fieldType === "datetime");
   // Fields offered as clickable chips inside a pivot formula measure. Numeric
@@ -501,9 +502,9 @@ export default function EntityViewsPage() {
         : { dateFieldKey: calendarDateFields[0]?.fieldKey ?? "" },
     );
     const dimToDraft = (d: PivotDimension | undefined): DraftDim =>
-      d && d.source !== "status"
+      d && d.source !== "status" && d.source !== "statusTag"
         ? { source: "entity", fieldKey: d.fieldKey ?? "", datePeriod: d.datePeriod ?? null }
-        : { source: "status", fieldKey: "", datePeriod: null };
+        : { source: d?.source === "statusTag" ? "statusTag" : "status", fieldKey: "", datePeriod: null };
     const p = cfg.pivot;
     setPivotRows(p ? dimToDraft(p.rows) : { source: pivotDimFields[0] ? "entity" : "status", fieldKey: pivotDimFields[0]?.fieldKey ?? "", datePeriod: null });
     // cols is only honored in single-measure mode; in multi-measure mode the
@@ -551,9 +552,9 @@ export default function EntityViewsPage() {
     );
     const dp = (entity?.defaultPivotJson ?? null) as PivotConfig | null;
     const dimToDraft = (d: PivotDimension | undefined): DraftDim =>
-      d && d.source !== "status"
+      d && d.source !== "status" && d.source !== "statusTag"
         ? { source: "entity", fieldKey: d.fieldKey ?? "", datePeriod: d.datePeriod ?? null }
-        : { source: "status", fieldKey: "", datePeriod: null };
+        : { source: d?.source === "statusTag" ? "statusTag" : "status", fieldKey: "", datePeriod: null };
     const dpMulti = !!dp?.measures && dp.measures.length > 1;
     setDefaultPivotOn(!!dp);
     setDefaultPivotRows(dp ? dimToDraft(dp.rows) : { source: pivotDimFields[0] ? "entity" : "status", fieldKey: pivotDimFields[0]?.fieldKey ?? "", datePeriod: null });
@@ -592,8 +593,8 @@ export default function EntityViewsPage() {
     let defaultPivotJson: PivotConfig | null = null;
     if (entity?.pivotEnabled && defaultPivotOn) {
       const draftToDim = (d: DraftDim): PivotDimension =>
-        d.source === "status"
-          ? { source: "status" as PivotDimensionSource }
+        d.source === "status" || d.source === "statusTag"
+          ? { source: d.source as PivotDimensionSource }
           : {
               source: "entity" as PivotDimensionSource,
               fieldKey: d.fieldKey,
@@ -674,8 +675,8 @@ export default function EntityViewsPage() {
     if (viewType !== "pivot") return base;
 
     const draftToDim = (d: DraftDim): PivotDimension =>
-      d.source === "status"
-        ? { source: "status" as PivotDimensionSource }
+      d.source === "status" || d.source === "statusTag"
+        ? { source: d.source as PivotDimensionSource }
         : {
             source: "entity" as PivotDimensionSource,
             fieldKey: d.fieldKey,

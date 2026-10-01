@@ -7,6 +7,7 @@ import {
   DEFAULT_FORMULA_TIME_ZONE,
   DEFAULT_WORKING_DAYS,
   evaluateFormula,
+  FormulaComputationError,
   formatFormulaFieldResult,
   formatFormulaResult,
   type FormulaEvaluationOptions,
@@ -23,6 +24,22 @@ const workingDaysBetween = (
     { start, end },
     options,
   );
+
+test("zero divisors are explicit errors only in strict aggregate evaluation", () => {
+  for (const expression of ["1 / 0", "1 % 0", "1 / {missing}", "1 % {zero}"]) {
+    assert.equal(evaluateFormula(expression, { zero: 0 }), null);
+    assert.equal(evaluateFormula(expression, { zero: 0 }, { throwOnError: false }), null);
+    assert.throws(() => evaluateFormula(expression, { zero: 0 }, { throwOnError: true }), FormulaComputationError);
+    const definitions = [{ key: "fault", expression }, { key: "chain", expression: "{fault}+10" }];
+    assert.equal(buildFormulaScope({ zero: 0 }, definitions).fault, null);
+    assert.throws(() => buildFormulaScope({ zero: 0 }, definitions, { throwOnError: true }).chain, /by zero/);
+  }
+  // Null/empty results and unselected ternary branches are not arithmetic errors.
+  assert.equal(evaluateFormula("{missing}", {}, { throwOnError: true }), null);
+  assert.equal(evaluateFormula('""', {}, { throwOnError: true }), "");
+  assert.equal(evaluateFormula("false ? 1 / 0 : 12 / 3", {}, { throwOnError: true }), 4);
+  assert.equal(evaluateFormula("7 % 3", {}, { throwOnError: true }), 1);
+});
 
 test("marks only numeric formula results as numeric for display formatting", () => {
   assert.equal(formatFormulaResult("1 / 4", {}, 2).numeric, true);
