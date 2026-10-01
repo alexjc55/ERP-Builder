@@ -283,6 +283,7 @@ export default function EntityViewsPage() {
     [entityId],
   );
   // Fields the admin has opted into as pivot dims/measures.
+  const pivotEligibleFields = fields.filter((f: Field) => PIVOT_DIM_TYPES.has(f.fieldType) || isWidgetSumField(f));
   const pivotDimFields = fields.filter((f: Field) => f.pivotEnabled && PIVOT_DIM_TYPES.has(f.fieldType));
   const pivotSumFields = fields.filter((f: Field) => f.pivotEnabled && isWidgetSumField(f));
   // Date/datetime fields available to anchor records on a calendar view.
@@ -832,18 +833,18 @@ export default function EntityViewsPage() {
           {entity?.pivotEnabled && (
             <div className="border-t border-slate-100 pt-3">
               <p className="text-xs font-medium text-slate-600 mb-2">{t("pivot.allowedFields", "Поля, доступные в сводных")}</p>
-              {fields.filter((f: Field) => PIVOT_DIM_TYPES.has(f.fieldType)).length === 0 ? (
+              {pivotEligibleFields.length === 0 ? (
                 <p className="text-xs text-slate-400">{t("pivot.noEligibleFields", "Нет подходящих полей (текст, число, дата, список, логическое).")}</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
-                  {fields
-                    .filter((f: Field) => PIVOT_DIM_TYPES.has(f.fieldType))
+                  {pivotEligibleFields
                     .map((f: Field) => {
                       const on = !!f.pivotEnabled;
                       return (
                         <button
                           key={f.id}
                           type="button"
+                          aria-pressed={on}
                           disabled={pivotFieldMutation.isPending}
                           onClick={() => pivotFieldMutation.mutate({ id: f.id, data: { pivotEnabled: !on } })}
                           className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition disabled:opacity-50 ${
