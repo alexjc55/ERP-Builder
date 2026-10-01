@@ -54,6 +54,14 @@ independent authorization of every dependency field and linked target.
 
 **How to apply:** Discover only referenced active relation/lookup fields, fail neutral on stale/invalid metadata, authorize every base/target resource and row, resolve the complete evaluation set once, and partition projected page inputs from entity inputs before building qualified scopes. SuperAdmin bypasses redundant grant rows but not schema existence.
 
+## Archive parity for grouping keys
+
+**Rule:** A single-link projection used as a one-time-result grouping key must include archived linked targets, while preserving every target permission boundary. Keep this internal exception separate from explicit linked aggregates and equality intermediates, which remain active-only.
+
+**Why:** A pivot axis can still display an archived linked project's or order's value. Resolving the same grouping key as empty collapses distinct historical orders and silently undercounts archived/all reports.
+
+**How to apply:** Partition resolver permission batches by archive policy; never expose this exception as a user-configurable source capability. Compare grouped counts against independent distinct project/order pairs across active, archived and all base rows.
+
 ## Equality through a shared relation
 
 **Archived intermediates:** An archived intermediate is outside the active join universe, not an authorization denial. Exclude it from join candidates even when SYSTEM or an archived-row permission adapter returns its ID; only active unauthorized intermediates propagate denial.

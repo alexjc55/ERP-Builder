@@ -47,6 +47,11 @@ export type LinkedFormulaSource =
       /** Applied after row permissions, in stable target-record-id order. */
       limit?: number;
       separator?: string;
+      /**
+       * Server-only opt-in for synthesized single-link group keys. Persisted
+       * external aggregate configs are normalized without this capability.
+       */
+      includeArchivedTargets?: boolean;
     };
 
 export type LinkedFormulaResource =
@@ -58,6 +63,8 @@ export interface LinkedFormulaRowScope {
   entityId: number;
   pageId?: number;
   recordIds: readonly number[];
+  /** Archive parity for a single-link group projection, never a permission bypass. */
+  includeArchivedRows?: boolean;
 }
 
 /**
@@ -193,7 +200,7 @@ type LoadedRecord = {
   values: Record<string, unknown>;
   pages: Map<number, Record<string, unknown>>;
 };
-type RecordRow = { id: number; entityId: number; values: unknown };
+type RecordRow = { id: number; entityId: number; values: unknown; archivedAt?: Date | null };
 type FormulaFieldMetadata = {
   fieldType: string;
   relationConfigJson: unknown;
@@ -226,34 +233,40 @@ export function linkedFormulaEqualityKeys(values: readonly (readonly unknown[])[
  * identical and must not cause repeated scope/status queries.
  */
 export async function filterLinkedFormulaTargetsByScope(
-  sources: readonly Pick<Extract<LinkedFormulaSource, { kind: "aggregate" }>, "key" | "targetEntityId" | "targetPageId">[],
-  targetRows: readonly Pick<RecordRow, "id" | "entityId">[],
+  sources: readonly Pick<Extract<LinkedFormulaSource, { kind: "aggregate" }>, "key" | "targetEntityId" | "targetPageId" | "includeArchivedTargets">[],
+  targetRows: readonly Pick<RecordRow, "id" | "entityId" | "archivedAt">[],
   filterRows: LinkedFormulaPermissionContext["filterRows"],
 ): Promise<Map<string, ReadonlySet<number>>> {
   const groups = new Map<string, {
     entityId: number;
     pageId?: number;
+    includeArchivedRows: boolean;
     sourceKeys: string[];
   }>();
   for (const source of sources) {
-    const scopeKey = `${source.targetEntityId}:${source.targetPageId ?? ""}`;
+    const includeArchivedRows = source.includeArchivedTargets === true;
+    const scopeKey = `${source.targetEntityId}:${source.targetPageId ?? ""}:${includeArchivedRows}`;
     const group = groups.get(scopeKey);
     if (group) group.sourceKeys.push(source.key);
     else groups.set(scopeKey, {
       entityId: source.targetEntityId,
       pageId: source.targetPageId,
+      includeArchivedRows,
       sourceKeys: [source.key],
     });
   }
 
   const bySource = new Map<string, ReadonlySet<number>>();
   await Promise.all([...groups.values()].map(async (group) => {
-    const ids = targetRows.filter((row) => row.entityId === group.entityId).map((row) => row.id);
+    const ids = targetRows.filter((row) =>
+      row.entityId === group.entityId && (group.includeArchivedRows || row.archivedAt == null),
+    ).map((row) => row.id);
     const candidateIds = new Set(ids);
     const allowed = await filterRows({
       entityId: group.entityId,
       pageId: group.pageId,
       recordIds: ids,
+      includeArchivedRows: group.includeArchivedRows,
     });
     if (!allowed?.has || [...allowed].some((id) => !candidateIds.has(id))) {
       throw new LinkedFormulaResolutionError("FORBIDDEN", "Invalid target row permission result");
@@ -320,6 +333,11 @@ export async function resolveLinkedFormulaData(
       }
       if (source.join.kind === "relation") {
         assertPositiveId(source.join.relationId, `Source ${source.key} relationId`);
+      }
+      if (source.includeArchivedTargets && (
+        source.join.kind !== "relation" || source.aggregate !== "min" || source.limit !== 1 || !source.value
+      )) {
+        invalid(`Source ${source.key} archive projection requires a single-link scalar group key`);
       }
     }
   }
@@ -507,6 +525,9 @@ export async function resolveLinkedFormulaData(
 
   const maxTargets = options.maxTargetRecords ?? 50_000;
   if (!Number.isInteger(maxTargets) || maxTargets < 1) invalid("maxTargetRecords must be a positive integer");
+  const archivedTargetEntityIds = [...new Set(aggregates.filter((source) =>
+    source.includeArchivedTargets === true,
+  ).map((source) => source.targetEntityId))];
   const [baseRows, targetRows]: [RecordRow[], RecordRow[]] = await Promise.all([
     baseIds.length
       ? db.select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, values: entityRecordsTable.valuesJson })
@@ -518,9 +539,14 @@ export async function resolveLinkedFormulaData(
           ))
       : Promise.resolve([] as RecordRow[]),
     aggregates.length
-      ? db.select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, values: entityRecordsTable.valuesJson })
+      ? db.select({ id: entityRecordsTable.id, entityId: entityRecordsTable.entityId, values: entityRecordsTable.valuesJson, archivedAt: entityRecordsTable.archivedAt })
           .from(entityRecordsTable)
-          .where(and(inArray(entityRecordsTable.entityId, [...new Set(aggregates.map((s) => s.targetEntityId))]), isNull(entityRecordsTable.archivedAt)))
+          .where(and(
+            inArray(entityRecordsTable.entityId, [...new Set(aggregates.map((s) => s.targetEntityId))]),
+            archivedTargetEntityIds.length
+              ? or(isNull(entityRecordsTable.archivedAt), inArray(entityRecordsTable.entityId, archivedTargetEntityIds))
+              : isNull(entityRecordsTable.archivedAt),
+          ))
           .limit(maxTargets + 1)
       : Promise.resolve([] as RecordRow[]),
   ]);
@@ -584,6 +610,8 @@ export async function resolveLinkedFormulaData(
     : [];
 
   const intermediateIdsByEntity = new Map<number, Set<number>>();
+  const baseIdSet = new Set(baseIds);
+  const archivedTargetIds = new Set(targetRows.filter((row) => row.archivedAt != null).map((row) => row.id));
   for (const usage of equalityRelationOwners) {
     const relation = relationById.get(usage.relationId)!;
     const ownerIsSource = relation.sourceEntityId === usage.ownerEntityId;
@@ -592,6 +620,9 @@ export async function resolveLinkedFormulaData(
       if (link.relationId !== usage.relationId) continue;
       const ownerRecordId = ownerIsSource ? link.sourceRecordId : link.targetRecordId;
       if (loaded.get(ownerRecordId)?.entityId !== usage.ownerEntityId) continue;
+      // A group-only archived target is not an external equality join owner.
+      // Archived base rows explicitly requested by the caller remain eligible.
+      if (archivedTargetIds.has(ownerRecordId) && !baseIdSet.has(ownerRecordId)) continue;
       const linkedRecordId = ownerIsSource ? link.targetRecordId : link.sourceRecordId;
       const ids = intermediateIdsByEntity.get(linkedEntityId) ?? new Set<number>();
       ids.add(linkedRecordId);
@@ -701,7 +732,8 @@ export async function resolveLinkedFormulaData(
         const targetId = source.join.baseSide === "source" ? link.targetRecordId : link.sourceRecordId;
         if (!valuesByRecordId.has(baseId)) continue;
         const candidateTarget = targetRows.find((row) =>
-          row.id === targetId && row.entityId === source.targetEntityId);
+          row.id === targetId && row.entityId === source.targetEntityId &&
+          (source.includeArchivedTargets === true || row.archivedAt == null));
         if (candidateTarget && !allowedTargets.has(targetId)) {
           deniedSourceKeysByRecordId.get(baseId)!.add(source.key);
           continue;
@@ -732,7 +764,7 @@ export async function resolveLinkedFormulaData(
         for (const key of keys) for (const target of index.get(key) ?? []) found.set(target.id, target);
         matches.set(baseId, [...found.values()].sort((a, b) => a.id - b.id));
         if (targetRows.some((record) =>
-          record.entityId === source.targetEntityId && !allowedTargets.has(record.id))) {
+          record.entityId === source.targetEntityId && record.archivedAt == null && !allowedTargets.has(record.id))) {
           // Determining whether a denied equality target matches would itself
           // require inspecting denied join values. Conservatively suppress the
           // projection for every base row instead of creating that oracle.

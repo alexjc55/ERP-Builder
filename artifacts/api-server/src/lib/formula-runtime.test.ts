@@ -235,6 +235,41 @@ test("legacy source discovery accepts the pre-extracted keys used by the DB meta
   }]);
 });
 
+test("only enabled, same-scope synthesized group links opt in to archived targets", () => {
+  const relation = { id: 4, sourceEntityId: 7, targetEntityId: 8 };
+  const link = {
+    fieldKey: "order", fieldType: "relation", scope: "entity" as const,
+    relationConfigJson: { relationId: 4, relatedFieldKey: "number" },
+  };
+  const formula = (enabled: boolean, scope: string, pageId?: number) => ({
+    fieldKey: "once", fieldType: "function", scope: "entity" as const,
+    formulaConfigJson: {
+      expression: "{order}",
+      groupResult: { enabled, fields: [{ scope, pageId, fieldKey: "order" }] },
+    },
+  });
+  const group = legacyFormulaSourcesFromFields([link, formula(true, "entity")], [relation], 7);
+  assert.equal(group[0].kind === "aggregate" && group[0].includeArchivedTargets, true);
+  for (const field of [formula(false, "entity"), formula(true, "page", 22)]) {
+    const sources = legacyFormulaSourcesFromFields([link, field], [relation], 7);
+    assert.equal(sources[0].kind === "aggregate" && sources[0].includeArchivedTargets, undefined);
+  }
+  const pageLink = { ...link, scope: "page" as const, pageId: 22 };
+  const page = legacyFormulaSourcesFromFields([pageLink, formula(true, "page", 22)], [relation], 7);
+  assert.equal(page[0].kind === "aggregate" && page[0].includeArchivedTargets, true);
+  const foreignPage = legacyFormulaSourcesFromFields([pageLink, formula(true, "page", 23)], [relation], 7);
+  assert.equal(foreignPage[0].kind === "aggregate" && foreignPage[0].includeArchivedTargets, undefined);
+
+  // The capability is transient server metadata, not a persisted formula option.
+  const configured = formulaSourcesOf([{
+    fieldType: "function",
+    formulaConfigJson: { sources: [{
+      ...group[0], key: "source:external", includeArchivedTargets: true,
+    }] },
+  }]);
+  assert.equal(configured[0].kind === "aggregate" && configured[0].includeArchivedTargets, undefined);
+});
+
 test("legacy relation source inputs feed visible formula chains but never serialize", () => {
   const values = materializeVisibleEntityFormulas({
     entityId: 7,

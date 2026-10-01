@@ -163,6 +163,29 @@ type LegacyRelationField = {
   pageId?: number;
 };
 type RelationEndpoint = { id: number; sourceEntityId: number; targetEntityId: number };
+type FormulaGroupSourceReference = { scope: "entity" | "page"; pageId?: number; fieldKey: string };
+
+function formulaGroupSourceReferences(
+  fields: readonly FormulaConfiguredField[],
+): FormulaGroupSourceReference[] {
+  return fields.flatMap((field) => {
+    if (field.fieldType !== "function") return [];
+    const group = (field.formulaConfigJson as {
+      groupResult?: { enabled?: unknown; fields?: unknown };
+    } | null)?.groupResult;
+    if (group?.enabled !== true || !Array.isArray(group.fields)) return [];
+    return group.fields.flatMap((raw): FormulaGroupSourceReference[] => {
+      if (!raw || typeof raw !== "object") return [];
+      const ref = raw as { scope?: unknown; pageId?: unknown; fieldKey?: unknown };
+      if (typeof ref.fieldKey !== "string" || !ref.fieldKey) return [];
+      if (ref.scope === "entity") return [{ scope: "entity", fieldKey: ref.fieldKey }];
+      if (ref.scope === "page" && typeof ref.pageId === "number" && Number.isInteger(ref.pageId) && ref.pageId > 0) {
+        return [{ scope: "page", pageId: ref.pageId, fieldKey: ref.fieldKey }];
+      }
+      return [];
+    });
+  });
+}
 
 /** Default-deny, field-wide capability for one exact page-field source. */
 export function canExportPageFieldToFormula(options: {
@@ -284,6 +307,7 @@ export function legacyFormulaSourcesFromFields(
   relations: readonly RelationEndpoint[],
   entityId: number,
   referencedKeys?: Iterable<string>,
+  groupReferences: readonly FormulaGroupSourceReference[] = formulaGroupSourceReferences(fields),
 ): LinkedFormulaSource[] {
   const references = referencedKeys == null
     ? formulaReferenceKeys(fields)
@@ -337,6 +361,13 @@ export function legacyFormulaSourcesFromFields(
       // that invariant, without choosing an arbitrary link.
       aggregate: "min",
       limit: 1,
+      // A group key is the displayed single-link value, including archived
+      // linked records. Explicit external formula aggregations keep their
+      // active-only universe, even when they read the same target entity.
+      ...(groupReferences.some((ref) =>
+        ref.fieldKey === field.fieldKey && ref.scope === field.scope &&
+        (ref.scope !== "page" || ref.pageId === field.pageId),
+      ) ? { includeArchivedTargets: true } : {}),
     });
   }
   return result;
@@ -622,7 +653,7 @@ export async function interactiveFormulaPermissions(
       const clauses = [
         eq(entityRecordsTable.entityId, scope.entityId),
         idArrayAny(entityRecordsTable.id, scope.recordIds),
-        ...(includeArchivedBaseRows ? [] : [isNull(entityRecordsTable.archivedAt)]),
+        ...((scope.includeArchivedRows ?? includeArchivedBaseRows) ? [] : [isNull(entityRecordsTable.archivedAt)]),
       ];
       if (effective.scope === "own") {
         clauses.push(await ownScopeWhere(
@@ -737,7 +768,7 @@ export async function interactiveFormulaPermissions(
       const clauses = [
         eq(entityRecordsTable.entityId, scope.entityId),
         idArrayAny(entityRecordsTable.id, scope.recordIds),
-        ...(includeArchivedBaseRows ? [] : [isNull(entityRecordsTable.archivedAt)]),
+        ...((scope.includeArchivedRows ?? includeArchivedBaseRows) ? [] : [isNull(entityRecordsTable.archivedAt)]),
       ];
       if (effective.scope === "own") {
         clauses.push(await ownScopeWhere(scope.entityId, effective.scopeFieldKeys, req.user!.userId, fields));
@@ -868,6 +899,7 @@ export async function mergeLinkedFormulaInputs(options: {
         relations,
         options.entityId,
         referencedKeys,
+        formulaGroupSourceReferences(options.fields),
       );
       for (const source of legacySources) {
         const candidate = [...candidates].reverse().find((field) => field.fieldKey === source.key)!;

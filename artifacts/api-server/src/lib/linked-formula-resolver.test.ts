@@ -97,3 +97,26 @@ test("archived equality intermediates do not suppress active authorized matches"
     true,
   );
 });
+
+test("mixed group projections and external sources have separate archive universes and row boundaries", async () => {
+  const calls: Array<{ includeArchivedRows?: boolean; recordIds: readonly number[] }> = [];
+  const sources = [
+    { key: "group", targetEntityId: 7, includeArchivedTargets: true },
+    { key: "anotherGroup", targetEntityId: 7, includeArchivedTargets: true },
+    { key: "external", targetEntityId: 7 },
+  ];
+  const result = await filterLinkedFormulaTargetsByScope(sources, [
+    { id: 1, entityId: 7, archivedAt: null },
+    { id: 2, entityId: 7, archivedAt: new Date("2024-01-01") },
+    { id: 3, entityId: 7, archivedAt: new Date("2024-01-01") },
+  ], async scope => {
+    calls.push(scope);
+    return new Set(scope.recordIds.filter(id => id !== 3));
+  });
+  assert.equal(calls.length, 2, "same archive scope still batches permission checks");
+  assert.deepEqual(calls.find(call => call.includeArchivedRows)?.recordIds, [1, 2, 3]);
+  assert.deepEqual(calls.find(call => !call.includeArchivedRows)?.recordIds, [1]);
+  assert.deepEqual([...result.get("group")!], [1, 2], "archived permission-denied rows stay excluded");
+  assert.strictEqual(result.get("group"), result.get("anotherGroup"));
+  assert.deepEqual([...result.get("external")!], [1], "loading archived group targets never widens external aggregation");
+});
