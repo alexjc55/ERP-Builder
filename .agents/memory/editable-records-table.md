@@ -11,7 +11,7 @@ existing modal create/edit dialog which is kept as a fallback:
 - **Inline cell edit** — clicking an `edit`-access cell opens an in-place editor; text/number/date
   commit on Enter/blur, Esc cancels; boolean toggles immediately; select/user commit on choice.
   Saves send a **partial** `valuesJson` (server merges).
-- **Inline add-row** — a draft row at the bottom of the tbody; uses the record create endpoint.
+- **Inline add-row** — a draft row at the top of the tbody; uses the record create endpoint.
 - **Setup mode** — admin-only (`canAdmin("entities")`) toggle; column headers become buttons that
   open a shared `FieldConfigDialog` (field props + per-role access), and a "+" header button creates
   a new field/column.
@@ -34,3 +34,16 @@ the modal edit dialog's existing `workflowActive` gating.
 Keep the table header + inline add-row trigger/draft visible in the empty state (render the empty
 message as a row inside the tbody, not as a replacement for the whole table). Otherwise inline add-row
 and setup-mode column tools are unreachable in the common "no rows yet" bootstrap case.
+
+## Rule: inline creation controls are independent of the actions column
+Show labeled Save/Cancel controls in a compact row immediately below the draft for ALL users,
+including roles that hide the actions column. Keep the controls themselves sticky at logical
+inline-start so horizontal scrolling in LTR/RTL cannot move them out of view.
+
+**Why:** The user approved separating creation controls from actions on existing records;
+hiding actions must not prevent a create-authorized user from completing or cancelling a draft.
+
+**How to apply:** Gate draft and toolbar together on create permission and ordinary table mode.
+Retain the actions placeholder cell only when that column is visible, span exactly the visible
+columns in the controls row, and reuse the existing save/cancel handlers and write-readiness guards.
+This presentation rule does not grant create, update, delete, or field access.

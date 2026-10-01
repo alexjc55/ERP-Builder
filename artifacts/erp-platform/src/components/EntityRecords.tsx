@@ -8996,7 +8996,8 @@ export function EntityRecords({
                     </tr>
                   )}
                   {canCreate && !setupMode && !showGroups && addingRow && (
-                    <tr className="border-b border-blue-100 bg-blue-50/40">
+                    <>
+                    <tr data-testid="row-inline-create-draft" className="border-b border-blue-100 bg-blue-50/40">
                       {showBulk && <td style={bulkColStyle("#EFF6FF")} />}
                       {orderedColumns.map((col) => {
                         if (col.kind === "status") {
@@ -9192,13 +9193,19 @@ export function EntityRecords({
                           </td>
                         );
                       })}
-                      {showActionsColumn && (
-                      <td className="px-2 py-1.5 align-top">
-                        <div className="flex items-center justify-end gap-1">
+                      {showActionsColumn && <td />}
+                    </tr>
+                    <tr data-testid="row-inline-create-controls" className="border-b border-blue-100 bg-blue-50/40">
+                      <td
+                        colSpan={orderedColumns.length + (showBulk ? 1 : 0) + (showActionsColumn ? 1 : 0)}
+                        className="px-2 py-1.5"
+                      >
+                        <div className="sticky [inset-inline-start:0.5rem] z-10 flex w-max max-w-full items-center gap-2 rounded-md bg-blue-50 px-2 py-1">
                           <Button
-                            size="icon"
-                            className="h-8 w-8 bg-blue-600 hover:bg-blue-700"
-                            title={t("records.saveRow", "Сохранить строку")}
+                            data-testid="button-save-inline-row"
+                            type="button"
+                            size="sm"
+                            className="h-8 gap-1.5 bg-blue-600 hover:bg-blue-700"
                             disabled={
                               createMutation.isPending ||
                               setPageValuesMutation.isPending ||
@@ -9206,21 +9213,25 @@ export function EntityRecords({
                             }
                             onClick={commitNewRow}
                           >
-                            {createMutation.isPending || setPageValuesMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                            {createMutation.isPending || setPageValuesMutation.isPending ? <Loader2 aria-hidden="true" className="w-3.5 h-3.5 animate-spin" /> : <Check aria-hidden="true" className="w-3.5 h-3.5" />}
+                            {t("records.saveRow", "Сохранить строку")}
                           </Button>
                           <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-slate-500"
-                            title={t("records.cancel", "Отмена")}
+                            data-testid="button-cancel-inline-row"
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1.5"
+                            disabled={createMutation.isPending || setPageValuesMutation.isPending}
                             onClick={cancelAddRow}
                           >
-                            <X className="w-3.5 h-3.5" />
+                            <X aria-hidden="true" className="w-3.5 h-3.5" />
+                            {t("records.cancel", "Отмена")}
                           </Button>
                         </div>
                       </td>
-                      )}
                     </tr>
+                    </>
                   )}
                   {groupRowsReady && records.map((record: EntityRecord, rowIndex: number) => {
                     // Emit the group header row whenever this record's
