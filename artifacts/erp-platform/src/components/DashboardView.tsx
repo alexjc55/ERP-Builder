@@ -991,7 +991,7 @@ function WidgetCard({
       <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
         <CardContent className="flex h-full flex-col p-4">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
+            <p className="text-base font-semibold text-slate-500 truncate">{ml(w.titleJson)}</p>
             {onViewAll && (
               <button
                 type="button"
@@ -1020,7 +1020,7 @@ function WidgetCard({
     return (
       <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
         <CardContent className="flex h-full flex-col p-4">
-          <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
+          <p className="text-base font-semibold text-slate-500 truncate">{ml(w.titleJson)}</p>
           <div className="flex-1 min-h-0 mt-2">
             <WidgetChart chartType={w.chartType ?? "bar"} series={w.series ?? []} color={w.color} showValues={w.showValues ?? false} t={t} />
           </div>
@@ -1034,7 +1034,7 @@ function WidgetCard({
     return (
       <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
         <CardContent className="flex h-full flex-col p-4">
-          {title && <p className="text-sm font-medium text-slate-500 truncate">{title}</p>}
+          {title && <p className="text-base font-semibold text-slate-500 truncate">{title}</p>}
           <div className={cn("flex-1 min-h-0", title && "mt-2")}>
             {notes ? (
               <EditableNotesContent
@@ -1062,7 +1062,7 @@ function WidgetCard({
     return (
       <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
         <CardContent className="flex h-full flex-col p-4">
-          <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
+          <p className="text-base font-semibold text-slate-500 truncate">{ml(w.titleJson)}</p>
           <div className="flex-1 min-h-0 mt-2 overflow-auto">
             {hasData ? (
               <PivotResultTable result={pivot} />
@@ -1082,7 +1082,7 @@ function WidgetCard({
     return (
       <Card className="h-full border-slate-200 shadow-sm hover:shadow-md transition-shadow">
         <CardContent className="flex h-full flex-col p-4">
-          <p className="text-sm font-medium text-slate-500 truncate">{ml(w.titleJson)}</p>
+          <p className="text-base font-semibold text-slate-500 truncate">{ml(w.titleJson)}</p>
           <div className="flex-1 min-h-0 mt-3 relative">
             <OnlineUsersWidget users={users} t={t} ml={ml} />
           </div>
@@ -1112,13 +1112,13 @@ function WidgetCard({
             : "border-slate-200",
       )}
     >
-      <CardContent className="flex h-full items-center p-6">
-        <div className="flex w-full items-center justify-between gap-3">
+      <CardContent className="flex h-full items-start p-4">
+        <div className="flex w-full items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className={cn("text-sm font-medium truncate", isFill ? `${fillText} opacity-90` : "text-slate-500")}>{ml(w.titleJson)}</p>
+            <p className={cn("text-base font-semibold truncate", isFill ? `${fillText} opacity-90` : "text-slate-500")}>{ml(w.titleJson)}</p>
             <p className={cn("text-3xl font-bold mt-1", isFill ? fillText : "text-slate-800")}>{formatValue(value, w.format, currencySymbol)}</p>
             {secondary && (
-              <p data-testid="widget-secondary-value" className={cn("mt-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-base leading-snug", isFill ? fillText : "text-slate-800")}>
+              <p data-testid="widget-secondary-value" className={cn("mt-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-sm leading-snug", isFill ? fillText : "text-slate-800")}>
                 {ml(secondary.captionJson) && <span className={cn("min-w-0 [overflow-wrap:anywhere]", isFill ? "opacity-80" : "text-slate-500")}>{ml(secondary.captionJson)}</span>}
                 <bdi className="min-w-0 font-semibold [overflow-wrap:anywhere]" dir="auto">
                   {typeof secondaryNumber === "number" && Number.isFinite(secondaryNumber)
