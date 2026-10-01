@@ -9282,6 +9282,12 @@
     "he": "רשומה נוצרה"
   },
   {
+    "key": "auto.trig.record_created_or_status_changed",
+    "ru": "Создание записи или смена статуса",
+    "en": "Record created or status changed",
+    "he": "יצירת רשומה או שינוי סטטוס"
+  },
+  {
     "key": "auto.trig.record_updated",
     "ru": "Изменение записи",
     "en": "Record updated",

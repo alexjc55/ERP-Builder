@@ -223,6 +223,7 @@ const OPERATORS: { value: AutomationConditionOperator; label: string }[] = [
 
 const TRIGGER_TYPES: { value: AutomationTriggerType; labelKey: string; label: string }[] = [
   { value: "record_created", labelKey: "auto.trig.record_created", label: "Создание записи" },
+  { value: "record_created_or_status_changed", labelKey: "auto.trig.record_created_or_status_changed", label: "Создание записи или смена статуса" },
   { value: "record_updated", labelKey: "auto.trig.record_updated", label: "Изменение записи" },
   { value: "field_changed", labelKey: "auto.trig.field_changed", label: "Изменение поля" },
   { value: "status_changed", labelKey: "auto.trig.status_changed", label: "Смена статуса" },
@@ -1255,8 +1256,8 @@ export default function EntityAutomationsPage() {
               <Label className="text-sm font-semibold">{t("auto.trigger", "Триггер")}</Label>
               <div className="flex flex-wrap items-center gap-1.5">
                 <Select value={triggerType} onValueChange={(v) => setTriggerType(v as AutomationTriggerType)}>
-                  <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
-                  <SelectContent>{TRIGGER_TYPES.map((tt) => (<SelectItem key={tt.value} value={tt.value}>{t(tt.labelKey, tt.label)}</SelectItem>))}</SelectContent>
+                  <SelectTrigger className="w-full sm:w-80" data-testid="select-automation-trigger"><SelectValue /></SelectTrigger>
+                  <SelectContent>{TRIGGER_TYPES.map((tt) => (<SelectItem key={tt.value} value={tt.value} data-testid={`option-automation-trigger-${tt.value}`}>{t(tt.labelKey, tt.label)}</SelectItem>))}</SelectContent>
                 </Select>
                 {(triggerType === "field_changed" || triggerType === "date_reached") && (
                   <Select value={trigFieldKey} onValueChange={setTrigFieldKey}>

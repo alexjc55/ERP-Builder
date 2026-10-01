@@ -1401,6 +1401,8 @@ function triggerMatchesEvent(
   switch (trigger.type) {
     case "record_created":
       return kind === "record.created";
+    case "record_created_or_status_changed":
+      return kind === "record.created" || kind === "status.changed";
     case "record_updated":
       return kind === "record.updated";
     case "field_changed": {
@@ -1537,11 +1539,13 @@ async function runOne(
     let values = { ...baseValues, ...(relValues.get(recordId) ?? {}) };
 
     // Relation selections from the create form arrive in a follow-up link
-    // request. Wait only inside a record_created run that consumes one of those
-    // projections, then continue the same create event exactly once. Later
+    // request. Wait only inside a creation-event run that consumes one of those
+    // projections, then continue the same create event exactly once. The combined
+    // trigger's status-change branch must not wait for create-form links. Later
     // edits (date, driver, etc.) remain record.updated and cannot enter here.
     const pendingRelationKeys =
-      trigger.type === "record_created"
+      trigger.type === "record_created" ||
+      (trigger.type === "record_created_or_status_changed" && triggerName === "record.created")
         ? createRelationReadKeys(conditions, actions, fieldByKey)
         : [];
     const pendingRelationKeySet = new Set(pendingRelationKeys);

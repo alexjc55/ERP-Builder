@@ -71,6 +71,8 @@ export type ConditionConjunction = z.infer<typeof conditionConjunctionSchema>;
 /** Trigger: exactly one per automation. */
 export const automationTriggerSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("record_created") }),
+  /** Create OR status-change events only; status filtering uses common conditions. */
+  z.object({ type: z.literal("record_created_or_status_changed") }),
   z.object({ type: z.literal("record_updated") }),
   /** Fires only when the named field's value changes. */
   z.object({ type: z.literal("field_changed"), fieldKey: z.string().min(1) }),

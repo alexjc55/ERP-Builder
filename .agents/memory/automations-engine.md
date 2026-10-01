@@ -15,6 +15,12 @@ Outgoing webhooks export all mirror-page data without a page selector, including
 
 ## Contract dual source of truth (gotcha)
 
+The combined creation/status-change trigger is an additional option, not a replacement for either existing trigger. Specific status selection belongs in its common conditions, not separate from/to selectors.
+
+**Why:** the user explicitly chose one rule for either event while preserving existing rules and named it «Создание записи или смена статуса».
+
+**How to apply:** retain this distinction when extending the trigger editor; ordinary record edits must not count as either event.
+
 Automation trigger/condition/action/**mapping** types are defined as **zod schemas
 in `lib/db/src/schema/automations.ts`** and consumed server-side via
 `@workspace/db` (e.g. `type AutomationMapping`). `lib/api-spec/openapi.yaml` holds a

@@ -4175,11 +4175,15 @@ export interface AutomationCondition {
   valueFieldKey?: string;
 }
 
+/**
+ * record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from/to status selectors; use common conditions (including __status__) to constrain the record's current status.
+ */
 export type AutomationTriggerType = typeof AutomationTriggerType[keyof typeof AutomationTriggerType];
 
 
 export const AutomationTriggerType = {
   record_created: 'record_created',
+  record_created_or_status_changed: 'record_created_or_status_changed',
   record_updated: 'record_updated',
   field_changed: 'field_changed',
   status_changed: 'status_changed',
@@ -4188,6 +4192,7 @@ export const AutomationTriggerType = {
 } as const;
 
 export interface AutomationTrigger {
+  /** record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from/to status selectors; use common conditions (including __status__) to constrain the record's current status. */
   type: AutomationTriggerType;
   fieldKey?: string;
   /** @nullable */

@@ -7291,7 +7291,7 @@ export const ListEntityAutomationsResponseItem = zod.object({
 }),
   "isActive": zod.boolean(),
   "triggerJson": zod.object({
-  "type": zod.enum(['record_created', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']),
+  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
   "fieldKey": zod.string().optional(),
   "fromStatusId": zod.number().nullish(),
   "toStatusId": zod.number().nullish(),
@@ -7477,7 +7477,7 @@ export const CreateEntityAutomationBody = zod.object({
 }).optional(),
   "isActive": zod.boolean().optional(),
   "triggerJson": zod.object({
-  "type": zod.enum(['record_created', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']),
+  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
   "fieldKey": zod.string().optional(),
   "fromStatusId": zod.number().nullish(),
   "toStatusId": zod.number().nullish(),
@@ -7682,7 +7682,7 @@ export const GetAutomationResponse = zod.object({
 }),
   "isActive": zod.boolean(),
   "triggerJson": zod.object({
-  "type": zod.enum(['record_created', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']),
+  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
   "fieldKey": zod.string().optional(),
   "fromStatusId": zod.number().nullish(),
   "toStatusId": zod.number().nullish(),
@@ -7866,7 +7866,7 @@ export const UpdateAutomationBody = zod.object({
 }).optional(),
   "isActive": zod.boolean().optional(),
   "triggerJson": zod.object({
-  "type": zod.enum(['record_created', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']),
+  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
   "fieldKey": zod.string().optional(),
   "fromStatusId": zod.number().nullish(),
   "toStatusId": zod.number().nullish(),
@@ -8042,7 +8042,7 @@ export const UpdateAutomationResponse = zod.object({
 }),
   "isActive": zod.boolean(),
   "triggerJson": zod.object({
-  "type": zod.enum(['record_created', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']),
+  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
   "fieldKey": zod.string().optional(),
   "fromStatusId": zod.number().nullish(),
   "toStatusId": zod.number().nullish(),
