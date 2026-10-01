@@ -1,5 +1,17 @@
 [
   {
+    "key": "dash.customColor",
+    "ru": "Свой цвет",
+    "en": "Custom color",
+    "he": "צבע מותאם אישית"
+  },
+  {
+    "key": "dash.invalidCustomColor",
+    "ru": "Введите цвет в формате #RRGGBB, например #A3C8EF",
+    "en": "Enter a color in #RRGGBB format, for example #A3C8EF",
+    "he": "הזינו צבע בפורמט #RRGGBB, למשל #A3C8EF"
+  },
+  {
     "key": "dash.showSecondary",
     "ru": "Показывать дополнительное значение",
     "en": "Show secondary value",

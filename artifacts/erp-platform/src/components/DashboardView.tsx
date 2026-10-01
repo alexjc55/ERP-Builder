@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { isWidgetSumField } from "@/lib/widgetMetricFields";
+import { normalizeWidgetColor, widgetColorHex } from "@/lib/widgetColors";
+import { ColorPickerControl } from "@/components/ColorPickerControl";
 import "./dashboard-embedded-grid.css";
 import { CompactStatus, type DisplayStatusTag } from "@/components/CompactStatus";
 import {
@@ -212,18 +214,6 @@ const CHART_TYPE_OPTIONS: { value: ChartConfigType; labelKey: string; fallback: 
   { value: "pie", labelKey: "dash.chartPie", fallback: "Круговой" },
   { value: "donut", labelKey: "dash.chartDonut", fallback: "Кольцевой" },
 ];
-
-/** Map a tailwind preset bg class to a concrete hex for chart fills/strokes. */
-const TAILWIND_HEX: Record<string, string> = {
-  "bg-blue-600": "#2563eb",
-  "bg-violet-600": "#7c3aed",
-  "bg-emerald-600": "#059669",
-  "bg-amber-500": "#f59e0b",
-  "bg-red-500": "#ef4444",
-  "bg-cyan-600": "#0891b2",
-  "bg-pink-600": "#db2777",
-  "bg-slate-600": "#475569",
-};
 
 /** Fallback palette for chart buckets that carry no per-point color. */
 const CHART_PALETTE = [
@@ -658,7 +648,7 @@ function WidgetChart({
   showValues?: boolean;
   t: (key: string, fallback: string) => string;
 }) {
-  const hex = TAILWIND_HEX[color] ?? "#2563eb";
+  const hex = widgetColorHex(color);
   if (!series || series.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-slate-400">
@@ -1096,7 +1086,9 @@ function WidgetCard({
   const value = resolveValue(w, formulaOptions);
   const secondary = (w.widgetType ?? "metric") === "metric" ? w.secondaryValue : undefined;
   const secondaryNumber = secondary ? w.metrics?.[secondary.metricKey] : undefined;
-  const colorClass = w.color || DEFAULT_COLOR;
+  const normalizedColor = normalizeWidgetColor(w.color || DEFAULT_COLOR);
+  const customColor = normalizedColor?.startsWith("#") ? normalizedColor : undefined;
+  const colorClass = customColor ? "" : normalizedColor || DEFAULT_COLOR;
   const colorStyle = w.colorStyle ?? "icon";
   const isFill = colorStyle === "fill";
   const isBorder = colorStyle === "border";
@@ -1104,6 +1096,7 @@ function WidgetCard({
   const fillText = fillDark ? "text-slate-900" : "text-white";
   return (
     <Card
+      style={customColor ? (isFill ? { backgroundColor: customColor } : isBorder ? { borderColor: customColor } : undefined) : undefined}
       className={cn(
         "h-full shadow-sm hover:shadow-md transition-shadow",
         isFill
@@ -1131,6 +1124,7 @@ function WidgetCard({
           </div>
           {Icon && (
             <div
+              style={customColor && !isFill ? { backgroundColor: customColor } : undefined}
               className={cn(
                 "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
                 isFill ? (fillDark ? "bg-black/10" : "bg-white/20") : colorClass,
@@ -1992,6 +1986,11 @@ function WidgetEditorDialog({
     setVisibleRoleIds((prev) => (prev.includes(roleId) ? prev.filter((r) => r !== roleId) : [...prev, roleId]));
 
   const buildData = (): DashboardWidgetInput | null => {
+    const savedColor = normalizeWidgetColor(color);
+    if (!savedColor) {
+      toast({ title: t("dash.invalidCustomColor", "Введите цвет в формате #RRGGBB, например #A3C8EF"), variant: "destructive" });
+      return null;
+    }
     if (widgetType === "metric" && secondaryEnabled && (!secondaryKey.trim() || !metrics.some(m => m.key === secondaryKey))) {
       toast({ title: t("dash.secondarySelectRequired", "Выберите метрику для дополнительного значения"), variant: "destructive" });
       return null;
@@ -2000,7 +1999,7 @@ function WidgetEditorDialog({
       titleJson: titleJson as MultilingualText,
       visibleRoleIds: restrictRoles && visibleRoleIds.length > 0 ? visibleRoleIds : null,
       icon,
-      color,
+      color: savedColor,
       sortOrder: widget?.sortOrder ?? nextSortOrder,
       // Size is controlled on the grid (inline resize), not in this dialog. New widgets default
       // to 1×1; for edits we omit grid dims so an in-flight inline resize is never reverted.
@@ -2387,11 +2386,25 @@ function WidgetEditorDialog({
                 <button
                   key={c}
                   type="button"
+                  aria-label={c}
+                  aria-pressed={color === c}
                   onClick={() => setColor(c)}
                   className={`w-8 h-8 rounded-lg ${c} ${color === c ? "ring-2 ring-offset-2 ring-slate-800" : ""}`}
                 />
               ))}
             </div>
+            <div data-testid="widget-custom-color" className="pt-2">
+              <ColorPickerControl
+                label={t("dash.customColor", "Свой цвет")}
+                value={COLOR_PRESETS.includes(color) ? widgetColorHex(color) : color}
+                onChange={setColor}
+              />
+            </div>
+            {!normalizeWidgetColor(color) && (
+              <p role="alert" className="text-sm text-red-600">
+                {t("dash.invalidCustomColor", "Введите цвет в формате #RRGGBB, например #A3C8EF")}
+              </p>
+            )}
           </div>
 
           {(widgetType === "metric" || widgetType === "formula") && (
