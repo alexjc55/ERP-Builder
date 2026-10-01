@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { isWidgetSumField } from "@/lib/widgetMetricFields";
+import "./dashboard-embedded-grid.css";
 import { CompactStatus, type DisplayStatusTag } from "@/components/CompactStatus";
 import {
   useGetDashboardData,
@@ -1189,8 +1190,14 @@ function SizeStepper({
   );
 }
 
+function widgetColumnSpan(width: number | undefined, embedded = false): string {
+  const span = Math.min(Math.max(width || 1, 1), GRID_COLS);
+  return embedded ? `span min(${span}, var(--analytics-columns))` : `span ${span}`;
+}
+
 function EditWidgetCell({
   w,
+  embedded,
   index,
   total,
   busy,
@@ -1208,6 +1215,7 @@ function EditWidgetCell({
   onDragEndCell,
 }: {
   w: DashboardWidget;
+  embedded?: boolean;
   index: number;
   total: number;
   busy: boolean;
@@ -1243,7 +1251,7 @@ function EditWidgetCell({
     <div
       className={cn("min-w-0", isDragSource && "opacity-40")}
       style={{
-        gridColumn: `span ${Math.min(Math.max(w.gridW || 1, 1), GRID_COLS)}`,
+        gridColumn: widgetColumnSpan(w.gridW, embedded),
         gridRow: `span ${Math.min(Math.max(w.gridH || 1, 1), GRID_ROWS_MAX)}`,
       }}
       draggable={armed}
@@ -1515,7 +1523,7 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
   if (embedded && !isEditor && sortedData.length === 0 && !widgetDataError) return null;
 
   return (
-    <div className="space-y-4">
+    <div className={cn("space-y-4", embedded && "embedded-widget-container")}>
       {(isEditor || embedded) && (
         <div className={cn("flex items-center gap-2", embedded ? "justify-between" : "justify-end")}>
           {embedded ? (
@@ -1577,11 +1585,12 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
           </div>
         )
       ) : editMode ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 auto-rows-[8rem]">
+        <div data-testid="widget-grid" className={cn("grid gap-4 auto-rows-[8rem]", embedded ? "embedded-widget-grid" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4")}>
           {sortedEdit.map((w, i) => (
             <EditWidgetCell
               key={w.id}
               w={w}
+              embedded={embedded}
               index={i}
               total={sortedEdit.length}
               busy={resizeMutation.isPending || reorderMutation.isPending}
@@ -1618,7 +1627,8 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
         )
       ) : (
         <div
-          className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 auto-rows-[8rem]"
+          data-testid="widget-grid"
+          className={cn("grid gap-4 auto-rows-[8rem]", embedded ? "embedded-widget-grid" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4")}
         >
           {sortedData.map((w) => {
             const navPath = tableNavPath(w);
@@ -1627,7 +1637,7 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
                 key={w.id}
                 className="min-w-0"
                 style={{
-                  gridColumn: `span ${Math.min(Math.max(w.gridW || 1, 1), GRID_COLS)}`,
+                  gridColumn: widgetColumnSpan(w.gridW, embedded),
                   gridRow: `span ${Math.min(Math.max(w.gridH || 1, 1), GRID_ROWS_MAX)}`,
                 }}
               >

@@ -1,0 +1,25 @@
+/* Container-based, fixed-size units: analytics must not stretch a lone card
+   across the records page. Saved spans remain unchanged on narrow screens. */
+.embedded-widget-container {
+  container-type: inline-size;
+  container-name: widget-analytics;
+  min-width: 0;
+}
+
+.embedded-widget-grid {
+  --analytics-columns: 1;
+  grid-template-columns: repeat(auto-fill, min(100%, 260px));
+  justify-content: start;
+}
+
+@container widget-analytics (min-width: 536px) {
+  .embedded-widget-grid { --analytics-columns: 2; }
+}
+
+@container widget-analytics (min-width: 812px) {
+  .embedded-widget-grid { --analytics-columns: 3; }
+}
+
+@container widget-analytics (min-width: 1088px) {
+  .embedded-widget-grid { --analytics-columns: 4; }
+}
