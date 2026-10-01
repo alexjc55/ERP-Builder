@@ -10287,6 +10287,8 @@ components:
           type: number
         measureLabel:
           type: string
+        rowLabelJson:
+          $ref: "#/components/schemas/MultilingualText"
         multiMeasure:
           type: boolean
           description: >-

@@ -2883,6 +2883,7 @@ export interface PivotResult {
   colTotals: PivotTotal[];
   grandTotal: number;
   measureLabel: string;
+  rowLabelJson?: MultilingualText;
   /** True when each column is a distinct measure (multi-measure mode). In that case rowTotals/grandTotal are not meaningful (heterogeneous columns) and are omitted/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total. */
   multiMeasure?: boolean;
   /** Optional display-only affixes for sum measures over number/function fields. Omitted when no resolved measure has an affix. */

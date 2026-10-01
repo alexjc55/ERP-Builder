@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   usePivotEntityRecords,
+  useGetSettings,
   type PivotQuery,
   type PivotResult,
 } from "@workspace/api-client-react";
-import { useT } from "@/lib/i18n";
+import { useML, useT } from "@/lib/i18n";
 import { Loader2, TableProperties } from "lucide-react";
 import { AffixedNumericValue } from "@/components/AffixedNumericValue";
 import { useManualDataRefresh } from "@/lib/manualDataRefresh";
@@ -136,6 +137,11 @@ export function PivotResultTable({
   loading?: boolean;
 }) {
   const t = useT();
+  const ml = useML();
+  const { data: settings } = useGetSettings();
+  const striped = settings?.tableStyle === "striped" || settings?.tableStyle === "striped_bold";
+  const boldHeader = settings?.tableStyle === "striped_bold";
+  const headerBg = settings?.tableHeaderColor ?? (boldHeader ? "#e2e8f0" : "#f8fafc");
   const fmt = (v: number): string => {
     if (!Number.isFinite(v)) return "";
     return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(v);
@@ -146,7 +152,6 @@ export function PivotResultTable({
   for (const c of result.cells) cellMap.set(c.rowKey + "\u0000" + c.colKey, c.value);
   const rowTotal = new Map(result.rowTotals.map((r) => [r.key, r.value]));
   const colTotal = new Map(result.colTotals.map((c) => [c.key, c.value]));
-  const hasCols = result.cols.length > 1 || (result.cols[0]?.key ?? "") !== "__all__";
   // Multi-measure pivots have heterogeneous columns, so a per-row total and a
   // grand total are meaningless — the server omits them and we hide the column.
   const showRowTotal = !result.multiMeasure;
@@ -170,26 +175,26 @@ export function PivotResultTable({
           {t("pivot.updating", "Обновление…")}
         </div>
       )}
-      <table className="w-full text-sm">
+      <table className="w-full text-sm" style={settings?.tableBorderColor ? { "--erp-table-border": settings.tableBorderColor } as CSSProperties : undefined}>
         <thead className="sticky top-0 z-20">
           <tr className="bg-slate-50" data-testid="pivot-column-totals">
             <th scope="row" className="sticky start-0 z-[1] bg-slate-50 px-4 py-2 text-start font-medium text-slate-500">
               {t("pivot.colTotal", "Итого")}
             </th>
             {result.cols.map((c) => (
-              <td key={c.key} className="bg-[#d1fae5] px-4 py-2 text-center font-bold whitespace-nowrap tabular-nums text-[#047857]">
+              <td key={c.key} className="bg-[#d1fae5] px-4 py-2 text-start font-bold whitespace-nowrap tabular-nums text-[#047857]">
                 {withAffix(colTotal.get(c.key) ?? 0, c.key)}
               </td>
             ))}
             {showRowTotal && (
-              <td className="bg-[#d1fae5] px-4 py-2 text-center font-bold whitespace-nowrap tabular-nums text-[#047857]">
+              <td className="bg-[#d1fae5] px-4 py-2 text-start font-bold whitespace-nowrap tabular-nums text-[#047857]">
                 {withAffix(result.grandTotal)}
               </td>
             )}
           </tr>
-          <tr className="erp-main-header border-b border-slate-100 bg-slate-50 text-xs leading-snug">
-            <th scope="col" className="sticky start-0 z-[1] bg-slate-50 px-4 py-3 text-center font-medium text-slate-600">
-              {hasCols ? "" : result.measureLabel}
+          <tr className={`erp-main-header border-b text-xs leading-snug ${boldHeader ? "font-semibold border-b-2 border-slate-300 text-slate-800" : "border-slate-100"}`} style={{ backgroundColor: headerBg }}>
+            <th scope="col" style={{ backgroundColor: headerBg }} className="sticky start-0 z-[1] px-4 py-3 text-center font-medium text-slate-600">
+              {ml(result.rowLabelJson) || t("pivot.rowDimension", "Группировка")}
             </th>
             {result.cols.map((c) => (
               <th
@@ -208,9 +213,9 @@ export function PivotResultTable({
           </tr>
         </thead>
         <tbody>
-          {result.rows.map((r) => (
-            <tr key={r.key} className="group border-b border-slate-100 hover:bg-slate-50/50">
-              <th scope="row" className="sticky start-0 z-[1] bg-white px-4 py-2 text-center font-normal text-slate-700 group-hover:bg-slate-50">
+          {result.rows.map((r, index) => (
+            <tr key={r.key} className="group border-b border-slate-100 hover:bg-slate-50/50" style={{ backgroundColor: striped && index % 2 === 1 ? settings?.tableStripeColor ?? "#f8fafc" : "#ffffff" }}>
+              <th scope="row" style={{ backgroundColor: "inherit" }} className="sticky start-0 z-[1] px-4 py-3 text-start font-normal text-slate-700">
                 {r.label}
               </th>
               {result.cols.map((c) => {
@@ -218,14 +223,14 @@ export function PivotResultTable({
                 return (
                   <td
                     key={c.key}
-                    className="px-4 py-2 text-center tabular-nums text-slate-700"
+                    className="px-4 py-3 text-start tabular-nums text-slate-700"
                   >
                     {v == null || v === 0 ? <span className="text-slate-300">—</span> : withAffix(v, c.key)}
                   </td>
                 );
               })}
               {showRowTotal && (
-                <td className="px-4 py-2 text-center font-semibold tabular-nums text-slate-700">
+                <td className="px-4 py-3 text-start font-semibold tabular-nums text-slate-700">
                   {withAffix(rowTotal.get(r.key) ?? 0)}
                 </td>
               )}

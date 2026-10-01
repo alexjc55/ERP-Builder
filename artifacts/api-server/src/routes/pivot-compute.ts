@@ -195,6 +195,7 @@ export interface PivotResultShape {
   colTotals: { key: string; value: number }[];
   grandTotal: number;
   measureLabel: string;
+  rowLabelJson?: Record<string, string>;
   /** True when each column is a distinct measure (multi-measure mode). */
   multiMeasure?: boolean;
   /** Display-only affixes for resolved sum measures; absent when none apply. */
@@ -584,6 +585,15 @@ async function computePivotInternal(input: PivotComputeInput): Promise<PivotComp
 
   const rowMeta = resolveDim(pivot.rows);
   if ("error" in rowMeta) return { ok: false, error: rowMeta.error };
+  const rowName = pivot.rows.source === "status"
+    ? { ru: "Статус", en: "Status", he: "סטטוס" }
+    : pivot.rows.source === "statusTag"
+      ? { ru: "Тег статуса", en: "Status tag", he: "תג סטטוס" }
+      : (pivot.rows.source === "page" ? pageFieldByKey : entFieldByKey).get(pivot.rows.fieldKey ?? "")?.nameJson;
+  const rowLabelJson: Record<string, string> = Object.fromEntries(
+    Object.entries(rowName && typeof rowName === "object" ? rowName : {})
+      .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
 
   const rowKeyExpr = rowMeta.kind === "status" || rowMeta.kind === "statusTag" ? sql`${entityRecordsTable.statusId}::text` : rowMeta.expr;
 
@@ -975,6 +985,7 @@ async function computePivotInternal(input: PivotComputeInput): Promise<PivotComp
       colTotals: colKeys.map((k) => ({ key: k, value: pivotRound(colTotal.get(k) ?? 0) })),
       grandTotal: pivotRound(grandTotal),
       measureLabel: measureLabelSingle,
+      rowLabelJson,
       multiMeasure,
       ...(measureDisplayAffixes.length > 0 ? { measureDisplayAffixes } : {}),
     },

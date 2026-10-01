@@ -8373,8 +8373,8 @@ export function EntityRecords({
           </CardContent>
         </Card>
       ) : showPivot ? (
-        <Card className="border-slate-200 shadow-sm">
-          <CardContent className="p-3 sm:p-4">
+        <Card className="border-0 rounded-none shadow-none">
+          <CardContent className="p-0">
             <PivotView entityId={entityId} query={pivotQuery} refreshTick={refreshTick} />
           </CardContent>
         </Card>

@@ -13,6 +13,8 @@ report mode must not introduce a different table design.
 
 **How to apply:** Reuse records-grid spacing, header, separators, and total colors in
 shared pivot rendering. Keep aggregation and heterogeneous-measure semantics unchanged.
+Use the configured global table appearance, not merely its default CSS: the user's
+comparison specifically includes custom header/stripe/border colors and row spacing.
 
 Pivot started as a **view type** (`viewType: "pivot"` in a saved View's `configJson`) reusing the
 Views engine + the live records filter bar (Records page shows a Таблица⇄Сводная toggle, gated on the

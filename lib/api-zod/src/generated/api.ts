@@ -3521,6 +3521,11 @@ export const GetDashboardDataResponseItem = zod.object({
 })),
   "grandTotal": zod.number(),
   "measureLabel": zod.string(),
+  "rowLabelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
   "multiMeasure": zod.boolean().optional().describe('True when each column is a distinct measure (multi-measure mode). In that case rowTotals\/grandTotal are not meaningful (heterogeneous columns) and are omitted\/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total.'),
   "measureDisplayAffixes": zod.array(zod.object({
   "measureKey": zod.string().nullable(),
@@ -3596,6 +3601,11 @@ export const GetPivotPageDataResponse = zod.object({
 })),
   "grandTotal": zod.number(),
   "measureLabel": zod.string(),
+  "rowLabelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
   "multiMeasure": zod.boolean().optional().describe('True when each column is a distinct measure (multi-measure mode). In that case rowTotals\/grandTotal are not meaningful (heterogeneous columns) and are omitted\/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total.'),
   "measureDisplayAffixes": zod.array(zod.object({
   "measureKey": zod.string().nullable(),
@@ -9240,6 +9250,11 @@ export const PivotEntityRecordsResponse = zod.object({
 })),
   "grandTotal": zod.number(),
   "measureLabel": zod.string(),
+  "rowLabelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
   "multiMeasure": zod.boolean().optional().describe('True when each column is a distinct measure (multi-measure mode). In that case rowTotals\/grandTotal are not meaningful (heterogeneous columns) and are omitted\/zero; only colTotals (per-measure totals) apply. The client hides the row-total column and grand total.'),
   "measureDisplayAffixes": zod.array(zod.object({
   "measureKey": zod.string().nullable(),
