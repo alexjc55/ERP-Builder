@@ -16,6 +16,7 @@ import type { OnlineUserData } from './onlineUserData';
 import type { PivotResult } from './pivotResult';
 import type { TableColumn } from './tableColumn';
 import type { TableRow } from './tableRow';
+import type { WidgetSecondaryValue } from './widgetSecondaryValue';
 
 export interface DashboardWidgetData {
   id: number;
@@ -29,6 +30,7 @@ export interface DashboardWidgetData {
   widgetType?: DashboardWidgetDataWidgetType;
   /** @nullable */
   chartType?: string | null;
+  secondaryValue?: WidgetSecondaryValue;
   /**
      * When true, the chart widget renders numeric value labels directly on the chart
      * @nullable

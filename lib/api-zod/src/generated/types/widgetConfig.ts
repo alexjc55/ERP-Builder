@@ -14,6 +14,7 @@ import type { WidgetConfigTextColor } from './widgetConfigTextColor';
 import type { WidgetConfigWidgetType } from './widgetConfigWidgetType';
 import type { WidgetMetric } from './widgetMetric';
 import type { WidgetPivotConfig } from './widgetPivotConfig';
+import type { WidgetSecondaryValue } from './widgetSecondaryValue';
 
 export interface WidgetConfig {
   /**
@@ -22,6 +23,8 @@ export interface WidgetConfig {
      */
   widgetType?: WidgetConfigWidgetType;
   metrics?: WidgetMetric[];
+  /** Optional secondary metric displayed below the main value. Only for metric widgets; omit to disable. */
+  secondaryValue?: WidgetSecondaryValue;
   notes?: NotesConfig;
   /**
      * Optional expression combining metric keys as {key}

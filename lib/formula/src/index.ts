@@ -48,7 +48,13 @@ export interface FormulaEvaluationOptions {
   now?: Date;
   /** ISO weekdays considered working days (Monday = 1, Sunday = 7). */
   workingDays?: readonly number[];
+  /** Opt-in aggregate boundary: errors/cycles must not become a plausible zero. */
+  throwOnError?: boolean;
+  /** Read-time recomputation must ignore stale stored values of formula fields. */
+  ignoreStoredFormulaValues?: boolean;
 }
+
+export class FormulaComputationError extends Error {}
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const ISO_DATE_OR_DATETIME_RE =
@@ -606,7 +612,7 @@ export function buildFormulaScope(
 ): Record<string, unknown> {
   const defs = new Map<string, FormulaFieldDef>();
   for (const f of formulas) {
-    if (f.key && (f.expression ?? "").trim()) defs.set(f.key, f);
+    if (f.key && ((f.expression ?? "").trim() || options?.throwOnError)) defs.set(f.key, f);
   }
   if (defs.size === 0) return base;
 
@@ -615,17 +621,29 @@ export function buildFormulaScope(
 
   const scope: Record<string, unknown> = new Proxy(base, {
     get(target, prop) {
-      if (typeof prop === "string" && !(prop in target) && defs.has(prop)) {
+      if (typeof prop === "string" && defs.has(prop) && (!(prop in target) || options?.ignoreStoredFormulaValues)) {
         if (cache.has(prop)) return cache.get(prop);
-        if (inProgress.has(prop)) return null; // cycle guard
+        if (inProgress.has(prop)) {
+          if (options?.throwOnError) throw new FormulaComputationError(`Formula "${prop}" has a circular dependency.`);
+          return null; // cycle guard
+        }
         inProgress.add(prop);
         let val: FormulaValue = null;
         try {
+          if (options?.throwOnError && !(defs.get(prop)!.expression ?? "").trim()) {
+            throw new FormulaComputationError(`Formula "${prop}" has no expression.`);
+          }
           val = evaluateFormula(defs.get(prop)!.expression, scope, options);
-        } catch {
+        } catch (error) {
+          if (options?.throwOnError) {
+            throw error instanceof FormulaComputationError ? error : new FormulaComputationError(
+              `Cannot evaluate formula "${prop}": ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
           val = null;
+        } finally {
+          inProgress.delete(prop);
         }
-        inProgress.delete(prop);
         cache.set(prop, val);
         return val;
       }

@@ -5,6 +5,7 @@ import { eq, inArray } from "drizzle-orm";
 import {
   db,
   entitiesTable,
+  entityFieldsTable,
   entityRecordsTable,
   entityStatusesTable,
   pool,
@@ -30,6 +31,9 @@ test("dashboard metric tag filters OR tags, AND status ids, and return zero when
   }).returning({ id: entitiesTable.id });
   entityId = entity.id;
   const currentEntityId = entity.id;
+  await db.insert(entityFieldsTable).values({
+    entityId: currentEntityId, fieldKey: "amount", nameJson: { en: "Amount" }, fieldType: "number",
+  });
   const statuses = await db.insert(entityStatusesTable).values([
     { entityId: currentEntityId, statusKey: "overlap", nameJson: { en: "Overlap" }, sortOrder: 1 },
     { entityId: currentEntityId, statusKey: "alpha", nameJson: { en: "Alpha" }, sortOrder: 2 },

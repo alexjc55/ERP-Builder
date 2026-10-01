@@ -46,6 +46,8 @@ import {
   UpdateNotesContentBody,
 } from "@workspace/api-zod";
 import { globalPresenceSnapshot } from "../lib/collaboration";
+import { computeFormulaMetricSum, DashboardFormulaMetricError, isMetricSumField } from "../lib/dashboard-formula-metric";
+import { validateSecondaryValue } from "../lib/widget-secondary-value";
 import {
   mergeLinkedFormulaInputs,
   mergeLinkedFormulaInputsBatched,
@@ -186,6 +188,7 @@ interface PivotSpec {
 }
 
 interface WidgetConfigShape {
+  secondaryValue?: { metricKey: string; captionJson?: Record<string, string>; format?: "number" | "currency" | "percent" };
   widgetType?: "metric" | "formula" | "chart" | "table" | "notes" | "pivot" | "online_users" | null;
   metrics?: WidgetMetricSpec[];
   formula?: string | null;
@@ -693,14 +696,14 @@ async function resolvePageEntityId(pageId: number): Promise<number | null> {
 async function resolvePageLocalField(
   pageId: number,
   fieldKey: string,
-): Promise<{ fieldType: string } | null> {
+): Promise<{ fieldType: string; formulaConfigJson: typeof pageFieldsTable.$inferSelect.formulaConfigJson } | null> {
   const [f] = await db
-    .select({ fieldType: pageFieldsTable.fieldType, isActive: pageFieldsTable.isActive })
+    .select({ fieldType: pageFieldsTable.fieldType, isActive: pageFieldsTable.isActive, formulaConfigJson: pageFieldsTable.formulaConfigJson })
     .from(pageFieldsTable)
     .where(and(eq(pageFieldsTable.pageId, pageId), eq(pageFieldsTable.fieldKey, fieldKey)))
     .limit(1);
   if (!f || !f.isActive) return null;
-  return { fieldType: f.fieldType };
+  return { fieldType: f.fieldType, formulaConfigJson: f.formulaConfigJson };
 }
 
 /**
@@ -708,7 +711,7 @@ async function resolvePageLocalField(
  * relation, numeric sum field). Shared by widget metrics and notes metric sources;
  * key validity/uniqueness is the caller's responsibility.
  */
-async function validateMetricLike(m: {
+export async function validateMetricLike(m: {
   entityId: number;
   aggregation: "count" | "sum";
   fieldKey?: string | null;
@@ -726,7 +729,7 @@ async function validateMetricLike(m: {
     if (!m.fieldKey) return "Page metric requires a page field";
     const pf = await resolvePageLocalField(m.pageId, m.fieldKey);
     if (!pf) return `Page field "${m.fieldKey}" not found on page ${m.pageId}`;
-    if (m.aggregation === "sum" && pf.fieldType !== "number") {
+    if (m.aggregation === "sum" && !isMetricSumField(pf)) {
       return `Page field "${m.fieldKey}" is not numeric`;
     }
     return null;
@@ -764,12 +767,12 @@ async function validateMetricLike(m: {
   if (m.aggregation === "sum") {
     if (!m.fieldKey) return "Sum metric requires a numeric field";
     const [field] = await db
-      .select({ fieldType: entityFieldsTable.fieldType })
+      .select({ fieldType: entityFieldsTable.fieldType, formulaConfigJson: entityFieldsTable.formulaConfigJson })
       .from(entityFieldsTable)
-      .where(and(eq(entityFieldsTable.entityId, m.entityId), eq(entityFieldsTable.fieldKey, m.fieldKey)))
+      .where(and(eq(entityFieldsTable.entityId, m.entityId), eq(entityFieldsTable.fieldKey, m.fieldKey), eq(entityFieldsTable.isActive, true)))
       .limit(1);
     if (!field) return `Field "${m.fieldKey}" not found on entity ${m.entityId}`;
-    if (field.fieldType !== "number") return `Field "${m.fieldKey}" is not numeric`;
+    if (!isMetricSumField(field)) return `Field "${m.fieldKey}" is not numeric or a configured formula`;
   }
   return null;
 }
@@ -953,6 +956,8 @@ async function validateConfig(
   config: WidgetConfigShape | undefined,
   tagReader: TagReader = db,
 ): Promise<string | null> {
+  const secondaryError = validateSecondaryValue(config);
+  if (secondaryError) return secondaryError;
   const tagError = await validateWidgetStatusTags(config, tagReader);
   if (tagError) return tagError;
   if (config?.widgetType === "online_users") {
@@ -1010,6 +1015,11 @@ export async function computeMetric(m: WidgetMetricSpec): Promise<number> {
       eq(pageRecordValuesTable.pageId, pageId),
     );
     if (m.aggregation === "sum") {
+      const field = await resolvePageLocalField(pageId, key);
+      if (!field || !isMetricSumField(field)) throw new DashboardFormulaMetricError(`Page sum field "${key}" is unavailable or not numeric.`);
+      if (field.fieldType === "function") {
+        return computeFormulaMetricSum({ entityId, pageId, fieldKey: key, where: and(...conds)! });
+      }
       const [row] = await db
         .select({
           v: sql<number>`COALESCE(SUM(CASE WHEN (${pageRecordValuesTable.valuesJson} ->> ${key}) ~ ${NUMERIC_RE} THEN (${pageRecordValuesTable.valuesJson} ->> ${key})::numeric ELSE 0 END), 0)::float8`,
@@ -1093,6 +1103,13 @@ export async function computeMetric(m: WidgetMetricSpec): Promise<number> {
 
   if (m.aggregation === "sum" && m.fieldKey) {
     const key = m.fieldKey;
+    const [field] = await db.select().from(entityFieldsTable).where(and(
+      eq(entityFieldsTable.entityId, m.entityId), eq(entityFieldsTable.fieldKey, key), eq(entityFieldsTable.isActive, true),
+    )).limit(1);
+    if (!field || !isMetricSumField(field)) throw new DashboardFormulaMetricError(`Sum field "${key}" is unavailable or not numeric.`);
+    if (field.fieldType === "function") {
+      return computeFormulaMetricSum({ entityId: m.entityId, fieldKey: key, where: and(...conds)! });
+    }
     const [row] = await db
       .select({
         v: sql<number>`COALESCE(SUM(CASE WHEN (${entityRecordsTable.valuesJson} ->> ${key}) ~ ${NUMERIC_RE} THEN (${entityRecordsTable.valuesJson} ->> ${key})::numeric ELSE 0 END), 0)::float8`,
@@ -1983,6 +2000,8 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
         gridW: w.gridW,
         gridH: w.gridH,
         sortOrder: w.sortOrder,
+        ...((config.widgetType ?? "metric") === "metric" && config.secondaryValue
+          ? { secondaryValue: config.secondaryValue } : {}),
       };
       if (config.widgetType === "online_users") {
         return {
@@ -2058,8 +2077,13 @@ router.get("/pages/:id/dashboard/data", requireAuth, async (req, res): Promise<v
         metrics,
       };
     }),
-  );
+  ).catch((error: unknown) => {
+    if (!(error instanceof DashboardFormulaMetricError)) throw error;
+    res.status(422).json({ error: error.message });
+    return null;
+  });
 
+  if (data === null) return;
   res.json(data);
 });
 

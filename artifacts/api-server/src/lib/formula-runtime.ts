@@ -35,7 +35,7 @@ import {
 } from "./linked-formula-resolver";
 import { idArrayAny } from "./sql-id-array";
 import { normalizeFormulaFieldSources } from "./formula-field-config";
-import { buildFormulaScope, DEFAULT_FORMULA_TIME_ZONE, DEFAULT_WORKING_DAYS, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
+import { buildFormulaScope, DEFAULT_FORMULA_TIME_ZONE, DEFAULT_WORKING_DAYS, FormulaComputationError, type FormulaEvaluationOptions, type FormulaFieldDef } from "@workspace/formula";
 
 /** Authoritative application calendar settings for formula materialization. */
 export async function loadFormulaOptions(): Promise<FormulaEvaluationOptions> {
@@ -121,6 +121,7 @@ function formulaDependencyCacheKey(options: {
   pageId?: number;
   rows: readonly { id: number; values: Record<string, unknown> }[];
   fields: readonly FormulaDependencyField[];
+  formulaOptions?: FormulaEvaluationOptions;
 }): string {
   // Duplicate identical metadata is semantically inert (some aggregate passes
   // append the all-formulas list to the visible field list), so remove exact
@@ -135,7 +136,7 @@ function formulaDependencyCacheKey(options: {
   const rows = options.rows
     .map((row) => [row.id, stableFormulaCacheValue(row.values), deniedFormulaCachePaths(row.values)] as const)
     .sort(([a], [b]) => a - b);
-  return JSON.stringify([options.entityId, options.pageId ?? null, fields, rows]);
+  return JSON.stringify([options.entityId, options.pageId ?? null, fields, rows, stableFormulaCacheValue(options.formulaOptions ?? null)]);
 }
 
 function deniedFormulaCachePaths(
@@ -390,12 +391,21 @@ export function buildQualifiedFormulaScope(options: {
   pageFormulas?: FormulaFieldDef[];
   formulaOptions?: FormulaEvaluationOptions;
 }): Record<string, unknown> {
-  const base: Record<string, unknown> = { ...options.entityValues };
-  for (const [key, value] of Object.entries(options.entityValues)) {
+  const entityValues = { ...options.entityValues };
+  const pageValues = { ...(options.pageValues ?? {}) };
+  if (options.formulaOptions?.ignoreStoredFormulaValues) {
+    // Remove stale storage only in its owning namespace BEFORE flattening.
+    // A genuine page scalar named like an entity formula still shadows that
+    // formula's flat alias; qualified entity references remain unambiguous.
+    for (const formula of options.entityFormulas) delete entityValues[formula.key];
+    for (const formula of options.pageFormulas ?? []) delete pageValues[formula.key];
+  }
+  const base: Record<string, unknown> = { ...entityValues };
+  for (const [key, value] of Object.entries(entityValues)) {
     base[`entity:${options.entityId}.${key}`] = value;
   }
   if (options.pageId != null) {
-    for (const [key, value] of Object.entries(options.pageValues ?? {})) {
+    for (const [key, value] of Object.entries(pageValues)) {
       base[key] = value; // current-page flat-key compatibility
       base[`page:${options.pageId}.${key}`] = value;
     }
@@ -411,7 +421,15 @@ export function buildQualifiedFormulaScope(options: {
       key: `page:${options.pageId}.${formula.key}`,
     })));
   }
-  return buildFormulaScope(base, [...formulas, ...aliases], options.formulaOptions);
+  if (options.formulaOptions?.ignoreStoredFormulaValues) {
+    for (const alias of aliases) delete base[alias.key];
+  }
+  return buildFormulaScope(base, [...formulas, ...aliases], {
+    ...options.formulaOptions,
+    // This scope is now namespace-clean. Ignoring all matching flat base keys
+    // here would incorrectly replace legitimate page scalar shadows.
+    ignoreStoredFormulaValues: false,
+  });
 }
 
 /** Collect structured dependencies once for an evaluation batch. */
@@ -441,12 +459,13 @@ export function formulaSourcesOf(fields: readonly FormulaConfiguredField[]): Lin
  * resolved recursively. Keeping this closure target-specific prevents sibling
  * projections in the same batch from being mistaken for active ancestors.
  */
-function localFormulaDependencyClosure(
+export function localFormulaDependencyClosure(
   target: FormulaDependencyField,
   entityId: number,
-  pageId: number,
+  pageId: number | undefined,
   entityFields: readonly FormulaDependencyField[],
   pageFields: readonly FormulaDependencyField[],
+  targetScope: "entity" | "page" = "page",
 ): FormulaDependencyField[] {
   const entityByKey = new Map(entityFields.map((field) => [field.fieldKey, field]));
   const pageByKey = new Map(pageFields.map((field) => [field.fieldKey, field]));
@@ -480,9 +499,16 @@ function localFormulaDependencyClosure(
         else if (entityDependency) visit(entityDependency, "entity");
       }
     }
+    const group = (field.formulaConfigJson as { groupResult?: { enabled?: boolean; fields?: { scope?: string; pageId?: number; fieldKey?: string }[] } } | null)?.groupResult;
+    if (group?.enabled && Array.isArray(group.fields)) for (const ref of group.fields) {
+      if (!ref?.fieldKey) continue;
+      const dependency = ref.scope === "entity" ? entityByKey.get(ref.fieldKey)
+        : ref.scope === "page" && ref.pageId === pageId ? pageByKey.get(ref.fieldKey) : undefined;
+      if (dependency) visit(dependency, ref.scope as "entity" | "page");
+    }
   };
 
-  visit(target, "page");
+  visit(target, targetScope);
   return [...out.values()];
 }
 
@@ -749,6 +775,7 @@ export async function mergeLinkedFormulaInputs(options: {
   fields: readonly FormulaDependencyField[];
   permissions: LinkedFormulaPermissionContext;
   requestCache?: FormulaDependencyRequestCache;
+  formulaOptions?: FormulaEvaluationOptions;
 }, state: {
   depth: number;
   pageFormulaStack: ReadonlySet<string>;
@@ -757,6 +784,9 @@ export async function mergeLinkedFormulaInputs(options: {
   depth: 0,
   pageFormulaStack: new Set(),
 }): Promise<Map<number, Record<string, unknown>>> {
+  if (options.formulaOptions?.throwOnError && state.depth >= 16) {
+    throw new FormulaComputationError("Formula source chain exceeds the supported dependency depth.");
+  }
   if (options.requestCache && state.depth === 0) {
     const cacheKey = formulaDependencyCacheKey(options);
     let entries = options.requestCache.byPermissionContext.get(options.permissions);
@@ -1190,6 +1220,13 @@ export async function mergeLinkedFormulaInputs(options: {
               field.fieldType === "function" &&
               !state.pageFormulaStack.has(`page:${pageId}.${source.fieldKey}`),
             ));
+          if (options.formulaOptions?.throwOnError) {
+            const cyclic = pageFormulaSources.find(source => source.pageId === pageId &&
+              visiblePageFields.some(field => field.fieldKey === source.fieldKey && (field.fieldType === "function" || field.fieldType === "page_ref")) &&
+              state.pageFormulaStack.has(`page:${pageId}.${source.fieldKey}`));
+            if (cyclic) throw new FormulaComputationError(`Formula source "${cyclic.key}" has a circular page dependency.`);
+            if (deniedComputedSources.size > 0) throw new FormulaComputationError("A page formula dependency is unavailable or requires unsupported grouped-source evaluation.");
+          }
           for (const source of pageFormulaSources.filter((candidate) =>
             candidate.pageId === pageId && deniedComputedSources.has(candidate.key))) {
             for (const id of eligibleIds) {
@@ -1243,6 +1280,7 @@ export async function mergeLinkedFormulaInputs(options: {
                 },
               }],
               permissions: options.permissions,
+              formulaOptions: options.formulaOptions,
             }, { depth: state.depth + 1, pageFormulaStack: nextStack });
             for (const id of allowedPageRows) {
               const nestedValues = nested.get(id);
@@ -1287,6 +1325,7 @@ export async function mergeLinkedFormulaInputs(options: {
                 visiblePageFields,
               ),
               permissions: options.permissions,
+              formulaOptions: options.formulaOptions,
             }, {
               depth: state.depth + 1,
               pageFormulaStack: nextStack,
@@ -1301,7 +1340,8 @@ export async function mergeLinkedFormulaInputs(options: {
               hiddenEntity: new Set(),
               hiddenPage: new Set(),
               linkedInputs: nestedInputs,
-              formulaOptions: await loadFormulaOptions(),
+              formulaOptions: options.formulaOptions ?? await loadFormulaOptions(),
+              materializeKeys: options.formulaOptions?.throwOnError ? new Set([source.fieldKey]) : undefined,
             });
             for (const id of allowedPageRows) {
               const computedValues = computed.get(id);
@@ -1315,6 +1355,7 @@ export async function mergeLinkedFormulaInputs(options: {
       }
     }
   } catch (error) {
+    if (options.formulaOptions?.throwOnError) throw error;
     if (error instanceof LinkedFormulaResolutionError && error.code === "LIMIT_EXCEEDED") {
       throw error;
     }
@@ -1440,6 +1481,8 @@ export function materializeVisibleEntityFormulas(options: {
   hiddenPage?: ReadonlySet<string>;
   linkedInputs?: ReadonlyMap<number, Record<string, unknown>>;
   formulaOptions?: FormulaEvaluationOptions;
+  /** Restrict output evaluation while retaining all lazy dependency definitions. */
+  materializeKeys?: ReadonlySet<string>;
 }): Map<number, Record<string, unknown>> {
   const formulas: FormulaFieldDef[] = options.fields
     .filter((field) => field.fieldType === "function" && !options.hidden.has(field.fieldKey))
@@ -1497,11 +1540,12 @@ export function materializeVisibleEntityFormulas(options: {
         formulaOptions: options.formulaOptions,
       });
       for (const formula of formulas) {
+        if (options.materializeKeys && !options.materializeKeys.has(formula.key)) continue;
         // Reading through the scope (rather than evaluating the expression
         // directly) preserves formula chains, qualified aliases and cycle
         // handling. FormulaValue is deliberately scalar/null; guard anyway so
         // a future evaluator cannot introduce an opaque response object here.
-        const result = scope[formula.key];
+        const result = scope[`entity:${options.entityId}.${formula.key}`];
         if (
           result === null ||
           typeof result === "string" ||
@@ -1540,6 +1584,7 @@ export function materializeVisiblePageFormulas(options: {
   hiddenPage: ReadonlySet<string>;
   linkedInputs?: ReadonlyMap<number, Record<string, unknown>>;
   formulaOptions?: FormulaEvaluationOptions;
+  materializeKeys?: ReadonlySet<string>;
 }): Map<number, Record<string, unknown>> {
   const defs = (fields: readonly (FormulaConfiguredField & { fieldKey: string; formulaConfigJson?: unknown })[], hidden: ReadonlySet<string>) =>
     fields.filter((f) => f.fieldType === "function" && !hidden.has(f.fieldKey)).map((f) => {
@@ -1576,6 +1621,7 @@ export function materializeVisiblePageFormulas(options: {
       pageId: options.pageId, pageValues: prepared.scopePageValues, pageFormulas, formulaOptions: options.formulaOptions,
     });
     for (const formula of pageFormulas) {
+      if (options.materializeKeys && !options.materializeKeys.has(formula.key)) continue;
       const result = scope[`page:${options.pageId}.${formula.key}`];
       if (result === null || typeof result === "string" || typeof result === "number" || typeof result === "boolean") {
         pageValues[formula.key] = result;

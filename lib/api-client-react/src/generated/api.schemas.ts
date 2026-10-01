@@ -2550,6 +2550,25 @@ export interface NotesConfig {
   editableRoleIds?: number[] | null;
 }
 
+export type WidgetSecondaryValueFormat = typeof WidgetSecondaryValueFormat[keyof typeof WidgetSecondaryValueFormat];
+
+
+export const WidgetSecondaryValueFormat = {
+  number: 'number',
+  currency: 'currency',
+  percent: 'percent',
+} as const;
+
+export interface WidgetSecondaryValue {
+  /**
+     * Explicit key of an existing metric in this widget.
+     * @minLength 1
+     */
+  metricKey: string;
+  captionJson?: MultilingualText;
+  format?: WidgetSecondaryValueFormat;
+}
+
 /**
  * metric (default) = number cards; formula = number card built from a formula combining field-terms across entities/pages; chart = graph; table = entity rows; notes = rich-text block or free-form live-value table; pivot = admin-authoritative cross-tab; online_users = transient authenticated-user presence aggregated across tabs.
  * @nullable
@@ -2611,6 +2630,8 @@ export interface WidgetConfig {
      */
   widgetType?: WidgetConfigWidgetType;
   metrics?: WidgetMetric[];
+  /** Optional secondary metric displayed below the main value. Only for metric widgets; omit to disable. */
+  secondaryValue?: WidgetSecondaryValue;
   notes?: NotesConfig;
   /**
      * Optional expression combining metric keys as {key}
@@ -2878,6 +2899,7 @@ export interface DashboardWidgetData {
   widgetType?: DashboardWidgetDataWidgetType;
   /** @nullable */
   chartType?: string | null;
+  secondaryValue?: WidgetSecondaryValue;
   /**
      * When true, the chart widget renders numeric value labels directly on the chart
      * @nullable

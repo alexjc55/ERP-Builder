@@ -6928,6 +6928,21 @@ components:
             type: integer
           description: Roles (besides page-admins) whose members may inline-edit this notes widget's content. null/empty = admins only.
 
+    WidgetSecondaryValue:
+      type: object
+      required: [metricKey]
+      properties:
+        metricKey:
+          type: string
+          minLength: 1
+          description: Explicit key of an existing metric in this widget.
+        captionJson:
+          $ref: "#/components/schemas/MultilingualText"
+        format:
+          type: string
+          enum: [number, currency, percent]
+          default: number
+
     WidgetConfig:
       type: object
       properties:
@@ -6939,6 +6954,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/WidgetMetric"
+        secondaryValue:
+          $ref: "#/components/schemas/WidgetSecondaryValue"
+          description: Optional secondary metric displayed below the main value. Only for metric widgets; omit to disable.
         notes:
           $ref: "#/components/schemas/NotesConfig"
         formula:
@@ -7141,6 +7159,8 @@ components:
           enum: [metric, formula, chart, table, notes, pivot, online_users, null]
         chartType:
           type: ["string", "null"]
+        secondaryValue:
+          $ref: "#/components/schemas/WidgetSecondaryValue"
         showValues:
           type: ["boolean", "null"]
           description: When true, the chart widget renders numeric value labels directly on the chart

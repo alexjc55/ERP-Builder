@@ -1,5 +1,59 @@
 [
   {
+    "key": "dash.showSecondary",
+    "ru": "Показывать дополнительное значение",
+    "en": "Show secondary value",
+    "he": "הצגת ערך משני"
+  },
+  {
+    "key": "dash.secondaryHint",
+    "ru": "Добавьте метрику, например сумму, и выберите её здесь. Источник и фильтры задаются отдельно в настройках этой метрики.",
+    "en": "Add a metric, such as a sum, and select it here. Its source and filters are configured separately in that metric.",
+    "he": "הוסיפו מדד, למשל סכום, ובחרו אותו כאן. המקור והמסננים מוגדרים בנפרד בהגדרות המדד."
+  },
+  {
+    "key": "dash.secondaryMetric",
+    "ru": "Метрика дополнительного значения",
+    "en": "Secondary value metric",
+    "he": "מדד הערך המשני"
+  },
+  {
+    "key": "dash.secondaryCaption",
+    "ru": "Подпись дополнительного значения",
+    "en": "Secondary value caption",
+    "he": "תווית הערך המשני"
+  },
+  {
+    "key": "dash.secondaryFormat",
+    "ru": "Формат дополнительного значения",
+    "en": "Secondary value format",
+    "he": "פורמט הערך המשני"
+  },
+  {
+    "key": "dash.secondarySelectRequired",
+    "ru": "Выберите метрику для дополнительного значения",
+    "en": "Select a metric for the secondary value",
+    "he": "בחרו מדד עבור הערך המשני"
+  },
+  {
+    "key": "dash.secondaryUnavailable",
+    "ru": "Значение недоступно",
+    "en": "Value unavailable",
+    "he": "הערך אינו זמין"
+  },
+  {
+    "key": "dash.selectMetric",
+    "ru": "Выберите метрику",
+    "en": "Select a metric",
+    "he": "בחירת מדד"
+  },
+  {
+    "key": "dash.removeMetric",
+    "ru": "Удалить метрику",
+    "en": "Remove metric",
+    "he": "הסרת מדד"
+  },
+  {
     "key": "common.cancel",
     "ru": "Отмена",
     "en": "Cancel",

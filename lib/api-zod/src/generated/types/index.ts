@@ -490,3 +490,5 @@ export * from './widgetMetric';
 export * from './widgetMetricAggregation';
 export * from './widgetMetricSource';
 export * from './widgetPivotConfig';
+export * from './widgetSecondaryValue';
+export * from './widgetSecondaryValueFormat';

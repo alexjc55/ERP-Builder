@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { isWidgetSumField } from "@/lib/widgetMetricFields";
 import { CompactStatus, type DisplayStatusTag } from "@/components/CompactStatus";
 import {
   useGetDashboardData,
@@ -34,6 +35,7 @@ import {
   type OnlineUserData,
   type WidgetMetric,
   type WidgetConfigFormat,
+  type WidgetSecondaryValue,
   type ChartSeriesPoint,
   type ChartConfigType,
   type ChartConfigGroupByKind,
@@ -113,6 +115,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { Switch } from "@/components/ui/switch";
 import { FormulaEditor } from "@/components/FormulaEditor";
 import {
   PivotMeasuresEditor,
@@ -1090,6 +1093,8 @@ function WidgetCard({
 
   const Icon = w.icon ? getIconComponent(w.icon, LayoutDashboard) : null;
   const value = resolveValue(w, formulaOptions);
+  const secondary = (w.widgetType ?? "metric") === "metric" ? w.secondaryValue : undefined;
+  const secondaryNumber = secondary ? w.metrics?.[secondary.metricKey] : undefined;
   const colorClass = w.color || DEFAULT_COLOR;
   const colorStyle = w.colorStyle ?? "icon";
   const isFill = colorStyle === "fill";
@@ -1108,10 +1113,20 @@ function WidgetCard({
       )}
     >
       <CardContent className="flex h-full items-center p-6">
-        <div className="flex w-full items-center justify-between">
-          <div className="min-w-0">
+        <div className="flex w-full items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
             <p className={cn("text-sm font-medium truncate", isFill ? `${fillText} opacity-90` : "text-slate-500")}>{ml(w.titleJson)}</p>
             <p className={cn("text-3xl font-bold mt-1", isFill ? fillText : "text-slate-800")}>{formatValue(value, w.format, currencySymbol)}</p>
+            {secondary && (
+              <p data-testid="widget-secondary-value" className={cn("mt-3 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-base leading-snug", isFill ? fillText : "text-slate-800")}>
+                {ml(secondary.captionJson) && <span className={cn("min-w-0 [overflow-wrap:anywhere]", isFill ? "opacity-80" : "text-slate-500")}>{ml(secondary.captionJson)}</span>}
+                <bdi className="min-w-0 font-semibold [overflow-wrap:anywhere]" dir="auto">
+                  {typeof secondaryNumber === "number" && Number.isFinite(secondaryNumber)
+                    ? formatValue(secondaryNumber, secondary.format, currencySymbol)
+                    : t("dash.secondaryUnavailable", "Значение недоступно")}
+                </bdi>
+              </p>
+            )}
           </div>
           {Icon && (
             <div
@@ -1324,7 +1339,7 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
 
   // Global presence can change on any ERP page, not only in this page's SSE
   // room, so refresh the ephemeral snapshot on the heartbeat cadence.
-  const { data: widgetData = [], isLoading } = useGetDashboardData(pageId, {
+  const { data: widgetData = [], isLoading, error: widgetDataError, refetch: retryWidgetData } = useGetDashboardData(pageId, {
     query: {
       queryKey: getGetDashboardDataQueryKey(pageId),
       refetchInterval: 15_000,
@@ -1497,7 +1512,7 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
   // Embedded above a records table: stay invisible (no empty card, no skeleton
   // flash) for viewers without widgets. Editors still see the toggle so they can
   // add the first widget.
-  if (embedded && !isEditor && sortedData.length === 0) return null;
+  if (embedded && !isEditor && sortedData.length === 0 && !widgetDataError) return null;
 
   return (
     <div className="space-y-4">
@@ -1547,7 +1562,15 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
       )}
 
       {(!isCollapsed || editMode) && (
-      isLoading ? (
+      widgetDataError && !editMode ? (
+        <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <p>{t("dash.calculationError", "Не удалось рассчитать показатели. Проверьте настройки и числовой результат формулы.")}</p>
+          <p className="mt-1 break-words">{widgetDataError.message}</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => void retryWidgetData()}>
+            {t("common.retry", "Повторить")}
+          </Button>
+        </div>
+      ) : isLoading ? (
         embedded ? null : (
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 w-full" />)}
@@ -1843,6 +1866,10 @@ function WidgetEditorDialog({
   const [colorStyle, setColorStyle] = useState<"icon" | "border" | "fill">(widget?.config.colorStyle ?? "icon");
   const [textColor, setTextColor] = useState<"light" | "dark">(widget?.config.textColor ?? "light");
   const [format, setFormat] = useState<string>(widget?.config.format || "number");
+  const [secondaryEnabled, setSecondaryEnabled] = useState(Boolean(widget?.config.secondaryValue));
+  const [secondaryKey, setSecondaryKey] = useState(widget?.config.secondaryValue?.metricKey ?? "");
+  const [secondaryCaption, setSecondaryCaption] = useState<MultilingualText>(widget?.config.secondaryValue?.captionJson ?? { ru: "На сумму:", en: "Total:", he: "בסכום:" });
+  const [secondaryFormat, setSecondaryFormat] = useState<NonNullable<WidgetSecondaryValue["format"]>>(widget?.config.secondaryValue?.format ?? "currency");
   const [formula, setFormula] = useState(widget?.config.formula || "");
   const [restrictRoles, setRestrictRoles] = useState<boolean>(
     !!(widget?.visibleRoleIds && widget.visibleRoleIds.length > 0),
@@ -1934,18 +1961,31 @@ function WidgetEditorDialog({
     };
   });
 
-  const updateMetric = (i: number, patch: Partial<DraftMetric>) =>
+  const updateMetric = (i: number, patch: Partial<DraftMetric>) => {
+    if (patch.key !== undefined && metrics[i]?.key === secondaryKey) setSecondaryKey(patch.key);
     setMetrics((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
+  };
 
   const addMetric = () =>
-    setMetrics((prev) => [...prev, { key: `m${prev.length + 1}`, entityId: null, aggregation: "count", fieldKey: null, statusIds: [], statusTagIds: [], relationId: null, source: "entity", pageId: null }]);
+    setMetrics((prev) => {
+      let index = prev.length + 1;
+      while (prev.some(metric => metric.key === `m${index}`)) index += 1;
+      return [...prev, { key: `m${index}`, entityId: null, aggregation: "count", fieldKey: null, statusIds: [], statusTagIds: [], relationId: null, source: "entity", pageId: null }];
+    });
 
-  const removeMetric = (i: number) => setMetrics((prev) => prev.filter((_, idx) => idx !== i));
+  const removeMetric = (i: number) => {
+    if (metrics[i]?.key === secondaryKey) setSecondaryKey("");
+    setMetrics((prev) => prev.filter((_, idx) => idx !== i));
+  };
 
   const toggleRole = (roleId: number) =>
     setVisibleRoleIds((prev) => (prev.includes(roleId) ? prev.filter((r) => r !== roleId) : [...prev, roleId]));
 
   const buildData = (): DashboardWidgetInput | null => {
+    if (widgetType === "metric" && secondaryEnabled && (!secondaryKey.trim() || !metrics.some(m => m.key === secondaryKey))) {
+      toast({ title: t("dash.secondarySelectRequired", "Выберите метрику для дополнительного значения"), variant: "destructive" });
+      return null;
+    }
     const base = {
       titleJson: titleJson as MultilingualText,
       visibleRoleIds: restrictRoles && visibleRoleIds.length > 0 ? visibleRoleIds : null,
@@ -2270,6 +2310,9 @@ function WidgetEditorDialog({
         })),
         formula: formula.trim() ? formula.trim() : null,
         format: format as WidgetConfigFormat,
+        ...(widgetType === "metric" && secondaryEnabled ? {
+          secondaryValue: { metricKey: secondaryKey.trim(), captionJson: secondaryCaption, format: secondaryFormat },
+        } : {}),
       },
     };
   };
@@ -2433,6 +2476,41 @@ function WidgetEditorDialog({
                   />
                 ))}
               </div>
+
+              {widgetType === "metric" && (
+                <div className="space-y-3 rounded-md border border-slate-200 p-3">
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <Switch data-testid="toggle-secondary-value" checked={secondaryEnabled} onCheckedChange={setSecondaryEnabled} />
+                    {t("dash.showSecondary", "Показывать дополнительное значение")}
+                  </label>
+                  {secondaryEnabled && (
+                    <>
+                      <p className="text-xs text-slate-500">{t("dash.secondaryHint", "Добавьте метрику, например сумму, и выберите её здесь. Источник и фильтры задаются отдельно в настройках этой метрики.")}</p>
+                      <div className="space-y-1.5">
+                        <Label>{t("dash.secondaryMetric", "Метрика дополнительного значения")}</Label>
+                        <Select value={secondaryKey || undefined} onValueChange={setSecondaryKey}>
+                          <SelectTrigger data-testid="select-secondary-metric"><SelectValue placeholder={t("dash.selectMetric", "Выберите метрику")} /></SelectTrigger>
+                          <SelectContent>
+                            {[...new Set(metrics.map(m => m.key).filter(key => key.trim()))].map(key => <SelectItem key={key} value={key}>{key}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <MultilingualInput label={t("dash.secondaryCaption", "Подпись дополнительного значения")} value={secondaryCaption} onChange={setSecondaryCaption} />
+                      <div className="space-y-1.5">
+                        <Label>{t("dash.secondaryFormat", "Формат дополнительного значения")}</Label>
+                        <Select value={secondaryFormat} onValueChange={value => setSecondaryFormat(value as NonNullable<WidgetSecondaryValue["format"]>)}>
+                          <SelectTrigger data-testid="select-secondary-format"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="number">{t("dash.formatNumber", "Число")}</SelectItem>
+                            <SelectItem value="currency">{t("dash.formatCurrency", "Валюта")}</SelectItem>
+                            <SelectItem value="percent">{t("dash.formatPercent", "Процент")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               <FormulaEditor
                 value={formula}
@@ -3240,13 +3318,13 @@ function MetricEditor({
           .filter((f) => f.fieldType === "number")
           .map((f) => ({ key: f.key, label: f.label }))
       : fields
-          .filter((f: Field) => f.fieldType === "number")
+          .filter(isWidgetSumField)
           .map((f: Field) => ({ key: f.fieldKey, label: f.nameJson }));
-  // Page source: count picks any non-file/function field (counts non-empty
-  // values); sum is restricted to numeric page-local fields.
+  // Page count remains stored-value count. SUM also supports read-time formulas;
+  // their dynamic result is checked as numeric by the server, not coerced.
   const pageMetricFields: { key: string; label: unknown }[] = (
     metric.aggregation === "sum"
-      ? activePageFields.filter((f) => f.fieldType === "number")
+      ? activePageFields.filter(isWidgetSumField)
       : activePageFields.filter((f) => f.fieldType !== "function" && f.fieldType !== "file")
   ).map((f) => ({ key: f.fieldKey, label: f.nameJson }));
 
@@ -3269,7 +3347,7 @@ function MetricEditor({
         />
         <div className="flex-1" />
         {canRemove && (
-          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-400" onClick={onRemove}>
+          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-400" onClick={onRemove} aria-label={`${t("dash.removeMetric", "Удалить метрику")} ${metric.key}`}>
             <X className="w-3.5 h-3.5" />
           </Button>
         )}
@@ -3389,6 +3467,11 @@ function MetricEditor({
             )}
           </SelectContent>
         </Select>
+      )}
+      {metric.aggregation === "sum" && metric.relationId == null && (
+        <p className="text-xs text-slate-500">
+          {t("dash.formulaSumHint", "Можно выбрать вычисляемое поле. Формула должна возвращать число; суммируются результаты по записям.")}
+        </p>
       )}
       {metric.source === "entity" && metric.entityId != null && statuses.length > 0 && (
         <div className="space-y-1">

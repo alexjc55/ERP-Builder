@@ -2985,6 +2985,9 @@ export const ListDashboardWidgetsParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+export const listDashboardWidgetsResponseConfigSecondaryValueFormatDefault = `number`;
+
 export const ListDashboardWidgetsResponseItem = zod.object({
   "id": zod.number(),
   "pageId": zod.number(),
@@ -3006,6 +3009,15 @@ export const ListDashboardWidgetsResponseItem = zod.object({
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
+  "secondaryValue": zod.object({
+  "metricKey": zod.string().min(1).describe('Explicit key of an existing metric in this widget.'),
+  "captionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "format": zod.enum(['number', 'currency', 'percent']).default(listDashboardWidgetsResponseConfigSecondaryValueFormatDefault)
+}).optional().describe('Optional secondary metric displayed below the main value. Only for metric widgets; omit to disable.'),
   "notes": zod.object({
   "kind": zod.enum(['richtext', 'table']),
   "html": zod.string().nullish().describe('Sanitized rich-text HTML (kind = richtext).'),
@@ -3134,6 +3146,9 @@ export const CreateDashboardWidgetParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+export const createDashboardWidgetBodyConfigSecondaryValueFormatDefault = `number`;
+
 export const CreateDashboardWidgetBody = zod.object({
   "titleJson": zod.object({
   "ru": zod.string().optional(),
@@ -3153,6 +3168,15 @@ export const CreateDashboardWidgetBody = zod.object({
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
+  "secondaryValue": zod.object({
+  "metricKey": zod.string().min(1).describe('Explicit key of an existing metric in this widget.'),
+  "captionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "format": zod.enum(['number', 'currency', 'percent']).default(createDashboardWidgetBodyConfigSecondaryValueFormatDefault)
+}).optional().describe('Optional secondary metric displayed below the main value. Only for metric widgets; omit to disable.'),
   "notes": zod.object({
   "kind": zod.enum(['richtext', 'table']),
   "html": zod.string().nullish().describe('Sanitized rich-text HTML (kind = richtext).'),
@@ -3270,6 +3294,9 @@ export const CreateDashboardWidgetBody = zod.object({
   "sortOrder": zod.number().optional()
 })
 
+
+export const createDashboardWidgetResponseConfigSecondaryValueFormatDefault = `number`;
+
 export const CreateDashboardWidgetResponse = zod.object({
   "id": zod.number(),
   "pageId": zod.number(),
@@ -3291,6 +3318,15 @@ export const CreateDashboardWidgetResponse = zod.object({
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
+  "secondaryValue": zod.object({
+  "metricKey": zod.string().min(1).describe('Explicit key of an existing metric in this widget.'),
+  "captionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "format": zod.enum(['number', 'currency', 'percent']).default(createDashboardWidgetResponseConfigSecondaryValueFormatDefault)
+}).optional().describe('Optional secondary metric displayed below the main value. Only for metric widgets; omit to disable.'),
   "notes": zod.object({
   "kind": zod.enum(['richtext', 'table']),
   "html": zod.string().nullish().describe('Sanitized rich-text HTML (kind = richtext).'),
@@ -3419,6 +3455,7 @@ export const GetDashboardDataParams = zod.object({
 })
 
 
+export const getDashboardDataResponseSecondaryValueFormatDefault = `number`;
 
 
 export const GetDashboardDataResponseItem = zod.object({
@@ -3435,6 +3472,15 @@ export const GetDashboardDataResponseItem = zod.object({
   "sortOrder": zod.number(),
   "widgetType": zod.union([zod.literal('metric'),zod.literal('formula'),zod.literal('chart'),zod.literal('table'),zod.literal('notes'),zod.literal('pivot'),zod.literal('online_users'),zod.literal(null)]).nullish(),
   "chartType": zod.string().nullish(),
+  "secondaryValue": zod.object({
+  "metricKey": zod.string().min(1).describe('Explicit key of an existing metric in this widget.'),
+  "captionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "format": zod.enum(['number', 'currency', 'percent']).default(getDashboardDataResponseSecondaryValueFormatDefault)
+}).optional(),
   "showValues": zod.boolean().nullish().describe('When true, the chart widget renders numeric value labels directly on the chart'),
   "series": zod.array(zod.object({
   "label": zod.string(),
@@ -3566,6 +3612,9 @@ export const UpdateDashboardWidgetParams = zod.object({
   "wid": zod.coerce.number()
 })
 
+
+export const updateDashboardWidgetBodyConfigSecondaryValueFormatDefault = `number`;
+
 export const UpdateDashboardWidgetBody = zod.object({
   "titleJson": zod.object({
   "ru": zod.string().optional(),
@@ -3585,6 +3634,15 @@ export const UpdateDashboardWidgetBody = zod.object({
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
+  "secondaryValue": zod.object({
+  "metricKey": zod.string().min(1).describe('Explicit key of an existing metric in this widget.'),
+  "captionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "format": zod.enum(['number', 'currency', 'percent']).default(updateDashboardWidgetBodyConfigSecondaryValueFormatDefault)
+}).optional().describe('Optional secondary metric displayed below the main value. Only for metric widgets; omit to disable.'),
   "notes": zod.object({
   "kind": zod.enum(['richtext', 'table']),
   "html": zod.string().nullish().describe('Sanitized rich-text HTML (kind = richtext).'),
@@ -3702,6 +3760,9 @@ export const UpdateDashboardWidgetBody = zod.object({
   "sortOrder": zod.number().optional()
 })
 
+
+export const updateDashboardWidgetResponseConfigSecondaryValueFormatDefault = `number`;
+
 export const UpdateDashboardWidgetResponse = zod.object({
   "id": zod.number(),
   "pageId": zod.number(),
@@ -3723,6 +3784,15 @@ export const UpdateDashboardWidgetResponse = zod.object({
   "source": zod.enum(['entity', 'page']).optional().describe('Value source — \"entity\" (entity records, the default) or \"page\" (page-local field values from page_record_values for pageId). When \"page\", fieldKey refers to a page-local field of pageId and relationId is ignored.'),
   "pageId": zod.number().nullish().describe('When source = page, the page whose page-local field is aggregated.')
 })).optional(),
+  "secondaryValue": zod.object({
+  "metricKey": zod.string().min(1).describe('Explicit key of an existing metric in this widget.'),
+  "captionJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional(),
+  "format": zod.enum(['number', 'currency', 'percent']).default(updateDashboardWidgetResponseConfigSecondaryValueFormatDefault)
+}).optional().describe('Optional secondary metric displayed below the main value. Only for metric widgets; omit to disable.'),
   "notes": zod.object({
   "kind": zod.enum(['richtext', 'table']),
   "html": zod.string().nullish().describe('Sanitized rich-text HTML (kind = richtext).'),
