@@ -314,12 +314,12 @@ test("real independent Kanban sessions: stale CAS, SSE lanes, transition effects
     }
     // Fresh cards keep the reconnect scenarios independent of earlier filters.
     const reconnectRecords = await db.insert(entityRecordsTable).values(
-      ["Reconnect moved", "Reconnect archived", "Reconnect pending"].map(title => ({
+      ["Reconnect moved", "Reconnect archived", "Reconnect pending", "Lost response card"].map(title => ({
         entityId: f.entity, statusId: f.ready, valuesJson: { title, summary: "seed" },
       })),
     ).returning();
     f.records.push(...reconnectRecords.map(record => record.id));
-    const [reconnectMoved, reconnectArchived, reconnectPending] = reconnectRecords.map(record => record.id);
+    const [reconnectMoved, reconnectArchived, reconnectPending, lostResponse] = reconnectRecords.map(record => record.id);
     await alice.getByPlaceholder(/Search…|Search\.\.\.|Поиск…/).fill("");
     await bob.reload();
     for (const p of [alice, bob]) {
@@ -378,12 +378,69 @@ test("real independent Kanban sessions: stale CAS, SSE lanes, transition effects
     await expect(lane(alice, f.done).getByTestId(`card-kanban-${reconnectPending}`)).toHaveCount(0);
     await assertCounts();
     expect(await alice.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+
+    // Stop only the real SSE transport first, leaving HTTP available for the
+    // mutation. No successful write response or invalidation can reach Alice.
+    const streamPattern = `**/api/collaboration/pages/${f.page}/stream?*`;
+    await alice.route(streamPattern, route => route.abort("internetdisconnected"));
+    await alice.evaluate(() =>
+      (window as unknown as { disconnectTestStream: () => void }).disconnectTestStream());
+    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "disconnected");
+    const lostPattern = `**/api/records/${lostResponse}`;
+    let lostWriteAttempts = 0;
+    let serverStatus: number | undefined;
+    await alice.route(lostPattern, async route => {
+      if (route.request().method() !== "PUT") return route.continue();
+      lostWriteAttempts += 1;
+      // Forward exactly once, obtain the actual committed server response,
+      // then discard it and deliver a transport failure to the browser.
+      const committedResponse = await route.fetch({ maxRetries: 0, maxRedirects: 0 });
+      serverStatus = committedResponse.status();
+      await network(true);
+      await route.abort("connectionfailed");
+    });
+    const lostRequest = alice.waitForEvent("requestfailed", {
+      predicate: request => request.url().endsWith(`/api/records/${lostResponse}`) && request.method() === "PUT",
+    });
+    await move(alice, lostResponse, "Working");
+    expect((await lostRequest).failure()?.errorText).toBeTruthy();
+    expect(serverStatus).toBe(200);
+    await expect.poll(async () => (await stored(lostResponse)).valuesJson).toMatchObject({
+      workflow_mark: "transition ran", summary: "automation ran",
+    });
+    const committedRecord = await stored(lostResponse);
+    expect(committedRecord.statusId).toBe(f.working);
+    expect(committedRecord.version).toBeGreaterThan(1);
+    // A rollback is only local: Bob sees the real committed move.
+    await expect(lane(bob, f.working).getByTestId(`card-kanban-${lostResponse}`)).toBeVisible();
+    await expect(lane(alice, f.ready).getByTestId(`card-kanban-${lostResponse}`)).toBeVisible();
+    const runsForLostRecord = () => db.select({ id: entityAutomationRunsTable.id, status: entityAutomationRunsTable.status })
+      .from(entityAutomationRunsTable).where(eq(entityAutomationRunsTable.recordId, lostResponse));
+    await expect.poll(runsForLostRecord).toEqual([{ id: expect.any(Number), status: "success" }]);
+    const originalRuns = await runsForLostRecord();
+    await alice.unroute(streamPattern);
+    await network(false);
+    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "connected", { timeout: 40_000 });
+    await expect(lane(alice, f.working).getByTestId(`card-kanban-${lostResponse}`)).toContainText("automation ran");
+    await expect(lane(alice, f.ready).getByTestId(`card-kanban-${lostResponse}`)).toHaveCount(0);
+    await expect(card(alice, lostResponse)).toHaveCount(1);
+    await assertCounts();
+    // Cover delayed invalidations and automatic retries after reconnect.
+    await alice.waitForTimeout(2_000);
+    expect(lostWriteAttempts).toBe(1);
+    expect((await stored(lostResponse)).version).toBe(committedRecord.version);
+    expect(await runsForLostRecord()).toEqual(originalRuns);
+    await expect(card(alice, lostResponse)).toHaveCount(1);
+    await assertCounts();
+    expect(await alice.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+    await alice.unroute(lostPattern);
     await cdp.detach();
     await test.info().attach("verified-scenarios", {
       body: JSON.stringify({ independentSessions: 2, actualAPI: true, actualSSE: true, staleCAS: 409,
         sseLanes: [...refreshedStatuses], automation: true, archive: true,
         pendingFilterSuccess: true, pendingFilterConflict: true,
-        reconnectMissedMoveAndArchive: true, reconnectDuringPendingConflict: true, noDocumentReload: true }),
+        reconnectMissedMoveAndArchive: true, reconnectDuringPendingConflict: true, noDocumentReload: true,
+        committedResponseLost: true, lostWriteAttempts, automationNotRepeated: true }),
       contentType: "application/json",
     });
   } finally {
