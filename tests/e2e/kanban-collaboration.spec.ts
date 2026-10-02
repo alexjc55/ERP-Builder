@@ -20,7 +20,7 @@ const path = `/__kanban-collaboration-${run}`;
 const password = `Kanban-${run}!`;
 const emails = [`kanban-a-${run}@example.test`, `kanban-b-${run}@example.test`];
 let fixture: {
-  entity: number; page: number; role: number; users: number[];
+  entity: number; page: number; role: number; bobRole: number; users: number[];
   ready: number; working: number; done: number; records: number[]; automations: number[];
 } | undefined;
 
@@ -49,7 +49,7 @@ async function guard(page: Page) {
     .toEqual((await db.select().from(entitiesTable)).map(identity).sort());
 }
 
-async function setup() {
+async function setup(independentRoles = false) {
   // Entire setup commits atomically; no partial fixture can escape on failure.
   fixture = await db.transaction(async tx => {
     const [page] = await tx.insert(pagesTable).values({ path, nameJson: { en: key } }).returning();
@@ -61,10 +61,13 @@ async function setup() {
         records: { [entityId]: { view: true, create: false, update: true, delete: false, scope: "all" } },
       },
     }).returning();
+    const [bobRole] = independentRoles ? await tx.insert(rolesTable).values({
+      nameJson: { en: `${key}_bob` }, permissionsJson: role.permissionsJson,
+    }).returning() : [role];
     const passwordHash = await bcrypt.hash(password, 4);
     const users = await tx.insert(usersTable).values(emails.map((email, i) => ({
       email, passwordHash, firstName: i ? "Bob" : "Alice", lastName: "Kanban",
-      roleId: role.id, language: "en",
+      roleId: i ? bobRole.id : role.id, language: "en",
     }))).returning();
     await tx.insert(entityFieldsTable).values(["title", "summary", "workflow_mark"].map(fieldKey => ({
       entityId, fieldKey, nameJson: { en: fieldKey }, fieldType: "text",
@@ -92,7 +95,7 @@ async function setup() {
       "Conflict card", "Observer card", "Archive card", "Pending success card", "Pending failure card", "Keep sentinel",
     ].map(title => ({ entityId, statusId: ready, valuesJson: { title, summary: "seed" } }))).returning();
     return {
-      entity: entityId, page: page.id, role: role.id, users: users.map(u => u.id),
+      entity: entityId, page: page.id, role: role.id, bobRole: bobRole.id, users: users.map(u => u.id),
       ready, working, done, records: records.map(r => r.id), automations: automations.map(a => a.id),
     };
   });
@@ -109,11 +112,11 @@ async function cleanup() {
       await tx.delete(entitiesTable).where(eq(entitiesTable.id, f.entity));
       await tx.delete(pagesTable).where(eq(pagesTable.id, f.page));
       await tx.delete(usersTable).where(inArray(usersTable.id, f.users));
-      await tx.delete(rolesTable).where(eq(rolesTable.id, f.role));
+      await tx.delete(rolesTable).where(inArray(rolesTable.id, [f.role, f.bobRole]));
     });
     const tables = [
       [entitiesTable, entitiesTable.id, [f.entity]], [pagesTable, pagesTable.id, [f.page]],
-      [usersTable, usersTable.id, f.users], [rolesTable, rolesTable.id, [f.role]],
+      [usersTable, usersTable.id, f.users], [rolesTable, rolesTable.id, [f.role, f.bobRole]],
       [entityRecordsTable, entityRecordsTable.id, f.records],
       [entityAutomationsTable, entityAutomationsTable.id, f.automations],
     ] as const;
@@ -123,9 +126,11 @@ async function cleanup() {
     expect(await db.select().from(entityAutomationRunsTable).where(eq(entityAutomationRunsTable.entityId, f.entity))).toHaveLength(0);
     console.log("Kanban collaboration fixture cleanup verified: users, roles, page, entity, records, automations and runs removed");
   } finally {
-    await pool.end();
+    fixture = undefined;
   }
 }
+
+test.afterAll(async () => { await pool.end(); });
 
 async function login(page: Page, email: string) {
   await page.goto("/login");
@@ -445,6 +450,80 @@ test("real independent Kanban sessions: stale CAS, SSE lanes, transition effects
     });
   } finally {
     for (const gate of gates) gate.release();
+    await Promise.all(contexts.map(context => context.close()));
+    await cleanup();
+  }
+});
+
+test("revoked page access rejects SSE reconnect, presence and record reads", async ({ browser, page }) => {
+  test.setTimeout(90_000);
+  const contexts = await Promise.all([browser.newContext(), browser.newContext()]);
+  try {
+    await guard(page);
+    await setup(true);
+    const f = fixture!;
+    const [alice, bob] = await Promise.all(contexts.map(context => context.newPage()));
+    await alice.addInitScript(() => {
+      const nativeFetch = window.fetch.bind(window);
+      let streamController: AbortController | undefined;
+      Object.assign(window, { disconnectTestStream: () => streamController?.abort() });
+      window.fetch = (input, init) => {
+        if (String(input).includes("/collaboration/") && String(input).includes("/stream?")) {
+          streamController = new AbortController();
+          return nativeFetch(input, { ...init, signal: init?.signal
+            ? AbortSignal.any([init.signal, streamController.signal]) : streamController.signal });
+        }
+        return nativeFetch(input, init);
+      };
+    });
+    await Promise.all([login(alice, emails[0]), login(bob, emails[1])]);
+    const originalDocument = await alice.evaluate(() => performance.timeOrigin);
+    const clientId = await alice.evaluate(() => sessionStorage.getItem("erp_client_id"));
+    const streamPattern = `**/api/collaboration/pages/${f.page}/stream?*`;
+    const keep = f.records[0];
+    await expect(alice.getByTestId("collab-avatar")).toHaveCount(1);
+    // Isolate SSE loss: taking the entire browser offline also retries metadata
+    // on network recovery, which may unmount the board before SSE can retry.
+    await alice.route(streamPattern, route => route.abort("internetdisconnected"));
+    await alice.evaluate(() =>
+      (window as unknown as { disconnectTestStream: () => void }).disconnectTestStream());
+    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "disconnected");
+    await db.update(rolesTable).set({ permissionsJson: NO_ACCESS_PERMS }).where(eq(rolesTable.id, f.role));
+    // Only Alice loses the page and its records; Bob retains his independent role.
+    await apiMove(bob, keep, f.working, 1);
+    const reconnectStatuses: number[] = [];
+    alice.on("response", response => {
+      if (response.url().includes(`/collaboration/pages/${f.page}/stream?`)) reconnectStatuses.push(response.status());
+    });
+    const deniedStream = alice.waitForResponse(response =>
+      response.url().includes(`/collaboration/pages/${f.page}/stream?`) && response.status() === 403,
+      { timeout: 40_000 });
+    await alice.unroute(streamPattern);
+    const denied = await deniedStream;
+    expect(denied.headers()["content-type"]).not.toContain("text/event-stream");
+    expect(await denied.json()).toMatchObject({ error: expect.any(String) });
+    await expect(alice.locator('[data-testid="collab-connection-status"][data-state="connected"]')).toHaveCount(0);
+    await expect(alice.getByTestId("collab-avatar")).toHaveCount(0);
+    await expect(lane(alice, f.working).getByTestId(`card-kanban-${keep}`)).toHaveCount(0);
+    const deniedToken = await alice.evaluate(() => localStorage.getItem("erp_token"));
+    const deniedPresence = await alice.request.put(`/api/collaboration/pages/${f.page}/presence`, {
+      headers: { Authorization: `Bearer ${deniedToken}` }, data: { clientId, editing: null },
+    });
+    expect(deniedPresence.status()).toBe(403);
+    const deniedQuery = await alice.request.post(`/api/entities/${f.entity}/records/query`, {
+      headers: { Authorization: `Bearer ${deniedToken}` }, data: { pageId: f.page, page: 1, pageSize: 40 },
+    });
+    expect(deniedQuery.status()).toBe(403);
+    await alice.waitForTimeout(2_000);
+    // Metadata refetch can replace the board with its Forbidden screen.
+    // Both an absent indicator and a disconnected indicator are safe.
+    await expect(alice.locator('[data-testid="collab-connection-status"][data-state="connected"]')).toHaveCount(0);
+    await expect(alice.getByTestId("collab-avatar")).toHaveCount(0);
+    expect(reconnectStatuses.length).toBeGreaterThan(0);
+    expect(reconnectStatuses.every(status => status === 403)).toBe(true);
+    await expect(lane(bob, f.working).getByTestId(`card-kanban-${keep}`)).toBeVisible();
+    expect(await alice.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+  } finally {
     await Promise.all(contexts.map(context => context.close()));
     await cleanup();
   }

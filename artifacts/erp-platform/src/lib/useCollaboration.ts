@@ -164,6 +164,10 @@ export function useCollaboration(pageId?: number | null) {
         if (stopped || controller.signal.aborted) return;
         setConnected(false);
         setConnectedPageId(null);
+        // Presence belongs to the live authorized subscription. Never retain
+        // identities/edit coordinates after a disconnect or denied reconnect.
+        setUsers([]);
+        setLastMessage(null);
         setConnectionAttempt({ pageId, state: "unavailable" });
         const delay = Math.min(30_000, 1_000 * 2 ** retry++);
         reconnectTimer = window.setTimeout(() => void connect(), delay);

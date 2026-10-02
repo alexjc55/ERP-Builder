@@ -38,3 +38,9 @@ Chromium's offline network emulation does not reliably terminate an already-open
 **Why:** The browser continued reporting a connected stream after offline emulation, so that alone did not exercise reconnect.
 
 **How to apply:** Cancel the actual stream transport through a test-owned AbortController while blocking network retries. Keep native fetch and server bytes unchanged; assert disconnection, missed updates, reconnection and unchanged document time origin.
+
+SSE authorization-retry tests should interrupt only SSE, not all browser networking.
+
+**Why:** Recovering the whole network can retry metadata reads and replace the board with a Forbidden screen before SSE retries. That is safe behavior, but makes an assertion about the SSE response nondeterministic.
+
+**How to apply:** Abort the native stream and block only stream reconnect requests while changing isolated permissions; unblock and assert a real 403. Keep independent test fixtures for authorization and mutation-race scenarios.
