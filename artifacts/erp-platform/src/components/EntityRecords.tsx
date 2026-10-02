@@ -6807,9 +6807,9 @@ export function EntityRecords({
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   // ── Pinned (frozen-left) columns ──────────────────────────────────────────
-  // Fields/page-fields flagged isPinned stay stuck to the left while the rest of
+  // Fields/page-fields flagged isPinned stay stuck to the inline start while the rest of
   // the table scrolls horizontally. A column's sticky offset is the cumulative
-  // measured width of the pinned columns to its left, in DOM order (entity
+  // measured width of preceding pinned columns, in DOM order (entity
   // fields, then page fields) — measurement is required because columns can be
   // auto-width. Pinning is suppressed in setup mode where headers carry extra
   // controls and saved widths are already ignored (see colWidthStyle).
@@ -6874,12 +6874,9 @@ export function EntityRecords({
     }
     const measure = () => {
       const next: Record<string, number> = {};
-      // The bulk-select checkbox column is sticky at the inline start; in LTR
-      // it occupies the first BULK_COL_W physical-left pixels, so pinned
-      // columns shift right by that amount. In RTL pinned columns stick to the
-      // physical left while the checkbox sticks to the physical right (inline
-      // start), so no shift is needed.
-      let acc = showBulk && !isRtl ? BULK_COL_W : 0;
+      // Selection and pinned data columns share the inline start in both
+      // directions, so reserve the checkbox width in RTL as well as LTR.
+      let acc = showBulk ? BULK_COL_W : 0;
       for (const key of pinnedOrder) {
         next[key] = acc;
         acc += pinHeaderRefs.current[key]?.offsetWidth ?? 0;
@@ -6897,7 +6894,7 @@ export function EntityRecords({
   }, [pinnedOrder, columnWidths, records, recordsLoading, numericTotals, showBulk, isRtl]);
   // Sticky is only applied once every pinned column's offset has been measured;
   // until then we render columns normally rather than risk several collapsing to
-  // left:0 and overlapping during a transient render before refs resolve.
+  // inline-start:0 and overlapping during a transient render before refs resolve.
   const pinReady = pinnedOrder.every((k) => k in pinnedLeft);
   // Sticky style for a pinned cell. The background must be opaque so scrolling
   // cells don't show through; a caller-supplied conditional-format/row colour
@@ -6907,12 +6904,12 @@ export function EntityRecords({
     if (!pinnedKeys.has(key) || !pinReady) return undefined;
     return {
       position: "sticky",
-      left: pinnedLeft[key] ?? 0,
+      insetInlineStart: pinnedLeft[key] ?? 0,
       zIndex: isHeader ? 3 : 2,
       backgroundColor: bg,
-      ...(key === lastPinnedKey ? { boxShadow: "2px 0 5px -2px rgba(15,23,42,0.15)" } : undefined),
+      ...(key === lastPinnedKey ? { boxShadow: `${isRtl ? "-2px" : "2px"} 0 5px -2px rgba(15,23,42,0.15)` } : undefined),
     };
-  }, [pinnedKeys, pinReady, pinnedLeft, lastPinnedKey]);
+  }, [pinnedKeys, pinReady, pinnedLeft, lastPinnedKey, isRtl]);
 
   const rowCommitCell = useCommittedCommand(commitCell);
   const rowCommitPageCell = useCommittedCommand(commitPageCell);
