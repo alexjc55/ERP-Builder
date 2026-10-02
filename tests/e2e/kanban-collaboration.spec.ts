@@ -144,6 +144,88 @@ test.afterAll(async () => {
   }
 });
 
+for (const scope of ["own", "filter"] as const) {
+  test(`no-status warning respects ${scope} scope, cancel, confirm, empty and failed checks`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await guard(page);
+    await setup(true);
+    const f = fixture!;
+    try {
+      await db.update(rolesTable).set({ permissionsJson: {
+        ...NO_ACCESS_PERMS, pageIds: [f.page],
+        admin: { ...NO_ACCESS_PERMS.admin, entities: true },
+        records: { [f.entity]: { view: true, create: false, update: false, delete: false, scope,
+          ...(scope === "filter" ? { scopeFilters: [{ fieldKey: "summary", values: ["visible"] }] } : { scopeFieldKeys: ["owner"] }),
+        } },
+      } }).where(eq(rolesTable.id, f.role));
+      await db.insert(entityFieldsTable).values({ entityId: f.entity, fieldKey: "owner", nameJson: { en: "Owner" }, fieldType: "user" });
+      await db.update(entityRecordsTable).set({ valuesJson: { title: "Visible fixture", summary: "visible", owner: f.users[0] } })
+        .where(eq(entityRecordsTable.id, f.records[0]));
+      await db.update(entityRecordsTable).set({ statusId: null, valuesJson: { title: "SECRET HIDDEN CARD", summary: "hidden", owner: f.users[1] } })
+        .where(eq(entityRecordsTable.id, f.records[1]));
+      await page.goto("/login");
+      await page.getByLabel("Email").fill(emails[0]);
+      await page.getByLabel(/Password|Пароль/).fill(password);
+      await page.getByRole("button", { name: /Sign in|Login|Войти/ }).click();
+      await expect(page).not.toHaveURL(/\/login$/);
+      await page.goto(`/admin/entities/${f.entity}/statuses`);
+      const toggle = page.locator("#allow-no-status");
+      await expect(toggle).toBeChecked();
+      const writes: unknown[] = [];
+      page.on("request", request => {
+        if (request.method() === "PUT" && request.url().endsWith(`/api/entities/${f.entity}`)) writes.push(request.postDataJSON());
+      });
+      const check = () => page.waitForResponse(r => r.url().endsWith(`/api/entities/${f.entity}/records/query`));
+      const snapshot = async () => (await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.entityId, f.entity))).sort((a, b) => a.id - b.id);
+      const before = await snapshot();
+      // Hidden rows exist, but the authorized endpoint must report zero.
+      const emptyResponse = check();
+      await toggle.click();
+      expect(await (await emptyResponse).json()).toMatchObject({ total: 0, data: [] });
+      await expect(toggle).not.toBeChecked();
+      await expect(page.getByRole("alertdialog")).toHaveCount(0);
+      expect(writes).toEqual([{ allowNoStatus: false }]);
+      await toggle.click();
+      await expect(toggle).toBeChecked();
+      expect(await snapshot()).toEqual(before);
+      await db.update(entityRecordsTable).set({ statusId: null }).where(eq(entityRecordsTable.id, f.records[0]));
+      const visibleBefore = await snapshot();
+      const response = check();
+      await toggle.click();
+      const body = await (await response).json();
+      expect(body.total).toBe(1);
+      expect(body.data.map((r: { id: number }) => r.id)).toEqual([f.records[0]]);
+      expect(JSON.stringify(body)).not.toContain("SECRET HIDDEN CARD");
+      const dialog = page.getByRole("alertdialog");
+      await expect(dialog).toContainText(/останутся в таблице|remain in the table/);
+      const count = writes.length;
+      await dialog.getByRole("button", { name: /Cancel|Отмена/, exact: true }).click();
+      await expect(toggle).toBeChecked();
+      expect(writes).toHaveLength(count);
+      await toggle.click();
+      await dialog.getByRole("button", { name: /Disable|Отключить/, exact: true }).click();
+      await expect(toggle).not.toBeChecked();
+      expect(writes.at(-1)).toEqual({ allowNoStatus: false });
+      expect(await snapshot()).toEqual(visibleBefore);
+      await toggle.click();
+      await expect(toggle).toBeChecked();
+      const beforeFailure = writes.length;
+      const pattern = `**/api/entities/${f.entity}/records/query`;
+      // Transport fault only; own/filter assertions above use real server responses.
+      await page.route(pattern, route => route.abort("failed"));
+      await toggle.click();
+      await expect(page.getByText(/Не удалось проверить записи|Could not check records/).first()).toBeVisible();
+      await expect(toggle).toBeChecked();
+      await expect(toggle).toBeEnabled();
+      expect(writes).toHaveLength(beforeFailure);
+      await page.unroute(pattern);
+    } finally {
+      await page.goto("about:blank");
+      await cleanup();
+    }
+  });
+}
+
 async function login(page: Page, email: string) {
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
