@@ -33,14 +33,15 @@ export type KanbanBaseQueryLike = {
 export function computeLanes(
   statuses: readonly KanbanStatusLike[],
   base: KanbanBaseQueryLike,
+  allowNoStatus: boolean | undefined,
 ): KanbanLaneKey[] {
   const selected = base.statusIds && base.statusIds.length > 0 ? new Set(base.statusIds) : null;
   const excluded = new Set(base.excludeStatusIds ?? []);
   const out: KanbanLaneKey[] = [];
   // statusIsNull AND-combines with statusIds: never widen an explicit selection.
-  if (base.statusIsNull === true) return selected ? [] : [NULL_LANE];
-  // Null-status records stay readable (legacy rows) regardless of allowNoStatus.
-  if (!selected) out.push(NULL_LANE);
+  if (base.statusIsNull === true) return selected || allowNoStatus !== true ? [] : [NULL_LANE];
+  // Legacy null records do not override the entity's explicit column policy.
+  if (!selected && allowNoStatus === true) out.push(NULL_LANE);
   const sorted = [...statuses].filter((s) => s.isActive !== false).sort((a, b) => a.sortOrder - b.sortOrder);
   for (const s of sorted) {
     if (selected && !selected.has(s.id)) continue;

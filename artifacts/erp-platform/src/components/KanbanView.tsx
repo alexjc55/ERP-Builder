@@ -189,8 +189,8 @@ export function KanbanView(props: KanbanViewProps) {
   const pageId = baseQuery.pageId;
 
   const lanes = useMemo(
-    () => computeLanes(statuses as StatusX[], baseQuery as never),
-    [statuses, baseQuery],
+    () => computeLanes(statuses as StatusX[], baseQuery as never, allowNoStatus),
+    [statuses, baseQuery, allowNoStatus],
   );
   const baseKey = JSON.stringify(baseQuery);
   const lanesKey = lanes.join(",");

@@ -9,15 +9,25 @@ const statuses = [
 ];
 
 test("lanes sort, hide hidden-by-default, include null lane", () => {
-  assert.deepEqual(computeLanes(statuses, {}), [NULL_LANE, "s:1", "s:2"]);
-  assert.deepEqual(computeLanes(statuses, { showHiddenStatuses: true }), [NULL_LANE, "s:1", "s:2", "s:3"]);
+  assert.deepEqual(computeLanes(statuses, {}, true), [NULL_LANE, "s:1", "s:2"]);
+  assert.deepEqual(computeLanes(statuses, { showHiddenStatuses: true }, true), [NULL_LANE, "s:1", "s:2", "s:3"]);
 });
 
 test("statusIds selection intersects and drops null lane", () => {
-  assert.deepEqual(computeLanes(statuses, { statusIds: [2, 9] }), ["s:2"]);
-  assert.deepEqual(computeLanes(statuses, { excludeStatusIds: [1] }), [NULL_LANE, "s:2"]);
-  assert.deepEqual(computeLanes(statuses, { statusIsNull: true }), [NULL_LANE]);
-  assert.deepEqual(computeLanes(statuses, { statusIsNull: true, statusIds: [1] }), []);
+  assert.deepEqual(computeLanes(statuses, { statusIds: [2, 9] }, true), ["s:2"]);
+  assert.deepEqual(computeLanes(statuses, { excludeStatusIds: [1] }, true), [NULL_LANE, "s:2"]);
+  assert.deepEqual(computeLanes(statuses, { statusIsNull: true }, true), [NULL_LANE]);
+  assert.deepEqual(computeLanes(statuses, { statusIsNull: true, statusIds: [1] }, true), []);
+});
+
+test("disabled or unknown null policy never widens filters or creates a null lane", () => {
+  for (const allow of [false, undefined]) {
+    assert.deepEqual(computeLanes(statuses, {}, allow), ["s:1", "s:2"]);
+    assert.deepEqual(computeLanes(statuses, { excludeStatusIds: [1] }, allow), ["s:2"]);
+    assert.deepEqual(computeLanes(statuses, { statusIds: [2] }, allow), ["s:2"]);
+    assert.deepEqual(computeLanes(statuses, { statusIsNull: true }, allow), []);
+    assert.deepEqual(computeLanes(statuses, { statusIsNull: true, statusIds: [1] }, allow), []);
+  }
 });
 
 test("lane query keeps base filters and scopes status", () => {

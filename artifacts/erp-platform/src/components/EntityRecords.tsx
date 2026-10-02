@@ -8462,7 +8462,7 @@ export function EntityRecords({
                 ?? transitions.find(tr => tr.fromStatusId == null && tr.toStatusId === status.id);
               return !!transition && (!transition.allowedRoleIds?.length || transition.allowedRoleIds.some(id => userRoleIds.includes(id)));
             })}
-            allowNoStatus={allowNoStatus}
+            allowNoStatus={entity?.allowNoStatus === true}
             refreshTick={refreshTick}
             ml={ml}
             pageTextDirection={pageTextDirection}

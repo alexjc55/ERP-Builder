@@ -132,6 +132,7 @@ async function installFixture(page: Page, options: { editable?: boolean; manyCar
   });
   return {
     queries, writes, records, unexpectedWrites, errors, detailReads,
+    setAllowNoStatus(value: boolean | undefined) { Object.assign(entity, { allowNoStatus: value }); },
     releaseMove: (fail = false) => {
       if (!pendingMove) throw new Error("No pending fixture move to release");
       pendingMove.release(fail);
@@ -157,6 +158,39 @@ function lane(page: Page, key: string) {
 function laneQueries(queries: Query[]) {
   return queries.filter(query => query.viewId === boardViewId && query.pageSize === 40 &&
     (query.statusIsNull === true || query.statusIds?.length === 1));
+}
+
+for (const permission of [false, undefined]) {
+  test(`null column requires explicit permission (${permission})`, async ({ page }) => {
+    const fixture = await installFixture(page, { editable: true });
+    fixture.setAllowNoStatus(permission);
+    await selectBoard(page);
+    await expect(lane(page, "null")).toHaveCount(0);
+    expect(laneQueries(fixture.queries).some(q => q.statusIsNull)).toBe(false);
+    await page.getByTestId("button-actions-kanban-1000").click();
+    await expect(page.getByRole("menuitem", { name: /No status|Без статуса/ })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    // Metadata refetch, not direct React/query-cache injection.
+    fixture.setAllowNoStatus(true);
+    await page.getByTestId("button-refresh-data-desktop").click();
+    await expect(lane(page, "null").getByTestId("card-kanban-10")).toBeVisible();
+    const box = (await page.getByTestId("handle-kanban-1000").boundingBox())!;
+    await page.mouse.move(box.x + 5, box.y + 5);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 30, box.y + 5, { steps: 4 });
+    await expect(page.getByTestId("card-kanban-1000")).toHaveClass(/opacity-30/);
+    fixture.setAllowNoStatus(false);
+    await page.getByTestId("button-refresh-data-desktop").evaluate((el: HTMLElement) => el.click());
+    await expect(lane(page, "null")).toHaveCount(0);
+    await page.mouse.up();
+    await expect(page.getByTestId("card-kanban-1000")).not.toHaveClass(/opacity-30/);
+    await selectBoard(page);
+    await expect(lane(page, "null")).toHaveCount(0);
+    expect(fixture.records.find(r => r.id === 10)?.statusId).toBeNull();
+    expect(fixture.writes).toEqual([]);
+    expect(fixture.unexpectedWrites).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
 }
 
 test("selects a persisted Kanban view and preserves its card field configuration", async ({ page }) => {
