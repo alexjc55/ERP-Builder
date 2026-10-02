@@ -32,3 +32,9 @@ Stopping a validation launcher is not equivalent to stopping its descendant fixt
 **Why:** Package launchers can exit while descendants still execute and retain inherited lock descriptors. Forced termination bypasses JavaScript finally/after cleanup; committed fixture rows may remain.
 
 **How to apply:** Terminate the dedicated process group with bounded graceful escalation, including after leader exit. Test interruption using mock descendants and real file locks, not live DB writes. Require development-data inspection after forced termination rather than automatically retrying.
+
+Chromium's offline network emulation does not reliably terminate an already-open fetch-based SSE reader.
+
+**Why:** The browser continued reporting a connected stream after offline emulation, so that alone did not exercise reconnect.
+
+**How to apply:** Cancel the actual stream transport through a test-owned AbortController while blocking network retries. Keep native fetch and server bytes unchanged; assert disconnection, missed updates, reconnection and unchanged document time origin.

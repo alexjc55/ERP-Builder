@@ -185,6 +185,23 @@ test("real independent Kanban sessions: stale CAS, SSE lanes, transition effects
     await setup();
     const f = fixture!;
     const [alice, bob] = await Promise.all(contexts.map(context => context.newPage()));
+    // Chromium offline mode alone leaves an already-open SSE reader alive.
+    // Retain native fetch/bytes, but expose cancellation of that real transport.
+    await alice.addInitScript(() => {
+      const nativeFetch = window.fetch.bind(window);
+      let streamController: AbortController | undefined;
+      Object.assign(window, { disconnectTestStream: () => streamController?.abort() });
+      window.fetch = (input, init) => {
+        if (String(input).includes("/collaboration/") && String(input).includes("/stream?")) {
+          streamController = new AbortController();
+          const signal = init?.signal
+            ? AbortSignal.any([init.signal, streamController.signal])
+            : streamController.signal;
+          return nativeFetch(input, { ...init, signal });
+        }
+        return nativeFetch(input, init);
+      };
+    });
     await Promise.all([login(alice, emails[0]), login(bob, emails[1])]);
     const identities = await Promise.all([alice, bob].map(p => p.evaluate(() => ({
       token: localStorage.getItem("erp_token"), client: sessionStorage.getItem("erp_client_id"),
@@ -295,10 +312,78 @@ test("real independent Kanban sessions: stale CAS, SSE lanes, transition effects
       await expect(alice.getByTestId(`text-lane-count-s:${f.working}`)).toHaveText("0");
       expect((await stored(record)).statusId).toBe(f.working);
     }
+    // Fresh cards keep the reconnect scenarios independent of earlier filters.
+    const reconnectRecords = await db.insert(entityRecordsTable).values(
+      ["Reconnect moved", "Reconnect archived", "Reconnect pending"].map(title => ({
+        entityId: f.entity, statusId: f.ready, valuesJson: { title, summary: "seed" },
+      })),
+    ).returning();
+    f.records.push(...reconnectRecords.map(record => record.id));
+    const [reconnectMoved, reconnectArchived, reconnectPending] = reconnectRecords.map(record => record.id);
+    await alice.getByPlaceholder(/Search…|Search\.\.\.|Поиск…/).fill("");
+    await bob.reload();
+    for (const p of [alice, bob]) {
+      await expect(card(p, reconnectPending)).toBeVisible();
+      await expect(p.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "connected");
+    }
+    const cdp = await contexts[0].newCDPSession(alice);
+    await cdp.send("Network.enable");
+    const network = async (offline: boolean) => {
+      await cdp.send("Network.emulateNetworkConditions", {
+        offline, latency: 0, downloadThroughput: -1, uploadThroughput: -1,
+      });
+      if (offline) await alice.evaluate(() =>
+        (window as unknown as { disconnectTestStream: () => void }).disconnectTestStream());
+    };
+    const originalDocument = await alice.evaluate(() => performance.timeOrigin);
+    const assertCounts = async () => {
+      for (const status of [f.ready, f.working, f.done]) {
+        const rows = await db.select({ id: entityRecordsTable.id }).from(entityRecordsTable)
+          .where(and(eq(entityRecordsTable.entityId, f.entity), eq(entityRecordsTable.statusId, status),
+            sql`${entityRecordsTable.archivedAt} IS NULL`));
+        await expect(alice.getByTestId(`text-lane-count-s:${status}`)).toHaveText(String(rows.length));
+      }
+    };
+    await network(true);
+    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "disconnected");
+    await apiMove(bob, reconnectMoved, f.working, 1);
+    await apiMove(bob, reconnectArchived, f.done, 1);
+    await expect.poll(async () => (await stored(reconnectArchived)).archivedAt !== null).toBe(true);
+    // Prove events were actually missed rather than received before disconnect.
+    await expect(lane(alice, f.ready).getByTestId(`card-kanban-${reconnectMoved}`)).toBeVisible();
+    await expect(card(alice, reconnectArchived)).toBeVisible();
+    await network(false);
+    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "connected", { timeout: 40_000 });
+    await expect(lane(alice, f.working).getByTestId(`card-kanban-${reconnectMoved}`)).toBeVisible();
+    await expect(card(alice, reconnectArchived)).toHaveCount(0);
+    await assertCounts();
+
+    const reconnectGate = await holdWrite(alice, reconnectPending);
+    gates.push(reconnectGate);
+    const reconnectResponse = responseFor(alice, reconnectPending);
+    await move(alice, reconnectPending, "Archived done");
+    await reconnectGate.seen;
+    await network(true);
+    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "disconnected");
+    await apiMove(bob, reconnectPending, f.working, 1);
+    await expect.poll(async () => (await stored(reconnectPending)).valuesJson.summary).toBe("automation ran");
+    await network(false);
+    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "connected", { timeout: 40_000 });
+    await expect(lane(alice, f.done).getByTestId(`card-kanban-${reconnectPending}`)).toBeVisible();
+    reconnectGate.release();
+    expect((await reconnectResponse).status()).toBe(409);
+    await reconnectGate.remove();
+    await expect(lane(alice, f.working).getByTestId(`card-kanban-${reconnectPending}`)).toBeVisible();
+    await expect(card(alice, reconnectPending)).toHaveCount(1);
+    await expect(lane(alice, f.done).getByTestId(`card-kanban-${reconnectPending}`)).toHaveCount(0);
+    await assertCounts();
+    expect(await alice.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+    await cdp.detach();
     await test.info().attach("verified-scenarios", {
       body: JSON.stringify({ independentSessions: 2, actualAPI: true, actualSSE: true, staleCAS: 409,
         sseLanes: [...refreshedStatuses], automation: true, archive: true,
-        pendingFilterSuccess: true, pendingFilterConflict: true }),
+        pendingFilterSuccess: true, pendingFilterConflict: true,
+        reconnectMissedMoveAndArchive: true, reconnectDuringPendingConflict: true, noDocumentReload: true }),
       contentType: "application/json",
     });
   } finally {
