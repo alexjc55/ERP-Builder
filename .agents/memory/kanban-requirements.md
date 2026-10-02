@@ -17,6 +17,12 @@ description: Product constraints for the reusable CRM-first Kanban entity view.
 
 The user subsequently requested the all-destinations option because this is a universal product and some pages may need direct handoff to a status outside their visible set.
 
+**Rule:** Status-change dropdowns must display status tags using the existing presentation, in both selected-status and all-available-status modes.
+
+**Why:** The user explicitly requested tag display consistent with other existing surfaces.
+
+**How to apply:** Reuse the existing status/tag rendering and its display settings rather than introducing a plain-text-only status list.
+
 **How to apply:** Allow overlapping page status sets. The shared-status record remains visible on both pages until its status leaves one page's set; it is the same record, not a copy.
 
 **Rule:** The status-coloured title hover option also applies to the eye and pencil icons on hover.
