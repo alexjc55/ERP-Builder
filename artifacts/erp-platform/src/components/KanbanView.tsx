@@ -575,6 +575,7 @@ export function KanbanView(props: KanbanViewProps) {
     if (!d.active) {
       if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 6) return;
       d.active = true;
+      window.getSelection()?.removeAllRanges();
       setDrag({ record: d.record, width: d.width, allowed: new Set(destinationsFor(d.record)) });
       d.raf = requestAnimationFrame(tick);
     }
@@ -613,6 +614,10 @@ export function KanbanView(props: KanbanViewProps) {
     if (e.pointerType !== "mouse" && !viaHandle) return; // touch: drag via grip so lanes still scroll
     const card = (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-kanban-card]");
     if (!card) return;
+    // Cancel native mouse selection at its start, not after the drag threshold:
+    // otherwise dragging across text selects the card and neighbouring lanes.
+    // Touch still scrolls normally outside the dedicated grip.
+    if (e.pointerType === "mouse") e.preventDefault();
     const r = card.getBoundingClientRect();
     dragRef.current = {
       record: rec, startX: e.clientX, startY: e.clientY, offX: e.clientX - r.left, offY: e.clientY - r.top,
@@ -689,7 +694,7 @@ export function KanbanView(props: KanbanViewProps) {
         onPointerDown={(e) => onCardPointerDown(e, rec, false)}
         className={`group relative rounded-lg border border-slate-200 bg-white p-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-[opacity,box-shadow] hover:shadow-md ${
           dragging ? "opacity-30" : ""
-        } ${pending ? "opacity-70" : ""} ${movable ? "cursor-grab active:cursor-grabbing" : ""}`}
+        } ${pending ? "opacity-70" : ""} ${movable ? "select-none cursor-grab active:cursor-grabbing" : ""}`}
       >
         <div className="flex items-start gap-1.5">
           {movable && (
@@ -710,7 +715,7 @@ export function KanbanView(props: KanbanViewProps) {
             onClick={() => {
               if (!suppressClick.current) setDetail(rec);
             }}
-            className="min-w-0 flex-1 text-start text-sm font-medium leading-snug text-slate-800 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded"
+            className="min-w-0 flex-1 cursor-pointer text-start text-sm font-medium leading-snug text-slate-800 hover:text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded"
             data-testid={`button-open-kanban-${rec.id}`}
           >
             <span dir={title.dir} className="block [overflow-wrap:anywhere]">{title.text}</span>

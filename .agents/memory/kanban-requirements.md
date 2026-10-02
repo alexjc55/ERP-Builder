@@ -11,6 +11,12 @@ description: Product constraints for the reusable CRM-first Kanban entity view.
 
 **Rule:** Card information must be flexibly configurable. Viewing all record information without editing and opening a record for editing must be separate actions.
 
+**Rule:** With a mouse, users expect to drag from the card body, not only a special grip, without selecting text across the board. Clickable titles must look interactive (pointer cursor and hover colour).
+
+**Why:** The user found grip-only mouse interaction unintuitive and reported unwanted text selection while moving cards.
+
+**How to apply:** Preserve whole-card mouse dragging alongside title clicks; keep touch scrolling usable rather than blindly applying mouse gesture prevention to touch.
+
 **Rule:** More dynamic card configuration and behavior can be worked out once an initial Kanban exists.
 
 **Why:** The user supplied these requirements and then authorized implementation of the agreed first version.

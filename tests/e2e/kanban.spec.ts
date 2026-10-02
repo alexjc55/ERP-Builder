@@ -415,17 +415,24 @@ test("mouse drag keeps its gesture active through horizontal auto-scroll", async
   expect(fixture.errors).toEqual([]);
 });
 
-test("mouse drag between visible columns moves optimistically with CAS and suppresses detail", async ({ page }) => {
+test("mouse drag from card body moves without selecting text or opening detail", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   const fixture = await installFixture(page, { editable: true });
   await selectBoard(page);
-  const source = (await page.getByTestId("button-open-kanban-1000").boundingBox())!;
+  const title = page.getByTestId("button-open-kanban-1000");
+  await expect(title).toHaveCSS("cursor", "pointer");
+  const originalColor = await title.evaluate(el => getComputedStyle(el).color);
+  await title.hover();
+  await expect.poll(() => title.evaluate(el => getComputedStyle(el).color)).not.toBe(originalColor);
+  const source = (await page.getByTestId("card-kanban-1000").locator("dd").first().boundingBox())!;
   const destination = (await lane(page, "s:2").locator("[data-kanban-scroller]").boundingBox())!;
   await page.mouse.move(source.x + 12, source.y + source.height / 2);
   await page.mouse.down();
   await page.mouse.move(destination.x + destination.width / 2, destination.y + 35, { steps: 15 });
   await expect(lane(page, "s:2")).toHaveClass(/border-slate-500/);
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("");
   await page.mouse.up();
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("");
   await expect.poll(() => fixture.writes.length).toBe(1);
   expect(fixture.writes[0]).toEqual({ id: 1000, body: { statusId: 2, expectedVersion: 7 } });
   await expect(lane(page, "s:1").getByTestId("card-kanban-1000")).toHaveCount(0);
