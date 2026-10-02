@@ -7,7 +7,7 @@ import {
   db, pool, pagesTable, entitiesTable, entityFieldsTable, entityRecordsTable,
   entityStatusesTable, entityTransitionsTable, viewsTable, rolesTable, usersTable,
   NO_ACCESS_PERMS, entityAutomationsTable, entityAutomationRunsTable,
-  auditLogTable, systemEventsTable, loginHistoryTable,
+  auditLogTable, systemEventsTable, loginHistoryTable, userRolesTable,
 } from "@workspace/db";
 
 // Obtain independently with executeSql(environment:"development"):
@@ -306,6 +306,134 @@ test("page status scope enforces queries, individual and bulk moves, and shared 
     await cleanup();
   }
 });
+
+for (const scope of ["own", "filter", "mixed"] as const) {
+  for (const mirrorContext of [false, true]) {
+    for (const superAdmin of [false, true]) {
+      test(`page status privacy matrix: ${scope}, mirror=${mirrorContext}, super=${superAdmin}`, async ({ page }) => {
+        await guard(page);
+        await setup(true);
+        const f = fixture!;
+        let mirrorId: number | undefined;
+        try {
+          const policy = { statusIds: [f.ready], includeNoStatus: false, allowAllChanges: true };
+          await db.update(pagesTable).set({ statusScopeJson: policy }).where(eq(pagesTable.id, f.page));
+          if (mirrorContext) {
+            const [mirror] = await db.insert(pagesTable).values({
+              path: `${path}-privacy`, nameJson: { en: key }, mirrorEntityId: f.entity,
+              statusScopeJson: policy,
+            }).returning();
+            mirrorId = mirror.id;
+            // Make accidental main-page policy reuse observable.
+            await db.update(pagesTable).set({
+              statusScopeJson: { ...policy, statusIds: [f.working] },
+            }).where(eq(pagesTable.id, f.page));
+          }
+          // Main-page context is inferred; the records API reserves pageId for mirrors.
+          const pageId = mirrorId;
+          await db.insert(entityFieldsTable).values(["owner", "reviewer"].map(fieldKey => ({
+            entityId: f.entity, fieldKey, nameJson: { en: fieldKey }, fieldType: "user",
+          })));
+          // Distinct primary-role, additional-role and unowned records, both inside
+          // and outside the page. Union of role scopes must precede page intersection.
+          for (let i = 0; i < f.records.length; i++) {
+            await db.update(entityRecordsTable).set({
+              statusId: i < 3 ? f.ready : i === 5 ? null : f.working,
+              valuesJson: {
+                title: `private-row-${i}`, summary: i % 3 === 0 ? "primary" : i % 3 === 1 ? "additional" : "neither",
+                owner: i % 3 === 0 ? f.users[0] : f.users[1],
+                reviewer: i % 3 === 1 ? f.users[0] : f.users[1],
+              },
+            }).where(eq(entityRecordsTable.id, f.records[i]));
+          }
+          const all = { view: true, create: false, update: true, delete: false, scope: "all" as const };
+          for (const [index, roleId] of [f.role, f.bobRole].entries()) {
+            const roleScope = scope === "mixed" ? (index === 0 ? "own" : "filter") : scope;
+            const scoped = {
+              ...all, scope: roleScope,
+              ...(roleScope === "own"
+                ? { scopeFieldKeys: [index === 0 ? "owner" : "reviewer"] }
+                : { scopeFilters: [{ fieldKey: "summary", values: [index === 0 ? "primary" : "additional"] }] }),
+            };
+            await db.update(rolesTable).set({ permissionsJson: {
+              ...NO_ACCESS_PERMS, superAdmin: superAdmin && index === 1,
+              pageIds: [f.page, ...(mirrorId ? [mirrorId] : [])],
+              // A mirror override must narrow even an unrestricted entity grant.
+              records: mirrorId ? { [f.entity]: all, [`mirror:${mirrorId}`]: scoped } : { [f.entity]: scoped },
+            } }).where(eq(rolesTable.id, roleId));
+          }
+          await db.insert(userRolesTable).values({ userId: f.users[0], roleId: f.bobRole });
+          const headers = { Authorization: `Bearer ${signToken({ userId: f.users[0], roleId: f.role })}` };
+          const query = async (extra: object = {}) => {
+            const response = await page.request.post(`/api/entities/${f.entity}/records/query`, {
+              headers, data: { pageId, pageSize: 100, showHiddenStatuses: true, ...extra },
+            });
+            expect(response.ok(), await response.text()).toBe(true);
+            return response.json();
+          };
+          const allowedIndices = superAdmin ? [0, 1, 2] : [0, 1];
+          const expectedIds = allowedIndices.map(i => f.records[i]).sort((a, b) => a - b);
+          const result = await query();
+          expect(result.total).toBe(expectedIds.length);
+          expect(result.data.map((row: { id: number }) => row.id).sort((a: number, b: number) => a - b)).toEqual(expectedIds);
+          const firstPage = await query({ pageSize: 1 });
+          expect(firstPage.total).toBe(expectedIds.length);
+          expect(firstPage.data).toHaveLength(1);
+          expect((await query({ statusIds: [f.working] })).total).toBe(0);
+          expect((await query({ statusIsNull: true })).total).toBe(0);
+          const filter = await page.request.post(`/api/entities/${f.entity}/records/filter-values`, {
+            headers, data: { pageId, field: "title", showHiddenStatuses: true },
+          });
+          expect(filter.ok(), await filter.text()).toBe(true);
+          expect((await filter.json()).values.sort()).toEqual(allowedIndices.map(i => `private-row-${i}`));
+          const snapshot = async () => ({
+            rows: await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.entityId, f.entity)).orderBy(entityRecordsTable.id),
+            audit: await db.select().from(auditLogTable).where(eq(auditLogTable.entityId, f.entity)),
+            events: await db.select().from(systemEventsTable).where(eq(systemEventsTable.entityId, f.entity)),
+          });
+          const before = await snapshot();
+          const blockedIndices = superAdmin ? [3, 4, 5] : [2, 3, 4, 5];
+          for (const index of blockedIndices) {
+            const blocked = before.rows.find(row => row.id === f.records[index])!;
+            const direct = await page.request.put(`/api/records/${blocked.id}`, {
+              headers, data: { pageId, expectedVersion: blocked.version, valuesJson: { title: "must-not-write" } },
+            });
+            expect(direct.status(), await direct.text()).toBe(404);
+            const visible = before.rows.find(row => row.id === f.records[0])!;
+            const bulk = await page.request.post("/api/records/bulk-field", {
+              headers, data: {
+                pageId, entityId: f.entity, recordIds: [visible.id, blocked.id],
+                fieldKey: "title", value: "must-not-partially-write",
+                expectedVersions: { [visible.id]: visible.version, [blocked.id]: blocked.version },
+              },
+            });
+            expect(bulk.status(), await bulk.text()).toBe(404);
+          }
+          expect(await snapshot()).toEqual(before);
+          // Positive control: the additional role genuinely permits a write.
+          const extraRoleRecord = before.rows.find(row => row.id === f.records[1])!;
+          const allowedWrite = await page.request.put(`/api/records/${extraRoleRecord.id}`, {
+            headers, data: {
+              pageId, expectedVersion: extraRoleRecord.version,
+              valuesJson: { title: "additional-role-authorized" },
+            },
+          });
+          expect(allowedWrite.ok(), await allowedWrite.text()).toBe(true);
+          const [saved] = await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.id, extraRoleRecord.id));
+          expect(saved.valuesJson).toMatchObject({ title: "additional-role-authorized" });
+          expect(saved.version).toBe(extraRoleRecord.version + 1);
+        } finally {
+          if (mirrorId != null) {
+            await db.delete(pagesTable).where(eq(pagesTable.id, mirrorId));
+            expect(await db.select().from(pagesTable).where(eq(pagesTable.id, mirrorId))).toHaveLength(0);
+          }
+          await cleanup();
+          expect(await db.select().from(userRolesTable).where(inArray(userRolesTable.userId, f.users))).toHaveLength(0);
+        }
+      });
+    }
+  }
+}
 
 const lane = (page: Page, status: number) => page.getByTestId(`lane-kanban-s:${status}`);
 const card = (page: Page, record: number) => page.getByTestId(`card-kanban-${record}`);
