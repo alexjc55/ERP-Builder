@@ -12,3 +12,9 @@ description: Product semantics of optional text direction versus interface geome
 **Why:** Interface language alone does not identify the language of a partially translated status. Text-only status projections lose provenance, particularly when translations start with digits or share identical text.
 
 **How to apply:** Keep multilingual status metadata through projections. Apply data direction to content wrappers and portaled editors, not sticky td/th elements whose logical offsets depend on UI direction. Include effective direction in memoized row inputs.
+
+**Rule:** A status's translation direction must also determine its alignment within the available cell width, independently of UI language.
+
+**Why:** The user found Hebrew-only statuses still positioned at the left edge: RTL on a shrink-to-fit label changes text flow but does not move that label inside its parent.
+
+**How to apply:** Test actual label-to-cell edge geometry in both UI directions, not only the dir attribute. Preserve compact sizing where a status appears alongside other inline content.

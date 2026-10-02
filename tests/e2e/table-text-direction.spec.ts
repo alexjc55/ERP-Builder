@@ -69,6 +69,25 @@ for (const scenario of [
     await expect(body.getByText("123 ABC מצב", { exact: true }).first().locator("xpath=ancestor::*[@data-status-direction][1]")).toHaveAttribute("dir", "rtl");
     const allLabel = scenario.lang === "he" ? "כל התרגומים" : scenario.lang === "en" ? "All translations" : "Все переводы";
     await expect(body.getByText(allLabel, { exact: true }).first().locator("xpath=ancestor::*[@data-status-direction][1]")).toHaveAttribute("dir", scenario.lang === "he" ? "rtl" : "ltr");
+    // Direction on a shrink-to-fit label is insufficient: its actual position
+    // must follow the displayed translation, not the surrounding flex row.
+    for (const [label, direction] of [
+      ["Русский статус", "ltr"],
+      ["123 ABC מצב", "rtl"],
+      [allLabel, scenario.lang === "he" ? "rtl" : "ltr"],
+    ]) {
+      const text = body.getByText(label, { exact: true }).first();
+      const alignment = await text.evaluate((el, dir) => {
+        const bounds = el.getBoundingClientRect();
+        const cell = el.closest("td")!;
+        const outer = cell.getBoundingClientRect();
+        const style = getComputedStyle(cell);
+        return dir === "rtl"
+          ? Math.abs(bounds.right - (outer.right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth)))
+          : Math.abs(bounds.left - (outer.left + parseFloat(style.paddingLeft) + parseFloat(style.borderLeftWidth)));
+      }, direction);
+      expect(alignment, `${label} must align to the ${direction === "rtl" ? "right" : "left"} cell edge`).toBeLessThanOrEqual(2);
+    }
     expect(errors).toEqual([]);
   });
 }

@@ -473,7 +473,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                   onClick={inlineEditEnabled && statusManualEditable ? () => setEditingCell({ recordId: record.id, fieldKey: STATUS_COLUMN_KEY }) : undefined}
                   title={inlineEditEnabled && statusManualEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                 >
-                  {status ? <CompactStatus name={ml(status.nameJson)} nameJson={status.nameJson} color={readableStatusTextColor(status.color)} displayTags={status.displayTags} ml={ml} /> : <span className="text-slate-300">—</span>}
+                  {status ? <CompactStatus className="w-full" name={ml(status.nameJson)} nameJson={status.nameJson} color={readableStatusTextColor(status.color)} displayTags={status.displayTags} ml={ml} /> : <span className="text-slate-300">—</span>}
                   {record.archivedAt && <span className="inline-flex max-w-full items-center gap-1 whitespace-nowrap text-xs text-indigo-500"><Archive className="h-3 w-3 shrink-0" /> {t("records.inArchive", "В архиве")}</span>}
                 </div>
               )}
@@ -7138,7 +7138,7 @@ export function EntityRecords({
                     )}
                   </span>
                 ) : commonStatus ? (
-                    <CompactStatus name={ml(commonStatus.nameJson)} nameJson={commonStatus.nameJson} color={readableStatusTextColor(commonStatus.color)} displayTags={commonStatus.displayTags} ml={ml} />
+                    <CompactStatus className="w-full" name={ml(commonStatus.nameJson)} nameJson={commonStatus.nameJson} color={readableStatusTextColor(commonStatus.color)} displayTags={commonStatus.displayTags} ml={ml} />
                   ) : null}
               </td>
             );
@@ -9066,7 +9066,7 @@ export function EntityRecords({
                                   </SelectContent>
                                 </Select>
                               ) : selectedStatus ? (
-                                <CompactStatus name={ml(selectedStatus.nameJson)} nameJson={selectedStatus.nameJson} color={readableStatusTextColor(selectedStatus.color)} displayTags={selectedStatus.displayTags} ml={ml} />
+                                <CompactStatus className="w-full" name={ml(selectedStatus.nameJson)} nameJson={selectedStatus.nameJson} color={readableStatusTextColor(selectedStatus.color)} displayTags={selectedStatus.displayTags} ml={ml} />
                               ) : (
                                 <span className="text-slate-300">—</span>
                               )}
