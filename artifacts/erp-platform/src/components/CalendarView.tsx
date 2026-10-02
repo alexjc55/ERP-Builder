@@ -481,7 +481,7 @@ export function CalendarView({
               />
             )}
             <span className="font-semibold shrink-0">{t("calendar.statusLabel", "Статус")}:</span>
-            <CompactStatus name={ml(status.nameJson)} displayTags={status.displayTags} ml={ml} />
+            <CompactStatus name={ml(status.nameJson)} displayTags={status.displayTags} ml={ml} nameJson={status.nameJson} />
           </span>
         )}
         {!compact &&

@@ -1,6 +1,7 @@
 import { pgTable, serial, jsonb, text, integer, boolean, timestamp, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { textDirectionEnum } from "./app_settings";
 import { pagesTable } from "./pages";
 import type { FieldFormatRule, FormatInheritSource, FormulaFieldConfig, FieldPermissions, RelationFieldConfig, PercentFieldConfig, FileFieldConfig } from "./fields";
 
@@ -63,6 +64,8 @@ export const pageFieldsTable = pgTable(
     isPinned: boolean("is_pinned").notNull().default(false),
     showColumnTotal: boolean("show_column_total").notNull().default(false),
     wrapText: boolean("wrap_text").notNull().default(false),
+    // Own override, including page_ref aliases; null inherits page/app/locale.
+    textDirection: textDirectionEnum("text_direction"),
     totalFillColor: text("total_fill_color"),
     totalTextColor: text("total_text_color"),
     // Base column-group membership (points at column_groups.id). A page-local

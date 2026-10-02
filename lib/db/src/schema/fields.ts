@@ -1,6 +1,7 @@
 import { pgTable, serial, jsonb, text, integer, boolean, timestamp, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { textDirectionEnum } from "./app_settings";
 import { entitiesTable } from "./entities";
 
 /** Per-field access level for a role. Unset role inherits the role's record perms. */
@@ -290,6 +291,8 @@ export const entityFieldsTable = pgTable(
     // When true, long values in this column wrap onto multiple lines instead of
     // being truncated with an ellipsis. Cosmetic, table-rendering only.
     wrapText: boolean("wrap_text").notNull().default(false),
+    // Data-text presentation only; null inherits page/app/locale direction.
+    textDirection: textDirectionEnum("text_direction"),
     totalFillColor: text("total_fill_color"),
     totalTextColor: text("total_text_color"),
     // Base column-group membership (points at column_groups.id). Inherited

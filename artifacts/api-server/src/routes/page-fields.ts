@@ -985,6 +985,7 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
   if ("defaultValue" in body) updateData.defaultValue = body.defaultValue ?? null;
   if (sanitizedOptions != null) updateData.optionsJson = sanitizedOptions;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
+  if ("textDirection" in body) updateData.textDirection = body.textDirection;
   if (body.formatInheritJson != null) {
     const inheritErr = validateFormatInherit(body.formatInheritJson);
     if (inheritErr) {

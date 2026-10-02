@@ -47,6 +47,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { IconPicker } from "@/components/IconPicker";
+import { TextDirectionSelect, type TextDirectionOverride } from "@/components/TextDirectionSelect";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Layout, Loader2, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink } from "lucide-react";
@@ -78,6 +79,7 @@ export default function PagesPage() {
   const [parentPageId, setParentPageId] = useState<string>("none");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
+  const [textDirection, setTextDirection] = useState<TextDirectionOverride>(null);
   const [mirrorEntityId, setMirrorEntityId] = useState<string>("none");
   const [mirrorFieldKeys, setMirrorFieldKeys] = useState<string[]>([]);
   const [groupByFieldKey, setGroupByFieldKey] = useState<string>("none");
@@ -139,6 +141,7 @@ export default function PagesPage() {
 
   const openCreate = () => {
     setEditingPage(null);
+    setTextDirection(null);
     setNameJson({});
     setDescJson({});
     setIcon("");
@@ -158,6 +161,7 @@ export default function PagesPage() {
 
   const openEdit = (page: Page) => {
     setEditingPage(page);
+    setTextDirection(page.textDirection ?? null);
     const n = page.nameJson;
     const d = page.descriptionJson;
     setNameJson(typeof n === "object" && n ? { ru: n.ru, en: n.en, he: n.he } : {});
@@ -235,6 +239,7 @@ export default function PagesPage() {
       pivotConfigJson: isPivot ? (pivotConfig ?? { source: "entity" }) : null,
       sortOrder,
       isActive,
+      textDirection,
     };
     if (editingPage) {
       updateMutation.mutate({ id: editingPage.id, data: payload });
@@ -388,6 +393,7 @@ export default function PagesPage() {
           <div className="space-y-4 py-2">
             <MultilingualInput label={t("pages.colName", "Название")} value={nameJson} onChange={setNameJson} required />
             <MultilingualInput label={t("pages.description", "Описание")} value={descJson} onChange={setDescJson} multiline />
+            <TextDirectionSelect id="page-text-direction" value={textDirection} onChange={setTextDirection} />
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{t("pages.colIcon", "Иконка")}</Label>

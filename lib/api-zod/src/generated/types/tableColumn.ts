@@ -5,9 +5,12 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { TextDirection } from './textDirection';
 
 export interface TableColumn {
   fieldKey: string;
   label: string;
   fieldType: string;
+  /** Display-only override from the selected source field (including page-local and related columns). Null inherits the dashboard page, then app, then UI language; status columns ignore this. */
+  textDirection?: TextDirection | null;
 }

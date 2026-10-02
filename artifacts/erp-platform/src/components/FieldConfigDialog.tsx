@@ -79,6 +79,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { TextDirectionSelect, type TextDirectionOverride } from "@/components/TextDirectionSelect";
 import { SelectOptionsEditor } from "@/components/SelectOptionsEditor";
 import { PercentOptionsEditor } from "@/components/PercentOptionsEditor";
 import { normalizeSelectOptions, type SelectOption } from "@/lib/selectOptions";
@@ -199,6 +200,7 @@ export function FieldConfigDialog({
   const [isPinned, setIsPinned] = useState(false);
   const [showColumnTotal, setShowColumnTotal] = useState(false);
   const [wrapText, setWrapText] = useState(false);
+  const [textDirection, setTextDirection] = useState<TextDirectionOverride>(null);
   const [totalFillColor, setTotalFillColor] = useState("");
   const [totalTextColor, setTotalTextColor] = useState("");
   const [permissions, setPermissions] = useState<FieldPermissions>({});
@@ -273,6 +275,7 @@ export function FieldConfigDialog({
       setIsPinned(field.isPinned ?? false);
       setShowColumnTotal(field.showColumnTotal ?? false);
       setWrapText(field.wrapText ?? false);
+      setTextDirection(field.textDirection ?? null);
       setTotalFillColor(field.totalFillColor ?? "");
       setTotalTextColor(field.totalTextColor ?? "");
       setPermissions(field.permissionsJson ?? {});
@@ -341,6 +344,8 @@ export function FieldConfigDialog({
       setShowInTable(true);
       setIsPinned(false);
       setShowColumnTotal(false);
+      setWrapText(false);
+      setTextDirection(null);
       setTotalFillColor("");
       setTotalTextColor("");
       setPermissions({});
@@ -548,6 +553,7 @@ export function FieldConfigDialog({
       showColumnTotal:
         fieldType === "number" || fieldType === "function" || fieldType === "percent" ? showColumnTotal : false,
       wrapText,
+      textDirection,
       totalFillColor:
         (fieldType === "number" || fieldType === "function" || fieldType === "percent") && showColumnTotal && totalFillColor
           ? totalFillColor
@@ -670,6 +676,7 @@ export function FieldConfigDialog({
           <div className="space-y-4 py-2">
             <MultilingualInput label={t("fields.name", "Название")} value={nameJson} onChange={setNameJson} required />
             <MultilingualInput label={t("fields.description", "Описание")} value={descJson} onChange={setDescJson} multiline />
+            <TextDirectionSelect id="field-text-direction" value={textDirection} onChange={setTextDirection} />
             <div className="space-y-1.5">
               <Label>{t("fields.systemKey", "Системный ключ")}</Label>
               <Input

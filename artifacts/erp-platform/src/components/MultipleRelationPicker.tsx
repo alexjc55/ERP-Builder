@@ -6,14 +6,16 @@ import { Input } from "@/components/ui/input";
 import { relationDraftIds } from "@/lib/relationSelections";
 import { Search } from "lucide-react";
 import { CompactStatus } from "./CompactStatus";
-import { useML, useT } from "@/lib/i18n";
+import { useML, useT, useLang } from "@/lib/i18n";
 import { AffixedNumericValue } from "./AffixedNumericValue";
+import type { DataDirection } from "@/lib/dataDirection";
 
 export function MultipleRelationPicker(props: {
   entityId: number; fieldKey: string; pageId?: number; pageField?: boolean;
   recordId?: number; expectedVersion?: number; ids?: number[];
   members?: PageRelatedCandidate[]; value?: unknown; disabled?: boolean;
   showStatus?: boolean; allowCreate?: boolean;
+  textDirection?: DataDirection;
   countSuffixJson?: { ru?: string; en?: string; he?: string };
   dependent?: boolean; parentValue?: string | null;
   onChange?: (value: string) => void; onChanged?: (version?: number) => void;
@@ -23,6 +25,7 @@ export function MultipleRelationPicker(props: {
   const { entityId, fieldKey, recordId, pageId, pageField, parentValue, dependent } = props;
   const t = useT();
   const ml = useML();
+  const { lang } = useLang();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
   const [candidates, setCandidates] = useState<PageRelatedCandidate[]>([]);
@@ -98,7 +101,12 @@ export function MultipleRelationPicker(props: {
           <span>{t("relations.searchRecords", "Поиск связанных записей")}</span>
           <span className="relative block">
             <Search aria-hidden="true" className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input type="search" className="border-slate-400 ps-9" placeholder={t("relations.searchPlaceholder", "Введите название для поиска…")}
+            <Input type="search" dir={props.textDirection} className="border-slate-400" style={{
+              textAlign: "start",
+              // Search icon stays on the UI-language side, not the data side.
+              paddingLeft: lang === "he" ? "0.75rem" : "2.25rem",
+              paddingRight: lang === "he" ? "2.25rem" : "0.75rem",
+            }} placeholder={t("relations.searchPlaceholder", "Введите название для поиска…")}
               value={search} onChange={e => setSearch(e.target.value)} />
           </span>
         </label>
@@ -112,15 +120,15 @@ export function MultipleRelationPicker(props: {
           {loading ? <p role="status">Загрузка…</p> : filtered.map(c =>
             <label key={c.id} className="flex items-center gap-2 rounded border p-2 text-sm">
               {!props.disabled && <input type="checkbox" checked={selected.includes(c.id)} disabled={busy || !!gated} onChange={e => setSelected(old => e.target.checked ? [...old, c.id] : old.filter(id => id !== c.id))} />}
-              <span className="min-w-0 flex-1 break-words">{c.label || `#${c.id}`}</span>
+              <span dir={props.textDirection} style={{ textAlign: "start" }} className="min-w-0 flex-1 break-words">{c.label || `#${c.id}`}</span>
               {props.showStatus && c.status && <CompactStatus name={ml(c.status.nameJson)} badgeColor={c.status.color}
-                displayTags={c.status.displayTags} ml={ml} className="max-w-[45%] shrink-0" />}
+                displayTags={c.status.displayTags} ml={ml} nameJson={c.status.nameJson} className="max-w-[45%] shrink-0" />}
             </label>)}
           {!loading && !error && filtered.length === 0 && <p role="status" className="text-sm text-muted-foreground">
             {search ? t("relations.noSearchResults", "Ничего не найдено") : t("relations.noAvailableRecords", "Нет доступных записей")}
           </p>}
           {!props.disabled && selected.filter(id => !candidates.some(c => c.id === id)).map(id =>
-            <div key={id} className="text-sm">{labels.get(id) ?? `#${id}`} <button type="button" disabled={busy} onClick={() => setSelected(old => old.filter(v => v !== id))}>Удалить</button></div>)}
+            <div key={id} className="text-sm"><span dir={props.textDirection} style={{ textAlign: "start" }}>{labels.get(id) ?? `#${id}`}</span> <button type="button" disabled={busy} onClick={() => setSelected(old => old.filter(v => v !== id))}>Удалить</button></div>)}
         </div>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" disabled={busy} onClick={() => changeOpen(false)}>Закрыть</Button>

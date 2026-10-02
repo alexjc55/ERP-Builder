@@ -148,6 +148,13 @@
       "when": 1790753482658,
       "tag": "0020_oval_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790933122276,
+      "tag": "0021_harsh_penance",
+      "breakpoints": true
     }
   ]
 }

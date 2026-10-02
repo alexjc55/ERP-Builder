@@ -43,6 +43,7 @@ import {
   type PivotDisplayAffixField,
   type PivotMeasureDisplayAffix,
 } from "./pivot-display-affix";
+import { resolvePivotTextDirections, type PivotTextDirections } from "./pivot-text-direction";
 import { buildQualifiedFormulaScope, localFormulaDependencyClosure, mergeLinkedFormulaInputsBatched } from "../lib/formula-runtime";
 import type { LinkedFormulaPermissionContext } from "../lib/linked-formula-resolver";
 import {
@@ -150,6 +151,7 @@ export interface PivotConfigInput {
 /** Minimal shape of a page-local field needed for pivot dim/measure resolution. */
 export interface PivotPageField extends Omit<PivotDisplayAffixField, "formulaConfigJson"> {
   fieldKey: string;
+  textDirection?: "ltr" | "rtl" | null;
   pivotEnabled: boolean | null;
   fieldType: string;
   nameJson: unknown;
@@ -200,6 +202,7 @@ export interface PivotResultShape {
   multiMeasure?: boolean;
   /** Display-only affixes for resolved sum measures; absent when none apply. */
   measureDisplayAffixes?: PivotMeasureDisplayAffix[];
+  textDirections?: PivotTextDirections;
 }
 
 export type PivotComputeOutcome =
@@ -988,6 +991,7 @@ async function computePivotInternal(input: PivotComputeInput): Promise<PivotComp
       rowLabelJson,
       multiMeasure,
       ...(measureDisplayAffixes.length > 0 ? { measureDisplayAffixes } : {}),
+      textDirections: resolvePivotTextDirections(pivot, input.entityFields, input.pageFields),
     },
   };
 }

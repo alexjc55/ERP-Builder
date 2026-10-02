@@ -60,6 +60,7 @@ router.get("/settings", async (_req, res): Promise<void> => {
     tableStripeColor: row.tableStripeColor ?? null,
     tableHeaderColor: row.tableHeaderColor ?? null,
     tableBorderColor: row.tableBorderColor ?? null,
+    textDirection: row.textDirection ?? null,
     updatedAt: row.updatedAt,
   });
 });
@@ -145,6 +146,7 @@ router.put(
       updates.firstDayOfWeek = parsed.data.firstDayOfWeek;
     }
     if (parsed.data.tableStyle !== undefined) updates.tableStyle = parsed.data.tableStyle;
+    if (parsed.data.textDirection !== undefined) updates.textDirection = parsed.data.textDirection;
     try {
       if (parsed.data.tableStripeColor !== undefined)
         updates.tableStripeColor = normalizeHexColor(parsed.data.tableStripeColor);
@@ -184,6 +186,7 @@ router.put(
       tableStripeColor: row.tableStripeColor ?? null,
       tableHeaderColor: row.tableHeaderColor ?? null,
       tableBorderColor: row.tableBorderColor ?? null,
+      textDirection: row.textDirection ?? null,
       updatedAt: row.updatedAt,
     });
   },

@@ -1,4 +1,5 @@
-import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useId, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useId, useContext, createContext, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { resolveDataDirection, type DataDirection } from "@/lib/dataDirection";
 import { sameAggregateTopology } from "@/lib/aggregateSnapshot";
 import { isGroupExpanded, toggleGroupException, groupedQueryOptions } from "@/lib/groupAccordion";
 import { MultipleRelationPicker } from "./MultipleRelationPicker";
@@ -243,6 +244,23 @@ const EMPTY_STATUSES: Status[] = [];
 const EMPTY_TRANSITIONS: Transition[] = [];
 const EMPTY_USER_OPTIONS: UserOption[] = [];
 
+// Context survives React portals, unlike inherited DOM direction. The direction
+// belongs to content only: never place it on td/th (logical sticky offsets).
+const DataDirectionContext = createContext<DataDirection | undefined>(undefined);
+function DataDirectionContent({ direction, children, className }: {
+  direction: DataDirection;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <DataDirectionContext.Provider value={direction}>
+      <div dir={direction} style={{ textAlign: "start" }} className={cn("min-w-0", className)}>
+        {children}
+      </div>
+    </DataDirectionContext.Provider>
+  );
+}
+
 // Only commands may use the latest committed closure. Render inputs (including
 // permissions, projections and translations) are ordinary compared props below.
 function useCommittedCommand<Args extends unknown[], Result>(command: (...args: Args) => Result) {
@@ -257,6 +275,7 @@ type RecordRowColumn =
   | { kind: "page"; token: string; pinKey: string; field: PageField }
   | { kind: "status"; token: typeof STATUS_COLUMN_KEY; pinKey: typeof STATUS_COLUMN_KEY };
 type RecordRowContext = {
+  cellDirection: (field: Field | PageField) => DataDirection;
   orderedColumns: RecordRowColumn[];
   fields: Field[];
   t: ReturnType<typeof useT>;
@@ -366,7 +385,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
     getCellEditors, bulkColStyle, colWidthStyle, pinStyle, columnBodyStyles, setHighlightedRowId,
     setSelectedIds, setEditingCell, setRefreshTick, setWriteThroughEdit, setHistoryFor,
     setToDelete, markCellDirty, commitCell, commitPageCell, commitStatus, openEdit,
-    archiveRecord, unarchiveRecord,
+    archiveRecord, unarchiveRecord, cellDirection,
   } = context;
   const { formulaValues, formatting, pageValues } = rowDisplay;
   const values = (record.valuesJson ?? {}) as Record<string, unknown>;
@@ -440,7 +459,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                         <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
                       )}
                       {allowedStatusesForRecord(record).map(s => (
-                        <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} /></SelectItem>
+                        <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} nameJson={s.nameJson} displayTags={s.displayTags} ml={ml} /></SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -454,7 +473,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                   onClick={inlineEditEnabled && statusManualEditable ? () => setEditingCell({ recordId: record.id, fieldKey: STATUS_COLUMN_KEY }) : undefined}
                   title={inlineEditEnabled && statusManualEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}
                 >
-                  {status ? <CompactStatus name={ml(status.nameJson)} color={readableStatusTextColor(status.color)} displayTags={status.displayTags} ml={ml} /> : <span className="text-slate-300">—</span>}
+                  {status ? <CompactStatus name={ml(status.nameJson)} nameJson={status.nameJson} color={readableStatusTextColor(status.color)} displayTags={status.displayTags} ml={ml} /> : <span className="text-slate-300">—</span>}
                   {record.archivedAt && <span className="inline-flex max-w-full items-center gap-1 whitespace-nowrap text-xs text-indigo-500"><Archive className="h-3 w-3 shrink-0" /> {t("records.inArchive", "В архиве")}</span>}
                 </div>
               )}
@@ -509,6 +528,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                 <td key={f.id} className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}>
                   {f.fieldType === "relation" && f.relationConfigJson?.selectionMode === "multiple" ? (
                     <MultipleRelationPicker entityId={entityId} fieldKey={f.fieldKey} recordId={record.id}
+                      textDirection={cellDirection(f)}
                       showStatus={f.relationConfigJson?.showStatus} allowCreate={f.relationConfigJson?.allowCreate}
                       countSuffixJson={f.relationConfigJson?.countSuffixJson}
                       expectedVersion={record.version} ids={rel?.linkedRecordIds} members={rel?.members}
@@ -540,7 +560,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
                       </div>
                     ) : (
                       <button type="button" onClick={() => setWriteThroughEdit({ entityId: meta.relatedEntityId as number, recordId: rel.linkedRecordId as number })}
-                        className="flex w-full items-center -mx-1 rounded px-1 text-left hover:bg-blue-50/60"
+                        className="flex w-full items-center -mx-1 rounded px-1 text-start hover:bg-blue-50/60"
                         title={t("records.openLinkedRecord", "Открыть связанную запись")}>
                         <span className={f.wrapText ? "whitespace-normal break-words" : "truncate"}>{display}</span>
                       </button>
@@ -631,6 +651,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
               <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
                 {pf.relationConfigJson?.selectionMode === "multiple" && pageId != null ? (
                   <MultipleRelationPicker entityId={entityId} pageId={pageId} pageField fieldKey={pf.fieldKey}
+                    textDirection={cellDirection(pf)}
                     showStatus={pf.relationConfigJson?.showStatus} allowCreate={pf.relationConfigJson?.allowCreate}
                     countSuffixJson={pf.relationConfigJson?.countSuffixJson}
                     recordId={record.id} expectedVersion={record.version} ids={rel?.linkedRecordIds} members={rel?.members}
@@ -761,7 +782,14 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
           );
         })();
         if (!cellNode) return null;
-        return withCollab(cellNode as React.ReactElement, col.field.fieldKey);
+        const td = cellNode as React.ReactElement<any>;
+        return withCollab(cloneElement(td, {
+          children: (
+            <DataDirectionContent direction={cellDirection(col.field)} className={td.props.className?.includes("truncate") ? "truncate" : undefined}>
+              {td.props.children}
+            </DataDirectionContent>
+          ),
+        }), col.field.fieldKey);
       })}
       {showActionsColumn && (
         <td className="px-4 py-3">
@@ -2161,6 +2189,7 @@ export function EntityRecords({
   filtersCollapsedDefault,
   pageHideStatusColumn,
   pageDisableCreate,
+  pageTextDirection,
 }: {
   entityId: number;
   /**
@@ -2292,6 +2321,7 @@ export function EntityRecords({
    * point on this page for everyone. Mirrored by a hard server check on create.
    */
   pageDisableCreate?: boolean;
+  pageTextDirection?: DataDirection | null;
 }) {
   const ml = useML();
   const t = useT();
@@ -2595,6 +2625,10 @@ export function EntityRecords({
 
   // Global records-table display style (cosmetic): plain | striped | striped_bold.
   const { data: appSettings } = useGetSettings();
+  const cellDirection = useCallback(
+    (field: Field | PageField) => resolveDataDirection(field.textDirection, pageTextDirection, appSettings?.textDirection, lang),
+    [pageTextDirection, appSettings?.textDirection, lang],
+  );
   const formulaOptions = useMemo<FormulaEvaluationOptions>(
     () => ({
       timeZone: appSettings?.timeZone ?? DEFAULT_FORMULA_TIME_ZONE,
@@ -6929,6 +6963,7 @@ export function EntityRecords({
   // passed separately to just the affected row. Changes in permissions, locale,
   // columns, formulas, projection readiness or styles invalidate the context.
   const recordRowContext = useMemo<RecordRowContext>(() => ({
+    cellDirection,
     orderedColumns, fields, t, ml, userOptions, userNames, stripedRows, stripeColor,
     showBulk, showActionsColumn, canUpdate, canDelete, inlineEditEnabled,
     statusManualEditable, allowNoStatus, statusById, entityId, pageId, permPageId,
@@ -6946,6 +6981,7 @@ export function EntityRecords({
     commitStatus: rowCommitStatus, openEdit: rowOpenEdit,
     archiveRecord: rowArchiveRecord, unarchiveRecord: rowUnarchiveRecord,
   }), [
+    cellDirection,
     orderedColumns, fields, t, ml, userOptions, userNames, stripedRows, stripeColor,
     showBulk, showActionsColumn, canUpdate, canDelete, inlineEditEnabled,
     statusManualEditable, allowNoStatus, statusById, entityId, pageId, permPageId,
@@ -7047,6 +7083,10 @@ export function EntityRecords({
 
   const renderGroupRow = (g: RecordGroup) => {
     const gk = groupKeyOf(g);
+    const groupField = groupByFieldKey?.startsWith("pf:")
+      ? pageFields.find(f => `pf:${f.id}` === groupByFieldKey)
+      : fields.find(f => f.fieldKey === groupByFieldKey) ?? pageFields.find(f => f.fieldKey === groupByFieldKey);
+    const groupLabelDirection = resolveDataDirection(groupField?.textDirection, pageTextDirection, appSettings?.textDirection, lang);
     const expanded = isGroupExpanded(expandAll, groupExceptions, gk);
     // Every group header carries a strong top border (border-t-2) so the start
     // of each group block is a clear line — this is what visually separates an
@@ -7089,16 +7129,16 @@ export function EntityRecords({
                     ) : (
                       <ChevronRight className="w-4 h-4 text-slate-500 shrink-0 rtl:rotate-180" />
                     )}
-                    <span className="whitespace-nowrap max-w-[220px] truncate">
+                    <span dir={groupLabelDirection} className="whitespace-nowrap max-w-[220px] truncate text-start">
                       {g.label ?? g.key ?? t("records.groupEmpty", "Без значения")}
                     </span>
                     <span className="text-xs font-normal text-slate-400">({g.count})</span>
                     {commonStatus && (
-                      <CompactStatus className="ms-2" name={ml(commonStatus.nameJson)} color={readableStatusTextColor(commonStatus.color)} displayTags={commonStatus.displayTags} ml={ml} />
+                      <CompactStatus className="ms-2" name={ml(commonStatus.nameJson)} nameJson={commonStatus.nameJson} color={readableStatusTextColor(commonStatus.color)} displayTags={commonStatus.displayTags} ml={ml} />
                     )}
                   </span>
                 ) : commonStatus ? (
-                    <CompactStatus name={ml(commonStatus.nameJson)} color={readableStatusTextColor(commonStatus.color)} displayTags={commonStatus.displayTags} ml={ml} />
+                    <CompactStatus name={ml(commonStatus.nameJson)} nameJson={commonStatus.nameJson} color={readableStatusTextColor(commonStatus.color)} displayTags={commonStatus.displayTags} ml={ml} />
                   ) : null}
               </td>
             );
@@ -7120,12 +7160,12 @@ export function EntityRecords({
                   ) : (
                     <ChevronRight className="w-4 h-4 text-slate-500 shrink-0 rtl:rotate-180" />
                   )}
-                  <span className="whitespace-nowrap max-w-[320px] truncate">
+                  <span dir={groupLabelDirection} className="whitespace-nowrap max-w-[320px] truncate text-start">
                     {g.label ?? g.key ?? t("records.groupEmpty", "Без значения")}
                   </span>
                   <span className="text-xs font-normal text-slate-400">({g.count})</span>
                   {sum !== undefined && (
-                    <span className={`ml-2 text-emerald-700 whitespace-nowrap ${expanded ? "font-bold" : "font-semibold"}`} style={groupBodyStyle?.color ? { color: groupBodyStyle.color } : undefined}>
+                    <span dir={cellDirection(col.field)} className={`ml-2 text-start text-emerald-700 whitespace-nowrap ${expanded ? "font-bold" : "font-semibold"}`} style={groupBodyStyle?.color ? { color: groupBodyStyle.color } : undefined}>
                       {formatTotalValue(col.field, sum)}
                     </span>
                   )}
@@ -7237,6 +7277,7 @@ export function EntityRecords({
                 color: commonTextColor ?? groupBodyStyle?.color,
               }}
             >
+              <DataDirectionContent direction={cellDirection(col.field)}>
               {sum !== undefined ? (
                 <span className={`text-emerald-700 whitespace-nowrap ${expanded ? "font-bold" : "font-semibold"}`} style={groupBodyStyle?.color ? { color: groupBodyStyle.color } : undefined}>
                   {formatTotalValue(col.field, sum)}
@@ -7244,6 +7285,7 @@ export function EntityRecords({
               ) : hasCommon ? (
                 <span className={`block max-w-[240px] truncate ${expanded ? "font-bold text-slate-900" : "text-slate-500"}`}>{commonContent}</span>
               ) : null}
+              </DataDirectionContent>
             </td>
           );
         })}
@@ -7637,7 +7679,7 @@ export function EntityRecords({
                       >
                         <Checkbox className="shrink-0" checked={statusFilter.includes(s.id)} onCheckedChange={() => toggleStatus(s.id)} />
                         <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: s.color }} />
-                        <CompactStatus className="min-w-0 [overflow-wrap:anywhere]" name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />
+                        <CompactStatus className="min-w-0 [overflow-wrap:anywhere]" name={ml(s.nameJson)} nameJson={s.nameJson} displayTags={s.displayTags} ml={ml} />
                       </label>
                     ))}
                   </div>
@@ -8373,7 +8415,7 @@ export function EntityRecords({
       ) : showPivot ? (
         <Card className="border-0 rounded-none shadow-none">
           <CardContent className="p-0">
-            <PivotView entityId={entityId} query={pivotQuery} refreshTick={refreshTick} />
+            <PivotView entityId={entityId} query={pivotQuery} refreshTick={refreshTick} fields={allFields} pageFields={pageFields} pageTextDirection={pageTextDirection} />
           </CardContent>
         </Card>
       ) : (
@@ -8517,9 +8559,11 @@ export function EntityRecords({
                             }}
                           >
                             {hasTotal ? (
+                              <DataDirectionContent direction={cellDirection(fld)}>
                               <span className="font-bold whitespace-nowrap" style={{ color: textColor }}>
                                 {formatTotalValue(fld, numericTotals[totalKey])}
                               </span>
+                              </DataDirectionContent>
                             ) : null}
                           </th>
                         );
@@ -9017,12 +9061,12 @@ export function EntityRecords({
                                       <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
                                     )}
                                     {dropHidden(statuses).map((s: Status) => (
-                                      <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} /></SelectItem>
+                                      <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} nameJson={s.nameJson} displayTags={s.displayTags} ml={ml} /></SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
                               ) : selectedStatus ? (
-                                <CompactStatus name={ml(selectedStatus.nameJson)} color={readableStatusTextColor(selectedStatus.color)} displayTags={selectedStatus.displayTags} ml={ml} />
+                                <CompactStatus name={ml(selectedStatus.nameJson)} nameJson={selectedStatus.nameJson} color={readableStatusTextColor(selectedStatus.color)} displayTags={selectedStatus.displayTags} ml={ml} />
                               ) : (
                                 <span className="text-slate-300">—</span>
                               )}
@@ -9043,6 +9087,7 @@ export function EntityRecords({
                             (pf.fieldType !== "page_ref" || pageRefEditable(pf));
                           return (
                             <td key={col.pinKey} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(col.pinKey, "#eff6ff"), ...colWidthStyle(col.pinKey) }}>
+                              <DataDirectionContent direction={cellDirection(pf)}>
                               {editable ? (
                                 <FieldInput
                                   field={pageFieldAsField}
@@ -9083,6 +9128,7 @@ export function EntityRecords({
                               ) : (
                                 <span className="text-slate-300 text-xs">—</span>
                               )}
+                              </DataDirectionContent>
                             </td>
                           );
                         }
@@ -9095,8 +9141,10 @@ export function EntityRecords({
                         const addRowRelInfo = relCreateDepInfo(f, newRow);
                         return (
                           <td key={col.pinKey} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(col.pinKey, "#eff6ff"), ...colWidthStyle(col.pinKey) }}>
+                            <DataDirectionContent direction={cellDirection(f)}>
                             {editable && f.fieldType === "relation" && f.relationConfigJson?.selectionMode === "multiple" ? (
                               <MultipleRelationPicker entityId={entityId} fieldKey={f.fieldKey}
+                                textDirection={cellDirection(f)}
                                 showStatus={f.relationConfigJson?.showStatus} allowCreate={f.relationConfigJson?.allowCreate}
                                 countSuffixJson={f.relationConfigJson?.countSuffixJson}
                                 value={newRow[f.fieldKey]} dependent={addRowRelInfo.dependent} parentValue={addRowRelInfo.parentValue}
@@ -9188,6 +9236,7 @@ export function EntityRecords({
                             ) : (
                               <span className="text-slate-300 text-xs">—</span>
                             )}
+                            </DataDirectionContent>
                           </td>
                         );
                       })}
@@ -9403,7 +9452,7 @@ export function EntityRecords({
                     {!workflowActive && (allowNoStatus || statusId === NO_STATUS) && <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>}
                     {selectableStatuses.map((s: Status) => (
                       <SelectItem key={s.id} value={String(s.id)}>
-                        <CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />
+                        <CompactStatus name={ml(s.nameJson)} nameJson={s.nameJson} displayTags={s.displayTags} ml={ml} />
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -9411,7 +9460,7 @@ export function EntityRecords({
                   <div data-testid="text-status-readonly" className="min-h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">
                     {statusId === NO_STATUS
                       ? t("records.noStatus", "Без статуса")
-                      : (() => { const s = statusById.get(Number(statusId)); return s && <CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />; })()}
+                      : (() => { const s = statusById.get(Number(statusId)); return s && <CompactStatus name={ml(s.nameJson)} nameJson={s.nameJson} displayTags={s.displayTags} ml={ml} />; })()}
                   </div>
                 )}
                 {statusManualEditable && workflowActive && (
@@ -9546,11 +9595,16 @@ export function EntityRecords({
               <div className="space-y-1.5">
                 <Label>{t("records.bulkEditValue", "Новое значение")}</Label>
                 <Select value={String(bulkEditValue || "")} onValueChange={setBulkEditValue} disabled={bulkFieldMutationPending}>
-                  <SelectTrigger><SelectValue placeholder={t("records.selectStatus", "Выберите статус")}>{ml(statuses.find(status => String(status.id) === String(bulkEditValue))?.nameJson) || undefined}</SelectValue></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={t("records.selectStatus", "Выберите статус")}>
+                    {(() => {
+                      const status = statuses.find(status => String(status.id) === String(bulkEditValue));
+                      return status ? <CompactStatus name={ml(status.nameJson)} nameJson={status.nameJson} displayTags={status.displayTags} ml={ml} /> : undefined;
+                    })()}
+                  </SelectValue></SelectTrigger>
                   <SelectContent>
                     {bulkStatusOptions.map(status => (
                       <SelectItem key={status.id} value={String(status.id)} textValue={ml(status.nameJson)}>
-                        <CompactStatus name={ml(status.nameJson)} displayTags={status.displayTags} ml={ml} />
+                        <CompactStatus name={ml(status.nameJson)} nameJson={status.nameJson} displayTags={status.displayTags} ml={ml} />
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -10087,6 +10141,7 @@ function RelationLinkPicker({
   onEditingChange: (open: boolean) => void;
   disabled?: boolean;
 }) {
+  const textDirection = useContext(DataDirectionContext);
   const t = useT();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -10150,14 +10205,14 @@ function RelationLinkPicker({
         <button
           type="button"
           disabled={disabled}
-          className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-left hover:bg-blue-50/60"
+          className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-start hover:bg-blue-50/60"
           title={t("records.clickToAssign", "Нажмите, чтобы назначить связь")}
         >
           <span className="truncate">{display}</span>
           <ChevronDown className="h-4 w-4 shrink-0 opacity-40" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0">
+      <PopoverContent dir={textDirection} style={{ textAlign: "start" }} align="start" className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0">
         <Command shouldFilter={false}>
           <CommandInput
             value={search}
@@ -10241,6 +10296,7 @@ function EntityRelationLinkPicker({
   /** True when the field has wrapText enabled — the trigger label wraps instead of truncating. */
   wrap?: boolean;
 }) {
+  const textDirection = useContext(DataDirectionContext);
   const t = useT();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -10332,7 +10388,7 @@ function EntityRelationLinkPicker({
           type="button"
           data-testid={`entity-relation-picker-${fieldKey}`}
           disabled={triggerDisabled || disabled}
-          className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-left hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+          className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-start hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
           title={
             gated
               ? t("records.relatedPickParentFirst", "Сначала заполните родительское поле")
@@ -10343,7 +10399,7 @@ function EntityRelationLinkPicker({
           <ChevronDown className="h-4 w-4 shrink-0 opacity-40" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0">
+      <PopoverContent dir={textDirection} style={{ textAlign: "start" }} align="start" className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0">
         <Command shouldFilter={false}>
           <CommandInput
             value={search}
@@ -10444,6 +10500,7 @@ function RelationCreatePicker({
   parentValue?: string | null;
   relatedFilterFieldKey?: string | null;
 }) {
+  const textDirection = useContext(DataDirectionContext);
   const t = useT();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -10521,7 +10578,7 @@ function RelationCreatePicker({
         <button
           type="button"
           disabled={gated}
-          className="flex w-full items-center justify-between gap-2 rounded border border-slate-200 px-2 py-1.5 text-left text-sm hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+          className="flex w-full items-center justify-between gap-2 rounded border border-slate-200 px-2 py-1.5 text-start text-sm hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
           title={
             gated
               ? t("records.relatedPickParentFirst", "Сначала заполните родительское поле")
@@ -10532,7 +10589,7 @@ function RelationCreatePicker({
           <ChevronDown className="h-4 w-4 shrink-0 opacity-40" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0">
+      <PopoverContent dir={textDirection} style={{ textAlign: "start" }} align="start" className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0">
         <Command shouldFilter={false}>
           <CommandInput
             value={search}
@@ -11294,14 +11351,14 @@ function RecordEditModal({
                       <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
                     )}
                     {visibleStatuses.map((s: Status) => (
-                      <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} /></SelectItem>
+                      <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} nameJson={s.nameJson} displayTags={s.displayTags} ml={ml} /></SelectItem>
                     ))}
                   </SelectContent>
                 </Select> : (
                   <div data-testid="text-linked-status-readonly" className="min-h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">
                     {statusId === NO_STATUS
                       ? t("records.noStatus", "Без статуса")
-                      : (() => { const s = statuses.find((status: Status) => status.id === Number(statusId)); return s && <CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />; })()}
+                      : (() => { const s = statuses.find((status: Status) => status.id === Number(statusId)); return s && <CompactStatus name={ml(s.nameJson)} nameJson={s.nameJson} displayTags={s.displayTags} ml={ml} />; })()}
                   </div>
                 )}
               </div>
@@ -11536,14 +11593,14 @@ function QuickCreateRelatedRecordDialog({
                       <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
                     )}
                     {selectableStatuses.map((s: Status) => (
-                      <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} /></SelectItem>
+                      <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} nameJson={s.nameJson} displayTags={s.displayTags} ml={ml} /></SelectItem>
                     ))}
                   </SelectContent>
                 </Select> : (
                   <div data-testid="text-quick-status-readonly" className="min-h-9 rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-600">
                     {statusId === NO_STATUS
                       ? t("records.noStatus", "Без статуса")
-                      : (() => { const s = relStatuses.find((status: Status) => status.id === Number(statusId)); return s && <CompactStatus name={ml(s.nameJson)} displayTags={s.displayTags} ml={ml} />; })()}
+                      : (() => { const s = relStatuses.find((status: Status) => status.id === Number(statusId)); return s && <CompactStatus name={ml(s.nameJson)} nameJson={s.nameJson} displayTags={s.displayTags} ml={ml} />; })()}
                   </div>
                 )}
               </div>
@@ -11641,6 +11698,7 @@ function DependentFieldCombobox({
   onClose?: (committed: boolean) => void;
   triggerClassName?: string;
 }) {
+  const textDirection = useContext(DataDirectionContext);
   const t = useT();
   const ml = useML();
   const { toast } = useToast();
@@ -11790,7 +11848,7 @@ function DependentFieldCombobox({
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-56 p-0">
+      <PopoverContent dir={textDirection} style={{ textAlign: "start" }} align="start" className="w-[var(--radix-popover-trigger-width)] min-w-56 p-0">
         <Command>
           <CommandInput
             value={search}
@@ -11898,6 +11956,7 @@ function UserCombobox({
   allowedRoleIds?: number[];
   fieldId?: number;
 }) {
+  const textDirection = useContext(DataDirectionContext);
   const t = useT();
   const [open, setOpen] = useState(autoOpen);
   const [createOpen, setCreateOpen] = useState(false);
@@ -11934,7 +11993,7 @@ function UserCombobox({
             <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] min-w-56 p-0">
+        <PopoverContent dir={textDirection} style={{ textAlign: "start" }} align="start" className="w-[var(--radix-popover-trigger-width)] min-w-56 p-0">
           <Command>
             <CommandInput placeholder={t("records.userSearch", "Поиск пользователя...")} />
             <CommandList>
@@ -12036,6 +12095,7 @@ function InlineCellEditor({
   entityId?: number;
   pageId?: number;
 }) {
+  const textDirection = useContext(DataDirectionContext);
   const t = useT();
   const ml = useML();
   const [draft, setDraft] = useState<CellValue>(initial);
@@ -12153,6 +12213,7 @@ function InlineCellEditor({
     return (
       <div onKeyDownCapture={cancelPickerOnEscape}>
         <InlineListPicker
+          textDirection={textDirection}
           label={ml(field.nameJson)}
           placeholder={t("records.selectValue", "Выберите значение")}
           options={[{ value: CLEAR_SELECT_VALUE, label: t("records.notSelected", "Не выбрано") }, ...options]}
@@ -12187,6 +12248,7 @@ function InlineCellEditor({
     return (
       <div onKeyDownCapture={cancelPickerOnEscape}>
         <InlineListPicker
+          textDirection={textDirection}
           label={ml(field.nameJson)}
           placeholder={t("records.selectValue", "Выберите значение")}
           options={[{ value: CLEAR_SELECT_VALUE, label: t("records.notSelected", "Не выбрано") }, ...options]}
@@ -12350,6 +12412,7 @@ function FieldInput({
   entityId?: number;
   pageId?: number;
 }) {
+  const textDirection = useContext(DataDirectionContext);
   const t = useT();
   const ml = useML();
   if (isDependentField(field) && allFields && rowValues && entityId != null) {
@@ -12396,6 +12459,7 @@ function FieldInput({
         const options = normalizeSelectOptions(field.optionsJson);
         return (
           <Select
+            dir={textDirection}
             value={value == null || value === "" ? "" : String(value)}
             onValueChange={(next) => onChange(next === CLEAR_SELECT_VALUE ? "" : next)}
             disabled={disabled}
@@ -12443,6 +12507,7 @@ function FieldInput({
       const options = normalizeSelectOptions(field.optionsJson);
       return (
         <Select
+          dir={textDirection}
           value={value == null || value === "" ? "" : String(value)}
           onValueChange={(next) => onChange(next === CLEAR_SELECT_VALUE ? "" : next)}
           disabled={disabled}

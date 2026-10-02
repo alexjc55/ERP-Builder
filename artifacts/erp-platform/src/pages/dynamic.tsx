@@ -73,7 +73,7 @@ export default function DynamicPage() {
       </div>
 
       {page.isPivot ? (
-        <PivotPageView pageId={page.id} />
+        <PivotPageView pageId={page.id} pageTextDirection={page.textDirection} />
       ) : page.isDashboard ? (
         <DashboardView pageId={page.id} />
       ) : entity ? (
@@ -101,6 +101,7 @@ export default function DynamicPage() {
             filtersCollapsedDefault={page.filtersCollapsedDefault ?? undefined}
             pageHideStatusColumn={page.hideStatusColumn ?? undefined}
             pageDisableCreate={page.disableCreate ?? undefined}
+            pageTextDirection={page.textDirection}
           />
         </>
       ) : (
@@ -128,7 +129,7 @@ export default function DynamicPage() {
  * filters), shipped only to viewers with page access — the access gate runs on the
  * server before any aggregation. Display-only: this component never aggregates.
  */
-function PivotPageView({ pageId }: { pageId: number }) {
+function PivotPageView({ pageId, pageTextDirection }: { pageId: number; pageTextDirection?: "ltr" | "rtl" | null }) {
   const t = useT();
   const { data: result, isLoading, isError } = useGetPivotPageData(pageId);
 
@@ -155,5 +156,5 @@ function PivotPageView({ pageId }: { pageId: number }) {
       </div>
     );
   }
-  return <PivotResultTable result={result} />;
+  return <PivotResultTable result={result} pageTextDirection={pageTextDirection} />;
 }

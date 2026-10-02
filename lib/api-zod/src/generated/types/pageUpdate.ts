@@ -13,8 +13,10 @@ import type { PageUpdateMirrorFieldLabelsJson } from './pageUpdateMirrorFieldLab
 import type { PageUpdateMirrorPinnedJson } from './pageUpdateMirrorPinnedJson';
 import type { PivotPageConfig } from './pivotPageConfig';
 import type { SortSpec } from './sortSpec';
+import type { TextDirection } from './textDirection';
 
 export interface PageUpdate {
+  textDirection?: TextDirection | null;
   nameJson?: MultilingualText;
   descriptionJson?: MultilingualText;
   icon?: string;

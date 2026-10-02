@@ -5,7 +5,7 @@ for (const dir of ["ltr", "rtl"]) {
   test(`pivot matches the records grid with totals above headers (${dir})`, async ({ page }) => {
     await page.route("**/src/lib/i18n.tsx*", route => route.fulfill({
       contentType: "text/javascript",
-      body: "export const useT = () => (_, fallback) => fallback; export const useML = () => value => value?.ru ?? '';",
+      body: `export const useT = () => (_, fallback) => fallback; export const useML = () => value => value?.ru ?? ''; export const useLang = () => ({lang: '${dir === "rtl" ? "he" : "ru"}'});`,
     }));
     await page.route("**/api/settings", route => route.fulfill({
       json: { tableStyle: "striped", tableHeaderColor: "#d9e1f2", tableStripeColor: "#f0f4ff", tableBorderColor: "#94a3b8" },

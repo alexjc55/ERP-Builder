@@ -167,6 +167,8 @@ export function SelectOptionsEditor({ value, onChange, t, statuses }: SelectOpti
                     {statuses.map((status) => (
                       <SelectItem key={status.id} value={String(status.id)} textValue={statusLabel(status)}>
                         <CompactStatus
+                          nameJson={status.nameJson}
+                          language={active}
                           name={statusLabel(status)}
                           displayTags={status.displayTags}
                           ml={text => getML(text, active)}

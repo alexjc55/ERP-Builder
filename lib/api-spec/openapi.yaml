@@ -5233,10 +5233,16 @@ components:
           description: When this entity-select value is chosen, synchronize the record's system status to this status.
 
     # Platform branding / general settings (singleton row).
+    TextDirection:
+      type: ["string", "null"]
+      enum: [ltr, rtl, null]
+      description: Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.
     AppSettings:
       type: object
       required: [appNameJson, subtitleJson, logoObjectPath, currencySymbol, defaultLanguage, timeZone, workingDays, firstDayOfWeek, tableStyle, tableStripeColor, tableHeaderColor, tableBorderColor, updatedAt]
       properties:
+        textDirection:
+          $ref: "#/components/schemas/TextDirection"
         appNameJson:
           $ref: "#/components/schemas/MultilingualText"
         subtitleJson:
@@ -5288,6 +5294,8 @@ components:
     AppSettingsUpdate:
       type: object
       properties:
+        textDirection:
+          $ref: "#/components/schemas/TextDirection"
         appNameJson:
           $ref: "#/components/schemas/MultilingualText"
         subtitleJson:
@@ -6394,6 +6402,8 @@ components:
       type: object
       required: [id, nameJson, icon, sortOrder, isActive, createdAt, updatedAt]
       properties:
+        textDirection:
+          $ref: "#/components/schemas/TextDirection"
         id:
           type: integer
         nameJson:
@@ -6497,6 +6507,8 @@ components:
       type: object
       required: [nameJson, icon]
       properties:
+        textDirection:
+          $ref: "#/components/schemas/TextDirection"
         nameJson:
           $ref: "#/components/schemas/MultilingualText"
         descriptionJson:
@@ -6592,6 +6604,8 @@ components:
     PageUpdate:
       type: object
       properties:
+        textDirection:
+          $ref: "#/components/schemas/TextDirection"
         nameJson:
           $ref: "#/components/schemas/MultilingualText"
         descriptionJson:
@@ -7063,6 +7077,9 @@ components:
           type: string
         fieldType:
           type: string
+        textDirection:
+          $ref: "#/components/schemas/TextDirection"
+          description: Display-only override from the selected source field (including page-local and related columns). Null inherits the dashboard page, then app, then UI language; status columns ignore this.
 
     TableRow:
       type: object
@@ -7813,6 +7830,8 @@ components:
       type: object
       required: [id, entityId, fieldKey, nameJson, fieldType, isRequired, optionsJson, sortOrder, isActive, createdAt, updatedAt]
       properties:
+        textDirection:
+          $ref: "#/components/schemas/TextDirection"
         id:
           type: integer
         entityId:
@@ -7904,6 +7923,8 @@ components:
       type: object
       required: [fieldKey, nameJson, fieldType]
       properties:
+        textDirection:
+          $ref: "#/components/schemas/TextDirection"
         fieldKey:
           type: string
         nameJson:
@@ -8009,6 +8030,8 @@ components:
     FieldUpdate:
       type: object
       properties:
+        textDirection:
+          $ref: "#/components/schemas/TextDirection"
         fieldKey:
           type: string
         nameJson:
@@ -8424,6 +8447,8 @@ components:
       type: object
       required: [id, pageId, fieldKey, nameJson, fieldType, isRequired, optionsJson, sortOrder, isActive, createdAt, updatedAt]
       properties:
+        textDirection:
+          $ref: "#/components/schemas/TextDirection"
         id:
           type: integer
         pageId:
@@ -8510,6 +8535,8 @@ components:
       type: object
       required: [fieldKey, nameJson, fieldType]
       properties:
+        textDirection:
+          $ref: "#/components/schemas/TextDirection"
         fieldKey:
           type: string
         nameJson:
@@ -8582,6 +8609,8 @@ components:
     PageFieldUpdate:
       type: object
       properties:
+        textDirection:
+          $ref: "#/components/schemas/TextDirection"
         fieldKey:
           type: string
         nameJson:
@@ -10308,6 +10337,34 @@ components:
             fields. Omitted when no resolved measure has an affix.
           items:
             $ref: "#/components/schemas/PivotMeasureDisplayAffix"
+        textDirections:
+          type: object
+          description: Display-only direction metadata from validated, caller-scoped source fields. Null inherits the rendering page, then app, then UI language. No source IDs or field configuration are exposed.
+          properties:
+            row:
+              $ref: "#/components/schemas/TextDirection"
+            column:
+              $ref: "#/components/schemas/TextDirection"
+            rowLanguageDriven:
+              type: boolean
+              description: Status and status-tag dimensions ignore data overrides.
+            columnLanguageDriven:
+              type: boolean
+              description: Status and status-tag dimensions ignore data overrides.
+            columnIsMeasure:
+              type: boolean
+              description: Column headers describe measures rather than a column dimension.
+            measures:
+              type: array
+              items:
+                type: object
+                required: [measureKey, textDirection]
+                properties:
+                  measureKey:
+                    type: ["string", "null"]
+                    description: Null identifies the sole measure in single-measure mode.
+                  textDirection:
+                    $ref: "#/components/schemas/TextDirection"
 
     View:
       type: object

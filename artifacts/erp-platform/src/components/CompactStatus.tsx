@@ -1,4 +1,6 @@
 import type { MultilingualText } from "@workspace/api-client-react";
+import { useLang, type Lang } from "@/lib/i18n";
+import { statusTextPresentation } from "@/lib/statusTextDirection";
 
 export type DisplayStatusTag = { id: number; nameJson: MultilingualText; color: string };
 
@@ -8,6 +10,8 @@ export type DisplayStatusTag = { id: number; nameJson: MultilingualText; color: 
  */
 export function CompactStatus({
   name,
+  nameJson,
+  language,
   color,
   badgeColor,
   displayTags,
@@ -15,6 +19,9 @@ export function CompactStatus({
   className = "",
 }: {
   name: string;
+  nameJson?: MultilingualText | null;
+  /** Option editors can preview a different language from the surrounding UI. */
+  language?: Lang;
   color?: string | null;
   /** Optional high-contrast badge for pickers; otherwise retain the usual colored text. */
   badgeColor?: string | null;
@@ -22,11 +29,17 @@ export function CompactStatus({
   ml: (value: MultilingualText | null | undefined) => string;
   className?: string;
 }) {
+  const { lang } = useLang();
+  const presentation = statusTextPresentation(nameJson, language ?? lang, name);
+  name = presentation.text;
   return (
-    <span className={`inline-flex min-w-0 max-w-full flex-col items-start align-middle whitespace-normal text-start ${className}`}>
+    <span dir={presentation.direction} data-status-direction={presentation.direction} className={`inline-flex min-w-0 max-w-full flex-col items-start align-middle whitespace-normal text-start ${className}`}>
       {displayTags && displayTags.length > 0 && (
         <span className="max-w-full text-[10px] font-normal leading-3 text-slate-600 [overflow-wrap:anywhere]" title={displayTags.map(tag => ml(tag.nameJson)).join(", ")}>
-          {displayTags.map(tag => ml(tag.nameJson)).join(" · ")}
+          {displayTags.map((tag, index) => {
+            const label = statusTextPresentation(tag.nameJson, language ?? lang, ml(tag.nameJson));
+            return <span key={tag.id}>{index > 0 && " · "}<bdi dir={label.direction}>{label.text}</bdi></span>;
+          })}
         </span>
       )}
       {badgeColor ? (

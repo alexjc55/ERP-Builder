@@ -1,7 +1,9 @@
 import { sql } from "drizzle-orm";
-import { pgTable, integer, text, jsonb, timestamp, check } from "drizzle-orm/pg-core";
+import { pgTable, pgEnum, integer, text, jsonb, timestamp, check } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+
+export const textDirectionEnum = pgEnum("text_direction", ["ltr", "rtl"]);
 
 /**
  * Singleton row (id = 1) holding platform branding shown in the sidebar header:
@@ -45,6 +47,8 @@ export const appSettingsTable = pgTable(
     // Optional custom hex colour for the records-table divider (grid) lines;
     // null falls back to the built-in light border. Cosmetic only.
     tableBorderColor: text("table_border_color"),
+    // Data-text presentation only; null inherits the viewer's UI locale.
+    textDirection: textDirectionEnum("text_direction"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },
   (table) => [

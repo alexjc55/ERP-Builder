@@ -16,8 +16,10 @@ import type { PageRefFieldConfig } from './pageRefFieldConfig';
 import type { PercentFieldConfig } from './percentFieldConfig';
 import type { RelationFieldConfig } from './relationFieldConfig';
 import type { SelectOption } from './selectOption';
+import type { TextDirection } from './textDirection';
 
 export interface PageFieldInput {
+  textDirection?: TextDirection | null;
   fieldKey: string;
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;

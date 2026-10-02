@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
+import { TextDirectionSelect, type TextDirectionOverride } from "@/components/TextDirectionSelect";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Building2, User, Lock, Image as ImageIcon, Loader2, Upload, Trash2, FolderTree } from "lucide-react";
@@ -131,6 +132,7 @@ export default function SettingsPage() {
   const [logoObjectPath, setLogoObjectPath] = useState<string | null>(null);
   const [currencySymbol, setCurrencySymbol] = useState<string>("₽");
   const [defaultLanguage, setDefaultLanguage] = useState<Lang>("ru");
+  const [textDirection, setTextDirection] = useState<TextDirectionOverride>(null);
   const [timeZone, setTimeZone] = useState(DEFAULT_FORMULA_TIME_ZONE);
   const [workingDays, setWorkingDays] = useState<number[]>([...DEFAULT_WORKING_DAYS]);
   const [firstDayOfWeek, setFirstDayOfWeek] = useState(7);
@@ -152,6 +154,7 @@ export default function SettingsPage() {
     setLogoObjectPath(settings.logoObjectPath ?? null);
     setCurrencySymbol(settings.currencySymbol ?? "₽");
     setDefaultLanguage((settings.defaultLanguage as Lang) ?? "ru");
+    setTextDirection(settings.textDirection ?? null);
     setTimeZone(settings.timeZone ?? DEFAULT_FORMULA_TIME_ZONE);
     setWorkingDays(settings.workingDays?.length ? [...settings.workingDays] : [...DEFAULT_WORKING_DAYS]);
     setFirstDayOfWeek(settings.firstDayOfWeek ?? 7);
@@ -208,6 +211,7 @@ export default function SettingsPage() {
           logoObjectPath,
           currencySymbol: currencySymbol.trim() || "₽",
           defaultLanguage,
+          textDirection,
           timeZone,
           workingDays,
           firstDayOfWeek,
@@ -386,6 +390,7 @@ export default function SettingsPage() {
               </Select>
               <p className="text-xs text-slate-400">{t("settings.defaultLanguageHint", "Язык интерфейса для новых пользователей и тех, кто ещё не выбрал язык.")}</p>
             </div>
+            <TextDirectionSelect id="app-text-direction" value={textDirection} onChange={setTextDirection} />
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-slate-700">
                 {t("settings.timeZone", "Часовой пояс")}

@@ -8,8 +8,10 @@
 import type { AppSettingsDefaultLanguage } from './appSettingsDefaultLanguage';
 import type { AppSettingsTableStyle } from './appSettingsTableStyle';
 import type { MultilingualText } from './multilingualText';
+import type { TextDirection } from './textDirection';
 
 export interface AppSettings {
+  textDirection?: TextDirection | null;
   appNameJson: MultilingualText;
   subtitleJson: MultilingualText;
   /** @nullable */

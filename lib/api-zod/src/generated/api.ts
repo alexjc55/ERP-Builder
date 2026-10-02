@@ -1058,6 +1058,7 @@ export const getSettingsResponseFirstDayOfWeekMax = 7;
 
 
 export const GetSettingsResponse = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "appNameJson": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -1104,6 +1105,7 @@ export const updateSettingsBodyTableBorderColorMax = 9;
 
 
 export const UpdateSettingsBody = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "appNameJson": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -1135,6 +1137,7 @@ export const updateSettingsResponseFirstDayOfWeekMax = 7;
 
 
 export const UpdateSettingsResponse = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "appNameJson": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -2339,6 +2342,7 @@ export const listPagesResponsePivotConfigJsonOneFilterConjunctionDefault = `and`
 export const listPagesResponseDefaultSortJsonOneItemDirectionDefault = `asc`;
 
 export const ListPagesResponseItem = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "id": zod.number(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -2468,6 +2472,7 @@ export const createPageBodyGroupDefaultExpandedDefault = false;
 export const createPageBodyIsActiveDefault = true;
 
 export const CreatePageBody = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -2591,6 +2596,7 @@ export const getPageResponsePivotConfigJsonOneFilterConjunctionDefault = `and`;
 export const getPageResponseDefaultSortJsonOneItemDirectionDefault = `asc`;
 
 export const GetPageResponse = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "id": zod.number(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -2718,6 +2724,7 @@ export const updatePageBodyPivotConfigJsonOneFilterConjunctionDefault = `and`;
 export const updatePageBodyDefaultSortJsonOneItemDirectionDefault = `asc`;
 
 export const UpdatePageBody = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
   "en": zod.string().optional(),
@@ -2833,6 +2840,7 @@ export const updatePageResponsePivotConfigJsonOneFilterConjunctionDefault = `and
 export const updatePageResponseDefaultSortJsonOneItemDirectionDefault = `asc`;
 
 export const UpdatePageResponse = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "id": zod.number(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -3490,7 +3498,8 @@ export const GetDashboardDataResponseItem = zod.object({
   "tableColumns": zod.array(zod.object({
   "fieldKey": zod.string(),
   "label": zod.string(),
-  "fieldType": zod.string()
+  "fieldType": zod.string(),
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Display-only override from the selected source field (including page-local and related columns). Null inherits the dashboard page, then app, then UI language; status columns ignore this.')
 })).optional().describe('Column metadata for table widgets, in display order'),
   "tableRows": zod.array(zod.object({
   "id": zod.number(),
@@ -3531,7 +3540,18 @@ export const GetDashboardDataResponseItem = zod.object({
   "measureKey": zod.string().nullable(),
   "displayAffix": zod.string(),
   "displayAffixPosition": zod.enum(['before', 'after'])
-}).describe('Display-only affix metadata for a resolved numeric sum measure. A null measureKey identifies the sole measure in single-measure mode.')).optional().describe('Optional display-only affixes for sum measures over number\/function fields. Omitted when no resolved measure has an affix.')
+}).describe('Display-only affix metadata for a resolved numeric sum measure. A null measureKey identifies the sole measure in single-measure mode.')).optional().describe('Optional display-only affixes for sum measures over number\/function fields. Omitted when no resolved measure has an affix.'),
+  "textDirections": zod.object({
+  "row": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
+  "column": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
+  "rowLanguageDriven": zod.boolean().optional().describe('Status and status-tag dimensions ignore data overrides.'),
+  "columnLanguageDriven": zod.boolean().optional().describe('Status and status-tag dimensions ignore data overrides.'),
+  "columnIsMeasure": zod.boolean().optional().describe('Column headers describe measures rather than a column dimension.'),
+  "measures": zod.array(zod.object({
+  "measureKey": zod.string().nullable().describe('Null identifies the sole measure in single-measure mode.'),
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullable().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.')
+})).optional()
+}).optional().describe('Display-only direction metadata from validated, caller-scoped source fields. Null inherits the rendering page, then app, then UI language. No source IDs or field configuration are exposed.')
 }),zod.null()]).optional().describe('Computed cross-tab for pivot widgets (admin-authoritative real totals, status-filtered). Null for other widget types.'),
   "formula": zod.string().nullish(),
   "format": zod.string().nullish(),
@@ -3611,7 +3631,18 @@ export const GetPivotPageDataResponse = zod.object({
   "measureKey": zod.string().nullable(),
   "displayAffix": zod.string(),
   "displayAffixPosition": zod.enum(['before', 'after'])
-}).describe('Display-only affix metadata for a resolved numeric sum measure. A null measureKey identifies the sole measure in single-measure mode.')).optional().describe('Optional display-only affixes for sum measures over number\/function fields. Omitted when no resolved measure has an affix.')
+}).describe('Display-only affix metadata for a resolved numeric sum measure. A null measureKey identifies the sole measure in single-measure mode.')).optional().describe('Optional display-only affixes for sum measures over number\/function fields. Omitted when no resolved measure has an affix.'),
+  "textDirections": zod.object({
+  "row": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
+  "column": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
+  "rowLanguageDriven": zod.boolean().optional().describe('Status and status-tag dimensions ignore data overrides.'),
+  "columnLanguageDriven": zod.boolean().optional().describe('Status and status-tag dimensions ignore data overrides.'),
+  "columnIsMeasure": zod.boolean().optional().describe('Column headers describe measures rather than a column dimension.'),
+  "measures": zod.array(zod.object({
+  "measureKey": zod.string().nullable().describe('Null identifies the sole measure in single-measure mode.'),
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullable().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.')
+})).optional()
+}).optional().describe('Display-only direction metadata from validated, caller-scoped source fields. Null inherits the rendering page, then app, then UI language. No source IDs or field configuration are exposed.')
 })
 
 
@@ -4013,6 +4044,7 @@ export const listEntityFieldsResponsePercentConfigJsonDecimalsMax = 10;
 
 
 export const ListEntityFieldsResponseItem = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "id": zod.number(),
   "entityId": zod.number(),
   "fieldKey": zod.string(),
@@ -4241,6 +4273,7 @@ export const createEntityFieldBodyWrapTextDefault = false;
 export const createEntityFieldBodyIsActiveDefault = true;
 
 export const CreateEntityFieldBody = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "fieldKey": zod.string(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -4447,6 +4480,7 @@ export const getFieldResponsePercentConfigJsonDecimalsMax = 10;
 
 
 export const GetFieldResponse = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "id": zod.number(),
   "entityId": zod.number(),
   "fieldKey": zod.string(),
@@ -4665,6 +4699,7 @@ export const updateFieldBodyPercentConfigJsonDecimalsMax = 10;
 
 
 export const UpdateFieldBody = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "fieldKey": zod.string().optional(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -4863,6 +4898,7 @@ export const updateFieldResponsePercentConfigJsonDecimalsMax = 10;
 
 
 export const UpdateFieldResponse = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "id": zod.number(),
   "entityId": zod.number(),
   "fieldKey": zod.string(),
@@ -5114,6 +5150,7 @@ export const listPageFieldsResponsePageRefConfigJsonResolvedPercentConfigJsonDec
 
 
 export const ListPageFieldsResponseItem = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "id": zod.number(),
   "pageId": zod.number(),
   "fieldKey": zod.string(),
@@ -5336,6 +5373,7 @@ export const createPageFieldBodyWrapTextDefault = false;
 export const createPageFieldBodyIsActiveDefault = true;
 
 export const CreatePageFieldBody = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "fieldKey": zod.string(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -5539,6 +5577,7 @@ export const updatePageFieldBodyPageRefConfigJsonResolvedPercentConfigJsonDecima
 
 
 export const UpdatePageFieldBody = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "fieldKey": zod.string().optional(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -5734,6 +5773,7 @@ export const updatePageFieldResponsePageRefConfigJsonResolvedPercentConfigJsonDe
 
 
 export const UpdatePageFieldResponse = zod.object({
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "id": zod.number(),
   "pageId": zod.number(),
   "fieldKey": zod.string(),
@@ -9260,7 +9300,18 @@ export const PivotEntityRecordsResponse = zod.object({
   "measureKey": zod.string().nullable(),
   "displayAffix": zod.string(),
   "displayAffixPosition": zod.enum(['before', 'after'])
-}).describe('Display-only affix metadata for a resolved numeric sum measure. A null measureKey identifies the sole measure in single-measure mode.')).optional().describe('Optional display-only affixes for sum measures over number\/function fields. Omitted when no resolved measure has an affix.')
+}).describe('Display-only affix metadata for a resolved numeric sum measure. A null measureKey identifies the sole measure in single-measure mode.')).optional().describe('Optional display-only affixes for sum measures over number\/function fields. Omitted when no resolved measure has an affix.'),
+  "textDirections": zod.object({
+  "row": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
+  "column": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
+  "rowLanguageDriven": zod.boolean().optional().describe('Status and status-tag dimensions ignore data overrides.'),
+  "columnLanguageDriven": zod.boolean().optional().describe('Status and status-tag dimensions ignore data overrides.'),
+  "columnIsMeasure": zod.boolean().optional().describe('Column headers describe measures rather than a column dimension.'),
+  "measures": zod.array(zod.object({
+  "measureKey": zod.string().nullable().describe('Null identifies the sole measure in single-measure mode.'),
+  "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullable().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.')
+})).optional()
+}).optional().describe('Display-only direction metadata from validated, caller-scoped source fields. Null inherits the rendering page, then app, then UI language. No source IDs or field configuration are exposed.')
 })
 
 

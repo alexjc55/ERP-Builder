@@ -416,6 +416,7 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
   if ("mirrorFieldLabelsJson" in body) updateData.mirrorFieldLabelsJson = body.mirrorFieldLabelsJson ?? null;
   if ("mirrorColumnOrderJson" in body) updateData.mirrorColumnOrderJson = body.mirrorColumnOrderJson ?? null;
   if ("columnGroupsJson" in body) updateData.columnGroupsJson = body.columnGroupsJson ?? null;
+  if ("textDirection" in body) updateData.textDirection = body.textDirection;
   if ("mirrorPinnedJson" in body) updateData.mirrorPinnedJson = body.mirrorPinnedJson ?? null;
   if ("isDashboard" in body) updateData.isDashboard = body.isDashboard ?? false;
   if ("isPivot" in body) updateData.isPivot = body.isPivot ?? false;

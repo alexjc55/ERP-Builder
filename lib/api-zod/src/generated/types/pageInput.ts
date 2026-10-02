@@ -13,8 +13,10 @@ import type { PageInputMirrorPinnedJson } from './pageInputMirrorPinnedJson';
 import type { PageQuickFilter } from './pageQuickFilter';
 import type { PivotPageConfig } from './pivotPageConfig';
 import type { SortSpec } from './sortSpec';
+import type { TextDirection } from './textDirection';
 
 export interface PageInput {
+  textDirection?: TextDirection | null;
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;
   icon: string;

@@ -138,6 +138,7 @@ import { TextStyle, Color } from "@tiptap/extension-text-style";
 import { TextAlign } from "@tiptap/extension-text-align";
 import { useAuth } from "@/lib/auth";
 import { useML, useT, useLang } from "@/lib/i18n";
+import { resolveDataDirection, type DataDirection } from "@/lib/dataDirection";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { Settings2, Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Minus, X, LayoutDashboard, GripVertical, Bold, Italic, Underline as UnderlineIcon, Strikethrough, List, ListOrdered, Link2, AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, Heading3, Star } from "lucide-react";
@@ -751,27 +752,42 @@ function renderTableCell(value: unknown, fieldType: string): string {
 function StatusCell({ value }: { value: unknown }) {
   const ml = useML();
   if (value == null || typeof value !== "object") return <span className="text-slate-400">—</span>;
-  const s = value as { name?: string; color?: string; displayTags?: readonly DisplayStatusTag[] };
+  const s = value as { name?: string; nameJson?: MultilingualText; color?: string; displayTags?: readonly DisplayStatusTag[] };
   if (!s.name) return <span className="text-slate-400">—</span>;
   return (
-    <CompactStatus name={s.name} color={s.color} displayTags={s.displayTags} ml={ml} />
+    <CompactStatus name={s.name} nameJson={s.nameJson} color={s.color} displayTags={s.displayTags} ml={ml} />
   );
 }
 
 /** Render a table widget: admin-chosen columns and the entity's recent rows. */
+type DirectedTableColumn = TableColumn & { textDirection?: DataDirection | null };
+
 function WidgetTable({
   columns,
   rows,
   onRowClick,
   t,
   affixByFieldKey,
+  directionByFieldKey,
+  pageTextDirection,
 }: {
-  columns: TableColumn[];
+  columns: DirectedTableColumn[];
   rows: TableRow[];
   onRowClick?: (id: number) => void;
   t: (key: string, fallback: string) => string;
   affixByFieldKey?: ReadonlyMap<string, DisplayAffixConfig>;
+  directionByFieldKey?: ReadonlyMap<string, DataDirection | null | undefined>;
+  pageTextDirection?: DataDirection | null;
 }) {
+  const { lang } = useLang();
+  const { data: settings } = useGetSettings();
+  const columnDirection = (column: DirectedTableColumn) =>
+    resolveDataDirection(
+      column.textDirection === undefined ? directionByFieldKey?.get(column.fieldKey) : column.textDirection,
+      pageTextDirection,
+      settings?.textDirection,
+      lang,
+    );
   if (!columns || columns.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-slate-400">
@@ -787,7 +803,9 @@ function WidgetTable({
           <tr>
             {columns.map((c) => (
               <th key={c.fieldKey} className="border-b border-slate-200 px-2 py-1.5 text-left font-medium text-slate-500 whitespace-nowrap">
-                {c.fieldType === "status" ? t("dash.statusColumn", "Статус") : c.label}
+                {c.fieldType === "status" ? t("dash.statusColumn", "Статус") : (
+                  <div dir={columnDirection(c)} style={{ textAlign: "start" }}>{c.label}</div>
+                )}
               </th>
             ))}
           </tr>
@@ -811,7 +829,8 @@ function WidgetTable({
                     {c.fieldType === "status" ? (
                       <StatusCell value={(r.values ?? {})[c.fieldKey]} />
                     ) : (
-                      (() => {
+                      <div dir={columnDirection(c)} style={{ textAlign: "start" }}>
+                      {(() => {
                         const value = (r.values ?? {})[c.fieldKey];
                         const isAffixable =
                           c.fieldType === "number" ||
@@ -824,7 +843,8 @@ function WidgetTable({
                             {renderTableCell(value, c.fieldType)}
                           </AffixedNumericValue>
                         );
-                      })()
+                      })()}
+                      </div>
                     )}
                   </td>
                 ))}
@@ -842,10 +862,11 @@ function WidgetTableWithFieldMetadata({
   ...props
 }: {
   entityId?: number | null;
-  columns: TableColumn[];
+  columns: DirectedTableColumn[];
   rows: TableRow[];
   onRowClick?: (id: number) => void;
   t: (key: string, fallback: string) => string;
+  pageTextDirection?: DataDirection | null;
 }) {
   const { data: fields = [] } = useListEntityFields(entityId ?? 0, {
     query: {
@@ -854,11 +875,12 @@ function WidgetTableWithFieldMetadata({
     },
   });
   const affixByFieldKey = new Map<string, DisplayAffixConfig>();
+  const directionByFieldKey = new Map(fields.map((field) => [field.fieldKey, field.textDirection]));
   for (const field of fields) {
     if (field.fieldType !== "number" && field.fieldType !== "function") continue;
     affixByFieldKey.set(field.fieldKey, field.formulaConfigJson as DisplayAffixConfig);
   }
-  return <WidgetTable {...props} affixByFieldKey={affixByFieldKey} />;
+  return <WidgetTable {...props} affixByFieldKey={affixByFieldKey} directionByFieldKey={directionByFieldKey} />;
 }
 
 function getRelativeTime(dateStr: string, lang: string) {
@@ -966,6 +988,7 @@ function WidgetCard({
   onSaveNotesContent,
   savingNotesContent,
   formulaOptions,
+  pageTextDirection,
 }: {
   w: DashboardWidgetData;
   ml: (v: unknown) => string;
@@ -976,6 +999,7 @@ function WidgetCard({
   onSaveNotesContent?: (wid: number, data: NotesContentInput) => void;
   savingNotesContent?: boolean;
   formulaOptions: FormulaEvaluationOptions;
+  pageTextDirection?: DataDirection | null;
 }) {
   if (w.widgetType === "table") {
     return (
@@ -997,6 +1021,7 @@ function WidgetCard({
           <div className="flex-1 min-h-0 mt-2">
             <WidgetTableWithFieldMetadata
               entityId={w.tableEntityId}
+              pageTextDirection={pageTextDirection}
               columns={w.tableColumns ?? []}
               rows={w.tableRows ?? []}
               onRowClick={onOpenRecord}
@@ -1056,7 +1081,7 @@ function WidgetCard({
           <p className="text-base font-semibold text-slate-500 truncate">{ml(w.titleJson)}</p>
           <div className="flex-1 min-h-0 mt-2 overflow-auto">
             {hasData ? (
-              <PivotResultTable result={pivot} />
+              <PivotResultTable result={pivot} pageTextDirection={pageTextDirection} />
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-slate-400">
                 {t("dash.noData", "Нет данных")}
@@ -1637,6 +1662,7 @@ export default function DashboardView({ pageId, embedded = false }: { pageId: nu
               >
                 <WidgetCard
                   w={w}
+                  pageTextDirection={thisPage?.textDirection}
                   ml={ml}
                   currencySymbol={currencySymbol}
                   t={t}

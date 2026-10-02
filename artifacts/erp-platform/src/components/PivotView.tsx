@@ -1,14 +1,39 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   usePivotEntityRecords,
   useGetSettings,
   type PivotQuery,
   type PivotResult,
+  type PivotConfig,
+  type PivotDimension,
+  type PivotMeasure,
+  type Field,
+  type PageField,
 } from "@workspace/api-client-react";
-import { useML, useT } from "@/lib/i18n";
+import { useLang, useML, useT } from "@/lib/i18n";
 import { Loader2, TableProperties } from "lucide-react";
 import { AffixedNumericValue } from "@/components/AffixedNumericValue";
 import { useManualDataRefresh } from "@/lib/manualDataRefresh";
+import { resolveDataDirection, type DataDirection } from "@/lib/dataDirection";
+
+/** Only metadata the records page already has permission to read is passed in. */
+type PivotDirectionProps = {
+  pageTextDirection?: DataDirection | null;
+  fields?: readonly Pick<Field, "fieldKey" | "textDirection">[];
+  pageFields?: readonly Pick<PageField, "fieldKey" | "textDirection">[];
+};
+
+// Structural compatibility until the owning agent regenerates the API client.
+type DirectedPivotResult = PivotResult & {
+  textDirections?: {
+    row?: DataDirection | null;
+    column?: DataDirection | null;
+    rowLanguageDriven?: boolean;
+    columnLanguageDriven?: boolean;
+    columnIsMeasure?: boolean;
+    measures?: { measureKey: string | null; textDirection: DataDirection | null }[];
+  };
+};
 
 /**
  * Cross-tab (Сводная таблица) renderer for an entity's records. Receives a fully
@@ -22,11 +47,14 @@ export function PivotView({
   entityId,
   query,
   refreshTick = 0,
+  pageTextDirection,
+  fields,
+  pageFields,
 }: {
   entityId: number;
   query: PivotQuery;
   refreshTick?: number;
-}) {
+} & PivotDirectionProps) {
   const t = useT();
   const pivotMutation = usePivotEntityRecords();
   const run = pivotMutation.mutateAsync;
@@ -120,7 +148,7 @@ export function PivotView({
     );
   }
 
-  return <PivotResultTable result={result} loading={loading} />;
+  return <PivotResultTable result={result} loading={loading} pivot={query.pivot} fields={fields} pageFields={pageFields} pageTextDirection={pageTextDirection} />;
 }
 
 /**
@@ -132,13 +160,51 @@ export function PivotView({
 export function PivotResultTable({
   result,
   loading = false,
+  pivot,
+  pageTextDirection,
+  fields = [],
+  pageFields = [],
 }: {
-  result: PivotResult;
+  result: DirectedPivotResult;
   loading?: boolean;
-}) {
+  pivot?: PivotConfig;
+} & PivotDirectionProps) {
   const t = useT();
   const ml = useML();
+  const { lang } = useLang();
   const { data: settings } = useGetSettings();
+  const inheritedDirection = resolveDataDirection(null, pageTextDirection, settings?.textDirection, lang);
+  const sourceDirection = (source: "entity" | "page", fieldKey?: string | null) => {
+    const metadata = source === "page" ? pageFields : fields;
+    return resolveDataDirection(metadata.find((field) => field.fieldKey === fieldKey)?.textDirection, pageTextDirection, settings?.textDirection, lang);
+  };
+  // Status dimensions are language-driven, never field/page/app overrides.
+  const dimensionDirection = (dimension?: PivotDimension) =>
+    dimension?.source === "status" || dimension?.source === "statusTag"
+      ? resolveDataDirection(null, null, null, lang)
+      : dimension ? sourceDirection(dimension.source, dimension.fieldKey) : inheritedDirection;
+  const measureDirection = (measure?: PivotMeasure, columnKey?: string) => {
+    const override = result.textDirections?.measures?.find((item) =>
+      item.measureKey === (result.multiMeasure ? columnKey : null))?.textDirection;
+    return override != null
+      ? resolveDataDirection(override, pageTextDirection, settings?.textDirection, lang)
+      : measure?.agg === "sum" ? sourceDirection(measure.source ?? "entity", measure.fieldKey) : inheritedDirection;
+  };
+  const rowDirection = result.textDirections?.rowLanguageDriven
+    ? resolveDataDirection(null, null, null, lang)
+    : result.textDirections?.row != null
+      ? resolveDataDirection(result.textDirections.row, pageTextDirection, settings?.textDirection, lang)
+      : dimensionDirection(pivot?.rows);
+  const columnHeaderDirection = result.textDirections?.columnLanguageDriven
+    ? resolveDataDirection(null, null, null, lang)
+    : result.textDirections?.column != null
+      ? resolveDataDirection(result.textDirections.column, pageTextDirection, settings?.textDirection, lang)
+      : dimensionDirection(pivot?.cols);
+  const columnMeasure = (columnKey?: string) =>
+    pivot?.measures?.find((measure) => measure.key === columnKey) ?? pivot?.measure;
+  const content = (children: ReactNode, direction = inheritedDirection) => (
+    <div dir={direction} style={{ textAlign: "start" }}>{children}</div>
+  );
   const striped = settings?.tableStyle === "striped" || settings?.tableStyle === "striped_bold";
   const boldHeader = settings?.tableStyle === "striped_bold";
   const headerBg = settings?.tableHeaderColor ?? (boldHeader ? "#e2e8f0" : "#f8fafc");
@@ -162,9 +228,11 @@ export function PivotResultTable({
   );
   const singleAffix = (result.measureDisplayAffixes ?? []).find((item) => item.measureKey == null);
   const withAffix = (value: number, columnKey?: string) => (
-    <AffixedNumericValue config={columnKey ? affixByMeasureKey?.get(columnKey) ?? singleAffix : singleAffix}>
-      {fmt(value)}
-    </AffixedNumericValue>
+    <div dir={measureDirection(columnMeasure(columnKey), columnKey)} style={{ textAlign: "start" }}>
+      <AffixedNumericValue config={columnKey ? affixByMeasureKey?.get(columnKey) ?? singleAffix : singleAffix}>
+        {fmt(value)}
+      </AffixedNumericValue>
+    </div>
   );
 
   return (
@@ -179,7 +247,7 @@ export function PivotResultTable({
         <thead className="sticky top-0 z-20">
           <tr className="bg-slate-50" data-testid="pivot-column-totals">
             <th scope="row" className="sticky start-0 z-[1] bg-slate-50 px-4 py-2 text-start font-medium text-slate-500">
-              {t("pivot.colTotal", "Итого")}
+              {content(t("pivot.colTotal", "Итого"))}
             </th>
             {result.cols.map((c) => (
               <td key={c.key} className="bg-[#d1fae5] px-4 py-2 text-start font-bold whitespace-nowrap tabular-nums text-[#047857]">
@@ -194,7 +262,7 @@ export function PivotResultTable({
           </tr>
           <tr className={`erp-main-header border-b text-xs leading-snug ${boldHeader ? "font-semibold border-b-2 border-slate-300 text-slate-800" : "border-slate-100"}`} style={{ backgroundColor: headerBg }}>
             <th scope="col" style={{ backgroundColor: headerBg }} className="sticky start-0 z-[1] px-4 py-3 text-center font-medium text-slate-600">
-              {ml(result.rowLabelJson) || t("pivot.rowDimension", "Группировка")}
+              {content(ml(result.rowLabelJson) || t("pivot.rowDimension", "Группировка"), rowDirection)}
             </th>
             {result.cols.map((c) => (
               <th
@@ -202,12 +270,12 @@ export function PivotResultTable({
                 scope="col"
                 className="px-4 py-3 text-center font-medium text-slate-600"
               >
-                {c.label}
+                {content(c.label, result.multiMeasure || result.textDirections?.columnIsMeasure || (pivot && !pivot.cols) ? measureDirection(columnMeasure(c.key), c.key) : columnHeaderDirection)}
               </th>
             ))}
             {showRowTotal && (
               <th scope="col" className="px-4 py-3 text-center font-medium text-slate-600">
-                {t("pivot.rowTotal", "Итого")}
+                {content(t("pivot.rowTotal", "Итого"))}
               </th>
             )}
           </tr>
@@ -216,7 +284,7 @@ export function PivotResultTable({
           {result.rows.map((r, index) => (
             <tr key={r.key} className="group border-b border-slate-100 hover:bg-slate-50/50" style={{ backgroundColor: striped && index % 2 === 1 ? settings?.tableStripeColor ?? "#f8fafc" : "#ffffff" }}>
               <th scope="row" style={{ backgroundColor: "inherit" }} className="sticky start-0 z-[1] px-4 py-3 text-start font-normal text-slate-700">
-                {r.label}
+                {content(r.label, rowDirection)}
               </th>
               {result.cols.map((c) => {
                 const v = cellMap.get(r.key + "\u0000" + c.key);
@@ -225,7 +293,7 @@ export function PivotResultTable({
                     key={c.key}
                     className="px-4 py-3 text-start tabular-nums text-slate-700"
                   >
-                    {v == null || v === 0 ? <span className="text-slate-300">—</span> : withAffix(v, c.key)}
+                    {v == null || v === 0 ? content(<span className="text-slate-300">—</span>, measureDirection(columnMeasure(c.key), c.key)) : withAffix(v, c.key)}
                   </td>
                 );
               })}

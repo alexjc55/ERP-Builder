@@ -140,7 +140,7 @@ function StatusDropdownOption({ status, ml }: {
   const label = ml(status.nameJson);
   return (
     <SelectItem value={String(status.id)} textValue={label}>
-      <CompactStatus name={label} displayTags={status.displayTags} ml={ml} />
+      <CompactStatus name={label} displayTags={status.displayTags} ml={ml} nameJson={status.nameJson} />
     </SelectItem>
   );
 }

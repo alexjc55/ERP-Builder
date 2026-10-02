@@ -17,9 +17,11 @@ import type { MultilingualText } from './multilingualText';
 import type { PercentFieldConfig } from './percentFieldConfig';
 import type { RelationFieldConfig } from './relationFieldConfig';
 import type { SelectOption } from './selectOption';
+import type { TextDirection } from './textDirection';
 import type { UserFieldConfig } from './userFieldConfig';
 
 export interface Field {
+  textDirection?: TextDirection | null;
   id: number;
   entityId: number;
   fieldKey: string;

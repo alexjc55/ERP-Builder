@@ -9,6 +9,7 @@ import type { MultilingualText } from './multilingualText';
 import type { PivotAxisItem } from './pivotAxisItem';
 import type { PivotCell } from './pivotCell';
 import type { PivotMeasureDisplayAffix } from './pivotMeasureDisplayAffix';
+import type { PivotResultTextDirections } from './pivotResultTextDirections';
 import type { PivotTotal } from './pivotTotal';
 
 export interface PivotResult {
@@ -24,4 +25,6 @@ export interface PivotResult {
   multiMeasure?: boolean;
   /** Optional display-only affixes for sum measures over number/function fields. Omitted when no resolved measure has an affix. */
   measureDisplayAffixes?: PivotMeasureDisplayAffix[];
+  /** Display-only direction metadata from validated, caller-scoped source fields. Null inherits the rendering page, then app, then UI language. No source IDs or field configuration are exposed. */
+  textDirections?: PivotResultTextDirections;
 }

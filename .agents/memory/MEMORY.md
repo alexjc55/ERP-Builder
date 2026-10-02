@@ -60,6 +60,7 @@
 - [External FastPanel deploy](external-fastpanel-deploy.md) — prod runs on an external Debian/FastPanel server; FastPanel regenerates the nginx conf (restore from backup + reload); npmmirror registry, PM2, static build via nginx.
 - [Drizzle select-fragment qualification](drizzle-select-fragment-qualification.md) — raw SQL fragments as selected fields render columns UNQUALIFIED; correlated subqueries silently return NULL; wrap in sql``.
 - [RTL table borders](rtl-table-borders.md) — separators need logical border-inline-end; sticky header in a collapsed table must paint its own inset-shadow dividers (flipped under dir=rtl).
+- [Table data direction](table-text-direction.md) — field → page → ERP → UI language; content only. Status direction follows its actual displayed translation, not data overrides.
 - [Field format inheritance](format-inheritance.md) — formatInheritJson sources (fields/statuses) resolved server-side into response-only inheritedFormatRulesJson; never merged into formatRulesJson.
 - [Bulk record actions](bulk-record-actions.md) — selected-record archive/delete and atomic one-field updates: distinct consistency, validation, and storage rules.
 - [Filter row scope](erp-filter-scope.md) — third record scope "filter" (rows where field value ∈ set): encoded as synthetic own-scope keys so all own-scope sites enforce it; lookup fields via EXISTS.

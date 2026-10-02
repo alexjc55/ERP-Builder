@@ -1,11 +1,14 @@
 import { pgTable, serial, jsonb, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { textDirectionEnum } from "./app_settings";
 
 export const pagesTable = pgTable("pages", {
   id: serial("id").primaryKey(),
   nameJson: jsonb("name_json").notNull().default({}),
   descriptionJson: jsonb("description_json").default({}),
+  // Data-text presentation only; null inherits the application setting.
+  textDirection: textDirectionEnum("text_direction"),
   icon: text("icon").notNull().default("file"),
   path: text("path"),
   parentPageId: integer("parent_page_id"),

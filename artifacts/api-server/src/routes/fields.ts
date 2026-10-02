@@ -691,6 +691,7 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.defaultToToday != null) updateData.defaultToToday = body.defaultToToday;
   if (sanitizedOptions != null) updateData.optionsJson = sanitizedOptions;
   if (body.formatRulesJson != null) updateData.formatRulesJson = body.formatRulesJson;
+  if ("textDirection" in body) updateData.textDirection = body.textDirection;
   if (body.formatInheritJson != null) {
     const inheritErr = validateFormatInherit(body.formatInheritJson);
     if (inheritErr) {

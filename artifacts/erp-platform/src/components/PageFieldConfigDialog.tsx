@@ -62,6 +62,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { TextDirectionSelect, type TextDirectionOverride } from "@/components/TextDirectionSelect";
 import { SelectOptionsEditor } from "@/components/SelectOptionsEditor";
 import { PercentOptionsEditor } from "@/components/PercentOptionsEditor";
 import { normalizeSelectOptions, type SelectOption } from "@/lib/selectOptions";
@@ -231,6 +232,7 @@ export function PageFieldConfigDialog({
   const [isPinned, setIsPinned] = useState(false);
   const [showColumnTotal, setShowColumnTotal] = useState(false);
   const [wrapText, setWrapText] = useState(false);
+  const [textDirection, setTextDirection] = useState<TextDirectionOverride>(null);
   const [totalFillColor, setTotalFillColor] = useState("");
   const [totalTextColor, setTotalTextColor] = useState("");
   const [formatRules, setFormatRules] = useState<FieldFormatRule[]>([]);
@@ -287,6 +289,7 @@ export function PageFieldConfigDialog({
       setIsPinned(field.isPinned ?? false);
       setShowColumnTotal(field.showColumnTotal ?? false);
       setWrapText(field.wrapText ?? false);
+      setTextDirection(field.textDirection ?? null);
       setTotalFillColor(field.totalFillColor ?? "");
       setTotalTextColor(field.totalTextColor ?? "");
       setFormatRules(Array.isArray(field.formatRulesJson) ? field.formatRulesJson : []);
@@ -345,6 +348,8 @@ export function PageFieldConfigDialog({
       setShowInTable(true);
       setIsPinned(false);
       setShowColumnTotal(false);
+      setWrapText(false);
+      setTextDirection(null);
       setTotalFillColor("");
       setTotalTextColor("");
       setFormatRules([]);
@@ -571,6 +576,7 @@ export function PageFieldConfigDialog({
       isPinned,
       showColumnTotal: canTotal ? showColumnTotal : false,
       wrapText,
+      textDirection,
       totalFillColor: canTotal && showColumnTotal && totalFillColor ? totalFillColor : null,
       totalTextColor:
         canTotal && showColumnTotal && totalTextColor
@@ -676,6 +682,7 @@ export function PageFieldConfigDialog({
           <div className="space-y-4 py-2">
             <MultilingualInput label={t("fields.name", "Название")} value={nameJson} onChange={setNameJson} required />
             <MultilingualInput label={t("fields.description", "Описание")} value={descJson} onChange={setDescJson} multiline />
+            <TextDirectionSelect id="page-field-text-direction" value={textDirection} onChange={setTextDirection} />
             <div className="space-y-1.5">
               <Label>{t("fields.systemKey", "Системный ключ")}</Label>
               <Input value={fieldKey} onChange={(e) => setFieldKey(e.target.value)} placeholder="title" className="font-mono" />

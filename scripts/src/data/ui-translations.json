@@ -1,5 +1,35 @@
 [
   {
+    "key": "textDirection.label",
+    "ru": "Направление текста",
+    "en": "Text direction",
+    "he": "כיוון טקסט"
+  },
+  {
+    "key": "textDirection.inherit",
+    "ru": "Наследовать / по умолчанию",
+    "en": "Inherit / default",
+    "he": "ירושה / ברירת מחדל"
+  },
+  {
+    "key": "textDirection.ltr",
+    "ru": "Слева направо (LTR)",
+    "en": "Left to right (LTR)",
+    "he": "משמאל לימין (LTR)"
+  },
+  {
+    "key": "textDirection.rtl",
+    "ru": "Справа налево (RTL)",
+    "en": "Right to left (RTL)",
+    "he": "מימין לשמאל (RTL)"
+  },
+  {
+    "key": "textDirection.priority",
+    "ru": "Приоритет: поле → страница → приложение → язык. Наследовать снимает переопределение. Статусы не затрагиваются.",
+    "en": "Priority: field → page → app → language. Inherit clears the override. Statuses are unaffected.",
+    "he": "סדר עדיפות: שדה ← עמוד ← יישום ← שפה. ירושה מסירה את ההגדרה המפורשת. סטטוסים אינם מושפעים."
+  },
+  {
     "key": "dash.groupByStatusTag",
     "ru": "Тегам статусов",
     "en": "Status tags",

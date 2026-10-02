@@ -718,6 +718,18 @@ export interface SelectOption {
 }
 
 /**
+ * Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.
+ * @nullable
+ */
+export type TextDirection = typeof TextDirection[keyof typeof TextDirection] | null;
+
+
+export const TextDirection = {
+  ltr: 'ltr',
+  rtl: 'rtl',
+} as const;
+
+/**
  * Platform-wide default UI language for users who have not picked their own.
  */
 export type AppSettingsDefaultLanguage = typeof AppSettingsDefaultLanguage[keyof typeof AppSettingsDefaultLanguage];
@@ -742,6 +754,7 @@ export const AppSettingsTableStyle = {
 } as const;
 
 export interface AppSettings {
+  textDirection?: TextDirection | null;
   appNameJson: MultilingualText;
   subtitleJson: MultilingualText;
   /** @nullable */
@@ -803,6 +816,7 @@ export const AppSettingsUpdateTableStyle = {
 } as const;
 
 export interface AppSettingsUpdate {
+  textDirection?: TextDirection | null;
   appNameJson?: MultilingualText;
   subtitleJson?: MultilingualText;
   /** @nullable */
@@ -1928,6 +1942,7 @@ export interface SortSpec {
 }
 
 export interface Page {
+  textDirection?: TextDirection | null;
   id: number;
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;
@@ -2034,6 +2049,7 @@ export const PageInputDefaultPageSize = {
 } as const;
 
 export interface PageInput {
+  textDirection?: TextDirection | null;
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;
   icon: string;
@@ -2136,6 +2152,7 @@ export const PageUpdateDefaultPageSize = {
 } as const;
 
 export interface PageUpdate {
+  textDirection?: TextDirection | null;
   nameJson?: MultilingualText;
   descriptionJson?: MultilingualText;
   icon?: string;
@@ -2696,6 +2713,8 @@ export interface TableColumn {
   fieldKey: string;
   label: string;
   fieldType: string;
+  /** Display-only override from the selected source field (including page-local and related columns). Null inherits the dashboard page, then app, then UI language; status columns ignore this. */
+  textDirection?: TextDirection | null;
 }
 
 /**
@@ -2875,6 +2894,30 @@ export interface PivotMeasureDisplayAffix {
   displayAffixPosition: PivotMeasureDisplayAffixDisplayAffixPosition;
 }
 
+export type PivotResultTextDirectionsMeasuresItem = {
+  /**
+     * Null identifies the sole measure in single-measure mode.
+     * @nullable
+     */
+  measureKey: string | null;
+  textDirection: TextDirection | null;
+};
+
+/**
+ * Display-only direction metadata from validated, caller-scoped source fields. Null inherits the rendering page, then app, then UI language. No source IDs or field configuration are exposed.
+ */
+export type PivotResultTextDirections = {
+  row?: TextDirection | null;
+  column?: TextDirection | null;
+  /** Status and status-tag dimensions ignore data overrides. */
+  rowLanguageDriven?: boolean;
+  /** Status and status-tag dimensions ignore data overrides. */
+  columnLanguageDriven?: boolean;
+  /** Column headers describe measures rather than a column dimension. */
+  columnIsMeasure?: boolean;
+  measures?: PivotResultTextDirectionsMeasuresItem[];
+};
+
 export interface PivotResult {
   rows: PivotAxisItem[];
   cols: PivotAxisItem[];
@@ -2888,6 +2931,8 @@ export interface PivotResult {
   multiMeasure?: boolean;
   /** Optional display-only affixes for sum measures over number/function fields. Omitted when no resolved measure has an affix. */
   measureDisplayAffixes?: PivotMeasureDisplayAffix[];
+  /** Display-only direction metadata from validated, caller-scoped source fields. Null inherits the rendering page, then app, then UI language. No source IDs or field configuration are exposed. */
+  textDirections?: PivotResultTextDirections;
 }
 
 export interface DashboardWidgetData {
@@ -3414,6 +3459,7 @@ export interface RelationFieldConfig {
 }
 
 export interface Field {
+  textDirection?: TextDirection | null;
   id: number;
   entityId: number;
   fieldKey: string;
@@ -3458,6 +3504,7 @@ export interface Field {
 }
 
 export interface FieldInput {
+  textDirection?: TextDirection | null;
   fieldKey: string;
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;
@@ -3506,6 +3553,7 @@ export interface FieldsReorderInput {
 }
 
 export interface FieldUpdate {
+  textDirection?: TextDirection | null;
   fieldKey?: string;
   nameJson?: MultilingualText;
   descriptionJson?: MultilingualText;
@@ -3749,6 +3797,7 @@ export interface PageRefFieldConfig {
 }
 
 export interface PageField {
+  textDirection?: TextDirection | null;
   id: number;
   pageId: number;
   fieldKey: string;
@@ -3790,6 +3839,7 @@ export interface PageField {
 }
 
 export interface PageFieldInput {
+  textDirection?: TextDirection | null;
   fieldKey: string;
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;
@@ -3824,6 +3874,7 @@ export interface PageFieldInput {
 }
 
 export interface PageFieldUpdate {
+  textDirection?: TextDirection | null;
   fieldKey?: string;
   nameJson?: MultilingualText;
   descriptionJson?: MultilingualText;

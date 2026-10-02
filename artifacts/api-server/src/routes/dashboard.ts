@@ -896,7 +896,7 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
   // page still belongs to this entity (degrade to null otherwise, mirroring the
   // pivot-opt-in recheck above), then load ALL its active page-local fields —
   // admin-authoritative, like the entity field set.
-  let pageFields: { fieldKey: string; pivotEnabled: boolean | null; fieldType: string; nameJson: unknown; formulaConfigJson: typeof pageFieldsTable.$inferSelect.formulaConfigJson; relationConfigJson: typeof pageFieldsTable.$inferSelect.relationConfigJson }[] = [];
+  let pageFields: { fieldKey: string; pivotEnabled: boolean | null; fieldType: string; nameJson: unknown; textDirection: "ltr" | "rtl" | null; formulaConfigJson: typeof pageFieldsTable.$inferSelect.formulaConfigJson; relationConfigJson: typeof pageFieldsTable.$inferSelect.relationConfigJson }[] = [];
   let pageId: number | undefined;
   if (spec.pageId != null) {
     const pageEntityId = await resolvePageEntityId(spec.pageId);
@@ -906,6 +906,7 @@ async function computePivotWidget(spec: PivotSpec): Promise<PivotResultShape | n
       .select({
         fieldKey: pageFieldsTable.fieldKey,
         pivotEnabled: pageFieldsTable.pivotEnabled,
+        textDirection: pageFieldsTable.textDirection,
         fieldType: pageFieldsTable.fieldType,
         nameJson: pageFieldsTable.nameJson,
         formulaConfigJson: pageFieldsTable.formulaConfigJson,
@@ -1384,7 +1385,7 @@ async function computeExpandedChartSeries(
 async function computeTableData(
   t: TableSpec,
 ): Promise<{
-  columns: Array<{ fieldKey: string; label: string; fieldType: string }>;
+  columns: Array<{ fieldKey: string; label: string; fieldType: string; textDirection?: "ltr" | "rtl" | null }>;
   rows: Array<{ id: number; values: Record<string, unknown> }>;
 }> {
   const fields = await db
@@ -1393,6 +1394,7 @@ async function computeTableData(
       nameJson: entityFieldsTable.nameJson,
       fieldType: entityFieldsTable.fieldType,
       formulaConfigJson: entityFieldsTable.formulaConfigJson,
+      textDirection: entityFieldsTable.textDirection,
     })
     .from(entityFieldsTable)
     .where(and(eq(entityFieldsTable.entityId, t.entityId), eq(entityFieldsTable.isActive, true)));
@@ -1409,7 +1411,7 @@ async function computeTableData(
         return { fieldKey: STATUS_COLUMN_KEY, label: "Status", fieldType: "status" };
       }
       const f = byKey.get(k)!;
-      return { fieldKey: f.fieldKey, label: resolveML(f.nameJson) || f.fieldKey, fieldType: f.fieldType };
+      return { fieldKey: f.fieldKey, label: resolveML(f.nameJson) || f.fieldKey, fieldType: f.fieldType, textDirection: f.textDirection };
     });
 
   const conds = [eq(entityRecordsTable.entityId, t.entityId), isNull(entityRecordsTable.archivedAt)];
@@ -1423,6 +1425,7 @@ async function computeTableData(
     nameJson: unknown;
     fieldType: string;
     formulaConfigJson: typeof pageFieldsTable.$inferSelect.formulaConfigJson;
+    textDirection: "ltr" | "rtl" | null;
   }> = [];
   if (t.pageId != null && await resolvePageEntityId(t.pageId) === t.entityId) {
     pageFields = await db
@@ -1431,6 +1434,7 @@ async function computeTableData(
         nameJson: pageFieldsTable.nameJson,
         fieldType: pageFieldsTable.fieldType,
         formulaConfigJson: pageFieldsTable.formulaConfigJson,
+        textDirection: pageFieldsTable.textDirection,
       })
       .from(pageFieldsTable)
       .where(and(eq(pageFieldsTable.pageId, t.pageId), eq(pageFieldsTable.isActive, true)));
@@ -1460,13 +1464,13 @@ async function computeTableData(
     : allRecords;
 
   // Resolve status name/color only when the status column is requested.
-  const statusById = new Map<number, { name: string; color: string; displayTags: Array<{ id: number; nameJson: unknown; color: string }> }>();
+  const statusById = new Map<number, { name: string; nameJson: unknown; color: string; displayTags: Array<{ id: number; nameJson: unknown; color: string }> }>();
   if (wantsStatus) {
     const sts = await db
       .select({ id: entityStatusesTable.id, nameJson: entityStatusesTable.nameJson, color: entityStatusesTable.color, showTags: entityStatusesTable.showTags, primaryTagId: entityStatusesTable.primaryTagId })
       .from(entityStatusesTable)
       .where(eq(entityStatusesTable.entityId, t.entityId));
-    for (const s of await enrichStatusTags(sts)) statusById.set(s.id, { name: resolveML(s.nameJson) || "—", color: s.color, displayTags: s.displayTags });
+    for (const s of await enrichStatusTags(sts)) statusById.set(s.id, { name: resolveML(s.nameJson) || "—", nameJson: s.nameJson, color: s.color, displayTags: s.displayTags });
   }
 
   // Related columns: each surfaces one field of the single linked record through a
@@ -1480,12 +1484,13 @@ async function computeTableData(
     linkMap: Map<number, number>;
     relatedFieldKey: string;
     linkedValues: Map<number, Record<string, unknown>>;
+    textDirection: "ltr" | "rtl" | null;
   }> = [];
   for (const rc of t.relatedColumns ?? []) {
     const resolved = await resolveRelationField(t.entityId, rc.relationId, rc.relatedFieldKey);
     if ("error" in resolved) continue;
     const [relName] = await db
-      .select({ nameJson: entityFieldsTable.nameJson })
+      .select({ nameJson: entityFieldsTable.nameJson, textDirection: entityFieldsTable.textDirection })
       .from(entityFieldsTable)
       .where(
         and(
@@ -1522,13 +1527,14 @@ async function computeTableData(
       linkMap,
       relatedFieldKey: rc.relatedFieldKey,
       linkedValues,
+      textDirection: relName?.textDirection ?? null,
     });
   }
 
   // Page-local columns: values live in page_record_values for (pageId, recordId).
   // ADMIN-AUTHORITATIVE like the rest. Synthetic key avoids entity-key collisions.
   // The page-vs-entity binding is re-checked at compute time (degrade: skip cols).
-  const pageCols: Array<{ fieldKey: string; label: string; fieldType: string; pfKey: string }> = [];
+  const pageCols: Array<{ fieldKey: string; label: string; fieldType: string; pfKey: string; textDirection: "ltr" | "rtl" | null }> = [];
   const pageValuesByRecord = new Map<number, Record<string, unknown>>();
   if (t.pageId != null && (wantedPfKeys.length > 0 || needsFormulaSet) && pageFields.length > 0) {
       const pfByKey = new Map(pageFields.map((f) => [f.fieldKey, f]));
@@ -1540,6 +1546,7 @@ async function computeTableData(
           label: resolveML(pf.nameJson) || key,
           fieldType: pf.fieldType,
           pfKey: key,
+          textDirection: pf.textDirection,
         });
       }
       const pageValueIds = needsFormulaSet ? allRecords.map((record) => record.id) : baseIds;
@@ -1634,8 +1641,8 @@ async function computeTableData(
 
   const allColumns = [
     ...columns,
-    ...pageCols.map((pc) => ({ fieldKey: pc.fieldKey, label: pc.label, fieldType: pc.fieldType })),
-    ...relCols.map((rc) => ({ fieldKey: rc.fieldKey, label: rc.label, fieldType: rc.fieldType })),
+    ...pageCols.map((pc) => ({ fieldKey: pc.fieldKey, label: pc.label, fieldType: pc.fieldType, textDirection: pc.textDirection })),
+    ...relCols.map((rc) => ({ fieldKey: rc.fieldKey, label: rc.label, fieldType: rc.fieldType, textDirection: rc.textDirection })),
   ];
 
   const rows = records.map((r) => {
