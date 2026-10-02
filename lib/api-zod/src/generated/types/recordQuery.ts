@@ -23,6 +23,10 @@ export interface RecordQuery {
   customFilters?: CustomFilterPick[];
   filterConjunction?: RecordQueryFilterConjunction;
   statusIds?: number[];
+  /** Restrict to records without a status. AND-combined with all filters, including statusIds. */
+  statusIsNull?: boolean;
+  /** Bypass only entity statuses' hideByDefault soft preference. Never bypasses role-hidden rows, own-row scope, saved-view hard filters, explicit status exclusions, or the independent archive filter. */
+  showHiddenStatuses?: boolean;
   /** SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled "show hidden"). Hides rows whose field value is one of the listed values and/or is empty. Always AND-combined. */
   excludeFilters?: ExcludeFilter[];
   /** SOFT status exclusions (from the page default filter, unless the viewer toggled "show hidden"): hide rows whose statusId is in this list. AND-combined; never widens beyond the view's hard filter. */

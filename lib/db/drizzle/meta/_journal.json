@@ -155,6 +155,13 @@
       "when": 1790933122276,
       "tag": "0021_harsh_penance",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790939789271,
+      "tag": "0022_striped_malice",
+      "breakpoints": true
     }
   ]
 }

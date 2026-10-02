@@ -254,6 +254,7 @@ export * from './inboundMappingVersion';
 export * from './inboundMappingVersionState';
 export * from './inboundStepLog';
 export * from './inboundWebhookAccepted';
+export * from './kanbanConfig';
 export * from './linkedRecord';
 export * from './linkInput';
 export * from './listAiAgentActsAsCandidatesParams';

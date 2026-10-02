@@ -3636,6 +3636,8 @@ export interface Status {
   readonly displayTags: readonly StatusDisplayTagsItem[];
   isDefault: boolean;
   isFinal: boolean;
+  /** Soft display preference for tables and Kanban; independent of archival and role permissions. */
+  hideByDefault: boolean;
   isArchiveTrigger: boolean;
   archiveAfterDays: number;
   sortOrder: number;
@@ -3993,6 +3995,7 @@ export interface StatusInput {
   primaryTagId?: number | null;
   isDefault?: boolean;
   isFinal?: boolean;
+  hideByDefault?: boolean;
   isArchiveTrigger?: boolean;
   /** @minimum 0 */
   archiveAfterDays?: number;
@@ -4012,6 +4015,8 @@ export interface StatusUpdate {
   primaryTagId?: number | null;
   isDefault?: boolean;
   isFinal?: boolean;
+  /** Omitted value preserves the current preference. */
+  hideByDefault?: boolean;
   isArchiveTrigger?: boolean;
   /** @minimum 0 */
   archiveAfterDays?: number;
@@ -4658,6 +4663,8 @@ export interface RecordDelete {
 }
 
 export interface RecordArchive {
+  /** Optional mirror-page context (see RecordInput.pageId): applies the authorized mirror page's update-rights override, row scope and response field visibility when archiving or unarchiving through it. */
+  pageId?: number;
   /** @minimum 1 */
   expectedVersion?: number;
 }
@@ -4877,6 +4884,7 @@ export const ViewConfigViewType = {
   table: 'table',
   pivot: 'pivot',
   calendar: 'calendar',
+  kanban: 'kanban',
 } as const;
 
 /**
@@ -4954,6 +4962,20 @@ export interface CalendarConfig {
   defaultMode?: CalendarConfigDefaultMode;
 }
 
+/**
+ * Card presentation over the same permission-scoped records/query rows. Entity field keys are unprefixed; page-local keys use page:<fieldKey> and require a view targeted at that mirror page. __status__ denotes the record status. Configuration cannot grant field or record access.
+ */
+export interface KanbanConfig {
+  /**
+     * Card title field, or null for the renderer's default title.
+     * @minLength 1
+     */
+  titleField: string | null;
+  fields: string[];
+  showLabels: boolean;
+  hideEmptyFields: boolean;
+}
+
 export interface ViewConfig {
   filters?: ViewFilterCondition[];
   filterConjunction?: ViewConfigFilterConjunction;
@@ -4965,6 +4987,7 @@ export interface ViewConfig {
   pageSize?: ViewConfigPageSize;
   pivot?: PivotConfig;
   calendar?: CalendarConfig;
+  kanban?: KanbanConfig;
 }
 
 export type PivotQueryFilterConjunction = typeof PivotQueryFilterConjunction[keyof typeof PivotQueryFilterConjunction];
@@ -5078,6 +5101,10 @@ export interface RecordQuery {
   customFilters?: CustomFilterPick[];
   filterConjunction?: RecordQueryFilterConjunction;
   statusIds?: number[];
+  /** Restrict to records without a status. AND-combined with all filters, including statusIds. */
+  statusIsNull?: boolean;
+  /** Bypass only entity statuses' hideByDefault soft preference. Never bypasses role-hidden rows, own-row scope, saved-view hard filters, explicit status exclusions, or the independent archive filter. */
+  showHiddenStatuses?: boolean;
   /** SOFT per-field exclusions (from the page default filter, when the viewer has NOT toggled "show hidden"). Hides rows whose field value is one of the listed values and/or is empty. Always AND-combined. */
   excludeFilters?: ExcludeFilter[];
   /** SOFT status exclusions (from the page default filter, unless the viewer toggled "show hidden"): hide rows whose statusId is in this list. AND-combined; never widens beyond the view's hard filter. */

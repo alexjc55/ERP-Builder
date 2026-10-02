@@ -6107,6 +6107,7 @@ export const GetPageRelatedValuesBody = zod.object({
 
 export const getPageRelatedValuesResponseValuesItemMembersItemStatusShowTagsDefault = true;
 export const getPageRelatedValuesResponseValuesItemMembersItemStatusPrimaryTagIdDefault = null;
+export const getPageRelatedValuesResponseValuesItemMembersItemStatusHideByDefaultDefault = false;
 
 export const GetPageRelatedValuesResponse = zod.object({
   "columns": zod.array(zod.object({
@@ -6157,6 +6158,7 @@ export const GetPageRelatedValuesResponse = zod.object({
 })).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
+  "hideByDefault": zod.boolean().default(getPageRelatedValuesResponseValuesItemMembersItemStatusHideByDefaultDefault).describe('Soft display preference for tables and Kanban; independent of archival and role permissions.'),
   "isArchiveTrigger": zod.boolean(),
   "archiveAfterDays": zod.number(),
   "sortOrder": zod.number(),
@@ -6190,6 +6192,7 @@ export const GetPageRelatedCandidatesBody = zod.object({
 
 export const getPageRelatedCandidatesResponseCandidatesItemStatusShowTagsDefault = true;
 export const getPageRelatedCandidatesResponseCandidatesItemStatusPrimaryTagIdDefault = null;
+export const getPageRelatedCandidatesResponseCandidatesItemStatusHideByDefaultDefault = false;
 
 export const GetPageRelatedCandidatesResponse = zod.object({
   "candidates": zod.array(zod.object({
@@ -6217,6 +6220,7 @@ export const GetPageRelatedCandidatesResponse = zod.object({
 })).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
+  "hideByDefault": zod.boolean().default(getPageRelatedCandidatesResponseCandidatesItemStatusHideByDefaultDefault).describe('Soft display preference for tables and Kanban; independent of archival and role permissions.'),
   "isArchiveTrigger": zod.boolean(),
   "archiveAfterDays": zod.number(),
   "sortOrder": zod.number(),
@@ -6255,6 +6259,7 @@ export const SetPageRelatedLinkBody = zod.object({
 
 export const setPageRelatedLinkResponseMembersItemStatusShowTagsDefault = true;
 export const setPageRelatedLinkResponseMembersItemStatusPrimaryTagIdDefault = null;
+export const setPageRelatedLinkResponseMembersItemStatusHideByDefaultDefault = false;
 
 export const SetPageRelatedLinkResponse = zod.object({
   "linkedRecordId": zod.number().nullable().describe('The linked record id after the change (null if cleared).'),
@@ -6284,6 +6289,7 @@ export const SetPageRelatedLinkResponse = zod.object({
 })).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
+  "hideByDefault": zod.boolean().default(setPageRelatedLinkResponseMembersItemStatusHideByDefaultDefault).describe('Soft display preference for tables and Kanban; independent of archival and role permissions.'),
   "isArchiveTrigger": zod.boolean(),
   "archiveAfterDays": zod.number(),
   "sortOrder": zod.number(),
@@ -6429,6 +6435,7 @@ export const GetEntityRelatedValuesBody = zod.object({
 
 export const getEntityRelatedValuesResponseValuesItemMembersItemStatusShowTagsDefault = true;
 export const getEntityRelatedValuesResponseValuesItemMembersItemStatusPrimaryTagIdDefault = null;
+export const getEntityRelatedValuesResponseValuesItemMembersItemStatusHideByDefaultDefault = false;
 
 export const GetEntityRelatedValuesResponse = zod.object({
   "columns": zod.array(zod.object({
@@ -6479,6 +6486,7 @@ export const GetEntityRelatedValuesResponse = zod.object({
 })).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
+  "hideByDefault": zod.boolean().default(getEntityRelatedValuesResponseValuesItemMembersItemStatusHideByDefaultDefault).describe('Soft display preference for tables and Kanban; independent of archival and role permissions.'),
   "isArchiveTrigger": zod.boolean(),
   "archiveAfterDays": zod.number(),
   "sortOrder": zod.number(),
@@ -6512,6 +6520,7 @@ export const GetEntityRelatedCandidatesBody = zod.object({
 
 export const getEntityRelatedCandidatesResponseCandidatesItemStatusShowTagsDefault = true;
 export const getEntityRelatedCandidatesResponseCandidatesItemStatusPrimaryTagIdDefault = null;
+export const getEntityRelatedCandidatesResponseCandidatesItemStatusHideByDefaultDefault = false;
 
 export const GetEntityRelatedCandidatesResponse = zod.object({
   "candidates": zod.array(zod.object({
@@ -6539,6 +6548,7 @@ export const GetEntityRelatedCandidatesResponse = zod.object({
 })).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
+  "hideByDefault": zod.boolean().default(getEntityRelatedCandidatesResponseCandidatesItemStatusHideByDefaultDefault).describe('Soft display preference for tables and Kanban; independent of archival and role permissions.'),
   "isArchiveTrigger": zod.boolean(),
   "archiveAfterDays": zod.number(),
   "sortOrder": zod.number(),
@@ -6577,6 +6587,7 @@ export const SetEntityRelatedLinkBody = zod.object({
 
 export const setEntityRelatedLinkResponseMembersItemStatusShowTagsDefault = true;
 export const setEntityRelatedLinkResponseMembersItemStatusPrimaryTagIdDefault = null;
+export const setEntityRelatedLinkResponseMembersItemStatusHideByDefaultDefault = false;
 
 export const SetEntityRelatedLinkResponse = zod.object({
   "linkedRecordId": zod.number().nullable().describe('The linked record id after the change (null if cleared).'),
@@ -6606,6 +6617,7 @@ export const SetEntityRelatedLinkResponse = zod.object({
 })).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
+  "hideByDefault": zod.boolean().default(setEntityRelatedLinkResponseMembersItemStatusHideByDefaultDefault).describe('Soft display preference for tables and Kanban; independent of archival and role permissions.'),
   "isArchiveTrigger": zod.boolean(),
   "archiveAfterDays": zod.number(),
   "sortOrder": zod.number(),
@@ -6735,6 +6747,7 @@ export const ListEntityStatusesParams = zod.object({
 
 export const listEntityStatusesResponseShowTagsDefault = true;
 export const listEntityStatusesResponsePrimaryTagIdDefault = null;
+export const listEntityStatusesResponseHideByDefaultDefault = false;
 
 export const ListEntityStatusesResponseItem = zod.object({
   "id": zod.number(),
@@ -6760,6 +6773,7 @@ export const ListEntityStatusesResponseItem = zod.object({
 })).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
+  "hideByDefault": zod.boolean().default(listEntityStatusesResponseHideByDefaultDefault).describe('Soft display preference for tables and Kanban; independent of archival and role permissions.'),
   "isArchiveTrigger": zod.boolean(),
   "archiveAfterDays": zod.number(),
   "sortOrder": zod.number(),
@@ -6782,6 +6796,7 @@ export const createEntityStatusBodyShowTagsDefault = true;
 export const createEntityStatusBodyPrimaryTagIdDefault = null;
 export const createEntityStatusBodyIsDefaultDefault = false;
 export const createEntityStatusBodyIsFinalDefault = false;
+export const createEntityStatusBodyHideByDefaultDefault = false;
 export const createEntityStatusBodyIsArchiveTriggerDefault = false;
 export const createEntityStatusBodyArchiveAfterDaysDefault = 0;
 export const createEntityStatusBodyArchiveAfterDaysMin = 0;
@@ -6801,6 +6816,7 @@ export const CreateEntityStatusBody = zod.object({
   "primaryTagId": zod.number().nullish().default(createEntityStatusBodyPrimaryTagIdDefault).describe('Must be one of the assigned tagIds when non-null.'),
   "isDefault": zod.boolean().default(createEntityStatusBodyIsDefaultDefault),
   "isFinal": zod.boolean().default(createEntityStatusBodyIsFinalDefault),
+  "hideByDefault": zod.boolean().default(createEntityStatusBodyHideByDefaultDefault),
   "isArchiveTrigger": zod.boolean().default(createEntityStatusBodyIsArchiveTriggerDefault),
   "archiveAfterDays": zod.number().min(createEntityStatusBodyArchiveAfterDaysMin).default(createEntityStatusBodyArchiveAfterDaysDefault),
   "sortOrder": zod.number().optional(),
@@ -6817,6 +6833,7 @@ export const GetStatusParams = zod.object({
 
 export const getStatusResponseShowTagsDefault = true;
 export const getStatusResponsePrimaryTagIdDefault = null;
+export const getStatusResponseHideByDefaultDefault = false;
 
 export const GetStatusResponse = zod.object({
   "id": zod.number(),
@@ -6842,6 +6859,7 @@ export const GetStatusResponse = zod.object({
 })).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
+  "hideByDefault": zod.boolean().default(getStatusResponseHideByDefaultDefault).describe('Soft display preference for tables and Kanban; independent of archival and role permissions.'),
   "isArchiveTrigger": zod.boolean(),
   "archiveAfterDays": zod.number(),
   "sortOrder": zod.number(),
@@ -6875,6 +6893,7 @@ export const UpdateStatusBody = zod.object({
   "primaryTagId": zod.number().nullish().describe('Must be assigned; null clears the preference. Removing its assignment also clears it.'),
   "isDefault": zod.boolean().optional(),
   "isFinal": zod.boolean().optional(),
+  "hideByDefault": zod.boolean().optional().describe('Omitted value preserves the current preference.'),
   "isArchiveTrigger": zod.boolean().optional(),
   "archiveAfterDays": zod.number().min(updateStatusBodyArchiveAfterDaysMin).optional(),
   "sortOrder": zod.number().optional(),
@@ -6883,6 +6902,7 @@ export const UpdateStatusBody = zod.object({
 
 export const updateStatusResponseShowTagsDefault = true;
 export const updateStatusResponsePrimaryTagIdDefault = null;
+export const updateStatusResponseHideByDefaultDefault = false;
 
 export const UpdateStatusResponse = zod.object({
   "id": zod.number(),
@@ -6908,6 +6928,7 @@ export const UpdateStatusResponse = zod.object({
 })).describe('Tags shown on this status; assignments in tagIds remain unchanged.'),
   "isDefault": zod.boolean(),
   "isFinal": zod.boolean(),
+  "hideByDefault": zod.boolean().default(updateStatusResponseHideByDefaultDefault).describe('Soft display preference for tables and Kanban; independent of archival and role permissions.'),
   "isArchiveTrigger": zod.boolean(),
   "archiveAfterDays": zod.number(),
   "sortOrder": zod.number(),
@@ -8591,6 +8612,7 @@ export const ArchiveRecordParams = zod.object({
 
 
 export const ArchiveRecordBody = zod.object({
+  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the authorized mirror page\'s update-rights override, row scope and response field visibility when archiving or unarchiving through it.'),
   "expectedVersion": zod.number().min(1).optional()
 })
 
@@ -8618,6 +8640,7 @@ export const UnarchiveRecordParams = zod.object({
 
 
 export const UnarchiveRecordBody = zod.object({
+  "pageId": zod.number().optional().describe('Optional mirror-page context (see RecordInput.pageId): applies the authorized mirror page\'s update-rights override, row scope and response field visibility when archiving or unarchiving through it.'),
   "expectedVersion": zod.number().min(1).optional()
 })
 
@@ -9097,6 +9120,8 @@ export const QueryEntityRecordsParams = zod.object({
 })
 
 export const queryEntityRecordsBodyFilterConjunctionDefault = `and`;
+export const queryEntityRecordsBodyStatusIsNullDefault = false;
+export const queryEntityRecordsBodyShowHiddenStatusesDefault = false;
 export const queryEntityRecordsBodyExcludeFiltersItemExcludeEmptyDefault = false;
 export const queryEntityRecordsBodyExcludePageLocalFiltersItemExcludeEmptyDefault = false;
 export const queryEntityRecordsBodySortsItemDirectionDefault = `asc`;
@@ -9130,6 +9155,8 @@ export const QueryEntityRecordsBody = zod.object({
 }).describe('A picked custom filter in a records\/pivot query: references a custom_filters row by id and supplies any runtime input values. The server resolves the authoritative definition from the entity\'s rows; the predicate may reference fields hidden for the viewer, but returned rows still obey the viewer\'s row\/field boundary.')).optional().describe('Picked per-entity CUSTOM filters (see CustomFilterPick). Each is resolved server-side to an admin-authored two-level И\/ИЛИ predicate over ANY field (incl. formula) and AND-combined with the rest of the query. The predicate may reference fields hidden for the viewer, but returned rows still obey the viewer\'s row\/field boundary.'),
   "filterConjunction": zod.enum(['and', 'or']).default(queryEntityRecordsBodyFilterConjunctionDefault),
   "statusIds": zod.array(zod.number()).optional(),
+  "statusIsNull": zod.boolean().default(queryEntityRecordsBodyStatusIsNullDefault).describe('Restrict to records without a status. AND-combined with all filters, including statusIds.'),
+  "showHiddenStatuses": zod.boolean().default(queryEntityRecordsBodyShowHiddenStatusesDefault).describe('Bypass only entity statuses\' hideByDefault soft preference. Never bypasses role-hidden rows, own-row scope, saved-view hard filters, explicit status exclusions, or the independent archive filter.'),
   "excludeFilters": zod.array(zod.object({
   "field": zod.string(),
   "values": zod.array(zod.string()).optional(),
@@ -9737,6 +9764,8 @@ export const listEntityViewsResponseConfigJsonFilterConjunctionDefault = `and`;
 export const listEntityViewsResponseConfigJsonSortsItemDirectionDefault = `asc`;
 export const listEntityViewsResponseConfigJsonViewTypeDefault = `table`;
 
+
+
 export const ListEntityViewsResponseItem = zod.object({
   "id": zod.number(),
   "entityId": zod.number(),
@@ -9761,7 +9790,7 @@ export const ListEntityViewsResponseItem = zod.object({
 })).optional(),
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
-  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(listEntityViewsResponseConfigJsonViewTypeDefault),
+  "viewType": zod.enum(['table', 'pivot', 'calendar', 'kanban']).default(listEntityViewsResponseConfigJsonViewTypeDefault),
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
@@ -9818,7 +9847,13 @@ export const ListEntityViewsResponseItem = zod.object({
   "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
   "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
-}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
+  "kanban": zod.object({
+  "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
+  "fields": zod.array(zod.string().min(1)),
+  "showLabels": zod.boolean(),
+  "hideEmptyFields": zod.boolean()
+}).optional().describe('Card presentation over the same permission-scoped records\/query rows. Entity field keys are unprefixed; page-local keys use page:<fieldKey> and require a view targeted at that mirror page. __status__ denotes the record status. Configuration cannot grant field or record access.')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean(),
@@ -9841,6 +9876,7 @@ export const createEntityViewBodyConfigJsonFiltersItemSourceDefault = `entity`;
 export const createEntityViewBodyConfigJsonFilterConjunctionDefault = `and`;
 export const createEntityViewBodyConfigJsonSortsItemDirectionDefault = `asc`;
 export const createEntityViewBodyConfigJsonViewTypeDefault = `table`;
+
 export const createEntityViewBodyIsDefaultDefault = false;
 export const createEntityViewBodyIsActiveDefault = true;
 
@@ -9866,7 +9902,7 @@ export const CreateEntityViewBody = zod.object({
 })).optional(),
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
-  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(createEntityViewBodyConfigJsonViewTypeDefault),
+  "viewType": zod.enum(['table', 'pivot', 'calendar', 'kanban']).default(createEntityViewBodyConfigJsonViewTypeDefault),
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
@@ -9923,7 +9959,13 @@ export const CreateEntityViewBody = zod.object({
   "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
   "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
-}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
+  "kanban": zod.object({
+  "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
+  "fields": zod.array(zod.string().min(1)),
+  "showLabels": zod.boolean(),
+  "hideEmptyFields": zod.boolean()
+}).optional().describe('Card presentation over the same permission-scoped records\/query rows. Entity field keys are unprefixed; page-local keys use page:<fieldKey> and require a view targeted at that mirror page. __status__ denotes the record status. Configuration cannot grant field or record access.')
 }).optional(),
   "visibleRoleIds": zod.array(zod.number()).nullish().describe('Role ids that may select this view; null\/empty = all roles with record access.'),
   "isDefault": zod.boolean().default(createEntityViewBodyIsDefaultDefault),
@@ -9943,6 +9985,8 @@ export const listMainEntityViewsResponseConfigJsonFiltersItemSourceDefault = `en
 export const listMainEntityViewsResponseConfigJsonFilterConjunctionDefault = `and`;
 export const listMainEntityViewsResponseConfigJsonSortsItemDirectionDefault = `asc`;
 export const listMainEntityViewsResponseConfigJsonViewTypeDefault = `table`;
+
+
 
 export const ListMainEntityViewsResponseItem = zod.object({
   "id": zod.number(),
@@ -9968,7 +10012,7 @@ export const ListMainEntityViewsResponseItem = zod.object({
 })).optional(),
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
-  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(listMainEntityViewsResponseConfigJsonViewTypeDefault),
+  "viewType": zod.enum(['table', 'pivot', 'calendar', 'kanban']).default(listMainEntityViewsResponseConfigJsonViewTypeDefault),
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
@@ -10025,7 +10069,13 @@ export const ListMainEntityViewsResponseItem = zod.object({
   "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
   "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
-}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
+  "kanban": zod.object({
+  "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
+  "fields": zod.array(zod.string().min(1)),
+  "showLabels": zod.boolean(),
+  "hideEmptyFields": zod.boolean()
+}).optional().describe('Card presentation over the same permission-scoped records\/query rows. Entity field keys are unprefixed; page-local keys use page:<fieldKey> and require a view targeted at that mirror page. __status__ denotes the record status. Configuration cannot grant field or record access.')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean(),
@@ -10048,6 +10098,8 @@ export const listPageViewsResponseConfigJsonFiltersItemSourceDefault = `entity`;
 export const listPageViewsResponseConfigJsonFilterConjunctionDefault = `and`;
 export const listPageViewsResponseConfigJsonSortsItemDirectionDefault = `asc`;
 export const listPageViewsResponseConfigJsonViewTypeDefault = `table`;
+
+
 
 export const ListPageViewsResponseItem = zod.object({
   "id": zod.number(),
@@ -10073,7 +10125,7 @@ export const ListPageViewsResponseItem = zod.object({
 })).optional(),
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
-  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(listPageViewsResponseConfigJsonViewTypeDefault),
+  "viewType": zod.enum(['table', 'pivot', 'calendar', 'kanban']).default(listPageViewsResponseConfigJsonViewTypeDefault),
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
@@ -10130,7 +10182,13 @@ export const ListPageViewsResponseItem = zod.object({
   "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
   "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
-}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
+  "kanban": zod.object({
+  "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
+  "fields": zod.array(zod.string().min(1)),
+  "showLabels": zod.boolean(),
+  "hideEmptyFields": zod.boolean()
+}).optional().describe('Card presentation over the same permission-scoped records\/query rows. Entity field keys are unprefixed; page-local keys use page:<fieldKey> and require a view targeted at that mirror page. __status__ denotes the record status. Configuration cannot grant field or record access.')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean(),
@@ -10153,6 +10211,8 @@ export const getViewResponseConfigJsonFiltersItemSourceDefault = `entity`;
 export const getViewResponseConfigJsonFilterConjunctionDefault = `and`;
 export const getViewResponseConfigJsonSortsItemDirectionDefault = `asc`;
 export const getViewResponseConfigJsonViewTypeDefault = `table`;
+
+
 
 export const GetViewResponse = zod.object({
   "id": zod.number(),
@@ -10178,7 +10238,7 @@ export const GetViewResponse = zod.object({
 })).optional(),
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
-  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(getViewResponseConfigJsonViewTypeDefault),
+  "viewType": zod.enum(['table', 'pivot', 'calendar', 'kanban']).default(getViewResponseConfigJsonViewTypeDefault),
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
@@ -10235,7 +10295,13 @@ export const GetViewResponse = zod.object({
   "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
   "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
-}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
+  "kanban": zod.object({
+  "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
+  "fields": zod.array(zod.string().min(1)),
+  "showLabels": zod.boolean(),
+  "hideEmptyFields": zod.boolean()
+}).optional().describe('Card presentation over the same permission-scoped records\/query rows. Entity field keys are unprefixed; page-local keys use page:<fieldKey> and require a view targeted at that mirror page. __status__ denotes the record status. Configuration cannot grant field or record access.')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean(),
@@ -10257,6 +10323,8 @@ export const updateViewBodyConfigJsonFiltersItemSourceDefault = `entity`;
 export const updateViewBodyConfigJsonFilterConjunctionDefault = `and`;
 export const updateViewBodyConfigJsonSortsItemDirectionDefault = `asc`;
 export const updateViewBodyConfigJsonViewTypeDefault = `table`;
+
+
 
 export const UpdateViewBody = zod.object({
   "viewKey": zod.string().optional(),
@@ -10280,7 +10348,7 @@ export const UpdateViewBody = zod.object({
 })).optional(),
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
-  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(updateViewBodyConfigJsonViewTypeDefault),
+  "viewType": zod.enum(['table', 'pivot', 'calendar', 'kanban']).default(updateViewBodyConfigJsonViewTypeDefault),
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
@@ -10337,7 +10405,13 @@ export const UpdateViewBody = zod.object({
   "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
   "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
-}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
+  "kanban": zod.object({
+  "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
+  "fields": zod.array(zod.string().min(1)),
+  "showLabels": zod.boolean(),
+  "hideEmptyFields": zod.boolean()
+}).optional().describe('Card presentation over the same permission-scoped records\/query rows. Entity field keys are unprefixed; page-local keys use page:<fieldKey> and require a view targeted at that mirror page. __status__ denotes the record status. Configuration cannot grant field or record access.')
 }).optional(),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean().optional(),
@@ -10349,6 +10423,8 @@ export const updateViewResponseConfigJsonFiltersItemSourceDefault = `entity`;
 export const updateViewResponseConfigJsonFilterConjunctionDefault = `and`;
 export const updateViewResponseConfigJsonSortsItemDirectionDefault = `asc`;
 export const updateViewResponseConfigJsonViewTypeDefault = `table`;
+
+
 
 export const UpdateViewResponse = zod.object({
   "id": zod.number(),
@@ -10374,7 +10450,7 @@ export const UpdateViewResponse = zod.object({
 })).optional(),
   "search": zod.string().optional(),
   "visibleFields": zod.array(zod.string()).optional(),
-  "viewType": zod.enum(['table', 'pivot', 'calendar']).default(updateViewResponseConfigJsonViewTypeDefault),
+  "viewType": zod.enum(['table', 'pivot', 'calendar', 'kanban']).default(updateViewResponseConfigJsonViewTypeDefault),
   "pageSize": zod.union([zod.literal(50),zod.literal(100),zod.literal(200),zod.literal(300),zod.literal(500)]).optional().describe('Rows per page for this view\'s records table. Absent = the entity\'s default (defaultPageSize) or 50.'),
   "pivot": zod.object({
   "rows": zod.object({
@@ -10431,7 +10507,13 @@ export const UpdateViewResponse = zod.object({
   "colorBy": zod.union([zod.literal('status'),zod.literal('field'),zod.literal(null)]).nullish().describe('Color chips by record status, by a field value, or not at all.'),
   "colorFieldKey": zod.string().nullish().describe('Field key used for coloring when colorBy=field (a select\/status-like field).'),
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
-}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.')
+}).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
+  "kanban": zod.object({
+  "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
+  "fields": zod.array(zod.string().min(1)),
+  "showLabels": zod.boolean(),
+  "hideEmptyFields": zod.boolean()
+}).optional().describe('Card presentation over the same permission-scoped records\/query rows. Entity field keys are unprefixed; page-local keys use page:<fieldKey> and require a view targeted at that mirror page. __status__ denotes the record status. Configuration cannot grant field or record access.')
 }),
   "visibleRoleIds": zod.array(zod.number()).nullish(),
   "isDefault": zod.boolean(),

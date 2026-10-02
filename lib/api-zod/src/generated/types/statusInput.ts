@@ -18,6 +18,7 @@ export interface StatusInput {
   primaryTagId?: number | null;
   isDefault?: boolean;
   isFinal?: boolean;
+  hideByDefault?: boolean;
   isArchiveTrigger?: boolean;
   /** @minimum 0 */
   archiveAfterDays?: number;

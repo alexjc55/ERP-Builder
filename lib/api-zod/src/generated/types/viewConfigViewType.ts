@@ -13,4 +13,5 @@ export const ViewConfigViewType = {
   table: 'table',
   pivot: 'pivot',
   calendar: 'calendar',
+  kanban: 'kanban',
 } as const;

@@ -1,0 +1,1 @@
+ALTER TABLE "entity_statuses" ADD COLUMN "hide_by_default" boolean DEFAULT false NOT NULL;

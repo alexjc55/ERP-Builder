@@ -1675,6 +1675,17 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
 
   const clauses: SQL[] = [eq(entityRecordsTable.entityId, entityId)];
   if (built.where) clauses.push(built.where);
+  // Presentation-only hiding is separate from both archive and hard RBAC.
+  // A correlated NOT EXISTS keeps the null lane visible and uses live metadata.
+  // The override removes only this clause; all hard boundaries below remain.
+  if (!body.data.showHiddenStatuses) {
+    clauses.push(sql`NOT EXISTS (
+      SELECT 1 FROM ${entityStatusesTable}
+      WHERE ${entityStatusesTable.id} = ${entityRecordsTable.statusId}
+        AND ${entityStatusesTable.entityId} = ${entityRecordsTable.entityId}
+        AND ${entityStatusesTable.hideByDefault} = true
+    )`);
+  }
   const archWhere = archivedWhere(archived);
   if (archWhere) clauses.push(archWhere);
   if (scope === "own") clauses.push(await ownScopeWhere(entityId, scopeFieldKeys, req.user!.userId, fields));
@@ -5120,6 +5131,7 @@ async function setArchived(
   recordId: number,
   archived: boolean,
   expectedVersion?: number,
+  pageId?: number,
 ): Promise<void> {
   const [existing] = await db
     .select()
@@ -5130,12 +5142,17 @@ async function setArchived(
     res.status(404).json({ error: "Record not found" });
     return;
   }
-  if (!(await assertRecord(req, res, existing.entityId, "update"))) return;
+  if (!(await assertRecord(req, res, existing.entityId, "update", pageId))) return;
 
   const perms = await getPermissions(req);
   const fields = await loadActiveFields(existing.entityId);
-  const { scope, scopeFieldKeys } = effectiveScope(perms, existing.entityId);
+  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, existing.entityId, pageId);
   if (scope === "own" && !(await isRecordOwned(existing.entityId, existing, scopeFieldKeys, req.user!.userId, fields))) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, existing.entityId);
+  if (existing.statusId != null && hiddenRowStatusIds.includes(existing.statusId)) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -5151,7 +5168,7 @@ async function setArchived(
     return;
   }
 
-  const { hidden } = await fieldAccessContext(req, existing.entityId, fields);
+  const { hidden } = await fieldAccessContext(req, existing.entityId, fields, pageId);
   res.json(presentRecord(record, hidden, fields));
 }
 
@@ -5225,7 +5242,7 @@ router.post("/records/:id/archive", requireAuth, async (req, res): Promise<void>
     res.status(400).json({ error: body.error.message });
     return;
   }
-  await setArchived(req, res, params.data.id, true, body.data.expectedVersion);
+  await setArchived(req, res, params.data.id, true, body.data.expectedVersion, body.data.pageId);
 });
 
 router.post("/records/:id/unarchive", requireAuth, async (req, res): Promise<void> => {
@@ -5239,7 +5256,7 @@ router.post("/records/:id/unarchive", requireAuth, async (req, res): Promise<voi
     res.status(400).json({ error: body.error.message });
     return;
   }
-  await setArchived(req, res, params.data.id, false, body.data.expectedVersion);
+  await setArchived(req, res, params.data.id, false, body.data.expectedVersion, body.data.pageId);
 });
 
 class BulkFieldUpdateError extends Error {

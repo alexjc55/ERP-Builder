@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CalendarConfig } from './calendarConfig';
+import type { KanbanConfig } from './kanbanConfig';
 import type { PivotConfig } from './pivotConfig';
 import type { SortSpec } from './sortSpec';
 import type { ViewConfigFilterConjunction } from './viewConfigFilterConjunction';
@@ -24,4 +25,5 @@ export interface ViewConfig {
   pageSize?: ViewConfigPageSize;
   pivot?: PivotConfig;
   calendar?: CalendarConfig;
+  kanban?: KanbanConfig;
 }

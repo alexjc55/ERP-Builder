@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Dialog,
@@ -86,6 +87,7 @@ export default function EntityStatusesPage() {
   const [archiveAfterDays, setArchiveAfterDays] = useState(0);
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
+  const [hideByDefault, setHideByDefault] = useState(false);
   const [tagIds, setTagIds] = useState<number[]>([]);
   const [showTags, setShowTags] = useState(true);
   const [primaryTagId, setPrimaryTagId] = useState<number | null>(null);
@@ -188,6 +190,7 @@ export default function EntityStatusesPage() {
     setArchiveAfterDays(0);
     setSortOrder(statuses.length + 1);
     setIsActive(true);
+    setHideByDefault(false);
     setTagIds([]);
     setShowTags(true);
     setPrimaryTagId(null);
@@ -206,6 +209,7 @@ export default function EntityStatusesPage() {
     setArchiveAfterDays(status.archiveAfterDays);
     setSortOrder(status.sortOrder);
     setIsActive(status.isActive);
+    setHideByDefault(status.hideByDefault ?? false);
     setTagIds(status.tagIds);
     setShowTags(status.showTags ?? true);
     setPrimaryTagId(status.primaryTagId ?? null);
@@ -229,6 +233,7 @@ export default function EntityStatusesPage() {
       archiveAfterDays: isArchiveTrigger ? Math.max(0, archiveAfterDays) : 0,
       sortOrder,
       isActive,
+      hideByDefault,
       tagIds: [...new Set(tagIds)],
       showTags,
       primaryTagId: primaryTagId != null && tagIds.includes(primaryTagId) ? primaryTagId : null,
@@ -546,6 +551,15 @@ export default function EntityStatusesPage() {
             <p className="text-xs text-slate-400">
               {t("statuses.defaultHint", "«По умолчанию» назначается новым записям. У сущности может быть только один статус по умолчанию.")}
             </p>
+            <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <Checkbox id="status-hide-by-default" checked={hideByDefault} onCheckedChange={(checked) => setHideByDefault(checked === true)} />
+                <Label htmlFor="status-hide-by-default">{t("statuses.hideByDefault", "Скрывать по умолчанию")}</Label>
+              </div>
+              <p className="text-xs text-slate-500">
+                {t("statuses.hideByDefaultHint", "Скрывает колонку этого статуса в канбане и записи с этим статусом в таблице по умолчанию. Пользователь может включить их отображение. Это не архивирование и не ограничение доступа.")}
+              </p>
+            </div>
             <div className="rounded-md border border-slate-200 bg-slate-50/50 p-3 space-y-3">
               <div className="flex items-center gap-2">
                 <Switch checked={isArchiveTrigger} onCheckedChange={setIsArchiveTrigger} id="status-archive-trigger" />

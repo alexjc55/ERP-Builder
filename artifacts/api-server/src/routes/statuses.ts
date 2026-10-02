@@ -278,6 +278,7 @@ router.put("/statuses/:id", requireAuth, requireAdmin("entities"), async (req, r
   if (body.showTags !== undefined) updateData.showTags = body.showTags;
   if (body.isDefault != null) updateData.isDefault = body.isDefault;
   if (body.isFinal != null) updateData.isFinal = body.isFinal;
+  if (body.hideByDefault !== undefined) updateData.hideByDefault = body.hideByDefault;
   if (body.isArchiveTrigger != null) updateData.isArchiveTrigger = body.isArchiveTrigger;
   if (body.archiveAfterDays != null) {
     if (!Number.isInteger(body.archiveAfterDays) || body.archiveAfterDays < 0) {

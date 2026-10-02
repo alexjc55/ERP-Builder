@@ -1,6 +1,6 @@
 ---
 name: Kanban requirements
-description: User requirements for a future reusable Kanban entity view, not yet an implementation commitment.
+description: Product constraints for the reusable CRM-first Kanban entity view.
 ---
 
 **Rule:** The first intended use is the future CRM section, but Kanban must be universal and reusable for any existing or future section.
@@ -13,6 +13,18 @@ description: User requirements for a future reusable Kanban entity view, not yet
 
 **Rule:** More dynamic card configuration and behavior can be worked out once an initial Kanban exists.
 
-**Why:** The user explicitly supplied these requirements while discussing the proposal, not as criticism or an instruction to start implementation.
+**Why:** The user supplied these requirements and then authorized implementation of the agreed first version.
 
 **How to apply:** Carry these constraints into subsequent design and implementation. Do not specialize the view for CRM or conflate hidden columns with archived records. Discuss further card behavior after a working initial version exists.
+
+**Rule:** Pagination must bound the work per column without imposing a total-card cap. Status moves reuse the existing workflow/CAS update path; late results from an earlier query must not restore cards after filters change.
+
+**Why:** A hard cap would leave older records inaccessible, while delayed optimistic rollback can otherwise put records into a view whose filters they no longer match.
+
+**How to apply:** Keep all pages reachable, use query-generation guards for reads and mutation completions, and preserve pending overlays during same-query live refresh.
+
+**Rule:** A drag gesture owns the exact event handlers registered at its start; ordinary layout rerenders must not cancel it.
+
+**Why:** Horizontal autoscrolling caused a rerender and callback-identity change that triggered effect cleanup, terminating the drag before drop.
+
+**How to apply:** Clean up the captured gesture on cancellation, query-scope change or unmount, not on changing callback identity. Retain real-pointer horizontal-autoscroll regression coverage.

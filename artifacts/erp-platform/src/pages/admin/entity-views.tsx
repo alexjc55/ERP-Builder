@@ -44,6 +44,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FormulaEditor, type FormulaFieldRef } from "@/components/FormulaEditor";
+import { KanbanConfigEditor, newKanbanConfig, type KanbanEditorConfig } from "@/components/KanbanConfigEditor";
 import {
   PivotMeasuresEditor,
   type DraftMeasure,
@@ -333,7 +334,8 @@ export default function EntityViewsPage() {
   const [filters, setFilters] = useState<DraftFilter[]>([]);
   const [sorts, setSorts] = useState<DraftSort[]>([]);
   // Pivot view editor state.
-  const [viewType, setViewType] = useState<"table" | "pivot" | "calendar">("table");
+  const [viewType, setViewType] = useState<"table" | "pivot" | "calendar" | "kanban">("table");
+  const [kanbanConfig, setKanbanConfig] = useState<KanbanEditorConfig>(newKanbanConfig);
   // Calendar view editor state.
   const [calendarConfig, setCalendarConfig] = useState<CalendarConfig>({ dateFieldKey: "" });
   const [pivotRows, setPivotRows] = useState<DraftDim>({ source: "status", fieldKey: "", datePeriod: null });
@@ -459,6 +461,7 @@ export default function EntityViewsPage() {
     setFilters([]);
     setSorts([]);
     setViewType("table");
+    setKanbanConfig(newKanbanConfig());
     setPivotRows({ source: pivotDimFields[0] ? "entity" : "status", fieldKey: pivotDimFields[0]?.fieldKey ?? "", datePeriod: null });
     setPivotColsOn(false);
     setPivotCols({ source: "status", fieldKey: "", datePeriod: null });
@@ -496,7 +499,13 @@ export default function EntityViewsPage() {
     setViewPageSize(PAGE_SIZE_CHOICES.includes(cfg.pageSize ?? 0) ? (cfg.pageSize as number) : 0);
     const isPivot = cfg.viewType === "pivot" && !!cfg.pivot;
     const isCalendar = cfg.viewType === "calendar";
-    setViewType(isCalendar ? "calendar" : isPivot ? "pivot" : "table");
+    setViewType(cfg.viewType === "kanban" ? "kanban" : isCalendar ? "calendar" : isPivot ? "pivot" : "table");
+    setKanbanConfig({
+      titleField: cfg.kanban?.titleField ?? null,
+      fields: [...(cfg.kanban?.fields ?? [])],
+      showLabels: cfg.kanban?.showLabels ?? true,
+      hideEmptyFields: cfg.kanban?.hideEmptyFields ?? true,
+    });
     setCalendarConfig(
       isCalendar && cfg.calendar
         ? cfg.calendar
@@ -660,6 +669,9 @@ export default function EntityViewsPage() {
       if (cleaned.length > 0) base.visibleFields = cleaned;
       // 0 = inherit (entity default / 50) — not written to config.
       if (PAGE_SIZE_CHOICES.includes(viewPageSize) && viewPageSize !== 0) base.pageSize = viewPageSize as 50 | 100 | 200 | 300 | 500;
+    }
+    if (viewType === "kanban") {
+      return { ...base, viewType: "kanban", kanban: { ...kanbanConfig, fields: [...kanbanConfig.fields] } };
     }
     if (viewType === "calendar") {
       const cal: CalendarConfig = {
@@ -981,6 +993,11 @@ export default function EntityViewsPage() {
                     setTargetPageId(nextId);
                     if (nextId !== targetPageId) {
                       setFilters(prev => prev.filter(f => f.source !== "page"));
+                      setKanbanConfig(prev => ({
+                        ...prev,
+                        titleField: prev.titleField?.startsWith("page:") ? null : prev.titleField,
+                        fields: prev.fields.filter(key => !key.startsWith("page:")),
+                      }));
                     }
                   }}
                 >
@@ -1002,12 +1019,13 @@ export default function EntityViewsPage() {
 
             <div className="space-y-1.5">
               <Label>{t("pivot.viewMode", "Тип отображения")}</Label>
-              <div className="inline-flex items-center rounded-md border border-slate-200 p-0.5">
+              <div className="inline-flex flex-wrap items-center rounded-md border border-slate-200 p-0.5">
                 {(([
                   ["table", t("pivot.modeTable", "Таблица")],
                   ...(entity?.pivotEnabled ? [["pivot", t("pivot.modePivot", "Сводная")]] : []),
                   ["calendar", t("calendar.modeCalendar", "Календарь")],
-                ]) as ["table" | "pivot" | "calendar", string][]).map(([value, label]) => (
+                  ["kanban", t("kanban.modeKanban", "Канбан")],
+                ]) as ["table" | "pivot" | "calendar" | "kanban", string][]).map(([value, label]) => (
                   <button
                     key={value}
                     type="button"
@@ -1123,6 +1141,15 @@ export default function EntityViewsPage() {
                   t={t}
                 />
               </div>
+            )}
+
+            {viewType === "kanban" && (
+              <KanbanConfigEditor
+                value={kanbanConfig}
+                onChange={setKanbanConfig}
+                fields={fields}
+                pageFields={targetPageId ? [...allPageFields].filter(field => field.isActive).sort((a, b) => a.sortOrder - b.sortOrder) : []}
+              />
             )}
 
             {viewType === "calendar" && (

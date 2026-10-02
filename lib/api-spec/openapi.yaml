@@ -8778,7 +8778,7 @@ components:
 
     Status:
       type: object
-      required: [id, entityId, statusKey, nameJson, color, tagIds, showTags, primaryTagId, displayTags, isDefault, isFinal, isArchiveTrigger, archiveAfterDays, sortOrder, isActive, createdAt, updatedAt]
+      required: [id, entityId, statusKey, nameJson, color, tagIds, showTags, primaryTagId, displayTags, isDefault, isFinal, hideByDefault, isArchiveTrigger, archiveAfterDays, sortOrder, isActive, createdAt, updatedAt]
       properties:
         id:
           type: integer
@@ -8820,6 +8820,10 @@ components:
           type: boolean
         isFinal:
           type: boolean
+        hideByDefault:
+          type: boolean
+          default: false
+          description: Soft display preference for tables and Kanban; independent of archival and role permissions.
         isArchiveTrigger:
           type: boolean
         archiveAfterDays:
@@ -8865,6 +8869,9 @@ components:
         isFinal:
           type: boolean
           default: false
+        hideByDefault:
+          type: boolean
+          default: false
         isArchiveTrigger:
           type: boolean
           default: false
@@ -8903,6 +8910,9 @@ components:
           type: boolean
         isFinal:
           type: boolean
+        hideByDefault:
+          type: boolean
+          description: Omitted value preserves the current preference.
         isArchiveTrigger:
           type: boolean
         archiveAfterDays:
@@ -9724,6 +9734,12 @@ components:
     RecordArchive:
       type: object
       properties:
+        pageId:
+          type: integer
+          description: >-
+            Optional mirror-page context (see RecordInput.pageId): applies the
+            authorized mirror page's update-rights override, row scope and
+            response field visibility when archiving or unarchiving through it.
         expectedVersion:
           type: integer
           minimum: 1
@@ -10019,7 +10035,7 @@ components:
             type: string
         viewType:
           type: string
-          enum: [table, pivot, calendar]
+          enum: [table, pivot, calendar, kanban]
           default: table
         pageSize:
           type: integer
@@ -10029,6 +10045,34 @@ components:
           $ref: "#/components/schemas/PivotConfig"
         calendar:
           $ref: "#/components/schemas/CalendarConfig"
+        kanban:
+          $ref: "#/components/schemas/KanbanConfig"
+
+    KanbanConfig:
+      type: object
+      required: [titleField, fields, showLabels, hideEmptyFields]
+      description: >-
+        Card presentation over the same permission-scoped records/query rows.
+        Entity field keys are unprefixed; page-local keys use page:<fieldKey>
+        and require a view targeted at that mirror page. __status__ denotes
+        the record status. Configuration cannot
+        grant field or record access.
+      properties:
+        titleField:
+          type: string
+          nullable: true
+          minLength: 1
+          description: Card title field, or null for the renderer's default title.
+        fields:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+        showLabels:
+          type: boolean
+        hideEmptyFields:
+          type: boolean
 
     CalendarConfig:
       type: object
@@ -10506,6 +10550,17 @@ components:
           type: array
           items:
             type: integer
+        statusIsNull:
+          type: boolean
+          default: false
+          description: Restrict to records without a status. AND-combined with all filters, including statusIds.
+        showHiddenStatuses:
+          type: boolean
+          default: false
+          description: >-
+            Bypass only entity statuses' hideByDefault soft preference.
+            Never bypasses role-hidden rows, own-row scope, saved-view hard
+            filters, explicit status exclusions, or the independent archive filter.
         excludeFilters:
           type: array
           description: >-

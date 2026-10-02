@@ -1,4 +1,4 @@
-import { sql, and, or, asc, desc, inArray, eq, type SQL } from "drizzle-orm";
+import { sql, and, or, asc, desc, inArray, eq, isNull, type SQL } from "drizzle-orm";
 import { db, entityRecordsTable, recordLinksTable, pageRecordValuesTable, pageFieldsTable } from "@workspace/db";
 import type { EntityField, PageField, PageRefFieldConfig } from "@workspace/db";
 
@@ -94,6 +94,7 @@ export interface RecordQuerySpec {
   filters?: FilterCondition[];
   filterConjunction?: "and" | "or";
   statusIds?: number[];
+  statusIsNull?: boolean;
   /**
    * SOFT per-field exclusions (from a page's default filter, when the viewer has
    * not toggled "show hidden"). Each hides rows whose field value is one of
@@ -594,7 +595,7 @@ export function buildRecordQuery(
     excludeStatusWhere = sql`(${entityRecordsTable.statusId} IS NULL OR ${entityRecordsTable.statusId} NOT IN (${sql.join(parts, sql`, `)}))`;
   }
 
-  const whereParts = [filterWhere, searchWhere, statusWhere, ...excludeChunks, excludeStatusWhere].filter(
+  const whereParts = [filterWhere, searchWhere, statusWhere, spec.statusIsNull ? isNull(entityRecordsTable.statusId) : undefined, ...excludeChunks, excludeStatusWhere].filter(
     (p): p is SQL => p !== undefined,
   );
   const where = whereParts.length > 0 ? and(...whereParts) : undefined;

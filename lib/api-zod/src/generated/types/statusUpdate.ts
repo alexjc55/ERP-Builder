@@ -19,6 +19,8 @@ export interface StatusUpdate {
   primaryTagId?: number | null;
   isDefault?: boolean;
   isFinal?: boolean;
+  /** Omitted value preserves the current preference. */
+  hideByDefault?: boolean;
   isArchiveTrigger?: boolean;
   /** @minimum 0 */
   archiveAfterDays?: number;

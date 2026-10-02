@@ -98,6 +98,7 @@ import {
 } from "@workspace/api-client-react";
 import { PivotView } from "./PivotView";
 import { CalendarView, defaultCalendarMode, type CalendarMode, type CalendarBaseQuery } from "./CalendarView";
+import { KanbanView } from "./KanbanView";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -4107,6 +4108,7 @@ export function EntityRecords({
       excludeFilters: activeExcludeFilters,
       excludeStatusIds: activeExcludeStatusIds,
       excludePageLocalFilters: activeExcludePageFilters,
+      showHiddenStatuses: showHidden || setupMode,
       sorts: effectiveSorts,
       search: debouncedSearch.trim() || undefined,
       archived,
@@ -4116,7 +4118,7 @@ export function EntityRecords({
       ...groupedQueryOptions(groupingActive),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [baseFiltersKey, selectedView?.id, sortsKey, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, debouncedSearch, archived, page, pageSize, groupingActive],
+    [baseFiltersKey, selectedView?.id, sortsKey, adHocKey, dateKey, customFilterKey, pageAdHocKey, pageDateKey, statusKey, excludeKey, debouncedSearch, archived, page, pageSize, groupingActive, showHidden, setupMode],
   );
 
   // Pivot (Сводная таблица): a view whose configJson.viewType is "pivot" carries a
@@ -4180,6 +4182,14 @@ export function EntityRecords({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedViewId]);
   const showCalendar = calendarAvailable && calendarActive && !setupMode;
+  const kanbanConfig = selectedView && selectedConfig.viewType === "kanban" ? selectedConfig.kanban : undefined;
+  const [kanbanTableMode, setKanbanTableMode] = useState(false);
+  useEffect(() => { setKanbanTableMode(false); }, [selectedViewId]);
+  const kanbanAvailable = !!kanbanConfig && !hideStatusColumn && !pageHideStatusColumn;
+  const showKanban = kanbanAvailable && !kanbanTableMode && !setupMode;
+  const kanbanBaseQuery = useMemo(() => ({
+    ...recordQuery, pageId: permPageId, grouped: false, withRowGroups: false, groupValue: undefined,
+  }), [recordQuery, permPageId]);
 
   const calendarBaseQuery: CalendarBaseQuery = useMemo(
     () => ({
@@ -6556,6 +6566,7 @@ export function EntityRecords({
     selectedView &&
     selectedConfig.viewType !== "pivot" &&
     selectedConfig.viewType !== "calendar" &&
+    selectedConfig.viewType !== "kanban" &&
     Array.isArray(selectedConfig.visibleFields) &&
     selectedConfig.visibleFields.length > 0
       ? selectedConfig.visibleFields
@@ -7574,6 +7585,16 @@ export function EntityRecords({
                 : t("records.expandAllGroups", "Развернуть все группы")}
             </Button>
           )}
+          {kanbanAvailable && !setupMode && (
+            <div className="flex items-center justify-center w-full sm:w-auto rounded-md border border-slate-200 p-0.5 bg-white">
+              {([[true, t("pivot.modeTable", "Таблица")], [false, t("kanban.modeKanban", "Канбан")]] as [boolean, string][]).map(([value, label]) => (
+                <button key={String(value)} type="button" onClick={() => setKanbanTableMode(value)}
+                  className={`px-2.5 h-8 text-xs rounded-[5px] transition ${kanbanTableMode === value ? "bg-slate-800 text-white" : "text-slate-500 hover:text-slate-700"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {calendarAvailable && !setupMode && (
             <div className="flex items-center justify-center w-full sm:w-auto rounded-md border border-slate-200 p-0.5 bg-white">
               {([
@@ -7789,7 +7810,7 @@ export function EntityRecords({
             {newestFirst ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUpDown className="w-3.5 h-3.5 opacity-60" />}
             {t("records.newestFirst", "Сначала новые")}
           </Button>
-          {hasExclusion && (
+          {(hasExclusion || statuses.some(s => s.hideByDefault)) && (
             <label className="flex items-center gap-2 h-9 px-2.5 rounded-md border border-slate-200 bg-white text-sm text-slate-600 cursor-pointer col-span-2 w-full justify-center sm:col-span-1 sm:w-auto">
               <Checkbox checked={showHidden} onCheckedChange={(v) => { setShowHidden(v === true); setPage(1); }} />
               <span className="truncate">{t("records.showHidden", "Показать скрытые")}</span>
@@ -8392,7 +8413,38 @@ export function EntityRecords({
         </div>
       )}
 
-      {showCalendar && calendarConfig ? (
+      {showKanban && kanbanConfig ? (
+        recordsBootstrapReady ? (
+          <KanbanView
+            key={`${entityId}:${permPageId ?? ""}:${selectedViewId ?? ""}`}
+            entityId={entityId}
+            config={kanbanConfig}
+            baseQuery={kanbanBaseQuery}
+            fields={visibleFormFields}
+            pageFields={pageFields}
+            statuses={statuses.filter(s => !hiddenRowStatusIds.has(s.id))}
+            userNames={userNames}
+            renderCellValue={renderCellValue}
+            onEdit={openEdit}
+            canEdit={canUpdate}
+            canArchive={record => canUpdate && !record.archivedAt}
+            onDataChanged={invalidate}
+            canMove={record => canUpdate && statusManualEditable && !record.archivedAt}
+            allowedStatuses={record => statuses.filter(status => {
+              if (hiddenStatusIds.has(status.id) || hiddenRowStatusIds.has(status.id)) return false;
+              if (!workflowActiveForRecord(record) || record.statusId === status.id) return true;
+              const transition = transitions.find(tr => tr.fromStatusId === record.statusId && tr.toStatusId === status.id)
+                ?? transitions.find(tr => tr.fromStatusId == null && tr.toStatusId === status.id);
+              return !!transition && (!transition.allowedRoleIds?.length || transition.allowedRoleIds.some(id => userRoleIds.includes(id)));
+            })}
+            allowNoStatus={allowNoStatus}
+            refreshTick={refreshTick}
+            ml={ml}
+            pageTextDirection={pageTextDirection}
+            appTextDirection={appSettings?.textDirection}
+          />
+        ) : <div className="p-8 text-center text-slate-500">{t("common.loading", "Загрузка…")}</div>
+      ) : showCalendar && calendarConfig ? (
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="p-3 sm:p-4">
             <CalendarView

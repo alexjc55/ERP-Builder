@@ -7,6 +7,8 @@
  */
 
 export interface RecordArchive {
+  /** Optional mirror-page context (see RecordInput.pageId): applies the authorized mirror page's update-rights override, row scope and response field visibility when archiving or unarchiving through it. */
+  pageId?: number;
   /** @minimum 1 */
   expectedVersion?: number;
 }

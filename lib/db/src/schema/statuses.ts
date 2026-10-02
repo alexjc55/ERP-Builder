@@ -18,6 +18,7 @@ export const entityStatusesTable = pgTable(
     primaryTagId: integer("primary_tag_id"),
     isDefault: boolean("is_default").notNull().default(false),
     isFinal: boolean("is_final").notNull().default(false),
+    hideByDefault: boolean("hide_by_default").notNull().default(false),
     isArchiveTrigger: boolean("is_archive_trigger").notNull().default(false),
     archiveAfterDays: integer("archive_after_days").notNull().default(0),
     sortOrder: integer("sort_order").notNull().default(0),

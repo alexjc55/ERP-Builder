@@ -22,6 +22,8 @@ export interface Status {
   readonly displayTags: readonly StatusDisplayTagsItem[];
   isDefault: boolean;
   isFinal: boolean;
+  /** Soft display preference for tables and Kanban; independent of archival and role permissions. */
+  hideByDefault: boolean;
   isArchiveTrigger: boolean;
   archiveAfterDays: number;
   sortOrder: number;

@@ -94,6 +94,25 @@ async function validateTargetAndConfig(
     type: pageFieldsTable.fieldType,
   }).from(pageFieldsTable).where(and(eq(pageFieldsTable.pageId, targetPageId), eq(pageFieldsTable.isActive, true)));
   const pageByKey = new Map(pageFields.map((f) => [f.key, f.type]));
+  if (config.viewType === "kanban" && config.kanban == null) {
+    return "Kanban views require a kanban configuration";
+  }
+  if (config.kanban != null) {
+    const kanban = config.kanban as { titleField: string | null; fields: string[] };
+    if (new Set(kanban.fields).size !== kanban.fields.length) {
+      return "Kanban fields must not contain duplicates";
+    }
+    for (const key of [kanban.titleField, ...kanban.fields]) {
+      if (key == null || key === "__status__") continue;
+      if (key.startsWith("page:")) {
+        if (targetPageId == null || !pageByKey.has(key.slice(5))) {
+          return `Unknown or inactive page field "${key}" for this view's target`;
+        }
+      } else if (!entityKeys.has(key)) {
+        return `Unknown or inactive entity field "${key}"`;
+      }
+    }
+  }
   for (const condition of filters) {
     const source = condition.source ?? "entity";
     if (source === "entity") {
