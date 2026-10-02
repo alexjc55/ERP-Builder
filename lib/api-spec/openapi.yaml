@@ -10058,6 +10058,9 @@ components:
         the record status. Configuration cannot
         grant field or record access.
       properties:
+        statusTitleHover:
+          type: boolean
+          description: Use a contrast-adjusted status color on title hover. Off when omitted.
         tintColumns:
           type: boolean
           description: Tint column backgrounds with their status color, leaving cards unchanged. Off when omitted.

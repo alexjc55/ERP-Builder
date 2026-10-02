@@ -4977,6 +4977,8 @@ export const KanbanConfigTextDirection = {
  * Card presentation over the same permission-scoped records/query rows. Entity field keys are unprefixed; page-local keys use page:<fieldKey> and require a view targeted at that mirror page. __status__ denotes the record status. Configuration cannot grant field or record access.
  */
 export interface KanbanConfig {
+  /** Use a contrast-adjusted status color on title hover. Off when omitted. */
+  statusTitleHover?: boolean;
   /** Tint column backgrounds with their status color, leaving cards unchanged. Off when omitted. */
   tintColumns?: boolean;
   /** Card content direction; null inherits page and app direction. Explicit field direction takes priority. */

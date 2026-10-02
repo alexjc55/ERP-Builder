@@ -21,6 +21,10 @@ description: Product constraints for the reusable CRM-first Kanban entity view.
 
 **Why:** The user approved explicit actions for discoverability and explicitly rejected hover underlining.
 
+**Rule:** Optional status-coloured title hover should darken light status colours for readability on white cards; without a status use neutral dark grey. Keep ordinary blue hover when disabled.
+
+**Why:** The user approved trying the proposed contrast-safe status-colour hover and requested a Kanban setting for it rather than a forced global change.
+
 **Rule:** Card direction controls the entire card layout, including grip, menu and footer actions, not just text. Field text overrides remain strongest: field → card → page → ERP → UI language. Board column order is unaffected.
 
 **Why:** The user clarified that RTL text inside an LTR card looks wrong: choosing RTL must mirror the card itself. Keeping field overrides strongest preserves the existing direction hierarchy.

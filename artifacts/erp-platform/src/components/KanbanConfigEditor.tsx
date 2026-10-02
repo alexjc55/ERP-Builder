@@ -10,6 +10,7 @@ import { useML, useT } from "@/lib/i18n";
 export type KanbanEditorConfig = KanbanConfig;
 
 export const newKanbanConfig = (): KanbanEditorConfig => ({
+  statusTitleHover: false,
   tintColumns: false,
   titleField: null,
   fields: [],
@@ -95,6 +96,10 @@ export function KanbanConfigEditor({
         ))}
       </div>
       <TextDirectionSelect id="kanban-text-direction" showPriorityHint={false} value={value.textDirection ?? null} onChange={(textDirection) => onChange({ ...value, textDirection })} />
+      <div className="flex items-center gap-2">
+        <Checkbox id="kanban-status-title-hover" checked={value.statusTitleHover ?? false} onCheckedChange={(checked) => onChange({ ...value, statusTitleHover: checked === true })} />
+        <Label htmlFor="kanban-status-title-hover">{t("kanban.statusTitleHover", "Цвет заголовка при наведении — по статусу")}</Label>
+      </div>
       <div className="flex items-center gap-2">
         <Checkbox id="kanban-tint-columns" checked={value.tintColumns ?? false} onCheckedChange={(checked) => onChange({ ...value, tintColumns: checked === true })} />
         <Label htmlFor="kanban-tint-columns">{t("kanban.tintColumns", "Подкрашивать колонки по цвету статуса")}</Label>

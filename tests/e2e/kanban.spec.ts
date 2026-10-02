@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { kanbanTitleColor } from "../../artifacts/erp-platform/src/lib/kanbanTitleColor";
 
 const entityId = 987670;
 const pageId = 987671;
@@ -26,7 +27,7 @@ type FixtureRecord = {
   updatedAt: string;
 };
 
-async function installFixture(page: Page, options: { editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null; tintColumns?: boolean } = {}) {
+async function installFixture(page: Page, options: { editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null; tintColumns?: boolean; statusTitleHover?: boolean } = {}) {
   const queries: Query[] = [];
   const writes: { id: number; body: Record<string, unknown> }[] = [];
   const unexpectedWrites: string[] = [];
@@ -84,7 +85,7 @@ async function installFixture(page: Page, options: { editable?: boolean; manyCar
       ...options.viewMode === "single" ? [] : [
       { id: boardViewId - 1, entityId, pageId, nameJson: { en: "Table fixture" }, isDefault: options.viewMode !== "multiple-no-default", sortOrder: 0, configJson: {} }],
       { id: boardViewId, entityId, pageId, nameJson: { en: "Board fixture" }, isDefault: false, sortOrder: 1,
-        configJson: { viewType: "kanban", kanban: { titleField: "title", fields: ["summary", "empty"], showLabels: true, hideEmptyFields: true, textDirection: options.cardDirection, tintColumns: options.tintColumns } } },
+        configJson: { viewType: "kanban", kanban: { titleField: "title", fields: ["summary", "empty"], showLabels: true, hideEmptyFields: true, textDirection: options.cardDirection, tintColumns: options.tintColumns, statusTitleHover: options.statusTitleHover } } },
     ]);
     if (path === `/api/entities/${entityId}/records/query`) {
       const query = request.postDataJSON() as Query;
@@ -268,6 +269,46 @@ test("hidden-status toggle includes and removes the hidden column", async ({ pag
   await expect(lane(page, "s:3")).toHaveCount(0);
   expect(fixture.unexpectedWrites).toEqual([]);
   expect(fixture.errors).toEqual([]);
+});
+
+test("status title hover is optional, readable and leaves cards white", async ({ page }) => {
+  const options = { statusTitleHover: true };
+  const fixture = await installFixture(page, options);
+  await selectBoard(page);
+  for (const [id, color] of [[1000, "#2563eb"], [2000, "#f59e0b"], [10, null]] as const) {
+    const title = page.getByTestId(`button-open-kanban-${id}`);
+    await page.mouse.move(0, 0);
+    const restingColor = await title.evaluate(el => getComputedStyle(el).color);
+    await title.hover();
+    const hex = kanbanTitleColor(color);
+    const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+    await expect(title).toHaveCSS("color", `rgb(${rgb.join(", ")})`);
+    await page.mouse.move(0, 0);
+    await expect(title).toHaveCSS("color", restingColor);
+    await expect(title).toHaveCSS("text-decoration-line", "none");
+    await expect(page.getByTestId(`card-kanban-${id}`)).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  }
+  options.statusTitleHover = false;
+  await selectBoard(page);
+  const title = page.getByTestId("button-open-kanban-2000");
+  await title.hover();
+  await expect(title).toHaveCSS("color", "rgb(37, 99, 235)");
+  expect(fixture.errors).toEqual([]);
+});
+
+test("status hover colors meet 4.5:1 contrast on white", () => {
+  for (const color of ["#ffffff", "#ffff00", "#00ff00", "#f59e0b", "#ff0000", "#2563eb", "#000000"]) {
+    const result = kanbanTitleColor(color);
+    const linear = [1, 3, 5].map(i => {
+      const c = parseInt(result.slice(i, i + 2), 16) / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    const luminance = linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+    expect(1.05 / (luminance + 0.05)).toBeGreaterThanOrEqual(4.5);
+  }
+  expect(kanbanTitleColor("#2563eb")).toBe("#2563eb");
+  expect(kanbanTitleColor(null)).toBe("#475569");
+  expect(kanbanTitleColor("invalid")).toBe("#475569");
 });
 
 test("column tint follows status colors without coloring cards and can be disabled", async ({ page }) => {

@@ -50,9 +50,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Archive, GripVertical, Loader2, MoreHorizontal, Pencil, Eye, ArrowRightLeft, RotateCw, Inbox, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { kanbanTitleColor } from "@/lib/kanbanTitleColor";
 
 /** Matches backend ViewConfig.kanban. Field refs: entity fieldKey or "page:<pageFieldKey>". */
 export type KanbanConfig = {
+  statusTitleHover?: boolean;
   tintColumns?: boolean;
   textDirection?: "ltr" | "rtl" | null;
   titleField: string | null;
@@ -718,7 +720,8 @@ export function KanbanView(props: KanbanViewProps) {
             onClick={() => {
               if (!suppressClick.current) setDetail(rec);
             }}
-            className="min-w-0 flex-1 cursor-pointer text-start text-sm font-medium leading-snug text-slate-800 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded"
+            style={{ "--kanban-title-hover": config?.statusTitleHover ? kanbanTitleColor(statusById.get(rec.statusId ?? -1)?.color) : "#2563eb" } as React.CSSProperties}
+            className="min-w-0 flex-1 cursor-pointer text-start text-sm font-medium leading-snug text-slate-800 hover:text-[var(--kanban-title-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded"
             data-testid={`button-open-kanban-${rec.id}`}
           >
             <span dir={title.dir} className="block [overflow-wrap:anywhere]">{title.text}</span>
