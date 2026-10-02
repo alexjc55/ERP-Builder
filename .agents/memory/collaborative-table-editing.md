@@ -44,6 +44,20 @@ fail closed on denial/error/timeout. Coalesce mutations to a whole-table
 invalidation, clear client presence on terminal denial, and test revocation
 without first disconnecting the original transport.
 
+Permission denial ends the current stream, not the possibility of future access.
+Use a separate slow authorization probe (30 seconds) after 403; keep presence
+writes stopped and old editing coordinates cleared until authorization succeeds.
+401 must not enter this polling loop.
+
+**Why:** A permanently stopped hook could not discover regranted permissions
+without navigating away. Fast transport reconnect loops would instead repeatedly
+hit denied endpoints and risk retaining stale editing state.
+
+**How to apply:** Keep one cancellable recovery timer owned by the current
+page/user scope; recheck server authorization on every attempt. Successful
+recovery starts a fresh subscription generation and authoritative table refresh.
+Verify repeated denials, restored snapshots, no duplicate stream, and teardown.
+
 Every write that changes a record's effective scalar, page-local, status,
 relation, archive, or merge state must participate in optimistic concurrency.
 An effective change advances the relevant version exactly once, including

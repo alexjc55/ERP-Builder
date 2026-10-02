@@ -39,6 +39,7 @@ export function useCollaboration(pageId?: number | null) {
   const [connected, setConnected] = useState(false);
   const [connectedPageId, setConnectedPageId] = useState<number | null>(null);
   const [subscriptionGeneration, setSubscriptionGeneration] = useState(0);
+  const [accessRetry, setAccessRetry] = useState(0);
   const [connectionAttempt, setConnectionAttempt] = useState<{
     pageId: number | null;
     state: "connecting" | "connected" | "unavailable";
@@ -47,7 +48,7 @@ export function useCollaboration(pageId?: number | null) {
   const [lastMessage, setLastMessage] = useState<CollaborationMessage | null>(null);
   const currentEditing = useRef<CollaborationEditing | null>(null);
   const activeScope = useRef<{
-    pageId: number; userId: number; denied: boolean; deny: () => void;
+    pageId: number; userId: number; denied: boolean; deny: (retryAccess?: boolean) => void;
   } | null>(null);
 
   const publishPresence = useCallback((editing: CollaborationEditing | null) => {
@@ -67,7 +68,7 @@ export function useCollaboration(pageId?: number | null) {
     }).then((response) => {
       if (activeScope.current !== scope) return;
       if (response.status === 401 || response.status === 403) {
-        scope.deny();
+        scope.deny(response.status === 403);
         return;
       }
       if (!response.ok && !isGuest) {
@@ -95,10 +96,11 @@ export function useCollaboration(pageId?: number | null) {
     let reconnectTimer: number | undefined;
     let connectionFallbackTimer: number | undefined;
     let heartbeatTimer: number | undefined;
+    let accessRetryTimer: number | undefined;
     let retry = 0;
     const scope = {
       pageId, userId, denied: false,
-      deny: () => {
+      deny: (retryAccess = true) => {
         if (stopped || activeScope.current !== scope) return;
         scope.denied = true;
         stopped = true;
@@ -112,6 +114,12 @@ export function useCollaboration(pageId?: number | null) {
         setUsers([]);
         setLastMessage(null);
         setConnectionAttempt({ pageId, state: "unavailable" });
+        // Denial ends this transport and all presence writes. A separate,
+        // bounded-rate authorization attempt can discover restored access.
+        // Invalid credentials (401) require login, not automatic polling.
+        if (retryAccess) accessRetryTimer = window.setTimeout(() => {
+          if (activeScope.current === scope) setAccessRetry(value => value + 1);
+        }, 30_000);
       },
     };
     activeScope.current = scope;
@@ -170,7 +178,7 @@ export function useCollaboration(pageId?: number | null) {
           },
         );
         if (response.status === 401 || response.status === 403) {
-          scope.deny();
+          scope.deny(response.status === 403);
           return;
         }
         if (!response.ok || !response.body) throw new Error(`SSE request failed: ${response.status}`);
@@ -228,12 +236,13 @@ export function useCollaboration(pageId?: number | null) {
       controller.abort();
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
       if (connectionFallbackTimer !== undefined) window.clearTimeout(connectionFallbackTimer);
+      if (accessRetryTimer !== undefined) window.clearTimeout(accessRetryTimer);
       window.clearInterval(heartbeatTimer);
       if (activeScope.current === scope) activeScope.current = null;
       setConnected(false);
       setConnectedPageId(null);
     };
-  }, [isGuest, pageId, publishPresence, userId]);
+  }, [isGuest, pageId, publishPresence, userId, accessRetry]);
 
   return {
     users,

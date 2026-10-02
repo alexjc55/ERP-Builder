@@ -543,6 +543,60 @@ test("real independent Kanban sessions: stale CAS, SSE lanes, transition effects
   }
 });
 
+test("restored access recovers after repeated real 403 streams without reload or duplicate subscriptions", async ({ browser, page }) => {
+  test.setTimeout(180_000);
+  await guard(page);
+  await setup(true);
+  const f = fixture!;
+  const contexts = await Promise.all([browser.newContext(), browser.newContext()]);
+  try {
+    const [alice, bob] = await Promise.all(contexts.map(context => context.newPage()));
+    const statuses: number[] = [];
+    let presenceWrites = 0;
+    alice.on("response", response => {
+      if (response.url().includes("/collaboration/") && response.url().includes("/stream?")) statuses.push(response.status());
+    });
+    alice.on("request", request => {
+      if (request.url().includes("/collaboration/") && request.url().endsWith("/presence")) presenceWrites++;
+    });
+    await Promise.all([login(alice, emails[0]), login(bob, emails[1])]);
+    const originalDocument = await alice.evaluate(() => performance.timeOrigin);
+    const originalClient = await alice.evaluate(() => sessionStorage.getItem("erp_client_id"));
+    const [role] = await db.select().from(rolesTable).where(eq(rolesTable.id, f.role));
+    await expect(alice.getByTestId("collab-avatar")).toHaveCount(1);
+    await db.update(rolesTable).set({ permissionsJson: NO_ACCESS_PERMS }).where(eq(rolesTable.id, f.role));
+    await apiMove(bob, f.records[0], f.working, 1);
+    await expect(alice.getByTestId("collab-avatar")).toHaveCount(0);
+    await expect.poll(() => statuses.filter(s => s === 403).length, { timeout: 110_000 }).toBeGreaterThanOrEqual(3);
+    const writesWhileDenied = presenceWrites;
+    await alice.waitForTimeout(1_000);
+    expect(presenceWrites).toBe(writesWhileDenied);
+    expect(statuses.filter(s => s === 200)).toHaveLength(1);
+    await expect(alice.getByTestId("collab-avatar")).toHaveCount(0);
+    await db.update(rolesTable).set({ permissionsJson: role.permissionsJson }).where(eq(rolesTable.id, f.role));
+    await expect.poll(() => statuses.filter(s => s === 200).length, { timeout: 40_000 }).toBe(2);
+    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "connected");
+    await expect(lane(alice, f.working).getByTestId(`card-kanban-${f.records[0]}`)).toBeVisible();
+    await expect(lane(alice, f.ready).getByTestId(`card-kanban-${f.records[0]}`)).toHaveCount(0);
+    for (const status of [f.ready, f.working]) {
+      await expect(alice.getByTestId(`text-lane-count-s:${status}`))
+        .toHaveText(await bob.getByTestId(`text-lane-count-s:${status}`).innerText());
+    }
+    await expect(alice.getByTestId("collab-avatar")).toHaveCount(1);
+    await expect(bob.getByTestId("collab-avatar")).toHaveCount(1);
+    await apiMove(bob, f.records[1], f.working, 1);
+    await expect(lane(alice, f.working).getByTestId(`card-kanban-${f.records[1]}`)).toBeVisible();
+    // The old recovery timer must not create another subscription after success.
+    await alice.waitForTimeout(31_000);
+    expect(statuses.filter(s => s === 200)).toHaveLength(2);
+    expect(await alice.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+    expect(await alice.evaluate(() => sessionStorage.getItem("erp_client_id"))).toBe(originalClient);
+  } finally {
+    await Promise.all(contexts.map(context => context.close()));
+    await cleanup();
+  }
+});
+
 test("revoked page access stops an already-open SSE before subsequent events and presence", async ({ browser, page }) => {
   test.setTimeout(90_000);
   const contexts = await Promise.all([browser.newContext(), browser.newContext()]);

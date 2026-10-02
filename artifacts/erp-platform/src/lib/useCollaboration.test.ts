@@ -11,11 +11,12 @@ function harness() {
   let cursor = 0;
   let pageId = 10;
   let queuedEffects: Array<() => void> = [];
-  const timers = new Map<number, { callback: () => void; interval: boolean }>();
+  const timers = new Map<number, { callback: () => void; interval: boolean; delay?: number }>();
   let timerId = 0;
   const requests: Array<{ url: string; init: RequestInit }> = [];
   const streams: ReadableStreamDefaultController<Uint8Array>[] = [];
   const presenceResponses: Array<Promise<Response>> = [];
+  const streamResponses: Response[] = [];
   const dependenciesEqual = (a: unknown[], b: unknown[]) =>
     a?.length === b?.length && a.every((value, i) => Object.is(value, b[i]));
   const react = {
@@ -57,7 +58,7 @@ function harness() {
     crypto: { randomUUID: () => "unit-client" },
     AbortController, TextDecoder, console,
     window: {
-      setTimeout: (callback: () => void) => { timers.set(++timerId, { callback, interval: false }); return timerId; },
+      setTimeout: (callback: () => void, delay: number) => { timers.set(++timerId, { callback, interval: false, delay }); return timerId; },
       setInterval: (callback: () => void) => { timers.set(++timerId, { callback, interval: true }); return timerId; },
       clearTimeout: (id: number) => timers.delete(id),
       clearInterval: (id: number) => timers.delete(id),
@@ -65,6 +66,7 @@ function harness() {
     fetch: async (url: string, init: RequestInit) => {
       requests.push({ url, init });
       if (url.endsWith("/presence")) return presenceResponses.shift() ?? new Response(null, { status: 204 });
+      if (streamResponses.length) return streamResponses.shift();
       const body = new ReadableStream<Uint8Array>({
         start(controller) {
           streams.push(controller);
@@ -89,7 +91,14 @@ function harness() {
     return result;
   };
   return {
-    render, requests, presenceResponses, timers,
+    render, requests, presenceResponses, streamResponses, timers,
+    retryAccess() {
+      for (const [id, timer] of [...timers]) if (timer.delay === 30_000) {
+        timers.delete(id);
+        timer.callback();
+      }
+      render();
+    },
     changePage(next: number) { pageId = next; render(); },
     send(event: string, data: unknown) {
       streams.at(-1)!.enqueue(new TextEncoder().encode(`event:${event}\ndata:${JSON.stringify(data)}\n\n`));
@@ -103,7 +112,7 @@ const settle = () => new Promise<void>(resolve => setImmediate(resolve));
 const editing = { entityId: 2, recordId: 3, fieldKey: "title", source: "entity" };
 const presence = [{ userId: 2, name: "Bob", color: "#123456", editing }];
 
-test("terminal SSE denial clears presence/messages/editing and stops heartbeat/reconnect", async () => {
+test("SSE denial clears presence/messages/editing and stops heartbeat/fast reconnect", async () => {
   const h = harness();
   try {
     h.render();
@@ -128,10 +137,51 @@ test("terminal SSE denial clears presence/messages/editing and stops heartbeat/r
     denied.publishPresence(editing);
     await settle();
     assert.equal(h.requests.length, attempts);
-    assert.equal(h.timers.size, 0);
+    assert.equal(h.timers.size, 1, "only the slow access probe remains");
   } finally {
     h.cleanup();
   }
+});
+
+test("three 403 attempts recover cleanly; 401 and unmount cancel access probes", async () => {
+  const h = harness();
+  try {
+    h.render();
+    await settle();
+    h.render().publishPresence(editing);
+    await settle();
+    h.send("access_denied", {});
+    await settle();
+    for (let i = 0; i < 3; i++) {
+      h.streamResponses.push(new Response(null, { status: 403 }));
+      h.retryAccess();
+      await settle();
+      assert.equal(h.render().connected, false);
+      assert.equal(h.timers.size, 1);
+    }
+    const before = h.requests.length;
+    h.retryAccess();
+    await settle();
+    assert.equal(h.render().connected, true);
+    assert.equal(h.requests.length, before + 2, "one stream and one fresh presence");
+    assert.equal(JSON.parse(String(h.requests.at(-1)!.init.body)).editing, null);
+    h.retryAccess();
+    await settle();
+    assert.equal(h.requests.length, before + 2, "no duplicate authorized stream");
+    h.send("access_denied", {});
+    await settle();
+    h.streamResponses.push(new Response(null, { status: 401 }));
+    h.retryAccess();
+    await settle();
+    assert.equal(h.timers.size, 0, "expired credentials do not poll");
+  } finally { h.cleanup(); }
+  const unmounted = harness();
+  unmounted.render();
+  await settle();
+  unmounted.send("access_denied", {});
+  await settle();
+  unmounted.cleanup();
+  assert.equal(unmounted.timers.size, 0);
 });
 
 test("denied heartbeat tears down an otherwise-open stream and stale heartbeat cannot deny a new page", async () => {
@@ -162,7 +212,7 @@ test("denied heartbeat tears down an otherwise-open stream and stale heartbeat c
     h.heartbeat();
     await settle();
     assert.equal(h.requests.length, attempts);
-    assert.equal(h.timers.size, 0);
+    assert.equal(h.timers.size, 1, "only the slow access probe remains");
   } finally {
     h.cleanup();
   }
