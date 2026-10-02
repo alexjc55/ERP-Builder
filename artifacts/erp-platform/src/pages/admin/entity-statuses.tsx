@@ -47,7 +47,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, CircleDot, Star, Flag, Archive, ChevronUp, ChevronDown, AlertTriangle, Tags as TagsIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, ArrowLeft, CircleDot, Star, Flag, Archive, ChevronUp, ChevronDown, AlertTriangle, EyeOff, Tags as TagsIcon } from "lucide-react";
 import { useML, useT } from "@/lib/i18n";
 import { slugifyKey, uniqueKey } from "@/lib/keys";
 
@@ -386,7 +386,7 @@ export default function EntityStatusesPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-500 font-mono text-xs">{status.statusKey}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         {status.isDefault && (
                           <span className="inline-flex items-center gap-1 text-amber-600 text-xs">
                             <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> {t("statuses.default", "По умолчанию")}
@@ -395,6 +395,12 @@ export default function EntityStatusesPage() {
                         {status.isFinal && (
                           <span className="inline-flex items-center gap-1 text-slate-500 text-xs">
                             <Flag className="w-3 h-3" /> {t("statuses.final", "Финальный")}
+                          </span>
+                        )}
+                        {status.hideByDefault && (
+                          <span className="inline-flex items-center gap-1 text-slate-500 text-xs" data-testid="status-hidden-by-default">
+                            <EyeOff className="w-3 h-3 shrink-0" />
+                            {t("statuses.hideByDefault", "Скрывать по умолчанию")}
                           </span>
                         )}
                         {status.isArchiveTrigger && (
@@ -412,7 +418,7 @@ export default function EntityStatusesPage() {
                             {ml(tag!.nameJson)}
                           </Badge>
                         ))}
-                        {!status.isDefault && !status.isFinal && !status.isArchiveTrigger && status.tagIds.length === 0 && <span className="text-slate-300 text-xs">—</span>}
+                        {!status.isDefault && !status.isFinal && !status.hideByDefault && !status.isArchiveTrigger && status.tagIds.length === 0 && <span className="text-slate-300 text-xs">—</span>}
                       </div>
                     </td>
                     <td className="px-4 py-3">
