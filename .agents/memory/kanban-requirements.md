@@ -5,7 +5,7 @@ description: User requirements for a future reusable Kanban entity view, not yet
 
 **Rule:** The first intended use is the future CRM section, but Kanban must be universal and reusable for any existing or future section.
 
-**Rule:** Allow hiding final-status columns for both successful and unsuccessful outcomes to prevent accumulated card tails. Existing archiving must also have a place in Kanban.
+**Rule:** Configure hiding on the entity status itself, analogous to its existing archiving option, rather than choosing hidden columns per Kanban view. A hidden status's Kanban column is hidden automatically. This covers both successful and unsuccessful final statuses; the user also wants the principle usable in ordinary tables to hide records with a given status. Existing archiving must also have a place in Kanban.
 
 **Rule:** Dragging must feel immediate, without waiting for a card to jump after a server response. Account for both vertical and horizontal scrolling; horizontal scrolling must remain accessible within the viewport without scrolling through all cards first.
 
