@@ -26,7 +26,7 @@ type FixtureRecord = {
   updatedAt: string;
 };
 
-async function installFixture(page: Page, options: { editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default" } = {}) {
+async function installFixture(page: Page, options: { editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null } = {}) {
   const queries: Query[] = [];
   const writes: { id: number; body: Record<string, unknown> }[] = [];
   const unexpectedWrites: string[] = [];
@@ -84,7 +84,7 @@ async function installFixture(page: Page, options: { editable?: boolean; manyCar
       ...options.viewMode === "single" ? [] : [
       { id: boardViewId - 1, entityId, pageId, nameJson: { en: "Table fixture" }, isDefault: options.viewMode !== "multiple-no-default", sortOrder: 0, configJson: {} }],
       { id: boardViewId, entityId, pageId, nameJson: { en: "Board fixture" }, isDefault: false, sortOrder: 1,
-        configJson: { viewType: "kanban", kanban: { titleField: "title", fields: ["summary", "empty"], showLabels: true, hideEmptyFields: true } } },
+        configJson: { viewType: "kanban", kanban: { titleField: "title", fields: ["summary", "empty"], showLabels: true, hideEmptyFields: true, textDirection: options.cardDirection } } },
     ]);
     if (path === `/api/entities/${entityId}/records/query`) {
       const query = request.postDataJSON() as Query;
@@ -270,11 +270,33 @@ test("hidden-status toggle includes and removes the hidden column", async ({ pag
   expect(fixture.errors).toEqual([]);
 });
 
+for (const cardDirection of ["ltr", "rtl", null] as const) {
+  test(`card content direction ${cardDirection ?? "inherited"} preserves layout and action placement`, async ({ page }) => {
+    const fixture = await installFixture(page, { editable: true, cardDirection });
+    await selectBoard(page);
+    const card = page.getByTestId("card-kanban-1000");
+    const title = page.getByTestId("button-open-kanban-1000");
+    await expect(title.locator("span")).toHaveAttribute("dir", cardDirection ?? "ltr");
+    await expect(card.locator("dl")).toHaveAttribute("dir", cardDirection ?? "ltr");
+    await title.hover();
+    await expect(title).toHaveCSS("text-decoration-line", "none");
+    // Footer follows interface direction, independently of data direction.
+    for (const dir of ["ltr", "rtl"]) {
+      await page.evaluate(dir => document.documentElement.dir = dir, dir);
+      const rect = (await card.boundingBox())!;
+      const eye = (await page.getByTestId("button-view-kanban-1000").boundingBox())!;
+      expect(dir === "ltr" ? eye.x > rect.x + rect.width / 2 : eye.x < rect.x + rect.width / 2).toBe(true);
+    }
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
 for (const editable of [false, true]) {
   test(`full read-only detail is separate from editing (update permission: ${editable})`, async ({ page }) => {
     const fixture = await installFixture(page, { editable });
     await selectBoard(page);
-    await page.getByTestId("button-open-kanban-1000").click();
+    await expect(page.getByTestId("button-edit-kanban-1000")).toHaveCount(editable ? 1 : 0);
+    await page.getByTestId("button-view-kanban-1000").click();
     const detail = page.getByTestId("dialog-kanban-detail");
     await expect(detail).toBeVisible();
     await expect(detail.getByTestId("text-detail-title")).toHaveText("Item 1000");
@@ -284,7 +306,8 @@ for (const editable of [false, true]) {
     expect(fixture.detailReads).toContain(1000);
     await expect(detail.locator("input, textarea, [contenteditable=true]")).toHaveCount(0);
     if (editable) {
-      await detail.getByTestId("button-kanban-detail-edit").click();
+      await page.keyboard.press("Escape");
+      await page.getByTestId("button-edit-kanban-1000").click();
       await expect(detail).toHaveCount(0);
       const edit = page.getByRole("dialog");
       await expect(edit.getByRole("heading", { name: /^(Edit record|Редактировать запись)$/ })).toBeVisible();

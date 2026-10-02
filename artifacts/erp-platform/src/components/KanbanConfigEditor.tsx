@@ -1,4 +1,5 @@
 import { type Field, type PageField, type KanbanConfig } from "@workspace/api-client-react";
+import { TextDirectionSelect } from "@/components/TextDirectionSelect";
 import { Columns3, Plus, ChevronUp, ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -92,6 +93,7 @@ export function KanbanConfigEditor({
           </div>
         ))}
       </div>
+      <TextDirectionSelect id="kanban-text-direction" showPriorityHint={false} value={value.textDirection ?? null} onChange={(textDirection) => onChange({ ...value, textDirection })} />
       <div className="flex items-center gap-2">
         <Checkbox id="kanban-show-labels" checked={value.showLabels} onCheckedChange={(checked) => onChange({ ...value, showLabels: checked === true })} />
         <Label htmlFor="kanban-show-labels">{t("kanban.showLabels", "Показывать названия полей")}</Label>

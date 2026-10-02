@@ -53,6 +53,7 @@ import { Archive, GripVertical, Loader2, MoreHorizontal, Pencil, Eye, ArrowRight
 
 /** Matches backend ViewConfig.kanban. Field refs: entity fieldKey or "page:<pageFieldKey>". */
 export type KanbanConfig = {
+  textDirection?: "ltr" | "rtl" | null;
   titleField: string | null;
   fields: string[];
   showLabels: boolean;
@@ -326,8 +327,8 @@ export function KanbanView(props: KanbanViewProps) {
 
   const dirFor = useCallback(
     (td: TextDirection | null | undefined) =>
-      resolveDataDirection(td ?? null, pageTextDirection ?? null, appTextDirection ?? null, lang),
-    [pageTextDirection, appTextDirection, lang],
+      resolveDataDirection(td ?? null, config?.textDirection ?? pageTextDirection ?? null, appTextDirection ?? null, lang),
+    [config?.textDirection, pageTextDirection, appTextDirection, lang],
   );
 
   const relItem = (
@@ -715,7 +716,7 @@ export function KanbanView(props: KanbanViewProps) {
             onClick={() => {
               if (!suppressClick.current) setDetail(rec);
             }}
-            className="min-w-0 flex-1 cursor-pointer text-start text-sm font-medium leading-snug text-slate-800 hover:text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded"
+            className="min-w-0 flex-1 cursor-pointer text-start text-sm font-medium leading-snug text-slate-800 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded"
             data-testid={`button-open-kanban-${rec.id}`}
           >
             <span dir={title.dir} className="block [overflow-wrap:anywhere]">{title.text}</span>
@@ -778,7 +779,7 @@ export function KanbanView(props: KanbanViewProps) {
           </DropdownMenu>
         </div>
         {cardFieldRefs.length > 0 && (
-          <dl className="mt-1.5 space-y-0.5 text-xs text-slate-600">
+          <dl dir={dirFor(null)} className="mt-1.5 space-y-0.5 text-xs text-slate-600">
             {cardFieldRefs.map((ref) => {
               if (ref === STATUS_FIELD_REF) {
                 const st = rec.statusId != null ? statusById.get(rec.statusId) : undefined;
@@ -796,7 +797,7 @@ export function KanbanView(props: KanbanViewProps) {
               if (!it) return null;
               if (config?.hideEmptyFields && isEmptyValue(it.value)) return null;
               return (
-                <div key={ref} className="flex min-w-0 items-baseline gap-1">
+                <div key={ref} dir={it.dir} className="flex min-w-0 items-baseline gap-1">
                   {config?.showLabels && <dt className="shrink-0 font-medium text-slate-400">{it.label}:</dt>}
                   <dd className="min-w-0">{renderValue(it)}</dd>
                 </div>
@@ -809,6 +810,24 @@ export function KanbanView(props: KanbanViewProps) {
             <Archive className="h-3 w-3" />
             {t("kanban.archivedBadge", "В архиве")}
           </span>
+        )}
+        {(
+          <div className="mt-2 flex justify-end gap-1" onPointerDown={(e) => e.stopPropagation()}>
+            <button type="button" title={t("kanban.view", "Просмотр")} aria-label={t("kanban.view", "Просмотр")}
+              data-testid={`button-view-kanban-${rec.id}`}
+              className="cursor-pointer rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-400"
+              onClick={() => { if (!suppressClick.current) setDetail(rec); }}>
+              <Eye className="h-4 w-4" />
+            </button>
+            {canEdit && (
+              <button type="button" title={t("kanban.edit", "Редактировать")} aria-label={t("kanban.edit", "Редактировать")}
+                data-testid={`button-edit-kanban-${rec.id}`} disabled={pending}
+                className="cursor-pointer rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-default disabled:opacity-50"
+                onClick={() => { if (!suppressClick.current) onEdit(rec); }}>
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         )}
         <span className="sr-only">{laneLabel(lane)}</span>
       </div>

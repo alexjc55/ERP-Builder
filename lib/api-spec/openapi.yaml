@@ -10058,6 +10058,11 @@ components:
         the record status. Configuration cannot
         grant field or record access.
       properties:
+        textDirection:
+          type: string
+          enum: [ltr, rtl]
+          nullable: true
+          description: Card content direction; null inherits page and app direction. Explicit field direction takes priority.
         titleField:
           type: string
           nullable: true

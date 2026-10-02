@@ -10,10 +10,12 @@ export function TextDirectionSelect({
   value,
   onChange,
   id,
+  showPriorityHint = true,
 }: {
   value: TextDirectionOverride;
   onChange: (value: TextDirectionOverride) => void;
   id: string;
+  showPriorityHint?: boolean;
 }) {
   const t = useT();
   return (
@@ -29,9 +31,9 @@ export function TextDirectionSelect({
           <SelectItem value="rtl" data-testid={`${id}-rtl`}>{t("textDirection.rtl", "Справа налево (RTL)")}</SelectItem>
         </SelectContent>
       </Select>
-      <p className="text-xs text-slate-500" data-testid={`text-${id}-hint`}>
+      {showPriorityHint && <p className="text-xs text-slate-500" data-testid={`text-${id}-hint`}>
         {t("textDirection.priority", "Приоритет: поле → страница → приложение → язык. Наследовать снимает переопределение. Статусы не затрагиваются.")}
-      </p>
+      </p>}
     </div>
   );
 }

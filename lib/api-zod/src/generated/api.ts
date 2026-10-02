@@ -9849,6 +9849,7 @@ export const ListEntityViewsResponseItem = zod.object({
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
 }).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
   "kanban": zod.object({
+  "textDirection": zod.enum(['ltr', 'rtl']).nullish().describe('Card content direction; null inherits page and app direction. Explicit field direction takes priority.'),
   "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
   "fields": zod.array(zod.string().min(1)),
   "showLabels": zod.boolean(),
@@ -9961,6 +9962,7 @@ export const CreateEntityViewBody = zod.object({
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
 }).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
   "kanban": zod.object({
+  "textDirection": zod.enum(['ltr', 'rtl']).nullish().describe('Card content direction; null inherits page and app direction. Explicit field direction takes priority.'),
   "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
   "fields": zod.array(zod.string().min(1)),
   "showLabels": zod.boolean(),
@@ -10071,6 +10073,7 @@ export const ListMainEntityViewsResponseItem = zod.object({
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
 }).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
   "kanban": zod.object({
+  "textDirection": zod.enum(['ltr', 'rtl']).nullish().describe('Card content direction; null inherits page and app direction. Explicit field direction takes priority.'),
   "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
   "fields": zod.array(zod.string().min(1)),
   "showLabels": zod.boolean(),
@@ -10184,6 +10187,7 @@ export const ListPageViewsResponseItem = zod.object({
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
 }).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
   "kanban": zod.object({
+  "textDirection": zod.enum(['ltr', 'rtl']).nullish().describe('Card content direction; null inherits page and app direction. Explicit field direction takes priority.'),
   "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
   "fields": zod.array(zod.string().min(1)),
   "showLabels": zod.boolean(),
@@ -10297,6 +10301,7 @@ export const GetViewResponse = zod.object({
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
 }).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
   "kanban": zod.object({
+  "textDirection": zod.enum(['ltr', 'rtl']).nullish().describe('Card content direction; null inherits page and app direction. Explicit field direction takes priority.'),
   "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
   "fields": zod.array(zod.string().min(1)),
   "showLabels": zod.boolean(),
@@ -10407,6 +10412,7 @@ export const UpdateViewBody = zod.object({
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
 }).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
   "kanban": zod.object({
+  "textDirection": zod.enum(['ltr', 'rtl']).nullish().describe('Card content direction; null inherits page and app direction. Explicit field direction takes priority.'),
   "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
   "fields": zod.array(zod.string().min(1)),
   "showLabels": zod.boolean(),
@@ -10509,6 +10515,7 @@ export const UpdateViewResponse = zod.object({
   "defaultMode": zod.union([zod.literal('month'),zod.literal('week'),zod.literal('day'),zod.literal('agenda'),zod.literal(null)]).nullish().describe('Initial calendar layout. Defaults to month.')
 }).optional().describe('Configuration for a calendar view (viewType=calendar). The records shown are the SAME viewer-scoped rows as the table (filters\/search\/status apply); the calendar just lays them out by date. `dateFieldKey` anchors each record on a day; `endDateFieldKey` (optional) turns a record into a multi-day span. The event chip shows `titleFieldKey` (falling back to the first text field) plus any `cardFieldKeys`. Coloring is by record status or a chosen field.'),
   "kanban": zod.object({
+  "textDirection": zod.enum(['ltr', 'rtl']).nullish().describe('Card content direction; null inherits page and app direction. Explicit field direction takes priority.'),
   "titleField": zod.string().min(1).nullable().describe('Card title field, or null for the renderer\'s default title.'),
   "fields": zod.array(zod.string().min(1)),
   "showLabels": zod.boolean(),
