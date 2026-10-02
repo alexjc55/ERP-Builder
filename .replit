@@ -28,6 +28,10 @@ args = "dependency-install"
 task = "workflow.run"
 args = "page-select-status-sync"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "kanban-collaboration"
+
 [[workflows.workflow]]
 name = "collaboration-e2e"
 author = "agent"
@@ -57,6 +61,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "corepack pnpm run validate:page-select-status-sync"
+
+[workflows.workflow.metadata]
+isValidation = true
+
+[[workflows.workflow]]
+name = "kanban-collaboration"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash scripts/validate-kanban-collaboration-e2e.sh"
 
 [workflows.workflow.metadata]
 isValidation = true

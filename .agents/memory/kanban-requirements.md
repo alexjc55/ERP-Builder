@@ -28,3 +28,9 @@ description: Product constraints for the reusable CRM-first Kanban entity view.
 **Why:** Horizontal autoscrolling caused a rerender and callback-identity change that triggered effect cleanup, terminating the drag before drop.
 
 **How to apply:** Clean up the captured gesture on cancellation, query-scope change or unmount, not on changing callback identity. Retain real-pointer horizontal-autoscroll regression coverage.
+
+**Rule:** After a conflicting Kanban move, refresh every current lane, not only the losing move's source and destination.
+
+**Why:** A concurrent winner can move the card into a third lane. An SSE refresh during the losing pending move hides that authoritative card behind the optimistic overlay; two-lane refresh then leaves it missing.
+
+**How to apply:** Exercise a three-lane conflict with two real sessions and an SSE refresh while the losing write is pending; verify the winner's card and counts after rollback.

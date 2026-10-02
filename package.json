@@ -9,6 +9,8 @@
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "release": "pnpm run typecheck && pnpm run validate:page-select-status-sync && pnpm --filter @workspace/db run generate",
     "test:e2e:collaboration": "playwright test tests/e2e/collaboration.spec.ts",
+    "test:e2e:kanban-collaboration": "bash scripts/validate-kanban-collaboration-e2e.sh",
+    "validate:kanban-collaboration": "bash scripts/validate-kanban-collaboration-e2e.sh",
     "test:e2e:page-load-profile": "bash scripts/with-validation-lock.sh env RUN_PAGE_LOAD_PROFILE=1 playwright test tests/e2e/page-load-profile.spec.ts",
     "test:e2e:relation-edit": "playwright test tests/e2e/relation-edit.spec.ts",
     "test:e2e:delivery-workflow": "bash scripts/validate-delivery-workflow-e2e.sh",

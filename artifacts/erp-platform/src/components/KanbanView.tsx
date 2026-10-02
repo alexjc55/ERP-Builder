@@ -462,8 +462,11 @@ export function KanbanView(props: KanbanViewProps) {
         });
         errToast();
         if (conflict) {
-          if (laneStateRef.current.has(from)) void loadLane(from);
-          if (laneStateRef.current.has(to)) void loadLane(to);
+          // Another editor may have moved this record into a third lane. A
+          // live refresh while our write was pending hid that authoritative
+          // card behind the optimistic overlay, so reloading only our source
+          // and destination would leave the winner's lane missing the card.
+          void reloadAllRef.current();
         }
       }
     },
