@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { DataDirection } from "@/lib/dataDirection";
 
-type Choice = { value: string; label: string };
+type Choice = { value: string; label: string; content?: ReactNode };
 
 function revealOption(element: HTMLElement, list: HTMLElement) {
   const top = element.offsetTop;
@@ -126,7 +126,7 @@ export function InlineListPicker({
           aria-expanded={open}
           className="flex h-8 w-full items-center justify-between gap-2 whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm outline-none focus:ring-1 focus:ring-ring"
         >
-          <span dir={textDirection} className="truncate text-start">{selected?.label ?? placeholder}</span>
+          <span dir={textDirection} className="truncate text-start">{selected?.content ?? selected?.label ?? placeholder}</span>
           <ChevronDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden="true" />
         </button>
       </PopoverTrigger>
@@ -161,7 +161,7 @@ export function InlineListPicker({
             onClick={() => choose(index)}
             className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 ps-2 pe-8 text-sm outline-none focus:bg-accent focus:text-accent-foreground"
           >
-            <span className="min-w-0 break-words text-start">{option.label}</span>
+            <span className="min-w-0 break-words text-start">{option.content ?? option.label}</span>
             {index === selectedIndex && (
               <Check className="absolute end-2 h-4 w-4" aria-hidden="true" />
             )}

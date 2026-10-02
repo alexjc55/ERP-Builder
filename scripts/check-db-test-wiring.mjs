@@ -4,6 +4,8 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { ANALYSIS_LIMITS, localProgram, functionAt, resolveSql } from "./db-wiring-analysis.mjs";
+import { checkLockGraph } from "./db-wiring-lock-graph.mjs";
 
 const API_DIR = path.join("artifacts", "api-server");
 const LOCK_RUNNER = "../../scripts/with-validation-lock.sh";
@@ -109,44 +111,6 @@ function bindingPropertyName(element) {
   return undefined;
 }
 
-function sqlText(expression) {
-  expression = unwrapExpression(expression);
-  if (
-    ts.isStringLiteral(expression) ||
-    ts.isNoSubstitutionTemplateLiteral(expression)
-  ) {
-    return expression.text;
-  }
-  if (ts.isTemplateExpression(expression)) {
-    return (
-      expression.head.text +
-      expression.templateSpans
-        .map((span) => ` ${span.literal.text}`)
-        .join("")
-    );
-  }
-  if (ts.isTaggedTemplateExpression(expression)) {
-    return sqlText(expression.template);
-  }
-  if (ts.isCallExpression(expression)) {
-    const property = propertyParts(expression.expression);
-    if (property?.name === "raw" && expression.arguments[0]) {
-      return sqlText(expression.arguments[0]);
-    }
-  }
-  if (
-    ts.isBinaryExpression(expression) &&
-    expression.operatorToken.kind === ts.SyntaxKind.PlusToken
-  ) {
-    const left = sqlText(expression.left);
-    const right = sqlText(expression.right);
-    return left === undefined || right === undefined
-      ? undefined
-      : `${left} ${right}`;
-  }
-  return undefined;
-}
-
 function tokenizeSql(text) {
   const tokens = [];
   let index = 0;
@@ -239,6 +203,9 @@ function tokenGroupMutates(tokens) {
   for (const segment of segments) {
     const command = segment.find((token) => SQL_COMMANDS.has(token));
     if (command && MUTATING_SQL_COMMANDS.has(command)) return true;
+    if (command === "explain" && tokens.includes("analyze") &&
+        tokens.some((token) => MUTATING_SQL_COMMANDS.has(token))) return true;
+    if (command === "select" && segment.includes("into")) return true;
   }
   return groups.some(
     (group) =>
@@ -249,20 +216,15 @@ function tokenGroupMutates(tokens) {
   );
 }
 
-function isMutatingSql(expression) {
-  const text = sqlText(expression);
-  if (text === undefined) return false;
+function isMutatingSql(expression, checker) {
+  const text = resolveSql(expression, checker, unwrapExpression);
+  if (text === undefined) return true;
+  if (!tokenizeSql(text).some((token) => SQL_COMMANDS.has(token))) return true;
   return tokenGroupMutates(tokenizeSql(text));
 }
 
-function findDbMutations(absoluteFile) {
-  const program = ts.createProgram([absoluteFile], {
-    allowJs: false,
-    noEmit: true,
-    noLib: true,
-    noResolve: true,
-    target: ts.ScriptTarget.Latest,
-  });
+function findDbMutations(absoluteFile, root) {
+  const program = localProgram(absoluteFile, root);
   const source = program.getSourceFile(absoluteFile);
   if (!source) return [];
   const checker = program.getTypeChecker();
@@ -272,15 +234,31 @@ function findDbMutations(absoluteFile) {
   const namespaceSymbols = new Set();
   const txSymbols = new Set();
   const functionAliases = new Map();
+  const returnedKinds = new Map();
   const nodes = [];
+  const activeFunctions = new Set();
+  const unknownHelperCalls = new Set();
 
   function walk(node) {
+    if (ts.isFunctionLike(node)) return;
     nodes.push(node);
+    if (nodes.length > ANALYSIS_LIMITS.nodes) throw new Error("local DB analysis node limit exceeded");
     ts.forEachChild(node, walk);
   }
-  walk(source);
+  function activate(fn) {
+    if (!fn?.body || activeFunctions.has(fn)) return false;
+    activeFunctions.add(fn);
+    walk(fn.body);
+    return true;
+  }
+  for (const localSource of program.getSourceFiles()) walk(localSource);
+  for (const localSource of program.getSourceFiles()) {
+    if (localSource.parseDiagnostics.length) {
+      throw new Error(`cannot parse local source ${path.relative(root, localSource.fileName)}`);
+    }
+  }
 
-  for (const statement of source.statements) {
+  for (const statement of program.getSourceFiles().flatMap((file) => [...file.statements])) {
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
@@ -321,20 +299,25 @@ function findDbMutations(absoluteFile) {
     );
   };
   const isNamespace = (node) => hasSymbol(namespaceSymbols, node);
+  const returnsKind = (node, kind) => {
+    node = unwrapExpression(node);
+    return node && ts.isCallExpression(node) &&
+      returnedKinds.get(functionAt(checker, node.expression, unwrapExpression))?.has(kind);
+  };
   const isDb = (node) => {
     node = unwrapExpression(node);
-    if (hasSymbol(dbSymbols, node)) return true;
+    if (hasSymbol(dbSymbols, node) || returnsKind(node, "db")) return true;
     const property = propertyParts(node);
     return property?.name === "db" && isNamespace(property.receiver);
   };
   const isPool = (node) => {
     node = unwrapExpression(node);
-    if (hasSymbol(poolSymbols, node)) return true;
+    if (hasSymbol(poolSymbols, node) || returnsKind(node, "pool")) return true;
     const property = propertyParts(node);
     return property?.name === "pool" && isNamespace(property.receiver);
   };
-  const isClient = (node) => hasSymbol(clientSymbols, node);
-  const isTx = (node) => hasSymbol(txSymbols, node);
+  const isClient = (node) => hasSymbol(clientSymbols, node) || returnsKind(node, "client");
+  const isTx = (node) => hasSymbol(txSymbols, node) || returnsKind(node, "tx");
   const addIdentifierSymbol = (set, node) => {
     if (!ts.isIdentifier(node)) return false;
     const symbol = symbolAt(checker, node);
@@ -342,6 +325,21 @@ function findDbMutations(absoluteFile) {
     set.add(symbol);
     return true;
   };
+  function importedOrigin(node, seen = new Set()) {
+    node = unwrapExpression(node);
+    if (!node || seen.size >= ANALYSIS_LIMITS.depth) return true;
+    const symbol = symbolAt(checker, node);
+    if (!symbol || seen.has(symbol)) {
+      const property = propertyParts(node);
+      return property ? importedOrigin(property.receiver, seen) : false;
+    }
+    seen.add(symbol);
+    return (symbol.declarations ?? []).some((declaration) =>
+      ts.isImportSpecifier(declaration) || ts.isImportClause(declaration) ||
+      ts.isNamespaceImport(declaration) ||
+      (ts.isVariableDeclaration(declaration) && declaration.initializer &&
+        importedOrigin(declaration.initializer, seen)));
+  }
 
   function trackBinding(name, initializer) {
     if (ts.isIdentifier(name)) {
@@ -416,10 +414,12 @@ function findDbMutations(absoluteFile) {
     ) {
       return undefined;
     }
-    const callback = unwrapExpression(call.arguments[0]);
+    const callback = functionAt(checker, call.arguments[0], unwrapExpression) ?? unwrapExpression(call.arguments[0]);
     if (
       callback &&
-      (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))
+      (ts.isArrowFunction(callback) ||
+        ts.isFunctionExpression(callback) ||
+        ts.isFunctionDeclaration(callback))
     ) {
       return callback;
     }
@@ -443,10 +443,23 @@ function findDbMutations(absoluteFile) {
   }
 
   let changed = true;
+  let steps = 0;
   while (changed) {
+    if (++steps > ANALYSIS_LIMITS.steps) throw new Error("local DB analysis propagation limit exceeded");
     changed = false;
     for (const node of nodes) {
-      if (ts.isVariableDeclaration(node) && node.initializer) {
+      if (ts.isReturnStatement(node) && node.expression) {
+        let fn = node.parent;
+        while (fn && !ts.isFunctionLike(fn)) fn = fn.parent;
+        const kinds = returnedKinds.get(fn) ?? new Set();
+        for (const [kind, matches] of [["db", isDb], ["pool", isPool], ["client", isClient], ["tx", isTx]]) {
+          if (matches(node.expression) && !kinds.has(kind)) {
+            kinds.add(kind);
+            returnedKinds.set(fn, kinds);
+            changed = true;
+          }
+        }
+      } else if (ts.isVariableDeclaration(node) && node.initializer) {
         changed = trackBinding(node.name, node.initializer) || changed;
       } else if (
         ts.isBinaryExpression(node) &&
@@ -454,6 +467,28 @@ function findDbMutations(absoluteFile) {
       ) {
         changed = trackBinding(node.left, node.right) || changed;
       } else if (ts.isCallExpression(node)) {
+        const fn = functionAt(checker, node.expression, unwrapExpression);
+        if (fn) {
+          changed = activate(fn) || changed;
+          for (let index = 0; index < fn.parameters.length; index += 1) {
+            if (node.arguments[index]) {
+              changed = trackBinding(fn.parameters[index].name, node.arguments[index]) || changed;
+            }
+          }
+        } else if (node.arguments.some((argument) =>
+          isDb(argument) || isPool(argument) || isClient(argument) || isTx(argument))) {
+          // An opaque helper handed a genuine connection is not evidence of safety.
+          if (importedOrigin(node.expression)) unknownHelperCalls.add(node);
+        }
+        // Test bodies and ordinary callbacks are potentially executed by their caller.
+        let enclosing = node.parent;
+        while (enclosing && !ts.isFunctionLike(enclosing)) enclosing = enclosing.parent;
+        if (node.getSourceFile() === source || activeFunctions.has(enclosing)) {
+          for (const argument of node.arguments) {
+            const callbackFn = functionAt(checker, argument, unwrapExpression);
+            if (callbackFn) changed = activate(callbackFn) || changed;
+          }
+        }
         const callback = transactionCallback(node);
         const parameter = callback?.parameters[0]?.name;
         if (parameter) {
@@ -463,7 +498,7 @@ function findDbMutations(absoluteFile) {
     }
   }
 
-  const mutations = [];
+  const mutations = [...unknownHelperCalls];
   for (const node of nodes) {
     if (!ts.isCallExpression(node)) continue;
     const calledSymbol = symbolAt(checker, unwrapExpression(node.expression));
@@ -472,8 +507,7 @@ function findDbMutations(absoluteFile) {
       aliasMethod &&
       (MUTATION_METHODS.has(aliasMethod) ||
         ((aliasMethod === "execute" || aliasMethod === "query") &&
-          node.arguments[0] &&
-          isMutatingSql(node.arguments[0])))
+           isMutatingSql(node.arguments[0], checker)))
     ) {
       mutations.push(node);
       continue;
@@ -492,15 +526,15 @@ function findDbMutations(absoluteFile) {
       ((isDb(property.receiver) || isTx(property.receiver)) &&
         MUTATION_METHODS.has(property.name)) ||
       ((property.name === "execute" || property.name === "query") &&
-        node.arguments[0] &&
-        isMutatingSql(node.arguments[0]))
+         isMutatingSql(node.arguments[0], checker))
     ) {
       mutations.push(node);
     }
   }
   return mutations.map((node) => {
-    const position = source.getLineAndCharacterOfPosition(node.getStart(source));
-    return { line: position.line + 1, column: position.character + 1 };
+    const mutationSource = node.getSourceFile();
+    const position = mutationSource.getLineAndCharacterOfPosition(node.getStart(mutationSource));
+    return { file: path.relative(root, mutationSource.fileName), line: position.line + 1, column: position.character + 1 };
   });
 }
 
@@ -577,15 +611,22 @@ export async function validateDbTestWiring(projectRoot = process.cwd()) {
   ]);
   const dbTests = testFiles.filter((file) => file.endsWith(".db.test.ts"));
   const errors = [];
+  errors.push(...await checkLockGraph(root, rootPackage, apiPackage));
   const registrations = new Map(dbTests.map((file) => [file, []]));
 
   for (const file of testFiles) {
     if (file.endsWith(".db.test.ts")) continue;
-    const mutations = findDbMutations(path.join(apiRoot, file));
+    let mutations;
+    try {
+      mutations = findDbMutations(path.join(apiRoot, file), root);
+    } catch (error) {
+      errors.push(`DB analysis of "${file}" failed closed: ${error.message}`);
+      continue;
+    }
     if (mutations.length) {
       const first = mutations[0];
       errors.push(
-        `mutating DB test "${file}:${first.line}:${first.column}" must use the .db.test.ts suffix and safe API script registration`,
+        `mutating DB test "${file}" (${first.file}:${first.line}:${first.column}) must use the .db.test.ts suffix and safe API script registration`,
       );
     }
   }

@@ -69,12 +69,12 @@ isValidation = true
 name = "kanban-collaboration"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "bash scripts/validate-kanban-collaboration-e2e.sh"
-
 [workflows.workflow.metadata]
 isValidation = true
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "env NODE_ENV=development REPLIT_ENVIRONMENT=development KANBAN_E2E_DEV_FINGERPRINT=10ad6a486b8f3634ad2efbc261f4f95d bash scripts/validate-kanban-collaboration-e2e.sh"
 
 [agent]
 stack = "PNPM_WORKSPACE"

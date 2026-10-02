@@ -10,6 +10,18 @@ const workspaceRoot = path.resolve(import.meta.dirname, "..");
 const artifactDirectory = path.join(workspaceRoot, "artifacts/erp-platform");
 const argumentsList = process.argv.slice(2);
 const fullSpec = argumentsList.includes("--full-spec");
+const specArguments = argumentsList.flatMap((argument, index) => {
+  if (argument !== "--spec") return [];
+  const value = argumentsList[index + 1];
+  if (!value || !/^tests\/e2e\/[a-zA-Z0-9/-]+\.spec\.ts$/.test(value) || value.includes("..")) {
+    throw new Error("--spec requires a relative tests/e2e/*.spec.ts path");
+  }
+  return [value];
+});
+const specs = specArguments.length ? specArguments : [
+  "tests/e2e/stable-background-refresh.spec.ts",
+  ...(fullSpec ? ["tests/e2e/collab-tooltip-formula-metadata.spec.ts"] : []),
+];
 const grepIndex = argumentsList.indexOf("--grep");
 if (fullSpec && grepIndex >= 0) {
   throw new Error("--full-spec and --grep cannot be used together");
@@ -20,7 +32,11 @@ if (grepIndex >= 0 && !argumentsList[grepIndex + 1]) {
 const grep =
   grepIndex >= 0
     ? argumentsList[grepIndex + 1]
-    : "profile: measures select reopen while a projection is held";
+    : "profile:";
+const budgetMs = Number(process.env.INLINE_EDITOR_PROFILE_BUDGET_MS ?? "250");
+if (!Number.isFinite(budgetMs) || budgetMs <= 0 || budgetMs > 250) {
+  throw new Error("INLINE_EDITOR_PROFILE_BUDGET_MS must be > 0 and <= 250; the production budget cannot be raised");
+}
 
 function run(command, args, options) {
   return new Promise((resolve, reject) => {
@@ -183,7 +199,7 @@ try {
   const playwrightArguments = [
     playwrightCli,
     "test",
-    "tests/e2e/stable-background-refresh.spec.ts",
+    ...specs,
     "--config=playwright.inline-editor-profile.config.ts",
   ];
   if (!fullSpec) playwrightArguments.push(`--grep=${grep}`);
@@ -197,8 +213,7 @@ try {
       ...(fullSpec
         ? {}
         : {
-            INLINE_EDITOR_PROFILE_BUDGET_MS:
-              process.env.INLINE_EDITOR_PROFILE_BUDGET_MS ?? "250",
+             INLINE_EDITOR_PROFILE_BUDGET_MS: String(budgetMs),
           }),
     },
     stdio: "inherit",

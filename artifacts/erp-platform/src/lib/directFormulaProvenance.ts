@@ -58,5 +58,34 @@ export function directFormulaDisplayValue(
 ): unknown {
   if (resultType !== "user" || value == null || value === "") return value;
   const id = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(id) ? (userNames.get(id) ?? `#${value}`) : value;
+  return Number.isFinite(id) ? (userNames.get(id) ?? "—") : "—";
+}
+
+export type DirectFormulaPresentation =
+  | { state: "value"; value: unknown }
+  | { state: "pending" | "unavailable" };
+
+/**
+ * An unresolved direct lookup is not a numeric formula. Until the authorized
+ * projection proves its type, withhold the value (including group commons).
+ * No target-key guesses, numeric-id heuristics, or cross-scope type caches.
+ */
+export function directFormulaPresentation(
+  value: unknown,
+  resultType: string | null | undefined,
+  userNames: ReadonlyMap<number, string>,
+  states: {
+    metadata: "pending" | "ready" | "unavailable";
+    users: "pending" | "ready" | "unavailable";
+  },
+): DirectFormulaPresentation {
+  if (value == null || value === "") return { state: "value", value };
+  if (resultType === "lookup") {
+    return { state: states.metadata === "pending" ? "pending" : "unavailable" };
+  }
+  if (resultType !== "user") return { state: "value", value };
+  const id = typeof value === "number" ? value : Number(value);
+  const name = Number.isFinite(id) ? userNames.get(id) : undefined;
+  if (name != null) return { state: "value", value: name };
+  return { state: states.users === "pending" ? "pending" : "unavailable" };
 }

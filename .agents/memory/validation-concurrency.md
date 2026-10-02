@@ -11,6 +11,17 @@ The dependency-install validation, collaboration/relation E2E, and PostgreSQL fi
 
 DB-test discovery must remain static; never execute or import fixture modules to decide whether they mutate the database.
 
+Resolved function symbols may point to declarations, not just arrow/function
+expressions. Preserve authentic transaction provenance for all supported callback
+forms, including imported and aliased named callbacks.
+
+**Why:** Expanding helper resolution once regressed previously detected named
+transaction callbacks by checking only expression node kinds after resolution.
+
+**How to apply:** Pair each new callable resolution form with real-DB mutation
+and read-only negative fixtures; test the transaction parameter as well as
+ordinary helper arguments.
+
 **Why:** Runtime classification could perform the very unguarded mutation the inventory is intended to prevent. Static discovery catches naming mistakes but is not a sandbox for arbitrary helper functions or dynamically generated SQL.
 
 **How to apply:** Keep regression fixtures as inert source strings in temporary directories. Preserve explicit DB suffix/locked-command registration even when extending mutation inference.

@@ -1,11 +1,13 @@
 import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useId, useContext, createContext, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { resolveDataDirection, type DataDirection } from "@/lib/dataDirection";
+import { CellCollabTooltip } from "./CellCollabTooltip";
 import { sameAggregateTopology } from "@/lib/aggregateSnapshot";
 import { isGroupExpanded, toggleGroupException, groupedQueryOptions } from "@/lib/groupAccordion";
 import { MultipleRelationPicker } from "./MultipleRelationPicker";
 import { draftRelationSelections } from "@/lib/relationSelections";
 import { columnGroupBodyStyle, resolveColumnGroupCellStyle } from "@/lib/columnGroupStyles";
 import { InlineListPicker } from "@/components/InlineListPicker";
+import { InlineStatusPicker } from "@/components/InlineStatusPicker";
 import { CompactStatus } from "@/components/CompactStatus";
 import { orderMirrorColumns, moveMirrorColumn } from "@/lib/mirrorColumnOrder";
 import { bulkErrorLabel } from "@/lib/bulkErrorLabel";
@@ -155,6 +157,7 @@ import {
 import {
   directEntityFormulaResultType,
   directFormulaDisplayValue,
+  directFormulaPresentation,
 } from "@/lib/directFormulaProvenance";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -276,7 +279,7 @@ type RecordRowColumn =
   | { kind: "page"; token: string; pinKey: string; field: PageField }
   | { kind: "status"; token: typeof STATUS_COLUMN_KEY; pinKey: typeof STATUS_COLUMN_KEY };
 type RecordRowContext = {
-  cellDirection: (field: Field | PageField) => DataDirection;
+  cellDirection: (field: Pick<Field | PageField, "textDirection">) => DataDirection;
   orderedColumns: RecordRowColumn[];
   fields: Field[];
   t: ReturnType<typeof useT>;
@@ -446,24 +449,24 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
             }}>
               {statusManualEditable && editingCell?.recordId === record.id && editingCell?.fieldKey === STATUS_COLUMN_KEY ? (
                 <>
-                  <Select defaultOpen
+                  <InlineStatusPicker
                     value={pendingInlineWriteKey === `entity:${record.id}:${STATUS_COLUMN_KEY}` && pendingInlineDraft != null
                       ? String(pendingInlineDraft) : record.statusId != null ? String(record.statusId) : NO_STATUS}
-                    onValueChange={v => commitStatus(record, v)}
-                    onOpenChange={o => {
-                      if (!o && pendingInlineWriteKey !== `entity:${record.id}:${STATUS_COLUMN_KEY}`) setEditingCell(null);
-                    }}
-                  >
-                    <SelectTrigger className="min-h-8 h-auto w-44 whitespace-normal text-sm [&>span]:line-clamp-none [&>span]:whitespace-normal"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {!workflowActiveForRecord(record) && (allowNoStatus || record.statusId == null) && (
-                        <SelectItem value={NO_STATUS}>{t("records.noStatus", "Без статуса")}</SelectItem>
-                      )}
-                      {allowedStatusesForRecord(record).map(s => (
-                        <SelectItem key={s.id} value={String(s.id)}><CompactStatus name={ml(s.nameJson)} nameJson={s.nameJson} displayTags={s.displayTags} ml={ml} /></SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder={t("records.noStatus", "Без статуса")}
+                    label={t("records.status", "Статус")}
+                    textDirection={cellDirection({})}
+                    options={[
+                      ...(!workflowActiveForRecord(record) && (allowNoStatus || record.statusId == null)
+                        ? [{ value: NO_STATUS, label: t("records.noStatus", "Без статуса") }] : []),
+                      ...allowedStatusesForRecord(record).map(s => ({
+                        value: String(s.id), label: ml(s.nameJson),
+                        content: <CompactStatus name={ml(s.nameJson)} nameJson={s.nameJson} displayTags={s.displayTags} ml={ml} />,
+                      })),
+                    ]}
+                    pending={pendingInlineWriteKey === `entity:${record.id}:${STATUS_COLUMN_KEY}`}
+                    onCommit={v => commitStatus(record, v)}
+                    onCancel={() => setEditingCell(null)}
+                  />
                   {pendingInlineWriteKey === `entity:${record.id}:${STATUS_COLUMN_KEY}` && (
                     <InlineSavingIndicator label={t("records.saving", "Сохранение…")} />
                   )}
@@ -509,7 +512,9 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
               const rel = entityRelatedValues?.get(f.fieldKey);
               const relField = { ...f, fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"], optionsJson: meta?.optionsJson ?? [] } as unknown as Field;
               const relAssignable = inlineEditEnabled && entityRelationsProjectionState === "ready" && !!meta?.editableColumn && !!rel?.editable && !relationFieldLocked(f, rel?.linkedRecordId ?? rel?.linkedRecordIds?.[0]);
-              const keepRelationPickerMounted = relationIsEditingThis && !!meta?.editableColumn && !!rel?.editable;
+              // A retained authorized snapshot keeps the picker subtree alive
+              // through ACK/background refresh; writes remain disabled unless ready.
+              const keepRelationPickerMounted = inlineEditEnabled && !!meta?.editableColumn && !!rel?.editable;
               const relDep = f.dependencyConfigJson;
               const relDepParentKey = relDep?.dependsOnFieldKey;
               const relIsDependent = !!(relDepParentKey && relDep?.relatedFilterFieldKey);
@@ -646,7 +651,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
             const rel = relatedValues?.get(pf.fieldKey);
             const relField = relationAsField(pf, meta);
             const relAssignable = inlineEditEnabled && pageRelationsProjectionState === "ready" && !!meta?.editableColumn && !!rel?.editable;
-            const keepRelationPickerMounted = isEditingThis && !!meta?.editableColumn && !!rel?.editable;
+            const keepRelationPickerMounted = inlineEditEnabled && !!meta?.editableColumn && !!rel?.editable;
             const display = rel?.linkedRecordId == null ? <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span> : renderCellValue(relField, rel?.value, t, userNames, cellText, ml);
             return (
               <td key={`pf-${pf.id}`} className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"}`} style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}>
@@ -1533,9 +1538,11 @@ function CellCollabVisual({
   const active = hasEditors || isConflict;
   const outlineColor = isConflict ? "#f59e0b" : (editorColor ?? "#3b82f6");
   const tooltipId = useId();
+  const anchorRef = useRef<HTMLDivElement>(null);
 
   return (
     <div
+      ref={anchorRef}
       className="relative w-full h-full min-h-[20px] flex items-center cursor-text"
       tabIndex={active ? 0 : undefined}
       aria-describedby={active ? tooltipId : undefined}
@@ -1551,24 +1558,15 @@ function CellCollabVisual({
             className="absolute inset-y-[-6px] inset-x-[-8px] pointer-events-none rounded-[4px] border-[2px] z-10"
             style={{ borderColor: outlineColor }}
           />
-          <div
+          <CellCollabTooltip
+            anchorRef={anchorRef}
             id={tooltipId}
-            role="tooltip"
-            data-testid="cell-collab-popover"
-            className="invisible absolute bottom-[calc(100%+8px)] left-1/2 z-50 w-max max-w-80 -translate-x-1/2 rounded-md border border-slate-200 bg-white p-2 text-xs text-slate-950 opacity-0 shadow-md transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-          >
-            {isConflict && (
-              <div data-testid="cell-conflict" className="text-amber-600 font-bold mb-1">
-                {conflictLabel}
-              </div>
-            )}
-            {hasEditors && (
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: editorColor }} />
-                <span><span className="font-bold">{editorNames}</span> {editingLabel}</span>
-              </div>
-            )}
-          </div>
+            isConflict={isConflict}
+            editorNames={editorNames}
+            editorColor={editorColor}
+            conflictLabel={conflictLabel}
+            editingLabel={editingLabel}
+          />
         </>
       )}
     </div>
@@ -2627,7 +2625,7 @@ export function EntityRecords({
   // Global records-table display style (cosmetic): plain | striped | striped_bold.
   const { data: appSettings } = useGetSettings();
   const cellDirection = useCallback(
-    (field: Field | PageField) => resolveDataDirection(field.textDirection, pageTextDirection, appSettings?.textDirection, lang),
+    (field: Pick<Field | PageField, "textDirection">) => resolveDataDirection(field.textDirection, pageTextDirection, appSettings?.textDirection, lang),
     [pageTextDirection, appSettings?.textDirection, lang],
   );
   const formulaOptions = useMemo<FormulaEvaluationOptions>(
@@ -2651,7 +2649,12 @@ export function EntityRecords({
   // an opaque colour and cannot rely on the row's Tailwind class. Custom colour
   // wins; otherwise mirror the bold/plain header default.
   const headerBg = headerColor ?? (boldHeader ? "#e2e8f0" : "#f8fafc");
-  const { data: userOptions = EMPTY_USER_OPTIONS } = useListUserOptions();
+  const {
+    data: userOptions = EMPTY_USER_OPTIONS,
+    isPending: userOptionsPending,
+    isError: userOptionsError,
+    refetch: refetchUserOptions,
+  } = useListUserOptions();
   // Roles are only needed to label per-field permission overrides in setup mode.
   const { data: rolesList = [] } = useListRoles({
     query: { enabled: canConfigureColumns, queryKey: getListRolesQueryKey() },
@@ -2920,39 +2923,6 @@ export function EntityRecords({
     for (const c of entityRelatedColumns) m.set(c.fieldKey, c);
     return m;
   }, [entityRelatedColumns]);
-  // Keep raw formula values; use the existing permission-scoped projection's
-  // metadata only for presentation, including group-common values. Never infer
-  // lookup types from target keys or the sticky calendar type cache.
-  const directEntityFormulaTypes = useMemo(() => {
-    const result = new Map<string, string>();
-    for (const formula of allFields) {
-      if (formula.fieldType !== "function") continue;
-      const type = directEntityFormulaResultType({
-        formula,
-        entityId,
-        entityFields: allFields,
-        pageFields,
-        entityRelatedColumns,
-      });
-      if (type) result.set(formula.fieldKey, type);
-    }
-    return result;
-  }, [allFields, entityId, pageFields, entityRelatedColumns]);
-  const directPageFormulaTypes = useMemo(() => {
-    const result = new Map<string, string>();
-    for (const formula of pageFields) {
-      if (formula.fieldType !== "function") continue;
-      const type = directEntityFormulaResultType({
-        formula,
-        entityId,
-        entityFields: allFields,
-        pageFields,
-        entityRelatedColumns,
-      });
-      if (type) result.set(formula.fieldKey, type);
-    }
-    return result;
-  }, [allFields, entityId, pageFields, entityRelatedColumns]);
   // Sticky cache of a relation/lookup field's PROJECTED type, keyed by fieldKey. The related-values
   // fetch clears `entityRelatedColumns` whenever the current filter yields zero rows (see the fetch
   // effect below), which would otherwise make a lookup-of-date field flip back to the checklist UI
@@ -5398,6 +5368,34 @@ export function EntityRecords({
     entityRelatedHydrationErrorKey === expectedEntityRelatedHydrationKey;
   const entityRelationsStale =
     hasEntityRelationFields && records.length > 0 && entityRelationsProjectionState === "stale";
+  // Type metadata is a permission-scoped projection too. Compare the exact
+  // scope synchronously, rather than trusting old columns until an effect runs.
+  const directEntityFormulaTypes = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const formula of allFields) {
+      if (formula.fieldType !== "function") continue;
+      const type = directEntityFormulaResultType({
+        formula, entityId, entityFields: allFields, pageFields,
+        entityRelatedColumns: entityRelatedHydrationKey === expectedEntityRelatedHydrationKey
+          ? entityRelatedColumns : [],
+      });
+      if (type) result.set(formula.fieldKey, type);
+    }
+    return result;
+  }, [allFields, entityId, pageFields, entityRelatedColumns, entityRelatedHydrationKey, expectedEntityRelatedHydrationKey]);
+  const directPageFormulaTypes = useMemo(() => {
+    const result = new Map<string, string>();
+    for (const formula of pageFields) {
+      if (formula.fieldType !== "function") continue;
+      const type = directEntityFormulaResultType({
+        formula, entityId, entityFields: allFields, pageFields,
+        entityRelatedColumns: entityRelatedHydrationKey === expectedEntityRelatedHydrationKey
+          ? entityRelatedColumns : [],
+      });
+      if (type) result.set(formula.fieldKey, type);
+    }
+    return result;
+  }, [allFields, entityId, pageFields, entityRelatedColumns, entityRelatedHydrationKey, expectedEntityRelatedHydrationKey]);
   // Do not evaluate a formula from a partial page/relation snapshot. A formula
   // can reference any projected field (including indirectly through another
   // formula), so it is safer and faster to show its explicit pending state.
@@ -7278,7 +7276,33 @@ export function EntityRecords({
             // inner elements carry their own colour classes, so an inherited
             // wrapper colour would not reach them.
             commonTextColor = commonTextColor ?? groupBodyStyle?.color;
-            commonContent = renderCellValue(renderField, renderValue, t, userNames, commonTextColor, ml);
+            const presentation = directFormulaPresentation(renderValue, directType, userNames, {
+              metadata: entityRelationsUnavailable ? "unavailable" : entityRelationsPending ? "pending" : "ready",
+              users: userOptionsPending ? "pending" : userOptionsError ? "unavailable" : "ready",
+            });
+            if (presentation.state !== "value") {
+              commonContent = (
+                <span data-testid="group-formula-state" data-state={presentation.state} className="inline-flex items-center gap-2">
+                  {renderProjectionState(presentation.state)}
+                  {presentation.state === "unavailable" && (
+                    <button
+                      type="button"
+                      data-testid={`retry-group-formula-${col.pinKey}`}
+                      className="text-xs underline"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (directType === "user") void refetchUserOptions();
+                        else setRefreshTick((tick) => tick + 1);
+                      }}
+                    >{t("records.retry", "Повторить")}</button>
+                  )}
+                </span>
+              );
+            } else if (directType === "user") {
+              commonContent = <span className="text-slate-700" style={{ color: commonTextColor }}>{String(presentation.value)}</span>;
+            } else {
+              commonContent = renderCellValue(renderField, renderValue, t, userNames, commonTextColor, ml);
+            }
           }
           const groupCellBg = commonCellColor ?? groupBodyStyle?.backgroundColor ?? groupBg;
           return (

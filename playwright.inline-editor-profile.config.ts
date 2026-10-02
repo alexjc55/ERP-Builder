@@ -18,6 +18,10 @@ if (!baseURL) {
     "INLINE_EDITOR_PROFILE_BASE_URL is required; use the isolated production profile runner",
   );
 }
+const target = new URL(baseURL);
+if (target.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(target.hostname)) {
+  throw new Error("Inline editor checks require an isolated loopback static server, never a live deployment");
+}
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -26,10 +30,13 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: false,
   workers: 1,
+  retries: 0,
   reporter: [["list"]],
+  projects: [{ name: "chromium", use: { browserName: "chromium" } }],
   use: {
     baseURL,
     headless: true,
+    serviceWorkers: "block",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     launchOptions: {

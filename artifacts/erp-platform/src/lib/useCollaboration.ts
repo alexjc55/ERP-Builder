@@ -46,9 +46,14 @@ export function useCollaboration(pageId?: number | null) {
   const clientId = useRef(getClientId());
   const [lastMessage, setLastMessage] = useState<CollaborationMessage | null>(null);
   const currentEditing = useRef<CollaborationEditing | null>(null);
+  const activeScope = useRef<{
+    pageId: number; userId: number; denied: boolean; deny: () => void;
+  } | null>(null);
 
   const publishPresence = useCallback((editing: CollaborationEditing | null) => {
     if (!pageId || userId == null || isGuest) return;
+    const scope = activeScope.current;
+    if (!scope || scope.pageId !== pageId || scope.userId !== userId || scope.denied) return;
     currentEditing.current = editing;
     const token = localStorage.getItem("erp_token");
     if (!token) return;
@@ -60,6 +65,11 @@ export function useCollaboration(pageId?: number | null) {
       },
       body: JSON.stringify({ clientId: clientId.current, editing }),
     }).then((response) => {
+      if (activeScope.current !== scope) return;
+      if (response.status === 401 || response.status === 403) {
+        scope.deny();
+        return;
+      }
       if (!response.ok && !isGuest) {
         console.warn(`Collaboration presence failed: ${response.status}`);
       }
@@ -74,6 +84,8 @@ export function useCollaboration(pageId?: number | null) {
       setConnected(false);
       setConnectedPageId(null);
       setConnectionAttempt({ pageId: null, state: "unavailable" });
+      setLastMessage(null);
+      currentEditing.current = null;
       return;
     }
 
@@ -82,7 +94,30 @@ export function useCollaboration(pageId?: number | null) {
     let stopped = false;
     let reconnectTimer: number | undefined;
     let connectionFallbackTimer: number | undefined;
+    let heartbeatTimer: number | undefined;
     let retry = 0;
+    const scope = {
+      pageId, userId, denied: false,
+      deny: () => {
+        if (stopped || activeScope.current !== scope) return;
+        scope.denied = true;
+        stopped = true;
+        controller.abort();
+        if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+        if (connectionFallbackTimer !== undefined) window.clearTimeout(connectionFallbackTimer);
+        if (heartbeatTimer !== undefined) window.clearInterval(heartbeatTimer);
+        currentEditing.current = null;
+        setConnected(false);
+        setConnectedPageId(null);
+        setUsers([]);
+        setLastMessage(null);
+        setConnectionAttempt({ pageId, state: "unavailable" });
+      },
+    };
+    activeScope.current = scope;
+    setUsers([]);
+    setLastMessage(null);
+    currentEditing.current = null;
     setConnectionAttempt({ pageId, state: "connecting" });
     connectionFallbackTimer = window.setTimeout(() => {
       setConnectionAttempt((current) =>
@@ -97,6 +132,10 @@ export function useCollaboration(pageId?: number | null) {
       try {
         retry = 0;
         const data = JSON.parse(rawData) as Record<string, unknown>;
+        if (eventName === "access_denied") {
+          scope.deny();
+          return;
+        }
         const type = (eventName || data.type) as CollaborationMessage["type"];
         const message = { ...data, type } as CollaborationMessage;
         if (type === "snapshot" || type === "presence") {
@@ -130,6 +169,10 @@ export function useCollaboration(pageId?: number | null) {
             signal: controller.signal,
           },
         );
+        if (response.status === 401 || response.status === 403) {
+          scope.deny();
+          return;
+        }
         if (!response.ok || !response.body) throw new Error(`SSE request failed: ${response.status}`);
         if (stopped) return;
         setConnectedPageId(pageId);
@@ -175,7 +218,7 @@ export function useCollaboration(pageId?: number | null) {
     };
 
     void connect();
-    const heartbeatTimer = window.setInterval(
+    heartbeatTimer = window.setInterval(
       () => publishPresence(currentEditing.current),
       15_000,
     );
@@ -186,6 +229,7 @@ export function useCollaboration(pageId?: number | null) {
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
       if (connectionFallbackTimer !== undefined) window.clearTimeout(connectionFallbackTimer);
       window.clearInterval(heartbeatTimer);
+      if (activeScope.current === scope) activeScope.current = null;
       setConnected(false);
       setConnectedPageId(null);
     };

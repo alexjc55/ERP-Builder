@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { armPointerPaint, readPointerPaint, touchTap, touchScrollToEnd, scrollSnapshot } from "./fixtures/inline-editor-reliability";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 
 /**
@@ -41,6 +42,8 @@ type MockApiOptions = {
     labelJson: Record<string, string>;
   }>;
   defaultStage?: string;
+  stageType?: "select" | "percent";
+  reliabilityFields?: boolean;
 };
 
 function userProfile(language: "en" | "he" = "en") {
@@ -325,8 +328,8 @@ function record(
             : REFRESHED_TITLE
           : `${revision === 0 ? INITIAL_TITLE : REFRESHED_TITLE} #${id}`,
       stage: stageOverride ?? (revision === 0 ? "todo" : "done"),
-    },
-    statusId: null,
+    } as Record<string, unknown>,
+    statusId: null as number | null,
     archivedAt: null,
     statusChangedAt: null,
     version: versionOverride ?? revision + 1,
@@ -346,7 +349,26 @@ function json(route: Route, value: unknown, status = 200) {
 async function installMockApi(page: Page, options: MockApiOptions = {}) {
   const recordCount = options.recordCount ?? 1;
   const groupedMode = options.groupedMode ?? false;
-  const language = options.language ?? "en";
+  let language = options.language ?? "en";
+  let fieldOverrides: Record<string, Record<string, unknown>> = {};
+  let pageOverrides: Record<string, unknown> = {};
+  let settingsOverrides: Record<string, unknown> = {};
+  const metadataRequests: string[] = [];
+  const storedValues = new Map<number, Record<string, unknown>>();
+  const storedStatuses = new Map<number, number | null>();
+  const currentFields = () => {
+    const fields: Array<Record<string, unknown>> = entityFields(groupedMode, options.selectOptions);
+    if (options.stageType === "percent") {
+      Object.assign(fields[1], { fieldType: "percent", percentConfigJson: { mode: "list", decimals: 0 } });
+    }
+    if (options.reliabilityFields) {
+      fields.push(
+        { ...fields[0], id: 705, fieldKey: "amount", nameJson: { en: "Amount", he: "סכום" }, fieldType: "number", sortOrder: 5, formulaConfigJson: { decimals: 2 } },
+        { ...fields[0], id: 706, fieldKey: "assignee", nameJson: { en: "Assignee", he: "משתמש" }, fieldType: "user", sortOrder: 6 },
+      );
+    }
+    return fields.map((field) => ({ ...field, ...fieldOverrides[String(field.fieldKey)] }));
+  };
   await page.addInitScript(() => {
     localStorage.setItem("erp_token", "fake-stable-refresh-token");
   });
@@ -368,6 +390,9 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
   let recordUpdate: ProjectionGate | null = null;
   let pageValueUpdate: ProjectionGate | null = null;
   let recordsQuery: ProjectionGate | null = null;
+  let relatedLinkHold: ProjectionGate | null = null;
+  let linkedRecordId = RELATED_RECORD_ID;
+  const candidateRequests: Array<Record<string, unknown>> = [];
   const recordsQueryRequests: Array<Record<string, unknown>> = [];
   const projectionRequests: Array<Record<string, unknown>> = [];
   const pageValuesRequests: Array<Record<string, unknown>> = [];
@@ -383,9 +408,15 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
     const method = request.method();
 
     if (method === "GET" && path === "/api/auth/me") return json(route, userProfile(language));
+    if (method === "PUT" && path === "/api/auth/me") {
+      const body = request.postDataJSON();
+      if (body.language === "en" || body.language === "he") language = body.language;
+      return json(route, userProfile(language));
+    }
     if (method === "GET" && path === "/api/pages") {
+      metadataRequests.push(path);
       return json(route, [
-        pageMetadata(),
+        { ...pageMetadata(), ...pageOverrides },
         {
           ...mirrorPageMetadata(),
           ...(groupedMode
@@ -397,7 +428,8 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
     if (method === "GET" && path === "/api/entities") return json(route, [entityMetadata()]);
     if (method === "GET" && path === `/api/entities/${ENTITY_ID}`) return json(route, entityMetadata());
     if (method === "GET" && path === `/api/entities/${ENTITY_ID}/fields`) {
-      return json(route, entityFields(groupedMode, options.selectOptions));
+      metadataRequests.push(path);
+      return json(route, currentFields());
     }
     if (method === "GET" && path === `/api/pages/${PAGE_ID}/fields`) {
       return json(route, pageFields());
@@ -419,7 +451,10 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
     ) {
       return json(route, []);
     }
-    if (method === "GET" && path === `/api/entities/${ENTITY_ID}/statuses`) return json(route, []);
+    if (method === "GET" && path === `/api/entities/${ENTITY_ID}/statuses`) return json(route, options.reliabilityFields ? [
+      { id: 71, entityId: ENTITY_ID, nameJson: { en: "Queued", he: "ממתין" }, color: "#64748b", sortOrder: 0, isActive: true },
+      { id: 72, entityId: ENTITY_ID, nameJson: { en: "Ready", he: "מוכן" }, color: "#22c55e", sortOrder: 1, isActive: true },
+    ] : []);
     if (method === "GET" && path === `/api/entities/${ENTITY_ID}/transitions`) {
       return json(route, []);
     }
@@ -428,10 +463,14 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
       return json(route, []);
     }
     if (method === "GET" && path === "/api/column-groups") return json(route, []);
-    if (method === "GET" && path === "/api/users/options") return json(route, []);
+    if (method === "GET" && path === "/api/users/options") return json(route, options.reliabilityFields ? [
+      { id: 11, name: "Loaded Owner", roleId: 1, roleIds: [1] },
+      { id: 12, name: "Next Owner", roleId: 1, roleIds: [1] },
+    ] : []);
     if (method === "GET" && path === "/api/roles") return json(route, []);
     if (method === "GET" && path === "/api/translations") return json(route, []);
     if (method === "GET" && path === "/api/settings") {
+      metadataRequests.push(path);
       return json(route, {
         appNameJson: { en: "ERP" },
         subtitleJson: { en: "" },
@@ -446,6 +485,7 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
         tableHeaderColor: null,
         tableBorderColor: null,
         updatedAt: "2025-01-01T00:00:00.000Z",
+        ...settingsOverrides,
       });
     }
     if (method === "GET" && path.startsWith("/api/pages/") && path.endsWith("/dashboard/data")) {
@@ -492,6 +532,12 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
           row.valuesJson.amount = revision === 0 ? 123 : 0;
           row.valuesJson.category = GROUP_LABEL;
         }
+        if (options.stageType === "percent") row.valuesJson.stage = Number(row.valuesJson.stage);
+        if (options.reliabilityFields) {
+          Object.assign(row.valuesJson, { amount: 123.456, assignee: 11 });
+          row.statusId = storedStatuses.has(id) ? storedStatuses.get(id)! : 71;
+        }
+        Object.assign(row.valuesJson, storedValues.get(id));
         return row;
       });
       const currentRecordsQuery = recordsQuery;
@@ -549,6 +595,11 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
         return json(route, { error: "mocked entity save failed" }, 503);
       }
       const valuesJson = (body.valuesJson ?? {}) as Record<string, unknown>;
+      storedValues.set(updatedRecordId, { ...storedValues.get(updatedRecordId), ...valuesJson });
+      if (options.stageType === "percent" && "stage" in valuesJson) {
+        storedValues.get(updatedRecordId)!.stage = valuesJson.stage === "" || valuesJson.stage == null ? null : Number(valuesJson.stage);
+      }
+      if ("statusId" in body) storedStatuses.set(updatedRecordId, body.statusId as number | null);
       if (typeof valuesJson.stage === "string") entityStage = valuesJson.stage;
       latestRecordVersion += 1;
       updatedRecordVersions.set(updatedRecordId, latestRecordVersion);
@@ -558,10 +609,10 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
         currentUpdate.markSeen();
         await currentUpdate.gate;
       }
-      return json(
-        route,
-        record(recordsRevision, updatedRecordId, entityStage ?? undefined, latestRecordVersion),
-      );
+      const saved = record(recordsRevision, updatedRecordId, entityStage ?? undefined, latestRecordVersion);
+      Object.assign(saved.valuesJson, options.reliabilityFields ? { amount: 123.456, assignee: 11 } : {}, storedValues.get(updatedRecordId));
+      saved.statusId = storedStatuses.get(updatedRecordId) ?? (options.reliabilityFields ? 71 : null);
+      return json(route, saved);
     }
     if (method === "PUT" && path === `/api/pages/${PAGE_ID}/records/${RECORD_ID}/values`) {
       const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
@@ -644,14 +695,16 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
             fieldKey: "project_name",
             value:
               currentProjection?.value ??
-              (projectionRequests.length === 1 ? INITIAL_PROJECT : REFRESHED_PROJECT),
-            linkedRecordId: RELATED_RECORD_ID,
+              (linkedRecordId === NEXT_RELATED_RECORD_ID ? "Next project candidate with a long label" :
+                projectionRequests.length === 1 ? INITIAL_PROJECT : REFRESHED_PROJECT),
+            linkedRecordId,
             editable: true,
           },
         ],
       });
     }
     if (method === "POST" && path === `/api/pages/${PAGE_ID}/related-candidates`) {
+      candidateRequests.push(request.postDataJSON());
       return json(route, {
         candidates: [
           { id: NEXT_RELATED_RECORD_ID, label: "Next project candidate with a long label" },
@@ -661,10 +714,15 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
     if (method === "PUT" && path === `/api/pages/${PAGE_ID}/related-link`) {
       const body = (request.postDataJSON() ?? {}) as Record<string, unknown>;
       relatedLinkRequests.push(body);
+      latestRecordVersion += 1;
+      linkedRecordId = Number(body.linkedRecordId);
+      const hold = relatedLinkHold;
+      relatedLinkHold = null;
+      if (hold) { hold.markSeen(); await hold.gate; }
       return json(route, {
         linkedRecordId: body.linkedRecordId ?? null,
         value: "Next project candidate with a long label",
-        version: 2,
+        version: latestRecordVersion,
       });
     }
     if (method === "POST" && path === `/api/entities/${ENTITY_ID}/filter-values`) {
@@ -681,6 +739,22 @@ async function installMockApi(page: Page, options: MockApiOptions = {}) {
   });
 
   return {
+    publishMetadata(change: { fields?: Record<string, Record<string, unknown>>; page?: Record<string, unknown>; settings?: Record<string, unknown>; language?: "en" | "he" }) {
+      if (change.language) language = change.language;
+      fieldOverrides = { ...fieldOverrides, ...change.fields };
+      pageOverrides = { ...pageOverrides, ...change.page };
+      settingsOverrides = { ...settingsOverrides, ...change.settings };
+    },
+    metadataRequests,
+    candidateRequests,
+    armRelatedLinkHold() {
+      let markSeen!: () => void;
+      let release!: () => void;
+      const seen = new Promise<void>(resolve => { markSeen = resolve; });
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      relatedLinkHold = { seen, gate, value: "", markSeen, release };
+      return { seen, release };
+    },
     armProjectionHold() {
       let markSeen!: () => void;
       let releaseRequest!: () => void;
@@ -933,7 +1007,7 @@ test("keeps inline editors stable across rapid select reopen and refresh failure
   mock.failNextRecordsQuery();
   await page.getByTestId("button-refresh-data-desktop").click();
   await expect(page.getByText("Ошибка загрузки записей", { exact: true })).toBeVisible();
-  await expect(page.getByText(REFRESHED_TITLE, { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(draftTitle, { exact: true }).first()).toBeVisible();
   expect(mock.unknownApiRequests).toEqual([]);
 });
 
@@ -1465,6 +1539,7 @@ test("restores the old select value and reports a failed inline save", async ({ 
 
 test("keeps relation search draft open during refresh and sends guarded link writes", async ({ page }) => {
   test.setTimeout(90_000);
+  page.on("dialog", dialog => void dialog.accept());
   const mock = await installMockApi(page);
 
   const initialProjection = mock.armProjectionHold();
@@ -1728,6 +1803,367 @@ const LONG_STAGE_OPTIONS = [
   }),
   { value: "zulu", labelJson: { en: "Zulu final option", he: "Zulu אפשרות אחרונה" } },
 ];
+
+const LONG_PERCENT_OPTIONS = Array.from({ length: 100 }, (_, value) => ({
+  value: String(value),
+  labelJson: { en: `${value}%`, he: `${value}%` },
+}));
+
+function entityCell(page: Page, id: number, key: string) {
+  return page.locator(`[data-testid="record-cell"][data-record-id="${id}"][data-field-key="${key}"]`);
+}
+
+// The shared refresh refetches the *actual* active query-backed metadata readers;
+// no React state, memoization keys, or query caches are modified by these tests.
+for (const scenario of [
+  "language and RTL",
+  "app data direction",
+  "page data direction",
+  "field direction override",
+  "decimal format and before affix",
+  "after affix",
+  "column order and pinning",
+  "cell and text color rules",
+  "row color rules",
+  "column width",
+]) {
+  test(`metadata matrix: ${scenario} repaints every row without replacing a same-scope draft`, async ({ page }) => {
+    const count = 12;
+    const mock = await installMockApi(page, {
+      recordCount: count,
+      reliabilityFields: true,
+      selectOptions: [
+        { value: "todo", labelJson: { en: "To do", he: "לביצוע" } },
+        { value: "done", labelJson: { en: "Done", he: "בוצע" } },
+      ],
+    });
+    await page.goto(PAGE_PATH, { waitUntil: "domcontentloaded" });
+    await expect(entityCell(page, RECORD_ID + count - 1, "amount")).toContainText("123.46");
+    const title = entityCell(page, RECORD_ID, "title");
+    await title.click();
+    const editor = page.getByTestId("cell-editor-input");
+    await editor.fill("unsaved metadata refresh draft");
+    await editor.evaluate((input: HTMLInputElement) => {
+      input.setSelectionRange(4, 12, "backward");
+      (window as Window & { __metadataDraft?: Element }).__metadataDraft = input;
+    });
+    const oldReads = mock.metadataRequests.length;
+    if (scenario === "language and RTL") mock.publishMetadata({ language: "he" });
+    if (scenario === "app data direction") mock.publishMetadata({ settings: { textDirection: "rtl" } });
+    if (scenario === "page data direction") mock.publishMetadata({ page: { textDirection: "rtl" } });
+    if (scenario === "field direction override") mock.publishMetadata({
+      settings: { textDirection: "rtl" }, page: { textDirection: "rtl" }, fields: { stage: { textDirection: "ltr" } },
+    });
+    if (scenario.includes("affix")) mock.publishMetadata({ fields: {
+      amount: { formulaConfigJson: { decimals: 1, displayAffix: "units", displayAffixPosition: scenario === "after affix" ? "after" : "before" } },
+    } });
+    if (scenario === "column order and pinning") mock.publishMetadata({ fields: {
+      amount: { sortOrder: -2, isPinned: true }, stage: { sortOrder: -1 },
+    } });
+    if (scenario === "cell and text color rules") mock.publishMetadata({ fields: {
+      stage: { formatRulesJson: [{ operator: "equals", value: "todo", cellColor: "#123456", textColor: "#abcdef" }] },
+    } });
+    if (scenario === "row color rules") mock.publishMetadata({ fields: {
+      stage: { formatRulesJson: [{ operator: "equals", value: "todo", rowColor: "#345678" }] },
+    } });
+    if (scenario === "column width") {
+      const header = page.locator("main table thead th").filter({ hasText: /^Amount/ }).first();
+      const handle = header.locator('[title*="двойной клик"]').first();
+      const before = await header.boundingBox();
+      expect(before).not.toBeNull();
+      // Dispatch the resize handler without moving focus off the unsaved input.
+      // The same window pointermove/up path persists viewer-local widths.
+      await handle.dispatchEvent("pointerdown", { clientX: 300, button: 0, pointerId: 1 });
+      await page.evaluate(() => {
+        window.dispatchEvent(new PointerEvent("pointermove", { clientX: 380, pointerId: 1 }));
+        window.dispatchEvent(new PointerEvent("pointerup", { clientX: 380, pointerId: 1 }));
+      });
+      await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("erp:colwidths:7:42") ?? "{}")["f:705"])).toBe(Math.round(before!.width + 80));
+    }
+    await page.getByTestId("button-refresh-data-desktop").dispatchEvent("click");
+    await expect.poll(() => mock.metadataRequests.length).toBeGreaterThan(oldReads);
+    if (scenario === "language and RTL") await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+    for (let index = 0; index < count; index++) {
+      const stage = entityCell(page, RECORD_ID + index, "stage");
+      const amount = entityCell(page, RECORD_ID + index, "amount");
+      if (scenario === "language and RTL") await expect(stage).toContainText("לביצוע");
+      if (scenario.includes("data direction") || scenario === "field direction override") {
+        await expect.poll(() => stage.evaluate(el => getComputedStyle(el.querySelector('[dir]') ?? el).direction))
+          .toBe(scenario === "field direction override" ? "ltr" : "rtl");
+      }
+      if (scenario.includes("affix")) {
+        await expect(amount.locator('[data-affix-part="number"]')).toHaveText("123.5");
+        await expect(amount.locator('[data-affix-part="affix"]')).toHaveText("units");
+        await expect(amount.locator("[data-affix-position]")).toHaveAttribute("data-affix-position", scenario === "after affix" ? "after" : "before");
+        await expect(amount.locator('[data-affix-part="number"]')).toHaveAttribute("dir", "ltr");
+      }
+      if (scenario === "column order and pinning") {
+        await expect.poll(() => amount.evaluate(el => getComputedStyle(el).position)).toBe("sticky");
+        await expect.poll(() => amount.evaluate(el => {
+          const keys = [...el.parentElement!.querySelectorAll("[data-field-key]")].map(cell => cell.getAttribute("data-field-key"));
+          return keys.slice(0, 2);
+        })).toEqual(["amount", "stage"]);
+      }
+      if (scenario === "cell and text color rules") {
+        await expect(stage).toHaveCSS("background-color", "rgb(18, 52, 86)");
+        await expect(stage.locator("span").filter({ hasText: "To do" }).first()).toHaveCSS("color", "rgb(171, 205, 239)");
+      }
+      if (scenario === "row color rules") await expect(stage.locator("xpath=..")).toHaveCSS("background-color", "rgb(52, 86, 120)");
+      if (scenario === "column width") {
+        await expect.poll(() => amount.evaluate(el => (el as HTMLElement).style.width)).toMatch(/^\d+px$/);
+        expect(await amount.evaluate(el => (el as HTMLElement).style.width)).toBe(
+          `${await page.evaluate(() => JSON.parse(localStorage.getItem("erp:colwidths:7:42")!)["f:705"])}px`,
+        );
+      }
+    }
+    await expect(editor).toHaveValue("unsaved metadata refresh draft");
+    await expect(editor).toBeFocused();
+    expect(await editor.evaluate((input: HTMLInputElement) => ({
+      same: input === (window as Window & { __metadataDraft?: Element }).__metadataDraft,
+      start: input.selectionStart, end: input.selectionEnd, direction: input.selectionDirection,
+    }))).toEqual({ same: true, start: 4, end: 12, direction: "backward" });
+    expect(mock.recordUpdateRequests).toHaveLength(0);
+    expect(mock.pageValueUpdateRequests).toHaveLength(0);
+    await editor.press("Escape");
+    expect(mock.unknownApiRequests).toEqual([]);
+  });
+}
+
+for (const language of ["en", "he"] as const) {
+  for (const kind of ["select", "percent"] as const) {
+    test(`touch matrix: ${kind} long list scroll/tap/clear/cancel at RTL/LTR edges (${language})`, async ({ page, context, browserName }) => {
+      test.skip(browserName !== "chromium", "CDP trusted-touch coverage requires Chromium; WebKit touch is not claimed");
+      test.setTimeout(120_000);
+      await page.setViewportSize({ width: 520, height: 400 });
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
+      const observedTouches: string[] = [];
+      await page.exposeFunction("recordTrustedTouch", (type: string) => observedTouches.push(type));
+      await page.addInitScript(() => {
+        for (const type of ["touchstart", "touchmove", "touchend"]) {
+          document.addEventListener(type, event => {
+            if (event.isTrusted) void (window as Window & { recordTrustedTouch?: (type: string) => Promise<void> }).recordTrustedTouch?.(type);
+          }, { passive: true, capture: true });
+        }
+      });
+      const mock = await installMockApi(page, {
+        recordCount: 60, language, stageType: kind, reliabilityFields: true,
+        selectOptions: kind === "percent" ? LONG_PERCENT_OPTIONS : LONG_STAGE_OPTIONS,
+        defaultStage: kind === "percent" ? "0" : "ack",
+      });
+      // Put the picker near the inline-end boundary, rather than asking an
+      // early column to scroll past the table's physical scroll origin.
+      mock.publishMetadata({ fields: { stage: { sortOrder: 99 } } });
+      await page.goto(PAGE_PATH, { waitUntil: "domcontentloaded" });
+      const target = entityCell(page, RECORD_ID + 59, "stage");
+      await expect(target).toBeVisible();
+      await target.evaluate((el, rtl) => el.scrollIntoView({ block: "end", inline: rtl ? "start" : "end" }), language === "he");
+      const box = await target.boundingBox();
+      expect(box).not.toBeNull();
+      expect(400 - box!.y - box!.height).toBeLessThanOrEqual(80);
+      expect(520 - box!.x - box!.width).toBeLessThanOrEqual(80);
+      const background = await scrollSnapshot(page);
+      await touchTap(cdp, target);
+      await expectPopupInsideViewport(page);
+      const list = page.getByRole("listbox");
+      await touchScrollToEnd(cdp, list, "bottom");
+      await expect(page.getByRole("option").last()).toBeInViewport();
+      await touchScrollToEnd(cdp, list, "top");
+      await expect(page.getByRole("option").first()).toBeInViewport();
+      expect(mock.recordUpdateRequests).toHaveLength(0);
+      expect(await scrollSnapshot(page)).toEqual(background);
+      // A real outside touch cancels without committing the highlighted item.
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 5, y: 5 }] });
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await expect(list).toHaveCount(0);
+      expect(mock.recordUpdateRequests).toHaveLength(0);
+      await touchTap(cdp, target);
+      await touchScrollToEnd(cdp, list, "bottom");
+      const hold = mock.armUpdateHold();
+      await touchTap(cdp, page.getByRole("option").last());
+      await hold.seen;
+      expect(mock.recordUpdateRequests).toHaveLength(1);
+      expect(mock.recordUpdateRequests[0]).toMatchObject({
+        expectedVersion: 1, valuesJson: { stage: kind === "percent" ? "99" : "zulu" },
+      });
+      // Selection publishes only after ACK, never from a touchmove/early tap.
+      await expect(page.getByTestId("inline-saving")).toBeVisible();
+      hold.release();
+      await expect(list).toHaveCount(0);
+      await expect(target).toContainText(kind === "percent" ? "99%" : "Zulu");
+      await touchTap(cdp, target);
+      await expect(page.getByRole("option").last()).toBeInViewport();
+      await touchTap(cdp, page.getByRole("option").last());
+      await expect(list).toHaveCount(0);
+      expect(mock.recordUpdateRequests).toHaveLength(1);
+      await touchTap(cdp, target);
+      await touchScrollToEnd(cdp, list, "top");
+      await touchTap(cdp, page.getByRole("option").first());
+      await expect(target).toHaveText("—");
+      await expect(list).toHaveCount(0);
+      expect(mock.recordUpdateRequests).toHaveLength(2);
+      expect(mock.recordUpdateRequests[1]).toMatchObject({
+        expectedVersion: 2, valuesJson: { stage: "" },
+      });
+      await touchTap(cdp, target);
+      await expectPopupInsideViewport(page);
+      await page.keyboard.press("Escape");
+      await expect(list).toHaveCount(0);
+      await page.waitForTimeout(500);
+      expect(mock.recordUpdateRequests).toHaveLength(2);
+      expect(await scrollSnapshot(page)).toEqual(background);
+      expect(observedTouches).toEqual(expect.arrayContaining(["touchstart", "touchmove", "touchend"]));
+      expect(mock.unknownApiRequests).toEqual([]);
+      await cdp.detach();
+    });
+  }
+}
+
+for (const kind of ["status", "percent", "user", "relation"] as const) {
+  test(`profile: ${kind} loaded-candidate first open and reopen retain ACK-first CAS`, async ({ page, context, browserName }, testInfo) => {
+    test.skip(process.env.RUN_INLINE_EDITOR_PROFILE !== "1", "Opt-in production-only diagnostic matrix");
+    test.skip(browserName !== "chromium", "CPU profiling uses Chromium CDP");
+    const directory = "test-results/inline-editor-profile";
+    mkdirSync(directory, { recursive: true });
+    const pageErrors: string[] = [];
+    const consoleErrors: string[] = [];
+    page.on("pageerror", error => pageErrors.push(error.stack ?? error.message));
+    page.on("console", message => { if (message.type() === "error") consoleErrors.push(message.text()); });
+    page.on("dialog", dialog => void dialog.accept());
+    const mock = await installMockApi(page, {
+      recordCount: 200, reliabilityFields: true,
+      stageType: "percent", selectOptions: LONG_PERCENT_OPTIONS, defaultStage: "0",
+    });
+    const cdp = await context.newCDPSession(page);
+    let heldProjection: ReturnType<typeof mock.armProjectionHold> | undefined;
+    let activeProfile = false;
+    const timings: Array<{ phase: string; wallMs: number; pointerToPaintMs: number; error: string | null; domNodes: number }> = [];
+    let cpu: unknown = null;
+    let ack: Record<string, unknown> = {};
+    let candidateHydrationWallMs: number | null = null;
+    try {
+      await page.goto(PAGE_PATH, { waitUntil: "domcontentloaded" });
+      const row = page.locator("main table tbody tr").first();
+      await expect(row).toContainText("Loaded Owner");
+      await expect(row).toContainText(INITIAL_PROJECT);
+      await expect(page.locator("main table tbody tr")).toHaveCount(200);
+      const target = kind === "status"
+        ? row.getByText("Queued", { exact: true })
+        : kind === "percent" ? entityCell(page, RECORD_ID, "stage")
+        : kind === "user" ? entityCell(page, RECORD_ID, "assignee")
+        : row.getByTitle("Нажмите, чтобы назначить связь", { exact: true });
+      // Bound assertions to actual option nodes. Global accessibility polling
+      // through all 200 rows can itself stall Chromium's paint and contaminate
+      // the user's latency with Playwright's text-alternative traversal.
+      const candidate = kind === "status" ? page.locator('[role="option"]').filter({ hasText: /^Ready$/ })
+        : kind === "percent" ? page.locator('[role="option"]').filter({ hasText: /^1%$/ })
+        : kind === "user" ? page.locator('[cmdk-item][data-value="Next Owner #12"]')
+        : page.locator('[cmdk-item][data-value="Next project candidate with a long label #901"]');
+      const selector = kind === "relation" ? '[cmdk-item][data-value^="Next project candidate"]'
+        : kind === "user" ? '[cmdk-item][data-value^="Next Owner"]' : '[role="option"]';
+      if (kind === "relation") {
+        // Candidate loading has a deliberate 200ms debounce; separate that
+        // cold network/hydration diagnostic from the loaded-candidate budget.
+        const started = Date.now();
+        await target.click();
+        await expect(candidate).toBeVisible();
+        candidateHydrationWallMs = Date.now() - started;
+        expect(mock.candidateRequests.length).toBeGreaterThan(0);
+        await page.keyboard.press("Escape");
+        await expect(candidate).toHaveCount(0);
+        expect(mock.relatedLinkRequests).toHaveLength(0);
+      }
+      // A relation's *own* projection refresh correctly disables assigning its
+      // link until ready. Hold an unrelated records read for this editor instead
+      // of mislabelling its permission/hydration guard as opening latency.
+      heldProjection = kind === "relation" ? mock.armRecordsQueryHold() : mock.armProjectionHold();
+      await page.getByTestId("button-refresh-data-desktop").dispatchEvent("click");
+      await heldProjection.seen;
+      const measure = async (phase: string, action: () => Promise<unknown>) => {
+        await armPointerPaint(page, selector);
+        const started = Date.now();
+        await action();
+        // Let the browser-owned observer finish its two-frame measurement
+        // before locator polling can do more work on the browser's main thread.
+        const paint = await readPointerPaint(page);
+        await expect(candidate).toBeVisible();
+        const wallMs = Date.now() - started;
+        timings.push({
+          phase, wallMs, pointerToPaintMs: paint.elapsedMs, error: paint.error,
+          domNodes: await page.evaluate(() => document.querySelectorAll("*").length),
+        });
+      };
+      await measure("first-loaded-open", () => target.click());
+      const initialVersion = mock.currentRecordVersion();
+      const hold = kind === "relation" ? mock.armRelatedLinkHold() : mock.armUpdateHold();
+      await candidate.click();
+      await hold.seen;
+      const writes = kind === "relation" ? mock.relatedLinkRequests : mock.recordUpdateRequests;
+      expect(writes).toHaveLength(1);
+      expect(writes[0]).toMatchObject(kind === "relation" ? {
+        fieldKey: "project_name", recordId: RECORD_ID, linkedRecordId: NEXT_RELATED_RECORD_ID, expectedVersion: initialVersion,
+      } : kind === "status" ? {
+        statusId: 72, expectedVersion: initialVersion,
+      } : {
+        expectedVersion: initialVersion, valuesJson: kind === "percent" ? { stage: "1" } : { assignee: 12 },
+      });
+      if (kind === "relation") await expect(candidate).toBeVisible();
+      else {
+        await expect(page.getByTestId("inline-saving")).toBeVisible();
+        // Check the display-only row hasn't published the chosen value early.
+        if (kind === "user") await expect(row.getByText("Next Owner", { exact: true })).toHaveCount(0);
+      }
+      hold.release();
+      if (kind === "relation") await expect(candidate).toHaveCount(0);
+      else {
+        await expect(page.getByTestId("inline-saving")).toHaveCount(0);
+        await expect(row).toContainText(kind === "status" ? "Ready" : kind === "percent" ? "1%" : "Next Owner");
+      }
+      ack = { expectedVersion: initialVersion, acknowledgedVersion: mock.currentRecordVersion(), writes: writes.length, ackFirst: true };
+      expect(mock.currentRecordVersion()).toBe(initialVersion + 1);
+      await cdp.send("Profiler.enable");
+      await cdp.send("Profiler.setSamplingInterval", { interval: 100 });
+      await cdp.send("Profiler.start");
+      activeProfile = true;
+      await measure("reopen", () => kind === "status"
+        ? row.getByText("Ready", { exact: true }).click() : target.click());
+      cpu = (await cdp.send("Profiler.stop")).profile;
+      activeProfile = false;
+      await page.keyboard.press("Escape");
+      await expect(candidate).toHaveCount(0);
+      expect(writes).toHaveLength(1);
+      expect(mock.unknownApiRequests).toEqual([]);
+      expect(pageErrors).toEqual([]);
+      const budget = Number(process.env.INLINE_EDITOR_PROFILE_BUDGET_MS ?? "250");
+      expect(Number.isFinite(budget) && budget > 0 && budget <= 250, "Production budget must not exceed 250ms").toBe(true);
+      for (const timing of timings) {
+        expect(timing.error).toBeNull();
+        expect(Number.isFinite(timing.pointerToPaintMs) && timing.pointerToPaintMs > 0).toBe(true);
+        expect.soft(timing.pointerToPaintMs, `${kind} ${timing.phase} pointer-to-paint budget`).toBeLessThanOrEqual(budget);
+      }
+    } finally {
+      if (activeProfile) cpu = await cdp.send("Profiler.stop").then(result => result.profile).catch(error => ({ cleanupError: String(error) }));
+      const diagnostic = {
+        kind, timings, candidateHydrationWallMs, ack,
+        dom: await page.evaluate(() => ({
+          nodes: document.querySelectorAll("*").length,
+          rows: document.querySelectorAll("main table tbody tr").length,
+          cells: document.querySelectorAll("main table tbody td").length,
+        })).catch(error => ({ error: String(error) })),
+        unknownApiRequests: mock.unknownApiRequests, pageErrors, consoleErrors,
+        candidateRequests: mock.candidateRequests.length,
+        outcome: testInfo.status, budgetMs: process.env.INLINE_EDITOR_PROFILE_BUDGET_MS ?? "250",
+      };
+      const filename = `${directory}/matrix-${kind}.json`;
+      writeFileSync(filename, JSON.stringify(diagnostic, null, 2));
+      if (cpu) writeFileSync(`${directory}/matrix-${kind}.cpuprofile`, JSON.stringify(cpu));
+      await testInfo.attach(`matrix-${kind}`, { path: filename, contentType: "application/json" });
+      console.log(`INLINE_EDITOR_PROFILE_RESULT ${JSON.stringify(diagnostic)}`);
+      heldProjection?.release();
+      await cdp.detach().catch(() => { /* Browser teardown after timeout must not mask the original failure. */ });
+    }
+  });
+}
 
 async function expectPopupInsideViewport(page: Page) {
   const popup = page.getByRole("listbox");

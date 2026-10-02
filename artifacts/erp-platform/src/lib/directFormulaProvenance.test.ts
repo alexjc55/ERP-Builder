@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   directEntityFormulaResultType,
   directFormulaDisplayValue,
+  directFormulaPresentation,
 } from "./directFormulaProvenance.ts";
 
 const entityFields = [
@@ -55,7 +56,7 @@ test("wrong scopes, expressions, and shadowed legacy aliases have no provenance"
 test("display resolves only proven user results and preserves other numbers", () => {
   const users = new Map([[42, "Ada"]]);
   assert.equal(directFormulaDisplayValue(42, "user", users), "Ada");
-  assert.equal(directFormulaDisplayValue(99, "user", users), "#99");
+  assert.equal(directFormulaDisplayValue(99, "user", users), "—");
   assert.equal(directFormulaDisplayValue(42, null, users), 42);
   assert.equal(directFormulaDisplayValue(42, "number", users), 42);
 });
@@ -139,13 +140,40 @@ test("table, page, and form callers reuse authorized columns, including grouped 
   const source = readFileSync(new URL("../components/EntityRecords.tsx", import.meta.url), "utf8");
   for (const name of ["directEntityFormulaTypes", "directPageFormulaTypes"]) {
     const start = source.indexOf(`const ${name} = useMemo`);
-    const end = source.indexOf("}, [allFields, entityId, pageFields, entityRelatedColumns]);", start);
+    const end = source.indexOf("}, [allFields, entityId, pageFields, entityRelatedColumns, entityRelatedHydrationKey, expectedEntityRelatedHydrationKey]);", start);
     assert.ok(start >= 0 && end > start);
     const block = source.slice(start, end);
-    assert.match(block, /entityRelatedColumns,/);
+    assert.match(block, /entityRelatedHydrationKey === expectedEntityRelatedHydrationKey\s*\? entityRelatedColumns : \[\]/);
     assert.doesNotMatch(block, /knownRelatedFieldTypes/);
   }
   assert.match(source, /const directFormFormulaTypes = useMemo[\s\S]*?entityRelatedColumns: relCols,/);
   assert.match(source, /const directType =[\s\S]*?directPageFormulaTypes\.get\(col\.field\.fieldKey\)[\s\S]*?if \(directType === "user"\) \{\s*renderField = \{ \.\.\.renderField, fieldType: "user" \}/);
   assert.match(source, /commonContent = renderCellValue\(renderField, renderValue, t, userNames/);
+});
+
+test("direct lookup group values withhold ids during delayed and failed authorized metadata, then retry resolves names", () => {
+  const options = {
+    formula: managerFormula, entityId: 72, entityFields: [managerLookup], pageFields: [],
+  };
+  const users = new Map([[42, "Ada"]]);
+  const unresolved = directEntityFormulaResultType(options);
+  for (const raw of [42, "42"]) {
+    assert.deepEqual(directFormulaPresentation(raw, unresolved, users, { metadata: "pending", users: "ready" }), { state: "pending" });
+    assert.deepEqual(directFormulaPresentation(raw, unresolved, users, { metadata: "unavailable", users: "ready" }), { state: "unavailable" });
+    assert.deepEqual(directFormulaPresentation(raw, unresolved, users, { metadata: "ready", users: "ready" }), { state: "unavailable" }, "denied/missing projection metadata is not an id label");
+    const resolved = directEntityFormulaResultType({
+      ...options, entityRelatedColumns: [{ fieldKey: managerLookup.fieldKey, relatedFieldType: "user" }],
+    });
+    assert.deepEqual(directFormulaPresentation(raw, resolved, users, { metadata: "ready", users: "ready" }), { state: "value", value: "Ada" });
+    assert.deepEqual(directFormulaPresentation(raw, unresolved, users, { metadata: "pending", users: "ready" }), { state: "pending" }, "new scope must not reuse old proven type");
+  }
+});
+
+test("missing user labels show explicit state, while numeric formulas are not guessed from ids", () => {
+  for (const users of ["pending", "unavailable", "ready"] as const) {
+    assert.deepEqual(directFormulaPresentation(42, "user", new Map(), { metadata: "ready", users }), { state: users === "pending" ? "pending" : "unavailable" });
+    for (const resultType of [null, undefined, "number"]) {
+      assert.deepEqual(directFormulaPresentation(42, resultType, new Map(), { metadata: "pending", users }), { state: "value", value: 42 });
+    }
+  }
 });

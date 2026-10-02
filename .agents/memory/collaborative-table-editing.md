@@ -32,6 +32,18 @@ page context, especially to passwordless guests.
 is single-process. Before adding API workers/replicas, move presence to a shared
 ephemeral store/pub-sub so session counts and current pages remain complete.
 
+Long-lived SSE authorization must use fresh request-scoped permissions before
+each outbound frame, not the original request's cached permissions. Coalescing
+while authorization runs must retain full invalidation coverage.
+
+**Why:** A connection-time allow decision survives role revocation; replacing
+queued record events by event name can silently lose changes to other records.
+
+**How to apply:** Reauthorize snapshots, presence, invalidations and keepalives;
+fail closed on denial/error/timeout. Coalesce mutations to a whole-table
+invalidation, clear client presence on terminal denial, and test revocation
+without first disconnecting the original transport.
+
 Every write that changes a record's effective scalar, page-local, status,
 relation, archive, or merge state must participate in optimistic concurrency.
 An effective change advances the relevant version exactly once, including

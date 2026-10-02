@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import { db, entitiesTable, entityFieldsTable, entityRecordsTable, pageFieldsTable, pagesTable, usersTable, type FieldPermissions } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
@@ -118,7 +118,32 @@ router.get("/collaboration/pages/:pageId/stream", requireAuth, async (req, res):
   if (!profile) return;
   res.status(200).set({ "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive", "X-Accel-Buffering": "no" });
   res.flushHeaders();
-  const close = addStream(pageId, client, res, profile.unrestricted, req.user!.userId);
+  const close = addStream(pageId, client, res, profile.unrestricted, req.user!.userId, async () => {
+    // A stream is not a request-scoped authorization cache. Resolve auth and
+    // permissions afresh for EVERY frame, including presence, snapshot and ping.
+    const fresh = {
+      headers: req.headers, method: req.method, path: req.path,
+    } as Request;
+    const deniedResponse = {
+      status() { return this; },
+      json() { return this; },
+    } as unknown as Response;
+    const authenticated = await new Promise<boolean>((resolve, reject) => {
+      const authResponse = {
+        status() { return this; },
+        json() { resolve(false); return this; },
+      } as unknown as Response;
+      requireAuth(fresh, authResponse, (error) => error ? reject(error) : resolve(true));
+    });
+    if (!authenticated || !fresh.user || fresh.user.guest) return null;
+    // requireAuth deliberately caches liveness for short HTTP requests; the
+    // long-lived stream must not inherit that stale allow verdict either.
+    const [account] = await db.select({ isActive: usersTable.isActive }).from(usersTable)
+      .where(eq(usersTable.id, fresh.user.userId)).limit(1);
+    if (!account?.isActive) return null;
+    const current = await visibilityProfile(fresh, deniedResponse, pageId);
+    return current ? { canSeeEditing: current.unrestricted } : null;
+  });
   req.on("close", close);
 });
 router.put("/collaboration/pages/:pageId/presence", requireAuth, async (req, res): Promise<void> => {

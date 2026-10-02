@@ -35,11 +35,16 @@ export type GlobalUserPresence = {
 type StreamEntry = {
   res: Response;
   canSeeEditing: boolean;
+  authorize: () => Promise<{ canSeeEditing: boolean } | null>;
+  pending: Map<string, (canSeeEditing: boolean) => unknown>;
+  draining: boolean;
+  cancelAuthorization?: () => void;
   userId?: number;
   ping?: ReturnType<typeof setInterval>;
 };
 
 export const PRESENCE_TTL_MS = 45_000;
+export const STREAM_AUTHORIZATION_TIMEOUT_MS = 10_000;
 const PRESENCE_CLEANUP_INTERVAL_MS = 5_000;
 const rooms = new Map<number, Map<string, Entry>>();
 // Ephemeral process-local registry. A user/client pair represents one browser
@@ -215,6 +220,8 @@ export function removePresence(pageId: number, clientId: string, userId?: number
 }
 
 function closeStream(pageId: number, clientId: string, stream: StreamEntry, removeClientPresence: boolean): void {
+  stream.pending.clear();
+  stream.cancelAuthorization?.();
   stream.ping && clearInterval(stream.ping);
   stream.ping = undefined;
   const room = streams.get(pageId);
@@ -242,34 +249,91 @@ function writeStream(pageId: number, clientId: string, stream: StreamEntry, fram
   }
 }
 
-function writeEvent(pageId: number, clientId: string, stream: StreamEntry, event: string, data: unknown): void {
-  writeStream(pageId, clientId, stream, `event:${event}\ndata:${JSON.stringify(data)}\n\n`);
+function writeEvent(pageId: number, clientId: string, stream: StreamEntry, event: string, data: (canSeeEditing: boolean) => unknown): void {
+  if (streams.get(pageId)?.get(clientId) !== stream) return;
+  // Coalesce invalidations/presence while authorization is in flight. Do not
+  // retain an unbounded promise/frame backlog for a slow database or recipient.
+  stream.pending.set(event, data);
+  if (stream.pending.size > 32) {
+    closeStream(pageId, clientId, stream, true);
+    return;
+  }
+  if (!stream.draining) void drainStream(pageId, clientId, stream);
 }
-export function addStream(pageId: number, clientId: string, res: Response, canSeeEditing: boolean, userId?: number): () => void {
+async function drainStream(pageId: number, clientId: string, stream: StreamEntry): Promise<void> {
+  stream.draining = true;
+  try {
+    while (stream.pending.size && streams.get(pageId)?.get(clientId) === stream) {
+      const [event, data] = stream.pending.entries().next().value!;
+      stream.pending.delete(event);
+      let permission: { canSeeEditing: boolean } | null = null;
+      let authorizationTimer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        permission = await Promise.race([
+          stream.authorize(),
+          new Promise<null>((resolve) => {
+            stream.cancelAuthorization = () => resolve(null);
+            authorizationTimer = setTimeout(() => resolve(null), STREAM_AUTHORIZATION_TIMEOUT_MS);
+            authorizationTimer.unref?.();
+          }),
+        ]);
+      } catch (err) {
+        logger.error({ err }, "Collaboration stream authorization failed");
+      } finally {
+        if (authorizationTimer) clearTimeout(authorizationTimer);
+        stream.cancelAuthorization = undefined;
+      }
+      // An old async check must never write to a replaced or disconnected socket.
+      if (streams.get(pageId)?.get(clientId) !== stream) return;
+      if (!permission) {
+        // No page information in this terminal control frame.
+        writeStream(pageId, clientId, stream, 'event:access_denied\ndata:{"error":"Collaboration access unavailable"}\n\n');
+        closeStream(pageId, clientId, stream, true);
+        return;
+      }
+      stream.canSeeEditing = permission.canSeeEditing;
+      writeStream(pageId, clientId, stream, event === ":ping" ? ":ping\n\n"
+        : `event:${event}\ndata:${JSON.stringify(data(permission.canSeeEditing))}\n\n`);
+    }
+  } finally {
+    stream.draining = false;
+  }
+}
+export function addStream(
+  pageId: number, clientId: string, res: Response, canSeeEditing: boolean,
+  userId: number | undefined, authorize: StreamEntry["authorize"],
+): () => void {
   const room = streams.get(pageId) ?? new Map<string, StreamEntry>();
   streams.set(pageId, room);
   const previous = room.get(clientId);
   if (previous && previous.res !== res) closeStream(pageId, clientId, previous, false);
   const activeRoom = streams.get(pageId) ?? new Map<string, StreamEntry>();
   streams.set(pageId, activeRoom);
-  const stream: StreamEntry = { res, canSeeEditing, userId };
+  const stream: StreamEntry = { res, canSeeEditing, userId, authorize, pending: new Map(), draining: false };
   activeRoom.set(clientId, stream);
-  writeEvent(pageId, clientId, stream, "snapshot", { presence: presenceSnapshot(pageId, canSeeEditing) });
+  writeEvent(pageId, clientId, stream, "snapshot", (allowed) => ({ presence: presenceSnapshot(pageId, allowed) }));
   if (activeRoom.get(clientId) === stream) {
-    stream.ping = setInterval(() => writeStream(pageId, clientId, stream, ":ping\n\n"), 20_000);
+    stream.ping = setInterval(() => writeEvent(pageId, clientId, stream, ":ping", () => null), 20_000);
     stream.ping.unref?.();
   }
   return () => closeStream(pageId, clientId, stream, true);
 }
 
 export function broadcast(pageId: number, event: string, data: unknown): void {
+  // All mutation notifications cross this boundary as opaque table-wide
+  // invalidations. Coalescing must not drop a second record's refresh coverage,
+  // or disclose identifiers/versions to a row-restricted recipient.
+  if (["record_changed", "page_changed", "delete", "table_changed"].includes(event)) {
+    event = "table_changed";
+    data = {};
+  }
   for (const [clientId, stream] of [...(streams.get(pageId) ?? [])]) {
-    writeEvent(pageId, clientId, stream, event, data);
+    writeEvent(pageId, clientId, stream, event, () => data);
   }
 }
 function broadcastPresence(pageId: number): void {
   for (const [clientId, stream] of [...(streams.get(pageId) ?? [])]) {
-    writeEvent(pageId, clientId, stream, "presence", { presence: presenceSnapshot(pageId, stream.canSeeEditing) });
+    writeEvent(pageId, clientId, stream, "presence", (allowed) => ({ presence: presenceSnapshot(pageId, allowed) }));
   }
 }
 
@@ -285,6 +349,8 @@ export function disposeCollaboration(): void {
   }
   for (const room of streams.values()) {
     for (const stream of room.values()) {
+      stream.pending.clear();
+      stream.cancelAuthorization?.();
       if (stream.ping) clearInterval(stream.ping);
       stream.ping = undefined;
       try {

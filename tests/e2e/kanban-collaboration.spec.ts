@@ -102,35 +102,47 @@ async function setup(independentRoles = false) {
 }
 
 async function cleanup() {
-  try {
-    if (!fixture) return;
-    const f = fixture;
-    await db.transaction(async tx => {
-      await tx.delete(loginHistoryTable).where(inArray(loginHistoryTable.userId, f.users));
-      await tx.delete(systemEventsTable).where(eq(systemEventsTable.entityId, f.entity));
-      await tx.delete(auditLogTable).where(eq(auditLogTable.entityId, f.entity));
-      await tx.delete(entitiesTable).where(eq(entitiesTable.id, f.entity));
-      await tx.delete(pagesTable).where(eq(pagesTable.id, f.page));
-      await tx.delete(usersTable).where(inArray(usersTable.id, f.users));
-      await tx.delete(rolesTable).where(inArray(rolesTable.id, [f.role, f.bobRole]));
-    });
-    const tables = [
-      [entitiesTable, entitiesTable.id, [f.entity]], [pagesTable, pagesTable.id, [f.page]],
-      [usersTable, usersTable.id, f.users], [rolesTable, rolesTable.id, [f.role, f.bobRole]],
-      [entityRecordsTable, entityRecordsTable.id, f.records],
-      [entityAutomationsTable, entityAutomationsTable.id, f.automations],
-    ] as const;
-    for (const [table, id, ids] of tables) {
-      expect(await db.select({ id }).from(table).where(inArray(id, [...ids])), `Cleanup of ${key}`).toHaveLength(0);
-    }
-    expect(await db.select().from(entityAutomationRunsTable).where(eq(entityAutomationRunsTable.entityId, f.entity))).toHaveLength(0);
-    console.log("Kanban collaboration fixture cleanup verified: users, roles, page, entity, records, automations and runs removed");
-  } finally {
-    fixture = undefined;
+  if (!fixture) return;
+  const f = fixture;
+  await db.transaction(async tx => {
+    await tx.delete(loginHistoryTable).where(inArray(loginHistoryTable.userId, f.users));
+    await tx.delete(systemEventsTable).where(eq(systemEventsTable.entityId, f.entity));
+    await tx.delete(auditLogTable).where(eq(auditLogTable.entityId, f.entity));
+    await tx.delete(entitiesTable).where(eq(entitiesTable.id, f.entity));
+    await tx.delete(pagesTable).where(eq(pagesTable.id, f.page));
+    await tx.delete(usersTable).where(inArray(usersTable.id, f.users));
+    await tx.delete(rolesTable).where(inArray(rolesTable.id, [f.role, f.bobRole]));
+  });
+  const tables = [
+    [entitiesTable, entitiesTable.id, [f.entity]], [pagesTable, pagesTable.id, [f.page]],
+    [usersTable, usersTable.id, f.users], [rolesTable, rolesTable.id, [f.role, f.bobRole]],
+    [entityRecordsTable, entityRecordsTable.id, f.records],
+    [entityAutomationsTable, entityAutomationsTable.id, f.automations],
+  ] as const;
+  for (const [table, id, ids] of tables) {
+    expect(await db.select({ id }).from(table).where(inArray(id, [...ids])), `Cleanup of ${key}`).toHaveLength(0);
   }
+  expect(await db.select().from(entityAutomationRunsTable).where(eq(entityAutomationRunsTable.entityId, f.entity))).toHaveLength(0);
+  expect(await db.select().from(auditLogTable).where(eq(auditLogTable.entityId, f.entity))).toHaveLength(0);
+  expect(await db.select().from(systemEventsTable).where(eq(systemEventsTable.entityId, f.entity))).toHaveLength(0);
+  expect(await db.select().from(loginHistoryTable).where(inArray(loginHistoryTable.userId, f.users))).toHaveLength(0);
+  const identity = await db.execute(sql`SELECT current_database() AS database,
+    md5(coalesce(string_agg(id::text || ':' || entity_key, ',' ORDER BY id), '')) AS fingerprint FROM entities`);
+  expect(identity.rows[0].database).toBe("heliumdb");
+  expect(identity.rows[0].fingerprint).toBe(process.env.KANBAN_E2E_DEV_FINGERPRINT);
+  console.log("Kanban fixture cleanup verified: entity/page/users/roles/records/automations/runs/audit/events/logins all zero; independently approved fingerprint restored");
+  // Retain ownership if deletion/verification throws so afterAll can retry
+  // cleanup before closing the pool. Never forget an unverified fixture.
+  fixture = undefined;
 }
 
-test.afterAll(async () => { await pool.end(); });
+test.afterAll(async () => {
+  try {
+    await cleanup();
+  } finally {
+    await pool.end();
+  }
+});
 
 async function login(page: Page, email: string) {
   await page.goto("/login");
@@ -319,12 +331,12 @@ test("real independent Kanban sessions: stale CAS, SSE lanes, transition effects
     }
     // Fresh cards keep the reconnect scenarios independent of earlier filters.
     const reconnectRecords = await db.insert(entityRecordsTable).values(
-      ["Reconnect moved", "Reconnect archived", "Reconnect pending", "Lost response card"].map(title => ({
+      ["Reconnect moved", "Reconnect archived", "Reconnect pending", "Lost response card", "Lost manual archive response"].map(title => ({
         entityId: f.entity, statusId: f.ready, valuesJson: { title, summary: "seed" },
       })),
     ).returning();
     f.records.push(...reconnectRecords.map(record => record.id));
-    const [reconnectMoved, reconnectArchived, reconnectPending, lostResponse] = reconnectRecords.map(record => record.id);
+    const [reconnectMoved, reconnectArchived, reconnectPending, lostResponse, lostManualArchive] = reconnectRecords.map(record => record.id);
     await alice.getByPlaceholder(/Search…|Search\.\.\.|Поиск…/).fill("");
     await bob.reload();
     for (const p of [alice, bob]) {
@@ -439,13 +451,89 @@ test("real independent Kanban sessions: stale CAS, SSE lanes, transition effects
     await assertCounts();
     expect(await alice.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
     await alice.unroute(lostPattern);
+
+    // #141: manual POST archive, not a status PUT/automatic archive trigger.
+    // Keep the stream blocked until the server's successful response is lost.
+    await alice.route(streamPattern, route => route.abort("internetdisconnected"));
+    await alice.evaluate(() =>
+      (window as unknown as { disconnectTestStream: () => void }).disconnectTestStream());
+    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "disconnected");
+    const beforeArchive = await stored(lostManualArchive);
+    const archivePattern = `**/api/records/${lostManualArchive}/archive`;
+    const archiveHistory = async () => ({
+      audit: await db.select({ id: auditLogTable.id }).from(auditLogTable)
+        .where(and(eq(auditLogTable.recordId, lostManualArchive), eq(auditLogTable.fieldKey, "__archived__"))),
+      events: await db.select({ id: systemEventsTable.id }).from(systemEventsTable)
+        .where(and(eq(systemEventsTable.entityId, f.entity), eq(systemEventsTable.recordId, lostManualArchive))),
+      runs: await db.select({ id: entityAutomationRunsTable.id }).from(entityAutomationRunsTable)
+        .where(eq(entityAutomationRunsTable.recordId, lostManualArchive)),
+    });
+    const beforeArchiveHistory = await archiveHistory();
+    let manualArchiveAttempts = 0;
+    let manualArchiveServerStatus: number | undefined;
+    let manualArchiveRequest: { method: string; body: Record<string, unknown> } | undefined;
+    let persistedBeforeResponseLoss: Awaited<ReturnType<typeof stored>> | undefined;
+    let manualArchiveTransportError: unknown;
+    await alice.route(archivePattern, async route => {
+      // Do not throw assertions from an asynchronous route callback: Playwright
+      // can start worker teardown before the test's fixture cleanup completes.
+      try {
+        manualArchiveRequest = { method: route.request().method(), body: route.request().postDataJSON() };
+        manualArchiveAttempts += 1;
+        const committedResponse = await route.fetch({ maxRetries: 0, maxRedirects: 0 });
+        manualArchiveServerStatus = committedResponse.status();
+        // Persistence is established BEFORE discarding the HTTP response.
+        persistedBeforeResponseLoss = await stored(lostManualArchive);
+      } catch (error) {
+        manualArchiveTransportError = error;
+      } finally {
+        await route.abort("connectionfailed");
+      }
+    });
+    const lostArchiveRequest = alice.waitForEvent("requestfailed", {
+      predicate: request => request.url().endsWith(`/api/records/${lostManualArchive}/archive`) && request.method() === "POST",
+    });
+    await alice.getByTestId(`button-actions-kanban-${lostManualArchive}`).click();
+    await alice.getByRole("menuitem", { name: /^(Archive|В архив)$/ }).click();
+    expect((await lostArchiveRequest).failure()?.errorText).toBeTruthy();
+    expect(manualArchiveTransportError).toBeUndefined();
+    expect(manualArchiveRequest?.method).toBe("POST");
+    expect(manualArchiveRequest?.body).toMatchObject({ expectedVersion: beforeArchive.version });
+    // Bound entities legitimately omit pageId; mirror-page writes must supply
+    // it. This fixture is bound, so test CAS without imposing mirror semantics.
+    expect(manualArchiveServerStatus).toBe(200);
+    expect(persistedBeforeResponseLoss).toMatchObject({
+      statusId: f.ready, version: beforeArchive.version + 1, archivedAt: expect.any(Date),
+    });
+    const committedArchive = await stored(lostManualArchive);
+    const committedArchiveHistory = await archiveHistory();
+    expect(committedArchiveHistory.audit.length).toBe(beforeArchiveHistory.audit.length + 1);
+    expect(committedArchiveHistory.events.length).toBe(beforeArchiveHistory.events.length + 1);
+    expect(committedArchiveHistory.runs).toEqual(beforeArchiveHistory.runs);
+    await expect(card(bob, lostManualArchive)).toHaveCount(0);
+    await expect(card(alice, lostManualArchive)).toBeVisible(); // Local failure rollback, not server rollback.
+    await alice.unroute(streamPattern);
+    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "connected", { timeout: 40_000 });
+    await expect(card(alice, lostManualArchive)).toHaveCount(0);
+    await assertCounts();
+    await alice.waitForTimeout(2_000);
+    expect(manualArchiveAttempts).toBe(1);
+    expect((await stored(lostManualArchive)).version).toBe(committedArchive.version);
+    expect((await stored(lostManualArchive)).archivedAt).toEqual(committedArchive.archivedAt);
+    expect(await archiveHistory()).toEqual(committedArchiveHistory);
+    await expect(card(alice, lostManualArchive)).toHaveCount(0);
+    await assertCounts();
+    expect(await alice.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+    await alice.unroute(archivePattern);
     await cdp.detach();
     await test.info().attach("verified-scenarios", {
       body: JSON.stringify({ independentSessions: 2, actualAPI: true, actualSSE: true, staleCAS: 409,
         sseLanes: [...refreshedStatuses], automation: true, archive: true,
         pendingFilterSuccess: true, pendingFilterConflict: true,
         reconnectMissedMoveAndArchive: true, reconnectDuringPendingConflict: true, noDocumentReload: true,
-        committedResponseLost: true, lostWriteAttempts, automationNotRepeated: true }),
+        committedResponseLost: true, lostWriteAttempts, automationNotRepeated: true,
+        manualPostArchiveResponseLost: true, manualArchiveAttempts, archiveVersionIncrement: 1,
+        archiveAuditAndEventExactlyOnce: true }),
       contentType: "application/json",
     });
   } finally {
@@ -455,7 +543,7 @@ test("real independent Kanban sessions: stale CAS, SSE lanes, transition effects
   }
 });
 
-test("revoked page access rejects SSE reconnect, presence and record reads", async ({ browser, page }) => {
+test("revoked page access stops an already-open SSE before subsequent events and presence", async ({ browser, page }) => {
   test.setTimeout(90_000);
   const contexts = await Promise.all([browser.newContext(), browser.newContext()]);
   try {
@@ -465,47 +553,73 @@ test("revoked page access rejects SSE reconnect, presence and record reads", asy
     const [alice, bob] = await Promise.all(contexts.map(context => context.newPage()));
     await alice.addInitScript(() => {
       const nativeFetch = window.fetch.bind(window);
-      let streamController: AbortController | undefined;
-      Object.assign(window, { disconnectTestStream: () => streamController?.abort() });
-      window.fetch = (input, init) => {
-        if (String(input).includes("/collaboration/") && String(input).includes("/stream?")) {
-          streamController = new AbortController();
-          return nativeFetch(input, { ...init, signal: init?.signal
-            ? AbortSignal.any([init.signal, streamController.signal]) : streamController.signal });
+      const observation = { bytes: "", streamStarts: 0, presenceRequests: 0 };
+      Object.assign(window, { collaborationObservation: observation });
+      window.fetch = async (input, init) => {
+        if (String(input).includes("/collaboration/") && String(input).endsWith("/presence")) {
+          observation.presenceRequests += 1;
         }
-        return nativeFetch(input, init);
+        const response = await nativeFetch(input, init);
+        if (String(input).includes("/collaboration/") && String(input).includes("/stream?")) {
+          observation.streamStarts += 1;
+          if (response.body) {
+            // Observe the SAME native reader/bytes used by the application.
+            // No disconnect hook, offline mode, mocked frames or extra reader.
+            const nativeGetReader = response.body.getReader.bind(response.body);
+            response.body.getReader = (() => {
+              const reader = nativeGetReader();
+              const nativeRead = reader.read.bind(reader);
+              const decoder = new TextDecoder();
+              reader.read = async () => {
+                const chunk = await nativeRead();
+                if (chunk.value) observation.bytes += decoder.decode(chunk.value, { stream: true });
+                return chunk;
+              };
+              return reader;
+            }) as typeof response.body.getReader;
+          }
+        }
+        return response;
       };
     });
     await Promise.all([login(alice, emails[0]), login(bob, emails[1])]);
     const originalDocument = await alice.evaluate(() => performance.timeOrigin);
     const clientId = await alice.evaluate(() => sessionStorage.getItem("erp_client_id"));
-    const streamPattern = `**/api/collaboration/pages/${f.page}/stream?*`;
     const keep = f.records[0];
     await expect(alice.getByTestId("collab-avatar")).toHaveCount(1);
-    // Isolate SSE loss: taking the entire browser offline also retries metadata
-    // on network recovery, which may unmount the board before SSE can retry.
-    await alice.route(streamPattern, route => route.abort("internetdisconnected"));
-    await alice.evaluate(() =>
-      (window as unknown as { disconnectTestStream: () => void }).disconnectTestStream());
-    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "disconnected");
+    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "connected");
+    const observation = () => alice.evaluate(() =>
+      (window as unknown as { collaborationObservation: { bytes: string; streamStarts: number; presenceRequests: number } }).collaborationObservation);
+    const beforeRevocation = await observation();
+    expect(beforeRevocation.bytes).toContain("event:snapshot");
+    expect(beforeRevocation.streamStarts).toBe(1);
+    const bobToken = await bob.evaluate(() => localStorage.getItem("erp_token"));
+    const bobClient = await bob.evaluate(() => sessionStorage.getItem("erp_client_id"));
+    // Revoke while Alice is still consuming the original authorized stream.
     await db.update(rolesTable).set({ permissionsJson: NO_ACCESS_PERMS }).where(eq(rolesTable.id, f.role));
-    // Only Alice loses the page and its records; Bob retains his independent role.
-    await apiMove(bob, keep, f.working, 1);
-    const reconnectStatuses: number[] = [];
-    alice.on("response", response => {
-      if (response.url().includes(`/collaboration/pages/${f.page}/stream?`)) reconnectStatuses.push(response.status());
+    // Make presence the first post-revocation outbound event. It must be gated
+    // just like a mutation invalidation, not sent using the opening profile.
+    const bobPresence = await bob.request.put(`/api/collaboration/pages/${f.page}/presence`, {
+      headers: { Authorization: `Bearer ${bobToken}` },
+      data: { clientId: bobClient, editing: { entityId: f.entity, recordId: keep, fieldKey: "title", source: "entity" } },
     });
-    const deniedStream = alice.waitForResponse(response =>
-      response.url().includes(`/collaboration/pages/${f.page}/stream?`) && response.status() === 403,
-      { timeout: 40_000 });
-    await alice.unroute(streamPattern);
-    const denied = await deniedStream;
+    expect(bobPresence.status()).toBe(204);
+    await expect.poll(async () => (await observation()).bytes.slice(beforeRevocation.bytes.length))
+      .toContain("event:access_denied");
+    await expect(alice.getByTestId("collab-avatar")).toHaveCount(0);
+    await expect(alice.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "disconnected");
+    // Bob keeps his independent role, transport and write capability.
+    await apiMove(bob, keep, f.working, 1);
+    const deniedToken = await alice.evaluate(() => localStorage.getItem("erp_token"));
+    const denied = await alice.request.get(`/api/collaboration/pages/${f.page}/stream?clientId=denied-probe-${run}`, {
+      headers: { Authorization: `Bearer ${deniedToken}` },
+    });
+    expect(denied.status()).toBe(403);
     expect(denied.headers()["content-type"]).not.toContain("text/event-stream");
     expect(await denied.json()).toMatchObject({ error: expect.any(String) });
     await expect(alice.locator('[data-testid="collab-connection-status"][data-state="connected"]')).toHaveCount(0);
     await expect(alice.getByTestId("collab-avatar")).toHaveCount(0);
     await expect(lane(alice, f.working).getByTestId(`card-kanban-${keep}`)).toHaveCount(0);
-    const deniedToken = await alice.evaluate(() => localStorage.getItem("erp_token"));
     const deniedPresence = await alice.request.put(`/api/collaboration/pages/${f.page}/presence`, {
       headers: { Authorization: `Bearer ${deniedToken}` }, data: { clientId, editing: null },
     });
@@ -514,14 +628,24 @@ test("revoked page access rejects SSE reconnect, presence and record reads", asy
       headers: { Authorization: `Bearer ${deniedToken}` }, data: { pageId: f.page, page: 1, pageSize: 40 },
     });
     expect(deniedQuery.status()).toBe(403);
-    await alice.waitForTimeout(2_000);
+    const afterDenial = await observation();
+    // Includes a full heartbeat interval: denied clients must not keep PUTs or
+    // SSE retries alive with stale edit coordinates.
+    await alice.waitForTimeout(16_000);
     // Metadata refetch can replace the board with its Forbidden screen.
     // Both an absent indicator and a disconnected indicator are safe.
     await expect(alice.locator('[data-testid="collab-connection-status"][data-state="connected"]')).toHaveCount(0);
     await expect(alice.getByTestId("collab-avatar")).toHaveCount(0);
-    expect(reconnectStatuses.length).toBeGreaterThan(0);
-    expect(reconnectStatuses.every(status => status === 403)).toBe(true);
+    const finalObservation = await observation();
+    expect(finalObservation.streamStarts).toBe(beforeRevocation.streamStarts);
+    expect(finalObservation.presenceRequests).toBe(afterDenial.presenceRequests);
+    const postRevocationBytes = finalObservation.bytes.slice(beforeRevocation.bytes.length);
+    expect(postRevocationBytes).not.toMatch(/event:(presence|snapshot|table_changed|record_changed|page_changed|delete)/);
+    expect(postRevocationBytes).not.toContain('"recordId"');
+    expect(postRevocationBytes).not.toContain('"name":"Bob');
     await expect(lane(bob, f.working).getByTestId(`card-kanban-${keep}`)).toBeVisible();
+    await expect(bob.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "connected");
+    await expect(bob.getByTestId("collab-avatar")).toHaveCount(0);
     expect(await alice.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
   } finally {
     await Promise.all(contexts.map(context => context.close()));
