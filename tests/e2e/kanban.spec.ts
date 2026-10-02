@@ -271,21 +271,26 @@ test("hidden-status toggle includes and removes the hidden column", async ({ pag
 });
 
 for (const cardDirection of ["ltr", "rtl", null] as const) {
-  test(`card content direction ${cardDirection ?? "inherited"} preserves layout and action placement`, async ({ page }) => {
+  test(`card direction ${cardDirection ?? "inherited"} controls header and footer independently of board direction`, async ({ page }) => {
     const fixture = await installFixture(page, { editable: true, cardDirection });
     await selectBoard(page);
     const card = page.getByTestId("card-kanban-1000");
     const title = page.getByTestId("button-open-kanban-1000");
+    await expect(card).toHaveAttribute("dir", cardDirection ?? "ltr");
     await expect(title.locator("span")).toHaveAttribute("dir", cardDirection ?? "ltr");
     await expect(card.locator("dl")).toHaveAttribute("dir", cardDirection ?? "ltr");
     await title.hover();
     await expect(title).toHaveCSS("text-decoration-line", "none");
-    // Footer follows interface direction, independently of data direction.
+    // Changing the outer layout must not override the effective card direction.
     for (const dir of ["ltr", "rtl"]) {
       await page.evaluate(dir => document.documentElement.dir = dir, dir);
       const rect = (await card.boundingBox())!;
       const eye = (await page.getByTestId("button-view-kanban-1000").boundingBox())!;
-      expect(dir === "ltr" ? eye.x > rect.x + rect.width / 2 : eye.x < rect.x + rect.width / 2).toBe(true);
+      const grip = (await page.getByTestId("handle-kanban-1000").boundingBox())!;
+      const menu = (await page.getByTestId("button-actions-kanban-1000").boundingBox())!;
+      const rtl = cardDirection === "rtl";
+      expect(rtl ? eye.x < rect.x + rect.width / 2 : eye.x > rect.x + rect.width / 2).toBe(true);
+      expect(rtl ? grip.x > menu.x : grip.x < menu.x).toBe(true);
     }
     expect(fixture.errors).toEqual([]);
   });

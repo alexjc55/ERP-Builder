@@ -17,13 +17,13 @@ description: Product constraints for the reusable CRM-first Kanban entity view.
 
 **How to apply:** Preserve whole-card mouse dragging alongside title clicks; keep touch scrolling usable rather than blindly applying mouse gesture prevention to touch.
 
-**Rule:** Card titles change colour on hover without underlining. Provide explicit view/edit buttons at the bottom trailing corner (right in LTR UI, left in RTL UI); editing remains permission-gated.
+**Rule:** Card titles change colour on hover without underlining. Provide explicit view/edit buttons at the bottom trailing corner (right in LTR cards, left in RTL cards); editing remains permission-gated.
 
 **Why:** The user approved explicit actions for discoverability and explicitly rejected hover underlining.
 
-**Rule:** Card content direction is configurable using the same inherit/LTR/RTL control as fields and pages. Precedence is field → card → page → ERP → UI language; it does not change board or action-button geometry.
+**Rule:** Card direction controls the entire card layout, including grip, menu and footer actions, not just text. Field text overrides remain strongest: field → card → page → ERP → UI language. Board column order is unaffected.
 
-**Why:** The user requested card-level text direction analogous to existing field/page/ERP overrides. Keeping field overrides strongest preserves the existing direction hierarchy.
+**Why:** The user clarified that RTL text inside an LTR card looks wrong: choosing RTL must mirror the card itself. Keeping field overrides strongest preserves the existing direction hierarchy.
 
 **Rule:** More dynamic card configuration and behavior can be worked out once an initial Kanban exists.
 

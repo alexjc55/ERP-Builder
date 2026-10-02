@@ -691,6 +691,7 @@ export function KanbanView(props: KanbanViewProps) {
       <div
         key={rec.id}
         data-kanban-card
+        dir={dirFor(null)}
         data-testid={`card-kanban-${rec.id}`}
         onPointerDown={(e) => onCardPointerDown(e, rec, false)}
         className={`group relative rounded-lg border border-slate-200 bg-white p-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-[opacity,box-shadow] hover:shadow-md ${
@@ -943,6 +944,7 @@ export function KanbanView(props: KanbanViewProps) {
       {drag && (
         <div
           ref={ghostRef}
+          dir={dirFor(null)}
           aria-hidden="true"
           className="pointer-events-none fixed left-0 top-0 z-[100] rounded-lg border border-slate-300 bg-white p-2.5 text-sm font-medium text-slate-800 shadow-xl"
           style={{ width: drag.width, willChange: "transform" }}
