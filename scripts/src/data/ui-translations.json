@@ -1,5 +1,29 @@
 [
   {
+    "key": "statuses.noStatusWarningTitle",
+    "ru": "Скрыть записи без статуса в канбане?",
+    "en": "Hide records without a status from Kanban?",
+    "he": "להסתיר מלוח הקנבן רשומות ללא סטטוס?"
+  },
+  {
+    "key": "statuses.noStatusWarning",
+    "ru": "Есть доступные вам записи без статуса. Они останутся в таблице, но не будут отображаться в канбане. Записи не удаляются, их статусы не изменяются.",
+    "en": "Some records you can access have no status. They will remain in the table but will not appear in Kanban. No records will be deleted or statuses changed.",
+    "he": "יש רשומות ללא סטטוס שיש לך גישה אליהן. הן יישארו בטבלה אך לא יוצגו בקנבן. הרשומות לא יימחקו והסטטוסים שלהן לא ישתנו."
+  },
+  {
+    "key": "statuses.noStatusCheckError",
+    "ru": "Не удалось проверить записи. Настройка не изменена.",
+    "en": "Could not check records. The setting was not changed.",
+    "he": "לא ניתן לבדוק את הרשומות. ההגדרה לא שונתה."
+  },
+  {
+    "key": "statuses.disableNoStatus",
+    "ru": "Отключить",
+    "en": "Disable",
+    "he": "השבתה"
+  },
+  {
     "key": "textDirection.label",
     "ru": "Направление текста",
     "en": "Text direction",

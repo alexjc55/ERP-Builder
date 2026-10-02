@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import {
   useListEntityStatuses,
@@ -8,6 +8,7 @@ import {
   useReorderStatuses,
   useListEntities,
   useUpdateEntity,
+  queryEntityRecords,
   getGetMeQueryKey,
   getListTagsQueryKey,
   useListTags,
@@ -158,9 +159,34 @@ export default function EntityStatusesPage() {
   });
 
   const allowNoStatus = entity?.allowNoStatus ?? true;
-  const toggleAllowNoStatus = (checked: boolean) => {
+  const [checkingNoStatus, setCheckingNoStatus] = useState(false);
+  const [confirmNoStatus, setConfirmNoStatus] = useState<number | null>(null);
+  const checkGeneration = useRef(0);
+  useEffect(() => {
+    setCheckingNoStatus(false);
+    setConfirmNoStatus(null);
+    return () => { checkGeneration.current++; };
+  }, [entityId]);
+  const toggleAllowNoStatus = async (checked: boolean) => {
     if (!entity) return;
-    updateEntityMutation.mutate({ id: entityId, data: { allowNoStatus: checked } });
+    if (checked) {
+      updateEntityMutation.mutate({ id: entityId, data: { allowNoStatus: true } });
+      return;
+    }
+    const generation = ++checkGeneration.current;
+    setCheckingNoStatus(true);
+    try {
+      // Reuse the full record-read boundary, never an administrator-wide count.
+      const result = await queryEntityRecords(entityId, { statusIsNull: true, pageSize: 1, page: 1 });
+      if (generation !== checkGeneration.current) return;
+      if (result.total > 0) setConfirmNoStatus(entityId);
+      else updateEntityMutation.mutate({ id: entityId, data: { allowNoStatus: false } });
+    } catch {
+      if (generation === checkGeneration.current)
+        toast({ title: t("statuses.noStatusCheckError", "Не удалось проверить записи. Настройка не изменена."), variant: "destructive" });
+    } finally {
+      if (generation === checkGeneration.current) setCheckingNoStatus(false);
+    }
   };
 
   const move = (list: Status[], index: number, direction: -1 | 1) => {
@@ -254,6 +280,20 @@ export default function EntityStatusesPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <AlertDialog open={confirmNoStatus === entityId} onOpenChange={open => { if (!open) setConfirmNoStatus(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("statuses.noStatusWarningTitle", "Скрыть записи без статуса в канбане?")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("statuses.noStatusWarning", "Есть доступные вам записи без статуса. Они останутся в таблице, но не будут отображаться в канбане. Записи не удаляются, их статусы не изменяются.")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel", "Отмена")}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => updateEntityMutation.mutate({ id: entityId, data: { allowNoStatus: false } })}>
+              {t("statuses.disableNoStatus", "Отключить")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div>
         <button
           onClick={() => { if (window.history.length > 1) window.history.back(); else navigate("/admin/entities"); }}
@@ -294,7 +334,7 @@ export default function EntityStatusesPage() {
               id="allow-no-status"
               checked={allowNoStatus}
               onCheckedChange={toggleAllowNoStatus}
-              disabled={!entity || updateEntityMutation.isPending}
+              disabled={!entity || updateEntityMutation.isPending || checkingNoStatus}
             />
           </div>
         </CardContent>
