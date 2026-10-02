@@ -5,6 +5,12 @@ description: Product constraints for the reusable CRM-first Kanban entity view.
 
 **Rule:** The first intended use is the future CRM section, but Kanban must be universal and reusable for any existing or future section.
 
+**Rule:** The user wants to split one entity with many statuses across staff pages, each showing only its selected statuses in both table rows and Kanban columns. “Show hidden” must not reveal statuses outside that page's selection.
+
+**Why:** Employees should monitor their own statuses. The existing soft hiding is intended for terminal statuses and must remain separate and unchanged.
+
+**How to apply:** Reuse existing entity records and page functionality; do not treat the page selection as the existing optional hidden-status filter. Page versus view ownership was raised for consultation, not yet approved.
+
 **Rule:** The status-coloured title hover option also applies to the eye and pencil icons on hover.
 
 **Why:** The user explicitly requested that these actions match the title instead of remaining blue.
