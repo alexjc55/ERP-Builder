@@ -79,6 +79,7 @@ export type KanbanViewProps = {
   /** Viewer-visible page-local fields (permission-scoped); referenced as "page:<fieldKey>". */
   pageFields?: PageField[];
   statuses: Status[];
+  statusScope?: { statusIds: number[]; includeNoStatus: boolean; allowAllChanges: boolean } | null;
   userNames: Map<number, string>;
   renderCellValue: (
     field: Field,
@@ -177,7 +178,7 @@ export function KanbanView(props: KanbanViewProps) {
   const {
     entityId, config, baseQuery, fields, pageFields = [], statuses, userNames, renderCellValue,
     onEdit, canEdit, canMove, allowedStatuses, allowNoStatus, canArchive, onDataChanged,
-    refreshTick = 0, ml, pageTextDirection, appTextDirection,
+    refreshTick = 0, ml, pageTextDirection, appTextDirection, statusScope,
   } = props;
   const t = useT();
   const { lang } = useLang();
@@ -189,8 +190,9 @@ export function KanbanView(props: KanbanViewProps) {
   const pageId = baseQuery.pageId;
 
   const lanes = useMemo(
-    () => computeLanes(statuses as StatusX[], baseQuery as never, allowNoStatus),
-    [statuses, baseQuery, allowNoStatus],
+    () => computeLanes((statusScope ? statuses.filter(s => statusScope.statusIds.includes(s.id)) : statuses) as StatusX[],
+      baseQuery as never, allowNoStatus && (!statusScope || statusScope.includeNoStatus)),
+    [statuses, baseQuery, allowNoStatus, statusScope],
   );
   const baseKey = JSON.stringify(baseQuery);
   const lanesKey = lanes.join(",");

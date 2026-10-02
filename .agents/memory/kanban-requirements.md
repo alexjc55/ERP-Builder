@@ -11,6 +11,12 @@ description: Product constraints for the reusable CRM-first Kanban entity view.
 
 **How to apply:** Reuse existing entity records and page functionality; do not treat the page selection as the existing optional hidden-status filter. Alongside the page's status selection, offer an option to show all statuses in status-change menus, applicable only in selected-status mode. This expands change destinations, not visible rows, columns, or filter options, and never bypasses existing permissions or workflow rules.
 
+**Rule:** Page status selection is ANDed with the viewer's existing row scope, even for administrators. A selected-but-empty set means no records, not all records; only an absent selection means unrestricted by page status.
+
+**Why:** Replacing an own/filter scope with status selection could expose colleagues' records. Treating an empty selection as “all” could expose a whole department while a page is being configured.
+
+**How to apply:** Preserve the base row-scope predicate when adding page constraints. The all-destinations option changes only allowed writes, never the read predicate. Page selection is not a replacement for global role permissions on direct entity access.
+
 **Rule:** The default departmental handoff uses a shared status included on both pages. Optionally, a page can allow choosing destinations outside its visible set.
 
 **Why:** The user specified “КП подписано” as a status visible in sales and as the first status in contracting. Sales moves a project there; contracting sees it and moves it through its own statuses, at which point it disappears from sales.

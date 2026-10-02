@@ -6398,10 +6398,26 @@ components:
           $ref: "#/components/schemas/RolePermissions"
 
     # PAGES
+    PageStatusScope:
+      type: ["object", "null"]
+      required: [statusIds, includeNoStatus, allowAllChanges]
+      properties:
+        statusIds:
+          type: array
+          maxItems: 1000
+          items:
+            type: integer
+            minimum: 1
+        includeNoStatus:
+          type: boolean
+        allowAllChanges:
+          type: boolean
     Page:
       type: object
       required: [id, nameJson, icon, sortOrder, isActive, createdAt, updatedAt]
       properties:
+        statusScopeJson:
+          $ref: "#/components/schemas/PageStatusScope"
         textDirection:
           $ref: "#/components/schemas/TextDirection"
         id:
@@ -6507,6 +6523,8 @@ components:
       type: object
       required: [nameJson, icon]
       properties:
+        statusScopeJson:
+          $ref: "#/components/schemas/PageStatusScope"
         textDirection:
           $ref: "#/components/schemas/TextDirection"
         nameJson:
@@ -6604,6 +6622,8 @@ components:
     PageUpdate:
       type: object
       properties:
+        statusScopeJson:
+          $ref: "#/components/schemas/PageStatusScope"
         textDirection:
           $ref: "#/components/schemas/TextDirection"
         nameJson:

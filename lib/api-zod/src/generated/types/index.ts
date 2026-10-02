@@ -342,6 +342,7 @@ export * from './pageRelationOptionField';
 export * from './pageRelationOptionPage';
 export * from './pageRelationOptionRelationType';
 export * from './pageRelationOptions';
+export * from './pageStatusScope';
 export * from './pageUpdate';
 export * from './pageUpdateColumnGroupsJson';
 export * from './pageUpdateDefaultPageSize';

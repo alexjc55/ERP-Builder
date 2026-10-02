@@ -45,6 +45,7 @@ import {
   mostPermissiveFieldPerm,
 } from "../middlewares/permissions";
 import { ownScopeWhere, isRecordOwned } from "./own-scope";
+import { pageStatusChangeAllowed } from "../lib/page-status-scope";
 import { PAGE_REF_SOURCE_TYPES, loadPageRefSource } from "./record-query";
 import {
   applyMappedStatusTransition,
@@ -2123,6 +2124,10 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
       }
       const [mappedStatusId] = mappedTargets;
       if (mappedStatusId != null) {
+        if (mappedStatusId !== lockedEntityRecord.statusId &&
+            !await pageStatusChangeAllowed(entityId, pageId, mappedStatusId)) {
+          throw new LockedPageValidationError("This status is not available on this page");
+        }
         mappedTransitionState.value = await applyMappedStatusTransition({
           tx,
           record: lockedEntityRecord,
@@ -2616,6 +2621,10 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
         const mapped = mappedStatusForChangedValues([writeField], locked, finalValues);
         if ("error" in mapped) {
           throw new BulkPageFieldUpdateError(422, recordId, mapped.error);
+        }
+        if (mapped.statusId != null && mapped.statusId !== recordsById.get(recordId)!.statusId &&
+            !await pageStatusChangeAllowed(entityId, pageId, mapped.statusId)) {
+          throw new BulkPageFieldUpdateError(403, recordId, "This status is not available on this page");
         }
         const mappedTransition = mapped.statusId == null
           ? null

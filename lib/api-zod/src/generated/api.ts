@@ -2338,10 +2338,18 @@ export const DeleteRoleResponse = zod.object({
 /**
  * @summary List all pages (menu structure)
  */
+
+export const listPagesResponseStatusScopeJsonStatusIdsMax = 1000;
+
 export const listPagesResponsePivotConfigJsonOneFilterConjunctionDefault = `and`;
 export const listPagesResponseDefaultSortJsonOneItemDirectionDefault = `asc`;
 
 export const ListPagesResponseItem = zod.object({
+  "statusScopeJson": zod.object({
+  "statusIds": zod.array(zod.number().min(1)).max(listPagesResponseStatusScopeJsonStatusIdsMax),
+  "includeNoStatus": zod.boolean(),
+  "allowAllChanges": zod.boolean()
+}).nullish(),
   "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "id": zod.number(),
   "nameJson": zod.object({
@@ -2463,6 +2471,9 @@ export const ListPagesResponse = zod.array(ListPagesResponseItem)
 /**
  * @summary Create a new page/menu item
  */
+
+export const createPageBodyStatusScopeJsonStatusIdsMax = 1000;
+
 export const createPageBodyIsPivotDefault = false;
 export const createPageBodyPivotConfigJsonOneFilterConjunctionDefault = `and`;
 export const createPageBodyWidgetsCollapsedDefaultDefault = false;
@@ -2472,6 +2483,11 @@ export const createPageBodyGroupDefaultExpandedDefault = false;
 export const createPageBodyIsActiveDefault = true;
 
 export const CreatePageBody = zod.object({
+  "statusScopeJson": zod.object({
+  "statusIds": zod.array(zod.number().min(1)).max(createPageBodyStatusScopeJsonStatusIdsMax),
+  "includeNoStatus": zod.boolean(),
+  "allowAllChanges": zod.boolean()
+}).nullish(),
   "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -2592,10 +2608,18 @@ export const GetPageParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+export const getPageResponseStatusScopeJsonStatusIdsMax = 1000;
+
 export const getPageResponsePivotConfigJsonOneFilterConjunctionDefault = `and`;
 export const getPageResponseDefaultSortJsonOneItemDirectionDefault = `asc`;
 
 export const GetPageResponse = zod.object({
+  "statusScopeJson": zod.object({
+  "statusIds": zod.array(zod.number().min(1)).max(getPageResponseStatusScopeJsonStatusIdsMax),
+  "includeNoStatus": zod.boolean(),
+  "allowAllChanges": zod.boolean()
+}).nullish(),
   "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "id": zod.number(),
   "nameJson": zod.object({
@@ -2720,10 +2744,18 @@ export const UpdatePageParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
+export const updatePageBodyStatusScopeJsonStatusIdsMax = 1000;
+
 export const updatePageBodyPivotConfigJsonOneFilterConjunctionDefault = `and`;
 export const updatePageBodyDefaultSortJsonOneItemDirectionDefault = `asc`;
 
 export const UpdatePageBody = zod.object({
+  "statusScopeJson": zod.object({
+  "statusIds": zod.array(zod.number().min(1)).max(updatePageBodyStatusScopeJsonStatusIdsMax),
+  "includeNoStatus": zod.boolean(),
+  "allowAllChanges": zod.boolean()
+}).nullish(),
   "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -2836,10 +2868,18 @@ export const UpdatePageBody = zod.object({
   "isActive": zod.boolean().optional()
 })
 
+
+export const updatePageResponseStatusScopeJsonStatusIdsMax = 1000;
+
 export const updatePageResponsePivotConfigJsonOneFilterConjunctionDefault = `and`;
 export const updatePageResponseDefaultSortJsonOneItemDirectionDefault = `asc`;
 
 export const UpdatePageResponse = zod.object({
+  "statusScopeJson": zod.object({
+  "statusIds": zod.array(zod.number().min(1)).max(updatePageResponseStatusScopeJsonStatusIdsMax),
+  "includeNoStatus": zod.boolean(),
+  "allowAllChanges": zod.boolean()
+}).nullish(),
   "textDirection": zod.union([zod.literal('ltr'),zod.literal('rtl'),zod.literal(null)]).nullish().describe('Optional data-text direction only (not layout or status metadata). Field overrides page, then app, then UI locale. Null clears to inherit; omitted updates preserve the stored override. Page-ref aliases retain their own override.'),
   "id": zod.number(),
   "nameJson": zod.object({

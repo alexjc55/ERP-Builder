@@ -7,6 +7,7 @@
  */
 import type { MultilingualText } from './multilingualText';
 import type { PageQuickFilter } from './pageQuickFilter';
+import type { PageStatusScope } from './pageStatusScope';
 import type { PageUpdateColumnGroupsJson } from './pageUpdateColumnGroupsJson';
 import type { PageUpdateDefaultPageSize } from './pageUpdateDefaultPageSize';
 import type { PageUpdateMirrorFieldLabelsJson } from './pageUpdateMirrorFieldLabelsJson';
@@ -16,6 +17,7 @@ import type { SortSpec } from './sortSpec';
 import type { TextDirection } from './textDirection';
 
 export interface PageUpdate {
+  statusScopeJson?: PageStatusScope | null;
   textDirection?: TextDirection | null;
   nameJson?: MultilingualText;
   descriptionJson?: MultilingualText;

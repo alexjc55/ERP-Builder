@@ -3,6 +3,9 @@ import { db, rolesTable, usersTable, userRolesTable, pagesTable, entityStatusesT
 import { eq, inArray } from "drizzle-orm";
 import type { ScopeFilter } from "@workspace/db";
 import { encodeScopeFilters } from "../lib/scope-filter";
+import { getPageStatusScope, PAGE_SCOPE_PREFIX } from "../lib/page-status-scope";
+
+const pageStatusScopeCache = new WeakMap<Request, Map<string, ReturnType<typeof getPageStatusScope>>>();
 
 declare global {
   namespace Express {
@@ -547,7 +550,7 @@ function resolveScopeEntry(rp: RecordPermission | undefined): { scope: RecordSco
  * resolve CRUD page-aware (carry `pageId`); entity-level paths must keep using
  * the sync `effectiveScope`, so scope page-awareness tracks CRUD page-awareness.
  */
-export async function effectiveScopeFor(
+async function baseEffectiveScopeFor(
   req: Request,
   perms: RolePermissions,
   entityId: number,
@@ -564,6 +567,21 @@ export async function effectiveScopeFor(
     }
   }
   return effectiveScope(perms, entityId);
+}
+
+export async function effectiveScopeFor(
+  req: Request, perms: RolePermissions, entityId: number, pageId?: number,
+): Promise<{ scope: RecordScope; scopeFieldKeys: string[] }> {
+  const base = await baseEffectiveScopeFor(req, perms, entityId, pageId);
+  let cache = pageStatusScopeCache.get(req);
+  if (!cache) { cache = new Map(); pageStatusScopeCache.set(req, cache); }
+  const key = `${entityId}:${pageId ?? "main"}`;
+  if (!cache.has(key)) cache.set(key, getPageStatusScope(entityId, pageId));
+  const policy = await cache.get(key)!;
+  if (!policy) return base;
+  return { scope: "own", scopeFieldKeys: [PAGE_SCOPE_PREFIX + JSON.stringify({
+    policy, base: base.scope === "all" ? null : base.scopeFieldKeys,
+  })] };
 }
 
 /** Formula-export-only row scope; see effectiveFormulaExportRecordPerm. */

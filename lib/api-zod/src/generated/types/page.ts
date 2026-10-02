@@ -11,11 +11,13 @@ import type { PageDefaultPageSize } from './pageDefaultPageSize';
 import type { PageMirrorFieldLabelsJson } from './pageMirrorFieldLabelsJson';
 import type { PageMirrorPinnedJson } from './pageMirrorPinnedJson';
 import type { PageQuickFilter } from './pageQuickFilter';
+import type { PageStatusScope } from './pageStatusScope';
 import type { PivotPageConfig } from './pivotPageConfig';
 import type { SortSpec } from './sortSpec';
 import type { TextDirection } from './textDirection';
 
 export interface Page {
+  statusScopeJson?: PageStatusScope | null;
   textDirection?: TextDirection | null;
   id: number;
   nameJson: MultilingualText;

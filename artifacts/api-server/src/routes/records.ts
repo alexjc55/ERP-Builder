@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { pageStatusChangeAllowed } from "../lib/page-status-scope";
 import { createRecordRelationSelections } from "../lib/record-relation-selections";
 import { recordLinkUniqueMessage } from "../lib/record-links";
 import { RelationSelectionError, guardedRelationRequiresFieldSurface, clearDependentSelections } from "../lib/relation-selection-integrity";
@@ -4245,6 +4246,10 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
   }
 
   // Stamp when the record entered its status so the N-day auto-archive rule has a baseline.
+  if (!await pageStatusChangeAllowed(entityId, body.data.pageId ?? undefined, statusId)) {
+    res.status(403).json({ error: "This status is not available on this page" });
+    return;
+  }
   // isKey uniqueness is verified inside the write transaction under an advisory lock
   // (per entity) so two concurrent creates can't both pass the check and insert a dup.
   const keyFields = fields.filter((f) => f.isKey);
@@ -4758,6 +4763,9 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
       }
 
       statusChanging = effectiveHasStatus && (update.statusId ?? null) !== (locked.statusId ?? null);
+      if (statusChanging && !await pageStatusChangeAllowed(locked.entityId, input.pageId ?? undefined, update.statusId ?? null)) {
+        throw new LockedUpdateError(403, "This status is not available on this page");
+      }
       delete update.statusChangedAt;
       delete update.archivedAt;
       delete update.archiveExempt;
@@ -5457,6 +5465,9 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
         const mappedStatusId = statusEdit ? statusId : mapped.statusId;
         const statusChanging =
           mappedStatusId != null && mappedStatusId !== (row.statusId ?? null);
+        if (statusChanging && !await pageStatusChangeAllowed(entityId, pageId ?? undefined, mappedStatusId!)) {
+          throw new BulkFieldUpdateError(403, recordId, "This status is not available on this page");
+        }
         if (mappedStatusId != null) {
           const [mappedStatus] = await tx
             .select({

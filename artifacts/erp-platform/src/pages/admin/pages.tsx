@@ -13,6 +13,7 @@ import {
   type MultilingualText,
 } from "@workspace/api-client-react";
 import { PivotPageConfig, type PivotPageConfigValue } from "@/components/PivotPageConfig";
+import { PageStatusScopeEditor } from "@/components/PageStatusScopeEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -82,6 +83,7 @@ export default function PagesPage() {
   const [textDirection, setTextDirection] = useState<TextDirectionOverride>(null);
   const [mirrorEntityId, setMirrorEntityId] = useState<string>("none");
   const [mirrorFieldKeys, setMirrorFieldKeys] = useState<string[]>([]);
+  const [statusScope, setStatusScope] = useState<Page["statusScopeJson"]>(null);
   const [groupByFieldKey, setGroupByFieldKey] = useState<string>("none");
   const [groupDefaultExpanded, setGroupDefaultExpanded] = useState(false);
   const [pageType, setPageType] = useState<"normal" | "mirror" | "dashboard" | "pivot">("normal");
@@ -141,6 +143,7 @@ export default function PagesPage() {
 
   const openCreate = () => {
     setEditingPage(null);
+    setStatusScope(null);
     setTextDirection(null);
     setNameJson({});
     setDescJson({});
@@ -173,6 +176,7 @@ export default function PagesPage() {
     setIsActive(page.isActive);
     setMirrorEntityId(page.mirrorEntityId ? String(page.mirrorEntityId) : "none");
     setMirrorFieldKeys(page.mirrorFieldKeysJson ?? []);
+    setStatusScope(page.statusScopeJson ?? null);
     setGroupByFieldKey(page.groupByFieldKey || "none");
     setGroupDefaultExpanded(page.groupDefaultExpanded ?? false);
     setPageType(
@@ -196,6 +200,7 @@ export default function PagesPage() {
   const pathMissing = pathRequired && normalizedPath === "";
 
   const handlePageTypeChange = (v: "normal" | "mirror" | "dashboard" | "pivot") => {
+    setStatusScope(null);
     setPageType(v);
     if (v !== "mirror") {
       setMirrorEntityId("none");
@@ -222,6 +227,7 @@ export default function PagesPage() {
     const isPivot = pageType === "pivot";
     const payload = {
       nameJson: nameJson as MultilingualText,
+      statusScopeJson: pageType === "normal" || pageType === "mirror" ? statusScope : null,
       descriptionJson: descJson as MultilingualText,
       icon: icon || "",
       path: normalizedPath || null,
@@ -467,6 +473,7 @@ export default function PagesPage() {
                     value={mirrorEntityId}
                     onValueChange={(v) => {
                       setMirrorEntityId(v);
+                      setStatusScope(null);
                       setMirrorFieldKeys([]);
                       setGroupByFieldKey("none");
                     }}
@@ -541,6 +548,13 @@ export default function PagesPage() {
                 </>
               )}
 
+              {(pageType === "mirror" && mirrorEntityId !== "none" || pageType === "normal" && entities.some(e => e.pageId === editingPage?.id)) && (
+                <PageStatusScopeEditor
+                  key={pageType === "mirror" ? mirrorEntityId : editingPage?.id}
+                  entityId={pageType === "mirror" ? Number(mirrorEntityId) : entities.find(e => e.pageId === editingPage?.id)!.id}
+                  value={statusScope ?? null} onChange={setStatusScope}
+                />
+              )}
               {pageType === "dashboard" && (
                 <p className="text-xs text-slate-400">
                   {t("pages.dashboardHint", "Страница покажет панель виджетов. Виджеты настраиваются на самой странице кнопкой «Настроить».")}

@@ -86,6 +86,7 @@ export default function DynamicPage() {
           <DashboardView pageId={page.id} embedded />
           <EntityRecords
             entityId={entity.id}
+            pageStatusScope={page.statusScopeJson}
             visibleFieldKeys={mirrorEntity ? page.mirrorFieldKeysJson ?? undefined : undefined}
             fieldLabelOverrides={mirrorEntity ? page.mirrorFieldLabelsJson ?? undefined : undefined}
             mirrorColumnOrder={mirrorEntity ? page.mirrorColumnOrderJson ?? undefined : undefined}

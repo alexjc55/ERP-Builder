@@ -1685,6 +1685,16 @@ export interface RoleUpdate {
 }
 
 /**
+ * @nullable
+ */
+export type PageStatusScope = {
+  /** @maxItems 1000 */
+  statusIds: number[];
+  includeNoStatus: boolean;
+  allowAllChanges: boolean;
+} | null;
+
+/**
  * Per-mirror-page display label override for mirrored source-entity fields, keyed by fieldKey. Display-only, not a security boundary.
  * @nullable
  */
@@ -1942,6 +1952,7 @@ export interface SortSpec {
 }
 
 export interface Page {
+  statusScopeJson?: PageStatusScope | null;
   textDirection?: TextDirection | null;
   id: number;
   nameJson: MultilingualText;
@@ -2049,6 +2060,7 @@ export const PageInputDefaultPageSize = {
 } as const;
 
 export interface PageInput {
+  statusScopeJson?: PageStatusScope | null;
   textDirection?: TextDirection | null;
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;
@@ -2152,6 +2164,7 @@ export const PageUpdateDefaultPageSize = {
 } as const;
 
 export interface PageUpdate {
+  statusScopeJson?: PageStatusScope | null;
   textDirection?: TextDirection | null;
   nameJson?: MultilingualText;
   descriptionJson?: MultilingualText;

@@ -22,6 +22,11 @@ export const pagesTable = pgTable("pages", {
   // projection only — real security (row scope, field hiding) is enforced by RBAC
   // on the mirrored entity.
   mirrorFieldKeysJson: jsonb("mirror_field_keys_json").$type<string[]>(),
+  statusScopeJson: jsonb("status_scope_json").$type<{
+    statusIds: number[];
+    includeNoStatus: boolean;
+    allowAllChanges: boolean;
+  }>(),
   // Optional per-mirror-page DISPLAY label override for mirrored source-entity
   // fields, keyed by fieldKey → multilingual {ru,en,he}. Lets a mirror page show
   // a different column/field label (e.g. "Цена для производителя" → "Цена")

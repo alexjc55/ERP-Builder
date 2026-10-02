@@ -2190,8 +2190,10 @@ export function EntityRecords({
   pageHideStatusColumn,
   pageDisableCreate,
   pageTextDirection,
+  pageStatusScope,
 }: {
   entityId: number;
+  pageStatusScope?: { statusIds: number[]; includeNoStatus: boolean; allowAllChanges: boolean } | null;
   /**
    * Display-level projection (used by mirror pages): when provided, only these
    * field keys are shown in the table and record dialog. This is purely cosmetic
@@ -2801,6 +2803,7 @@ export function EntityRecords({
   // buckets/totals) to re-run. Declared here (above the page-values mutation)
   // so the page-local edit path can trigger a group-header refresh too.
   const [refreshTick, setRefreshTick] = useState(0);
+  useEffect(() => { setRefreshTick(x => x + 1); }, [pageStatusScope]);
   // Inline editors guard against duplicate blur/Enter submits. A version
   // conflict releases that one-shot guard without remounting the editor, so its
   // local draft remains intact and can be retried against the refreshed version.
@@ -3225,7 +3228,10 @@ export function EntityRecords({
   const toIdSet = (v: unknown): Set<number> =>
     new Set<number>(Array.isArray(v) ? v.filter((n): n is number => Number.isInteger(n)) : []);
   const statusEntityPerm = isSuperAdmin ? undefined : user?.permissions?.records?.[String(entityId)];
-  const hiddenStatusIds = useMemo(() => toIdSet(statusEntityPerm?.hiddenStatusIds), [statusEntityPerm?.hiddenStatusIds]);
+  const hiddenStatusIds = useMemo(() => new Set([
+    ...toIdSet(statusEntityPerm?.hiddenStatusIds),
+    ...(pageStatusScope && !pageStatusScope.allowAllChanges ? statuses.filter(s => !pageStatusScope.statusIds.includes(s.id)).map(s => s.id) : []),
+  ]), [statusEntityPerm?.hiddenStatusIds, pageStatusScope, statuses]);
   const hiddenRowStatusIds = toIdSet(statusEntityPerm?.hiddenRowStatusIds);
   // Cosmetic per-role column hide. Read from the CURRENT context key (mirror
   // override when on a mirror page, else the entity) so it matches canRecord's
@@ -3249,7 +3255,7 @@ export function EntityRecords({
   const filterableStatuses =
     hideStatusColumn || pageHideStatusColumn
       ? []
-      : statuses.filter((s: Status) => !hiddenStatusIds.has(s.id) && !hiddenRowStatusIds.has(s.id));
+      : statuses.filter((s: Status) => !hiddenStatusIds.has(s.id) && !hiddenRowStatusIds.has(s.id) && (!pageStatusScope || pageStatusScope.statusIds.includes(s.id)));
   // When the entity's default status is hidden from this role's picker, the create
   // form falls back to NO_STATUS. The server only assigns the (hidden) default
   // when statusId is OMITTED — a null value is stored as an explicit no-status —
@@ -3261,7 +3267,7 @@ export function EntityRecords({
     statusValue: number | null,
     statusWasSelected: boolean,
   ): { valuesJson: Record<string, unknown>; statusId?: number | null; pageId?: number } =>
-    !statusWasSelected || (statusValue === null && defaultStatusHidden)
+    !pageStatusScope && (!statusWasSelected || (statusValue === null && defaultStatusHidden))
       ? { valuesJson, pageId: permPageId }
       : { valuesJson, statusId: statusValue, pageId: permPageId };
 
@@ -5780,7 +5786,9 @@ export function EntityRecords({
     // Preselect the default status — but if it is hidden from this role's picker,
     // leave it unset so the server assigns the (hidden) default itself instead of
     // rejecting an explicit forbidden statusId.
-    const def = statuses.find((s: Status) => s.isDefault);
+    const def = pageStatusScope
+      ? statuses.find(s => s.isDefault && !hiddenStatusIds.has(s.id)) ?? statuses.find(s => !hiddenStatusIds.has(s.id))
+      : statuses.find((s: Status) => s.isDefault);
     setStatusId(def && !hiddenStatusIds.has(def.id) ? String(def.id) : NO_STATUS);
     setStatusDirty(false);
     setDialogOpen(true);
@@ -6387,7 +6395,7 @@ export function EntityRecords({
   // When the entity disables it, the "Без статуса" option is hidden from status
   // pickers. Still shown when the current value is already null, so the Select
   // isn't left in a broken (value-with-no-matching-item) state.
-  const allowNoStatus = entity?.allowNoStatus ?? true;
+  const allowNoStatus = (entity?.allowNoStatus ?? true) && (!pageStatusScope || pageStatusScope.allowAllChanges || pageStatusScope.includeNoStatus);
 
   // Statuses a given row may move to, mirroring the server workflow boundary (per-row).
   const allowedStatusesForRecord = useCallback((record: EntityRecord): Status[] => {
@@ -6438,7 +6446,9 @@ export function EntityRecords({
     // Preselect the default status — but if it is hidden from this role's picker,
     // leave it unset so the server assigns the (hidden) default itself instead of
     // rejecting an explicit forbidden statusId.
-    const def = statuses.find((s: Status) => s.isDefault);
+    const def = pageStatusScope
+      ? statuses.find(s => s.isDefault && !hiddenStatusIds.has(s.id)) ?? statuses.find(s => !hiddenStatusIds.has(s.id))
+      : statuses.find((s: Status) => s.isDefault);
     setNewRowStatus(def && !hiddenStatusIds.has(def.id) ? String(def.id) : NO_STATUS);
     setNewRowStatusDirty(false);
     setEditingCell(null);
@@ -8449,6 +8459,7 @@ export function EntityRecords({
       {showKanban && kanbanConfig ? (
         recordsBootstrapReady ? (
           <KanbanView
+            statusScope={pageStatusScope}
             key={`${entityId}:${permPageId ?? ""}:${selectedViewId ?? ""}`}
             entityId={entityId}
             config={kanbanConfig}
@@ -8470,7 +8481,7 @@ export function EntityRecords({
                 ?? transitions.find(tr => tr.fromStatusId == null && tr.toStatusId === status.id);
               return !!transition && (!transition.allowedRoleIds?.length || transition.allowedRoleIds.some(id => userRoleIds.includes(id)));
             })}
-            allowNoStatus={entity?.allowNoStatus === true}
+            allowNoStatus={entity?.allowNoStatus === true && allowNoStatus}
             refreshTick={refreshTick}
             ml={ml}
             pageTextDirection={pageTextDirection}

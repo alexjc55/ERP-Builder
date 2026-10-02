@@ -35,12 +35,13 @@ type FixtureRecord = {
   updatedAt: string;
 };
 
-async function installFixture(page: Page, options: { language?: Locale; collaborationStatus?: number; editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null; tintColumns?: boolean; statusTitleHover?: boolean } = {}) {
+async function installFixture(page: Page, options: { adminPages?: boolean; statusScope?: { statusIds: number[]; includeNoStatus: boolean; allowAllChanges: boolean }; language?: Locale; collaborationStatus?: number; editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null; tintColumns?: boolean; statusTitleHover?: boolean } = {}) {
   const queries: Query[] = [];
   const writes: { id: number; body: Record<string, unknown> }[] = [];
   const unexpectedWrites: string[] = [];
   const errors: string[] = [];
   const detailReads: number[] = [];
+  const pageWrites: unknown[] = [];
   const entity = {
     id: entityId, pageId, entityKey: "kanban_fixture", nameJson: { en: "Kanban items" },
     isActive: true, allowNoStatus: true, defaultPageSize: 50,
@@ -49,7 +50,8 @@ async function installFixture(page: Page, options: { language?: Locale; collabor
     { id: 1, nameJson: { en: "Ready" }, sortOrder: 0, hideByDefault: false },
     { id: 2, nameJson: { en: "Working" }, sortOrder: 1, hideByDefault: false },
     { id: 3, nameJson: { en: "Hidden done" }, sortOrder: 2, hideByDefault: true },
-  ].map(status => ({ ...status, entityId, isActive: true, color: status.id === 2 ? "#f59e0b" : "#2563eb", displayTags: [] }));
+  ].map(status => ({ ...status, entityId, isActive: true, color: status.id === 2 ? "#f59e0b" : "#2563eb",
+    displayTags: options.statusScope ? [{ id: 11, nameJson: { en: "Department tag" } }] : [] }));
   const makeRecord = (id: number, statusId: number | null): FixtureRecord => ({
     id, entityId, statusId,
     valuesJson: { title: `Item ${id}`, summary: `Summary ${id}`, detail: `Full detail ${id}`, empty: "" },
@@ -73,7 +75,7 @@ async function installFixture(page: Page, options: { language?: Locale; collabor
     });
     if (path === "/api/auth/me") return reply({
       id: 1, firstName: "Kanban", roleId: 1, roleIds: [1], language: options.language ?? "en", direction: options.language === "he" ? "rtl" : "ltr", isActive: true,
-      permissions: { superAdmin: false, pageIds: [pageId], admin: {}, records: {
+      permissions: { superAdmin: false, pageIds: [pageId], admin: options.adminPages ? { pages: true } : {}, records: {
         [entityId]: { view: true, create: false, update: options.editable === true, delete: false, scope: "all" },
       } },
     });
@@ -81,7 +83,14 @@ async function installFixture(page: Page, options: { language?: Locale; collabor
     if (path === "/api/translations" && options.language) return reply(translations.map(({ key, ...translationsJson }, i) => ({
       id: i + 1, translationKey: key, translationsJson,
     })));
-    if (path === "/api/pages") return reply([{ id: pageId, path: fixturePath, nameJson: { en: "Kanban items" }, isActive: true }]);
+    const fixturePage = { id: pageId, path: fixturePath, nameJson: { en: "Kanban items" }, icon: "", sortOrder: 1, isActive: true, statusScopeJson: options.statusScope };
+    if (path === `/api/pages/${pageId}` && request.method() === "PUT" && options.adminPages) {
+      const body = request.postDataJSON();
+      pageWrites.push(body);
+      options.statusScope = body.statusScopeJson;
+      return reply({ ...fixturePage, ...body });
+    }
+    if (path === "/api/pages") return reply([fixturePage]);
     if (path === "/api/entities") return reply([entity]);
     if (path === `/api/entities/${entityId}`) return reply(entity);
     if (path === `/api/entities/${entityId}/statuses`) return reply(statuses);
@@ -102,6 +111,7 @@ async function installFixture(page: Page, options: { language?: Locale; collabor
       const query = request.postDataJSON() as Query;
       queries.push(query);
       const matching = records.filter(record => {
+        if (options.statusScope && !(record.statusId == null ? options.statusScope.includeNoStatus : options.statusScope.statusIds.includes(record.statusId))) return false;
         if (query.statusIsNull && record.statusId !== null) return false;
         if (query.statusIds?.length && !query.statusIds.includes(record.statusId!)) return false;
         if (!query.showHiddenStatuses && record.statusId === 3) return false;
@@ -149,7 +159,7 @@ async function installFixture(page: Page, options: { language?: Locale; collabor
     return reply([]);
   });
   return {
-    queries, writes, records, unexpectedWrites, errors, detailReads,
+    queries, writes, records, unexpectedWrites, errors, detailReads, pageWrites,
     setCollaborationStatus(status: number | undefined) { options.collaborationStatus = status; },
     setAllowNoStatus(value: boolean | undefined) { Object.assign(entity, { allowNoStatus: value }); },
     releaseMove: (fail = false) => {
@@ -414,6 +424,67 @@ test("hidden-status toggle includes and removes the hidden column", async ({ pag
   expect(fixture.unexpectedWrites).toEqual([]);
   expect(fixture.errors).toEqual([]);
 });
+
+test("page status settings save, reopen and return to all statuses", async ({ page }) => {
+  const fixture = await installFixture(page, { adminPages: true });
+  await page.goto("/admin/pages");
+  const edit = page.getByRole("row").filter({ hasText: "Kanban items" }).getByRole("button").filter({ has: page.locator("svg.lucide-pencil") });
+  await edit.click();
+  const editor = page.getByTestId("page-status-scope-editor");
+  await editor.getByRole("combobox").click();
+  await page.getByRole("option", { name: "Только выбранные", exact: true }).click();
+  await editor.getByText("Ready", { exact: true }).click();
+  await editor.getByText("Показывать все доступные статусы в меню смены статуса", { exact: true }).click();
+  await page.getByRole("button", { name: /^(Save|Сохранить)$/ }).click();
+  await expect.poll(() => fixture.pageWrites.length).toBe(1);
+  expect(fixture.pageWrites[0]).toMatchObject({ statusScopeJson: { statusIds: [1], includeNoStatus: false, allowAllChanges: true } });
+  await edit.click();
+  await expect(editor.locator("label").filter({ hasText: "Ready" }).getByRole("checkbox")).toBeChecked();
+  await editor.getByRole("combobox").click();
+  await page.getByRole("option", { name: "Все статусы", exact: true }).click();
+  await expect(editor.getByRole("checkbox")).toHaveCount(0);
+  await page.getByRole("button", { name: /^(Save|Сохранить)$/ }).click();
+  await expect.poll(() => fixture.pageWrites.length).toBe(2);
+  expect(fixture.pageWrites[1]).toMatchObject({ statusScopeJson: null });
+  expect(fixture.errors).toEqual([]);
+  expect(fixture.unexpectedWrites).toEqual([]);
+});
+
+for (const allowAllChanges of [false, true]) {
+  test(`page status selection constrains lanes, filters and changes (all destinations: ${allowAllChanges})`, async ({ page }) => {
+    const fixture = await installFixture(page, {
+      editable: true, viewMode: "single",
+      statusScope: { statusIds: [1, 3], includeNoStatus: false, allowAllChanges },
+    });
+    await page.goto(fixturePath);
+    await expect(page.getByTestId("card-kanban-1000")).toBeVisible();
+    await expect(lane(page, "s:2")).toHaveCount(0);
+    await expect(lane(page, "null")).toHaveCount(0);
+    await expect(lane(page, "s:3")).toHaveCount(0);
+    await page.getByRole("checkbox", { name: /Show hidden|Показать скрытые/ }).check();
+    await expect(lane(page, "s:3")).toBeVisible();
+    await expect(lane(page, "s:2")).toHaveCount(0);
+    await page.getByRole("button", { name: "Статус", exact: true }).click();
+    await expect(page.getByRole("dialog").getByText("Working", { exact: true })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await page.getByTestId("button-actions-kanban-1000").click();
+    const destination = page.getByRole("menuitem").filter({ hasText: "Working" });
+    await expect(destination).toHaveCount(allowAllChanges ? 1 : 0);
+    await expect(page.getByRole("menuitem").filter({ hasText: "Hidden done" })).toContainText("Department tag");
+    if (allowAllChanges) {
+      await expect(destination).toContainText("Department tag");
+      await destination.click();
+      await expect.poll(() => fixture.writes.length).toBe(1);
+      fixture.releaseMove();
+      await expect(page.getByTestId("card-kanban-1000")).toHaveCount(0);
+      await expect(lane(page, "s:2")).toHaveCount(0);
+    } else await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: /^(Table|Таблица)$/ }).click();
+    await expect(page.getByRole("cell", { name: "Item 2000", exact: true })).toHaveCount(0);
+    expect(fixture.unexpectedWrites).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
 
 test("status title hover is optional, readable and leaves cards white", async ({ page }) => {
   const options = { statusTitleHover: true, editable: true };

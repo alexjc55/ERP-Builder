@@ -13,6 +13,7 @@ import { requireAuth } from "../middlewares/auth";
 import { requireAdmin, getPermissions } from "../middlewares/permissions";
 import { buildRelationMeta } from "./own-scope";
 import { cascadeDeletePageRefFields } from "./page-fields";
+import { validatePageStatusScope } from "../lib/page-status-scope";
 import { computePivot, type PivotConfigInput } from "./pivot-compute";
 import { buildRecordQuery, type RecordQuerySpec, type FilterCondition } from "./record-query";
 import { mergeLinkedFormulaInputs, systemFormulaPermissions } from "../lib/formula-runtime";
@@ -151,6 +152,9 @@ router.post("/pages", requireAuth, requireAdmin("pages"), async (req, res): Prom
     res.status(400).json({ error: "A dashboard page cannot also mirror an entity" });
     return;
   }
+
+  const scopeError = await validatePageStatusScope(parsed.data.statusScopeJson, parsed.data.mirrorEntityId);
+  if (scopeError) { res.status(400).json({ error: scopeError }); return; }
 
   // Pivot pages: validate the reported-on entity exists and enforce the
   // pivot ⊥ dashboard ⊥ mirror exclusivity (a bound entity is impossible on a
@@ -413,6 +417,7 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
   if ("parentPageId" in body) updateData.parentPageId = body.parentPageId ?? null;
   if ("mirrorEntityId" in body) updateData.mirrorEntityId = body.mirrorEntityId ?? null;
   if ("mirrorFieldKeysJson" in body) updateData.mirrorFieldKeysJson = body.mirrorFieldKeysJson ?? null;
+  if ("statusScopeJson" in body) updateData.statusScopeJson = body.statusScopeJson ?? null;
   if ("mirrorFieldLabelsJson" in body) updateData.mirrorFieldLabelsJson = body.mirrorFieldLabelsJson ?? null;
   if ("mirrorColumnOrderJson" in body) updateData.mirrorColumnOrderJson = body.mirrorColumnOrderJson ?? null;
   if ("columnGroupsJson" in body) updateData.columnGroupsJson = body.columnGroupsJson ?? null;
@@ -462,6 +467,7 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
       isPivot: pagesTable.isPivot,
       pivotEntityId: pagesTable.pivotEntityId,
       groupByFieldKey: pagesTable.groupByFieldKey,
+      statusScopeJson: pagesTable.statusScopeJson,
     })
     .from(pagesTable)
     .where(eq(pagesTable.id, params.data.id));
@@ -478,6 +484,12 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
   const effPivotEntityId =
     "pivotEntityId" in updateData ? (updateData.pivotEntityId as number | null) : current.pivotEntityId;
   const hasBoundEntity = await pageHasBoundEntity(params.data.id);
+  const [boundEntity] = await db.select({ id: entitiesTable.id }).from(entitiesTable)
+    .where(eq(entitiesTable.pageId, params.data.id)).limit(1);
+  const effectiveStatusScope = "statusScopeJson" in body ? body.statusScopeJson : current.statusScopeJson;
+  const scopeError = await validatePageStatusScope(effectiveStatusScope,
+    effIsDashboard || effIsPivot ? null : effMirrorEntityId ?? boundEntity?.id);
+  if (scopeError) { res.status(400).json({ error: scopeError }); return; }
 
   if (effMirrorEntityId != null && hasBoundEntity) {
     res.status(409).json({

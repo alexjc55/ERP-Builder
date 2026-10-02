@@ -238,6 +238,75 @@ async function login(page: Page, email: string) {
   await expect(page.getByTestId(`card-kanban-${fixture!.records[0]}`)).toBeVisible();
 }
 
+test("page status scope enforces queries, individual and bulk moves, and shared handoff", async ({ page }) => {
+  await guard(page);
+  await setup();
+  let mirrorId: number | undefined;
+  try {
+    const f = fixture!;
+    const [mirror] = await db.insert(pagesTable).values({
+      path: `${path}-receiving`, nameJson: { en: `${key}-receiving` }, mirrorEntityId: f.entity,
+      statusScopeJson: { statusIds: [f.ready, f.working], includeNoStatus: false, allowAllChanges: false },
+    }).returning();
+    mirrorId = mirror.id;
+    await db.update(rolesTable).set({ permissionsJson: {
+      ...NO_ACCESS_PERMS, pageIds: [f.page, mirror.id],
+      records: { [f.entity]: { view: true, create: true, update: true, delete: false, scope: "all" } },
+    } }).where(eq(rolesTable.id, f.role));
+    await db.update(pagesTable).set({
+      statusScopeJson: { statusIds: [f.ready], includeNoStatus: false, allowAllChanges: false },
+    }).where(eq(pagesTable.id, f.page));
+    const headers = { Authorization: `Bearer ${signToken({ userId: f.users[0], roleId: f.role })}` };
+    const query = async (body: object = {}) => {
+      const response = await page.request.post(`/api/entities/${f.entity}/records/query`, {
+        headers, data: { showHiddenStatuses: true, pageSize: 100, ...body },
+      });
+      expect(response.ok(), await response.text()).toBe(true);
+      return response.json();
+    };
+    expect((await query()).total).toBe(f.records.length);
+    expect((await query({ statusIds: [f.working] })).total).toBe(0);
+    expect((await query({ statusIsNull: true })).total).toBe(0);
+    const before = (await query()).data.find((row: { id: number }) => row.id === f.records[0]);
+    const denied = await page.request.put(`/api/records/${before.id}`, {
+      headers, data: { statusId: f.working, expectedVersion: before.version },
+    });
+    expect(denied.status()).toBe(403);
+    const bulkDenied = await page.request.post("/api/records/bulk-field", {
+      headers, data: { entityId: f.entity, recordIds: [before.id], statusId: f.working,
+        expectedVersions: { [before.id]: before.version } },
+    });
+    expect(bulkDenied.status(), await bulkDenied.text()).toBe(403);
+    // The same shared record can be received through a mirror whose selection
+    // contains both the handoff status and the destination.
+    expect((await query({ pageId: mirror.id })).data.some((row: { id: number }) => row.id === before.id)).toBe(true);
+    const received = await page.request.put(`/api/records/${before.id}`, {
+      headers, data: { pageId: mirror.id, statusId: f.working, expectedVersion: before.version },
+    });
+    expect(received.ok(), await received.text()).toBe(true);
+    expect((await query()).data.some((row: { id: number }) => row.id === before.id)).toBe(false);
+    expect((await query({ pageId: mirror.id, statusIds: [f.working] })).total).toBe(1);
+    // Allowing all destinations must not widen the read boundary.
+    await db.update(pagesTable).set({
+      statusScopeJson: { statusIds: [f.ready], includeNoStatus: false, allowAllChanges: true },
+    }).where(eq(pagesTable.id, f.page));
+    const next = (await query()).data[0];
+    const outside = await page.request.put(`/api/records/${next.id}`, {
+      headers, data: { statusId: f.working, expectedVersion: next.version },
+    });
+    expect(outside.ok(), await outside.text()).toBe(true);
+    expect((await query({ statusIds: [f.working] })).total).toBe(0);
+    // Empty means no rows, never an accidental all-status fallback.
+    await db.update(pagesTable).set({
+      statusScopeJson: { statusIds: [], includeNoStatus: false, allowAllChanges: false },
+    }).where(eq(pagesTable.id, f.page));
+    expect((await query()).total).toBe(0);
+  } finally {
+    if (mirrorId != null) await db.delete(pagesTable).where(eq(pagesTable.id, mirrorId));
+    await cleanup();
+  }
+});
+
 const lane = (page: Page, status: number) => page.getByTestId(`lane-kanban-s:${status}`);
 const card = (page: Page, record: number) => page.getByTestId(`card-kanban-${record}`);
 async function move(page: Page, record: number, destination: string) {

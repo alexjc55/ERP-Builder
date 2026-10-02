@@ -1,6 +1,7 @@
 import { sql, and, or, eq, inArray, type SQL } from "drizzle-orm";
 import { db, entityRecordsTable, relationsTable, type EntityField, type ScopeFilter } from "@workspace/db";
 import { decodeScopeFilter } from "../lib/scope-filter";
+import { decodePageScope, pageStatusWhere } from "../lib/page-status-scope";
 import { relationDirection, ownRelationExists, relationValueExists, pageLocalValueExpr, type RelationFilterMeta } from "./record-query";
 
 /**
@@ -179,6 +180,9 @@ export async function ownScopeWhere(
   userId: number,
   fields: EntityField[],
 ): Promise<SQL> {
+  const pageScope = decodePageScope(scopeFieldKeys);
+  if (pageScope) return and(pageStatusWhere(pageScope.policy),
+    pageScope.base === null ? undefined : await ownScopeWhere(entityId, pageScope.base, userId, fields))!;
   if (scopeFieldKeys.length === 0) return sql`false`;
   const { native, relation, filters } = partitionOwnerFields(scopeFieldKeys, fields);
   const clauses: SQL[] = native.map(
@@ -227,6 +231,12 @@ export async function isRecordOwned(
   fields: EntityField[],
   executor: Pick<typeof db, "select"> = db,
 ): Promise<boolean> {
+  const pageScope = decodePageScope(scopeFieldKeys);
+  if (pageScope) {
+    const [visible] = await executor.select({ id: entityRecordsTable.id }).from(entityRecordsTable)
+      .where(and(eq(entityRecordsTable.id, record.id), eq(entityRecordsTable.entityId, entityId), pageStatusWhere(pageScope.policy))).limit(1);
+    return !!visible && (pageScope.base === null || await isRecordOwned(entityId, record, pageScope.base, userId, fields, executor));
+  }
   if (scopeFieldKeys.length === 0) return false;
   const { native, relation, filters } = partitionOwnerFields(scopeFieldKeys, fields);
   const values = (record.valuesJson as Record<string, unknown>) ?? {};

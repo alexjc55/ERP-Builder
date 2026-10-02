@@ -1,5 +1,35 @@
 [
   {
+    "key": "pages.statusScope",
+    "ru": "Статусы страницы",
+    "en": "Page statuses",
+    "he": "סטטוסים בעמוד"
+  },
+  {
+    "key": "pages.statusScopeAll",
+    "ru": "Все статусы",
+    "en": "All statuses",
+    "he": "כל הסטטוסים"
+  },
+  {
+    "key": "pages.statusScopeSelected",
+    "ru": "Только выбранные",
+    "en": "Selected statuses only",
+    "he": "סטטוסים נבחרים בלבד"
+  },
+  {
+    "key": "pages.statusScopeAllChanges",
+    "ru": "Показывать все доступные статусы в меню смены статуса",
+    "en": "Show all available statuses in the status-change menu",
+    "he": "הצגת כל הסטטוסים הזמינים בתפריט שינוי הסטטוס"
+  },
+  {
+    "key": "pages.statusScopeHint",
+    "ru": "Таблица, канбан и фильтр показывают только выбранные статусы. «Показать скрытые» не расширяет этот набор.",
+    "en": "The table, board and filter show only selected statuses. “Show hidden” does not expand this selection.",
+    "he": "הטבלה, לוח הקנבן והמסנן מציגים רק סטטוסים שנבחרו. ״הצג מוסתרים״ אינו מרחיב בחירה זו."
+  },
+  {
     "key": "collaboration.sessionExpired",
     "ru": "Сессия истекла. Войдите снова для совместной работы.",
     "en": "Your session expired. Sign in again to collaborate.",
