@@ -26,7 +26,7 @@ type FixtureRecord = {
   updatedAt: string;
 };
 
-async function installFixture(page: Page, options: { editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null } = {}) {
+async function installFixture(page: Page, options: { editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null; tintColumns?: boolean } = {}) {
   const queries: Query[] = [];
   const writes: { id: number; body: Record<string, unknown> }[] = [];
   const unexpectedWrites: string[] = [];
@@ -40,7 +40,7 @@ async function installFixture(page: Page, options: { editable?: boolean; manyCar
     { id: 1, nameJson: { en: "Ready" }, sortOrder: 0, hideByDefault: false },
     { id: 2, nameJson: { en: "Working" }, sortOrder: 1, hideByDefault: false },
     { id: 3, nameJson: { en: "Hidden done" }, sortOrder: 2, hideByDefault: true },
-  ].map(status => ({ ...status, entityId, isActive: true, color: "#2563eb", displayTags: [] }));
+  ].map(status => ({ ...status, entityId, isActive: true, color: status.id === 2 ? "#f59e0b" : "#2563eb", displayTags: [] }));
   const makeRecord = (id: number, statusId: number | null): FixtureRecord => ({
     id, entityId, statusId,
     valuesJson: { title: `Item ${id}`, summary: `Summary ${id}`, detail: `Full detail ${id}`, empty: "" },
@@ -84,7 +84,7 @@ async function installFixture(page: Page, options: { editable?: boolean; manyCar
       ...options.viewMode === "single" ? [] : [
       { id: boardViewId - 1, entityId, pageId, nameJson: { en: "Table fixture" }, isDefault: options.viewMode !== "multiple-no-default", sortOrder: 0, configJson: {} }],
       { id: boardViewId, entityId, pageId, nameJson: { en: "Board fixture" }, isDefault: false, sortOrder: 1,
-        configJson: { viewType: "kanban", kanban: { titleField: "title", fields: ["summary", "empty"], showLabels: true, hideEmptyFields: true, textDirection: options.cardDirection } } },
+        configJson: { viewType: "kanban", kanban: { titleField: "title", fields: ["summary", "empty"], showLabels: true, hideEmptyFields: true, textDirection: options.cardDirection, tintColumns: options.tintColumns } } },
     ]);
     if (path === `/api/entities/${entityId}/records/query`) {
       const query = request.postDataJSON() as Query;
@@ -267,6 +267,24 @@ test("hidden-status toggle includes and removes the hidden column", async ({ pag
   await toggle.uncheck();
   await expect(lane(page, "s:3")).toHaveCount(0);
   expect(fixture.unexpectedWrites).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("column tint follows status colors without coloring cards and can be disabled", async ({ page }) => {
+  const options = { tintColumns: true };
+  const fixture = await installFixture(page, options);
+  await selectBoard(page);
+  const background = (key: string) => lane(page, key).evaluate(el => getComputedStyle(el).backgroundColor);
+  expect(await background("s:1")).not.toBe(await background("s:2"));
+  expect(await background("null")).not.toBe(await background("s:1"));
+  for (const id of [1000, 2000]) {
+    await expect(page.getByTestId(`card-kanban-${id}`)).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  }
+  await page.screenshot({ path: "/tmp/kanban-tinted-columns.png" });
+  options.tintColumns = false;
+  await selectBoard(page);
+  expect(await background("s:1")).toBe(await background("s:2"));
+  expect(await lane(page, "s:1").evaluate(el => (el as HTMLElement).style.backgroundColor)).toBe("");
   expect(fixture.errors).toEqual([]);
 });
 

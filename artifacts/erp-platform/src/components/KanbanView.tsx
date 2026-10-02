@@ -53,6 +53,7 @@ import { Archive, GripVertical, Loader2, MoreHorizontal, Pencil, Eye, ArrowRight
 
 /** Matches backend ViewConfig.kanban. Field refs: entity fieldKey or "page:<pageFieldKey>". */
 export type KanbanConfig = {
+  tintColumns?: boolean;
   textDirection?: "ltr" | "rtl" | null;
   titleField: string | null;
   fields: string[];
@@ -890,6 +891,7 @@ export function KanbanView(props: KanbanViewProps) {
               data-kanban-lane={lane}
               aria-label={laneLabel(lane)}
               data-testid={`lane-kanban-${lane}`}
+              style={config?.tintColumns ? { backgroundColor: `color-mix(in srgb, ${color} ${drag && isOver && isTarget ? "16%" : "7%"}, white)` } : undefined}
               className={`flex h-full w-72 shrink-0 flex-col rounded-xl border bg-slate-50/80 transition-colors ${
                 drag && isOver && isTarget ? "border-slate-500 bg-slate-100" : drag && isTarget ? "border-dashed border-slate-400" : "border-slate-200"
               } ${drag && !isTarget && drag.record.statusId !== statusIdForLane(lane) ? "opacity-60" : ""}`}

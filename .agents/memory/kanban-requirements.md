@@ -27,6 +27,10 @@ description: Product constraints for the reusable CRM-first Kanban entity view.
 
 **Rule:** More dynamic card configuration and behavior can be worked out once an initial Kanban exists.
 
+**Rule:** Optional status-coloured backgrounds apply to Kanban columns only, never to the cards.
+
+**Why:** The user explicitly requested column tinting while preserving uncoloured cards, even though the reference image also decorated cards.
+
 **Why:** The user supplied these requirements and then authorized implementation of the agreed first version.
 
 **How to apply:** Carry these constraints into subsequent design and implementation. Do not specialize the view for CRM or conflate hidden columns with archived records. Discuss further card behavior after a working initial version exists.

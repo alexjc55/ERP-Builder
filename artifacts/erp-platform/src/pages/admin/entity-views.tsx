@@ -506,6 +506,7 @@ export default function EntityViewsPage() {
       showLabels: cfg.kanban?.showLabels ?? true,
       hideEmptyFields: cfg.kanban?.hideEmptyFields ?? true,
       textDirection: cfg.kanban?.textDirection ?? null,
+      tintColumns: cfg.kanban?.tintColumns ?? false,
     });
     setCalendarConfig(
       isCalendar && cfg.calendar

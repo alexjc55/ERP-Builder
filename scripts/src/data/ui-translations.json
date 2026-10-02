@@ -11321,6 +11321,7 @@
   {"key":"kanban.removeField","ru":"Удалить поле","en":"Remove field","he":"הסרת שדה"},
   {"key":"kanban.showLabels","ru":"Показывать названия полей","en":"Show field labels","he":"הצגת שמות השדות"},
   {"key":"kanban.hideEmptyFields","ru":"Скрывать пустые поля","en":"Hide empty fields","he":"הסתרת שדות ריקים"},
+  {"key":"kanban.tintColumns","ru":"Подкрашивать колонки по цвету статуса","en":"Tint columns with status colors","he":"צביעת עמודות לפי צבע הסטטוס"},
   {"key":"statuses.hideByDefault","ru":"Скрывать по умолчанию","en":"Hide by default","he":"הסתרה כברירת מחדל"},
   {"key":"statuses.hideByDefaultHint","ru":"Скрывает колонку этого статуса в канбане и записи с этим статусом в таблице по умолчанию. Пользователь может включить их отображение. Это не архивирование и не ограничение доступа.","en":"Hides this status column in Kanban and records with this status in the table by default. Users can choose to show them. This does not archive records or restrict access.","he":"מסתיר כברירת מחדל את עמודת הסטטוס בקנבן ואת הרשומות בסטטוס זה בטבלה. המשתמשים יכולים לבחור להציג אותן. פעולה זו אינה מעבירה רשומות לארכיון ואינה מגבילה גישה."},
   {"key":"kanban.actions","ru":"Действия","en":"Actions","he":"פעולות"},
