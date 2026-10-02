@@ -7368,6 +7368,7 @@ export function EntityRecords({
           </Button>
         )}
       </div>
+      <CollaborationNotice reason={collab.failureReason} />
       <div className={cn("space-y-2", !mobileToolbarOpen && "max-sm:hidden")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -7531,7 +7532,6 @@ export function EntityRecords({
           >
             {collab.connected ? "connected" : "disconnected"}
           </span>
-          <CollaborationNotice reason={collab.failureReason} />
           {activeCollabUsers.length > 0 && (
             <div data-testid="collab-avatar-list" className="flex items-center mr-2 relative" style={{ height: "28px" }}>
               {visibleCollabUsers.map((u, i) => (

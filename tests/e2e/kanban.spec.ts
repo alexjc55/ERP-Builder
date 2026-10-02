@@ -1,10 +1,18 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import { kanbanTitleColor } from "../../artifacts/erp-platform/src/lib/kanbanTitleColor";
 
 const entityId = 987670;
 const pageId = 987671;
 const boardViewId = 987672;
 const fixturePath = "/kanban-fixture";
+type Locale = "ru" | "en" | "he";
+const translations = JSON.parse(readFileSync("scripts/src/data/ui-translations.json", "utf8")) as Array<{ key: string } & Record<Locale, string>>;
+const localizedText = (key: string, language: Locale) => {
+  const text = translations.find(entry => entry.key === key)?.[language];
+  if (!text) throw new Error(`Missing curated ${language} translation: ${key}`);
+  return text;
+};
 
 type Query = {
   statusIds?: number[];
@@ -27,7 +35,7 @@ type FixtureRecord = {
   updatedAt: string;
 };
 
-async function installFixture(page: Page, options: { collaborationStatus?: number; editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null; tintColumns?: boolean; statusTitleHover?: boolean } = {}) {
+async function installFixture(page: Page, options: { language?: Locale; collaborationStatus?: number; editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null; tintColumns?: boolean; statusTitleHover?: boolean } = {}) {
   const queries: Query[] = [];
   const writes: { id: number; body: Record<string, unknown> }[] = [];
   const unexpectedWrites: string[] = [];
@@ -64,12 +72,15 @@ async function installFixture(page: Page, options: { collaborationStatus?: numbe
       status, contentType: "application/json", body: JSON.stringify(body),
     });
     if (path === "/api/auth/me") return reply({
-      id: 1, firstName: "Kanban", roleId: 1, roleIds: [1], language: "en", direction: "ltr", isActive: true,
+      id: 1, firstName: "Kanban", roleId: 1, roleIds: [1], language: options.language ?? "en", direction: options.language === "he" ? "rtl" : "ltr", isActive: true,
       permissions: { superAdmin: false, pageIds: [pageId], admin: {}, records: {
         [entityId]: { view: true, create: false, update: options.editable === true, delete: false, scope: "all" },
       } },
     });
     if (path === "/api/settings") return reply({ defaultLanguage: "en", timeZone: "UTC" });
+    if (path === "/api/translations" && options.language) return reply(translations.map(({ key, ...translationsJson }, i) => ({
+      id: i + 1, translationKey: key, translationsJson,
+    })));
     if (path === "/api/pages") return reply([{ id: pageId, path: fixturePath, nameJson: { en: "Kanban items" }, isActive: true }]);
     if (path === "/api/entities") return reply([entity]);
     if (path === `/api/entities/${entityId}`) return reply(entity);
@@ -188,6 +199,48 @@ for (const [status, reason, message] of [
 function laneQueries(queries: Query[]) {
   return queries.filter(query => query.viewId === boardViewId && query.pageSize === 40 &&
     (query.statusIsNull === true || query.statusIds?.length === 1));
+}
+
+for (const language of ["ru", "en", "he"] as const) {
+  for (const [status, reason, translationKey] of [
+    [401, "session_expired", "collaboration.sessionExpired"],
+    [403, "access_denied", "collaboration.accessDenied"],
+    [undefined, "network", "collaboration.networkLost"],
+  ] as const) {
+    test(`mobile localized notice ${language} ${reason}`, async ({ page }) => {
+      await page.setViewportSize({ width: 360, height: 800 });
+      const fixture = await installFixture(page, { language, collaborationStatus: status });
+      await page.goto(fixturePath);
+      const notice = page.getByTestId("collaboration-notice");
+      await expect(notice).toHaveAttribute("data-reason", reason);
+      await expect(notice).toContainText(localizedText(translationKey, language));
+      await expect(page.locator("html")).toHaveAttribute("lang", language);
+      await expect(page.locator("html")).toHaveAttribute("dir", language === "he" ? "rtl" : "ltr");
+      await expect(notice).toHaveCSS("direction", language === "he" ? "rtl" : "ltr");
+      const bounds = await notice.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(361);
+      expect(await notice.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+      await expect(page.getByTestId("collab-avatar")).toHaveCount(0);
+      await expect(page.getByText("PRIVATE SERVER DETAIL")).toHaveCount(0);
+      if (status === 401) {
+        const button = notice.getByRole("button", { name: localizedText("collaboration.signInAgain", language), exact: true });
+        await expect(button).toBeVisible();
+        // Reach the action using only real Tab navigation, not programmatic focus.
+        for (let i = 0; i < 40 && !(await button.evaluate(el => el === document.activeElement)); i++) {
+          await page.keyboard.press("Tab");
+        }
+        await expect(button).toBeFocused();
+        await page.keyboard.press("Enter");
+        await expect(page).toHaveURL(/\/login$/);
+        expect(await page.evaluate(() => localStorage.getItem("erp_token"))).toBeNull();
+      } else await expect(notice.getByRole("button")).toHaveCount(0);
+      expect(fixture.errors).toEqual([]);
+      expect(fixture.unexpectedWrites).toEqual([]);
+    });
+  }
 }
 
 test("collaboration denial keeps cached records hidden through failed probes until authorization succeeds", async ({ page }) => {

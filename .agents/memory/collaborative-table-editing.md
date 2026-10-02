@@ -72,6 +72,12 @@ Authorization denial is latched for the page/user: failed probes (including
 503 and transport failures) cannot downgrade it to a network-only warning or
 resume presence writes. Only successful authorization releases that boundary.
 
+Failure explanations must stay visible when mobile toolbars are collapsed.
+**Why:** The mobile default hides the toolbar; an outage warning inside it is
+present in the DOM but invisible to the user.
+**How to apply:** Assert actual visibility and viewport bounds, not only text
+or attributes, for localized connection warnings with collapsed mobile controls.
+
 Every write that changes a record's effective scalar, page-local, status,
 relation, archive, or merge state must participate in optimistic concurrency.
 An effective change advances the relevant version exactly once, including
