@@ -11,8 +11,8 @@ The "Настройки" dropdown item opens `/settings` (auth-only ProtectedRou
 
 ## Singleton + boundary rules
 - `app_settings` is a **singleton** row (id default 1), upserted by `PUT /settings`.
-- `GET /settings` is `requireAuth` only — every authed user reads it because the sidebar header (name/subtitle/logo) is built from it. `PUT /settings` is the hard admin boundary (`requireAdmin("settings")`, superAdmin bypasses).
-- **Why:** branding must render for all users, but only admins may change it. Splitting read vs write at the middleware is the boundary; do not gate GET behind the cap.
+- Public presentation settings must be readable before authentication; settings writes remain admin-only.
+- **Why:** login branding, including the browser favicon, must match the ERP before a session exists. Do not tie favicon updates to the authenticated layout or expose private configuration through the public presentation response.
 
 ## Public logo serving (no IDOR)
 - New logos are uploaded as raw bytes into the canonical local `uploads/branding/` directory and stored as `/local/branding/...` in `app_settings.logoObjectPath`; legacy `/objects/...` paths remain readable.

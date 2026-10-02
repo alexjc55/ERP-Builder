@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { I18nProvider, dirFor, useLang, useT } from "@/lib/i18n";
 import Layout from "@/components/layout/Layout";
+import { BrandingFavicon } from "@/components/BrandingFavicon";
 import LoginPage from "@/pages/login";
 import GuestEntryPage from "@/pages/guest";
 import DashboardPage from "@/pages/dashboard";
@@ -342,6 +343,7 @@ function RadixDirection({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <BrandingFavicon />
       <AuthProvider>
         <I18nProvider>
           <RadixDirection>
