@@ -5,6 +5,17 @@ description: Why destructive install, collaboration E2E, and PostgreSQL fixture 
 
 The dependency-install validation, collaboration/relation E2E, and PostgreSQL fixture release gates must share a repository-specific execution lock.
 
+Keep a pass-through API route installed for the lifetime of browser tests that
+add and remove individual write barriers.
+
+**Why:** Removing Chromium's last interception route during post-conflict lane
+refresh can strand an already-paused request; traces show a request with no
+response while other lanes finish, causing missing or duplicate cards.
+
+**How to apply:** Install the pass-through before the specific barriers and close
+it with the browser context. Forward bytes unchanged; never fabricate responses
+in real-session tests.
+
 **Why:** A clean workspace install creates enough concurrent I/O to change the timing of the collaboration conflict scenario. The E2E can then refresh before submitting the stale edit, return 200 instead of the expected 409, and time out despite both checks passing independently.
 
 **How to apply:** Route every PostgreSQL fixture command through the shared lock runner, retain each test runner's internal sequential mode, and use the same lock in destructive install and timing-sensitive E2E workflows. Avoid nested acquisition; source the helper for wrapper bodies and let delegated DB package commands acquire directly.

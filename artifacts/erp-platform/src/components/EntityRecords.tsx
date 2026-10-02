@@ -207,6 +207,7 @@ import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCollaboration, type CollaborationPresence } from "@/lib/useCollaboration";
+import { CollaborationNotice } from "@/components/CollaborationNotice";
 import { useManualDataRefresh } from "@/lib/manualDataRefresh";
 import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown, ListChecks, Merge, RefreshCw } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -7012,13 +7013,18 @@ export function EntityRecords({
     rowCommitStatus, rowOpenEdit, rowArchiveRecord, rowUnarchiveRecord,
   ]);
 
-  if (!canView) {
+  if (!canView || collab.failureReason === "access_denied" || collab.failureReason === "session_expired") {
     return (
       <Card className="border-slate-200 shadow-sm">
         <CardContent className="flex flex-col items-center justify-center text-center py-16 gap-3">
           <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
             <ShieldAlert className="w-6 h-6 text-red-500" />
           </div>
+          <CollaborationNotice reason={collab.failureReason} />
+          <span className="sr-only" data-testid="collab-connection-status"
+            data-state={collab.connected ? "connected" : "disconnected"}
+            data-reason={collab.failureReason ?? undefined}
+            data-reconnect-refreshes={collabReconnectRefreshes} />
           <p className="text-slate-700 font-medium">{t("records.noAccess", "Нет доступа к записям")}</p>
           <p className="text-sm text-slate-400 max-w-md">
             {t("records.noAccessDesc", "У вашей роли нет прав на просмотр данных этой сущности.")}
@@ -7519,11 +7525,13 @@ export function EntityRecords({
           <span
             className="sr-only"
             data-testid="collab-connection-status"
+            data-reason={collab.failureReason ?? undefined}
             data-state={collab.connected ? "connected" : "disconnected"}
             data-reconnect-refreshes={collabReconnectRefreshes}
           >
             {collab.connected ? "connected" : "disconnected"}
           </span>
+          <CollaborationNotice reason={collab.failureReason} />
           {activeCollabUsers.length > 0 && (
             <div data-testid="collab-avatar-list" className="flex items-center mr-2 relative" style={{ height: "28px" }}>
               {visibleCollabUsers.map((u, i) => (

@@ -8,6 +8,8 @@ export type CollaborationEditing = {
   source: "entity" | "page";
 };
 
+export type CollaborationFailure = "network" | "access_denied" | "session_expired";
+
 export type CollaborationPresence = {
   clientId?: string;
   userId: number;
@@ -40,6 +42,7 @@ export function useCollaboration(pageId?: number | null) {
   const [connectedPageId, setConnectedPageId] = useState<number | null>(null);
   const [subscriptionGeneration, setSubscriptionGeneration] = useState(0);
   const [accessRetry, setAccessRetry] = useState(0);
+  const [failure, setFailure] = useState<{ pageId: number; userId: number; reason: CollaborationFailure } | null>(null);
   const [connectionAttempt, setConnectionAttempt] = useState<{
     pageId: number | null;
     state: "connecting" | "connected" | "unavailable";
@@ -47,6 +50,7 @@ export function useCollaboration(pageId?: number | null) {
   const clientId = useRef(getClientId());
   const [lastMessage, setLastMessage] = useState<CollaborationMessage | null>(null);
   const currentEditing = useRef<CollaborationEditing | null>(null);
+  const deniedScope = useRef<{ pageId: number; userId: number } | null>(null);
   const activeScope = useRef<{
     pageId: number; userId: number; denied: boolean; deny: (retryAccess?: boolean) => void;
   } | null>(null);
@@ -55,6 +59,7 @@ export function useCollaboration(pageId?: number | null) {
     if (!pageId || userId == null || isGuest) return;
     const scope = activeScope.current;
     if (!scope || scope.pageId !== pageId || scope.userId !== userId || scope.denied) return;
+    if (deniedScope.current?.pageId === pageId && deniedScope.current?.userId === userId) return;
     currentEditing.current = editing;
     const token = localStorage.getItem("erp_token");
     if (!token) return;
@@ -103,6 +108,7 @@ export function useCollaboration(pageId?: number | null) {
       deny: (retryAccess = true) => {
         if (stopped || activeScope.current !== scope) return;
         scope.denied = true;
+        deniedScope.current = { pageId, userId };
         stopped = true;
         controller.abort();
         if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
@@ -114,6 +120,7 @@ export function useCollaboration(pageId?: number | null) {
         setUsers([]);
         setLastMessage(null);
         setConnectionAttempt({ pageId, state: "unavailable" });
+        setFailure({ pageId, userId, reason: retryAccess ? "access_denied" : "session_expired" });
         // Denial ends this transport and all presence writes. A separate,
         // bounded-rate authorization attempt can discover restored access.
         // Invalid credentials (401) require login, not automatic polling.
@@ -187,6 +194,8 @@ export function useCollaboration(pageId?: number | null) {
         setSubscriptionGeneration((generation) => generation + 1);
         setConnectionAttempt({ pageId, state: "connected" });
         setConnected(true);
+        deniedScope.current = null;
+        setFailure(null);
         publishPresence(currentEditing.current);
 
         const reader = response.body.getReader();
@@ -220,7 +229,14 @@ export function useCollaboration(pageId?: number | null) {
         setUsers([]);
         setLastMessage(null);
         setConnectionAttempt({ pageId, state: "unavailable" });
-        const delay = Math.min(30_000, 1_000 * 2 ** retry++);
+        // A failed probe is not renewed authorization. Retain the denial and
+        // withheld snapshot until a successful stream explicitly clears it.
+        setFailure(current =>
+          current?.pageId === pageId && current.userId === userId && current.reason !== "network"
+            ? current
+            : { pageId, userId, reason: "network" });
+        const stillDenied = deniedScope.current?.pageId === pageId && deniedScope.current?.userId === userId;
+        const delay = stillDenied ? 30_000 : Math.min(30_000, 1_000 * 2 ** retry++);
         reconnectTimer = window.setTimeout(() => void connect(), delay);
       }
     };
@@ -245,6 +261,7 @@ export function useCollaboration(pageId?: number | null) {
   }, [isGuest, pageId, publishPresence, userId, accessRetry]);
 
   return {
+    failureReason: !isGuest && failure && failure.pageId === pageId && failure.userId === userId ? failure.reason : null,
     users,
     clientId: clientId.current,
     connected,

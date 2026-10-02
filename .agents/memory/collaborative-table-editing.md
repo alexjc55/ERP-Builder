@@ -58,6 +58,20 @@ page/user scope; recheck server authorization on every attempt. Successful
 recovery starts a fresh subscription generation and authoritative table refresh.
 Verify repeated denials, restored snapshots, no duplicate stream, and teardown.
 
+Collaboration failure explanations must use safe categories, never raw server
+messages. A permission/session denial hides the record surface and presence;
+a network interruption can retain the authorized snapshot. Keep the notice
+available even when cached record permissions already deny the page.
+
+**Why:** A connection badge alone does not tell the user whether to wait or
+sign in, while cached records after explicit denial can expose revoked data.
+
+**How to apply:** Reuse existing retry ownership; the explanation must not
+create additional subscriptions or timers. Clear it on an authorized connection.
+Authorization denial is latched for the page/user: failed probes (including
+503 and transport failures) cannot downgrade it to a network-only warning or
+resume presence writes. Only successful authorization releases that boundary.
+
 Every write that changes a record's effective scalar, page-local, status,
 relation, archive, or merge state must participate in optimistic concurrency.
 An effective change advances the relevant version exactly once, including

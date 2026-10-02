@@ -202,6 +202,10 @@ test("real independent Kanban sessions: stale CAS, SSE lanes, transition effects
     await setup();
     const f = fixture!;
     const [alice, bob] = await Promise.all(contexts.map(context => context.newPage()));
+    // Keep Chromium interception enabled while individual write barriers are
+    // removed. Disabling the last route during a post-409 refresh can strand
+    // already-paused lane requests. This forwards all native bytes unchanged.
+    await alice.route("**/api/**", route => route.continue());
     // Chromium offline mode alone leaves an already-open SSE reader alive.
     // Retain native fetch/bytes, but expose cancellation of that real transport.
     await alice.addInitScript(() => {

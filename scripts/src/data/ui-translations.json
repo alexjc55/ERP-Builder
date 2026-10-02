@@ -1,5 +1,29 @@
 [
   {
+    "key": "collaboration.sessionExpired",
+    "ru": "Сессия истекла. Войдите снова для совместной работы.",
+    "en": "Your session expired. Sign in again to collaborate.",
+    "he": "תוקף ההתחברות פג. יש להתחבר מחדש כדי לעבוד בשיתוף."
+  },
+  {
+    "key": "collaboration.accessDenied",
+    "ru": "Нет доступа к совместной работе. Проверяем возврат доступа каждые 30 секунд.",
+    "en": "Collaboration access denied. Checking for restored access every 30 seconds.",
+    "he": "אין הרשאה לעבודה משותפת. נבדוק את חזרת ההרשאה כל 30 שניות."
+  },
+  {
+    "key": "collaboration.networkLost",
+    "ru": "Связь потеряна. Подключение восстановится автоматически.",
+    "en": "Connection lost. Reconnecting automatically.",
+    "he": "החיבור אבד. מתבצע ניסיון להתחבר מחדש באופן אוטומטי."
+  },
+  {
+    "key": "collaboration.signInAgain",
+    "ru": "Войти снова",
+    "en": "Sign in again",
+    "he": "התחברות מחדש"
+  },
+  {
     "key": "statuses.noStatusWarningTitle",
     "ru": "Скрыть записи без статуса в канбане?",
     "en": "Hide records without a status from Kanban?",

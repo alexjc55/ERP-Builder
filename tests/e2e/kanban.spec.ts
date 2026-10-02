@@ -27,7 +27,7 @@ type FixtureRecord = {
   updatedAt: string;
 };
 
-async function installFixture(page: Page, options: { editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null; tintColumns?: boolean; statusTitleHover?: boolean } = {}) {
+async function installFixture(page: Page, options: { collaborationStatus?: number; editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null; tintColumns?: boolean; statusTitleHover?: boolean } = {}) {
   const queries: Query[] = [];
   const writes: { id: number; body: Record<string, unknown> }[] = [];
   const unexpectedWrites: string[] = [];
@@ -123,7 +123,14 @@ async function installFixture(page: Page, options: { editable?: boolean; manyCar
     }
     if (path.endsWith("/record-values/query")) return reply([]);
     if (path.endsWith("/related-values")) return reply({ columns: [], values: [] });
-    if (path.includes("/collaboration/")) return route.abort();
+    if (path.includes("/collaboration/")) {
+      if (options.collaborationStatus === 200) return path.endsWith("/presence")
+        ? route.fulfill({ status: 204 })
+        : route.fulfill({ status: 200, contentType: "text/event-stream", body: 'event:snapshot\ndata:{"presence":[]}\n\n' });
+      return options.collaborationStatus
+        ? reply({ error: "PRIVATE SERVER DETAIL" }, options.collaborationStatus)
+        : route.abort();
+    }
     if (["PUT", "PATCH", "DELETE"].includes(request.method()) ||
       (request.method() === "POST" && !path.endsWith("/filter-values"))) {
       unexpectedWrites.push(`${request.method()} ${path}`);
@@ -132,6 +139,7 @@ async function installFixture(page: Page, options: { editable?: boolean; manyCar
   });
   return {
     queries, writes, records, unexpectedWrites, errors, detailReads,
+    setCollaborationStatus(status: number | undefined) { options.collaborationStatus = status; },
     setAllowNoStatus(value: boolean | undefined) { Object.assign(entity, { allowNoStatus: value }); },
     releaseMove: (fail = false) => {
       if (!pendingMove) throw new Error("No pending fixture move to release");
@@ -155,10 +163,59 @@ function lane(page: Page, key: string) {
   return page.getByTestId(`lane-kanban-${key}`);
 }
 
+for (const [status, reason, message] of [
+  [401, "session_expired", "Сессия истекла"],
+  [403, "access_denied", "Нет доступа к совместной работе"],
+  [undefined, "network", "Связь потеряна"],
+] as const) {
+  test(`collaboration notice distinguishes ${reason}`, async ({ page }) => {
+    await installFixture(page, { collaborationStatus: status });
+    await page.goto(fixturePath);
+    const notice = page.getByTestId("collaboration-notice");
+    await expect(notice).toHaveAttribute("data-reason", reason);
+    await expect(notice).toContainText(message);
+    await expect(page.getByText("PRIVATE SERVER DETAIL")).toHaveCount(0);
+    await expect(page.getByTestId("collab-avatar")).toHaveCount(0);
+    if (status) await expect(page.getByTestId("kanban-board")).toHaveCount(0);
+    if (status === 401) {
+      await notice.getByRole("button").click();
+      await expect(page).toHaveURL(/login/);
+      expect(await page.evaluate(() => localStorage.getItem("erp_token"))).toBeNull();
+    } else await expect(notice.getByRole("button")).toHaveCount(0);
+  });
+}
+
 function laneQueries(queries: Query[]) {
   return queries.filter(query => query.viewId === boardViewId && query.pageSize === 40 &&
     (query.statusIsNull === true || query.statusIds?.length === 1));
 }
+
+test("collaboration denial keeps cached records hidden through failed probes until authorization succeeds", async ({ page }) => {
+  await page.clock.install();
+  const fixture = await installFixture(page, { collaborationStatus: 200 });
+  await selectBoard(page);
+  await expect(page.getByTestId("card-kanban-1000")).toBeVisible();
+  fixture.setCollaborationStatus(403);
+  await page.clock.fastForward(15_000);
+  const notice = page.getByTestId("collaboration-notice");
+  await expect(notice).toHaveAttribute("data-reason", "access_denied");
+  for (const status of [503, undefined]) {
+    fixture.setCollaborationStatus(status);
+    const failed = page.waitForEvent(status ? "response" : "requestfailed", {
+      predicate: event => event.url().includes("/stream?"),
+    });
+    await page.clock.fastForward(30_000);
+    await failed;
+    await expect(notice).toHaveAttribute("data-reason", "access_denied");
+    await expect(page.getByTestId("kanban-board")).toHaveCount(0);
+    await expect(page.getByTestId("card-kanban-1000")).toHaveCount(0);
+    await expect(page.getByTestId("collab-avatar")).toHaveCount(0);
+  }
+  fixture.setCollaborationStatus(200);
+  await page.clock.fastForward(30_000);
+  await expect(page.getByTestId("card-kanban-1000")).toBeVisible();
+  await expect(page.locator('[data-reason="access_denied"]')).toHaveCount(0);
+});
 
 for (const permission of [false, undefined]) {
   test(`null column requires explicit permission (${permission})`, async ({ page }) => {
