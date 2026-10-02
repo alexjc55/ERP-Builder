@@ -5,15 +5,17 @@ description: Product constraints for the reusable CRM-first Kanban entity view.
 
 **Rule:** The first intended use is the future CRM section, but Kanban must be universal and reusable for any existing or future section.
 
-**Rule:** The user wants to split one entity with many statuses across staff pages, each showing only its selected statuses in table rows, Kanban columns, status filters, and status-change dropdowns. “Show hidden” must not reveal statuses outside that page's selection.
+**Rule:** The user wants to split one entity with many statuses across staff pages, each showing only its selected statuses in table rows, Kanban columns, and status filters. Status-change dropdowns follow that selection by default, with an explicit page-level opt-out. “Show hidden” must not reveal statuses outside that page's selection.
 
 **Why:** Employees should monitor their own statuses. The existing soft hiding is intended for terminal statuses and must remain separate and unchanged.
 
-**How to apply:** Reuse existing entity records and page functionality; do not treat the page selection as the existing optional hidden-status filter. A page must not offer a status-change destination outside its selected set.
+**How to apply:** Reuse existing entity records and page functionality; do not treat the page selection as the existing optional hidden-status filter. Alongside the page's status selection, offer an option to show all statuses in status-change menus, applicable only in selected-status mode. This expands change destinations, not visible rows, columns, or filter options, and never bypasses existing permissions or workflow rules.
 
-**Rule:** Departments hand off records through a shared status included on both pages, not by offering destinations outside the current page.
+**Rule:** The default departmental handoff uses a shared status included on both pages. Optionally, a page can allow choosing destinations outside its visible set.
 
 **Why:** The user specified “КП подписано” as a status visible in sales and as the first status in contracting. Sales moves a project there; contracting sees it and moves it through its own statuses, at which point it disappears from sales.
+
+The user subsequently requested the all-destinations option because this is a universal product and some pages may need direct handoff to a status outside their visible set.
 
 **How to apply:** Allow overlapping page status sets. The shared-status record remains visible on both pages until its status leaves one page's set; it is the same record, not a copy.
 
