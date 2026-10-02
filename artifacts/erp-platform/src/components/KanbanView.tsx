@@ -696,6 +696,7 @@ export function KanbanView(props: KanbanViewProps) {
         data-kanban-card
         dir={dirFor(null)}
         data-testid={`card-kanban-${rec.id}`}
+        style={{ "--kanban-title-hover": config?.statusTitleHover ? kanbanTitleColor(statusById.get(rec.statusId ?? -1)?.color) : "#2563eb" } as React.CSSProperties}
         onPointerDown={(e) => onCardPointerDown(e, rec, false)}
         className={`group relative rounded-lg border border-slate-200 bg-white p-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-[opacity,box-shadow] hover:shadow-md ${
           dragging ? "opacity-30" : ""
@@ -720,7 +721,6 @@ export function KanbanView(props: KanbanViewProps) {
             onClick={() => {
               if (!suppressClick.current) setDetail(rec);
             }}
-            style={{ "--kanban-title-hover": config?.statusTitleHover ? kanbanTitleColor(statusById.get(rec.statusId ?? -1)?.color) : "#2563eb" } as React.CSSProperties}
             className="min-w-0 flex-1 cursor-pointer text-start text-sm font-medium leading-snug text-slate-800 hover:text-[var(--kanban-title-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded"
             data-testid={`button-open-kanban-${rec.id}`}
           >
@@ -820,14 +820,14 @@ export function KanbanView(props: KanbanViewProps) {
           <div className="mt-2 flex justify-end gap-1" onPointerDown={(e) => e.stopPropagation()}>
             <button type="button" title={t("kanban.view", "Просмотр")} aria-label={t("kanban.view", "Просмотр")}
               data-testid={`button-view-kanban-${rec.id}`}
-              className="cursor-pointer rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-400"
+              className="cursor-pointer rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-[var(--kanban-title-hover)] focus-visible:ring-2 focus-visible:ring-blue-400"
               onClick={() => { if (!suppressClick.current) setDetail(rec); }}>
               <Eye className="h-4 w-4" />
             </button>
             {canEdit && (
               <button type="button" title={t("kanban.edit", "Редактировать")} aria-label={t("kanban.edit", "Редактировать")}
                 data-testid={`button-edit-kanban-${rec.id}`} disabled={pending}
-                className="cursor-pointer rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-default disabled:opacity-50"
+                className="cursor-pointer rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-[var(--kanban-title-hover)] focus-visible:ring-2 focus-visible:ring-blue-400 disabled:cursor-default disabled:opacity-50"
                 onClick={() => { if (!suppressClick.current) onEdit(rec); }}>
                 <Pencil className="h-4 w-4" />
               </button>

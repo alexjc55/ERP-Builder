@@ -416,7 +416,7 @@ test("hidden-status toggle includes and removes the hidden column", async ({ pag
 });
 
 test("status title hover is optional, readable and leaves cards white", async ({ page }) => {
-  const options = { statusTitleHover: true };
+  const options = { statusTitleHover: true, editable: true };
   const fixture = await installFixture(page, options);
   await selectBoard(page);
   for (const [id, color] of [[1000, "#2563eb"], [2000, "#f59e0b"], [10, null]] as const) {
@@ -429,6 +429,15 @@ test("status title hover is optional, readable and leaves cards white", async ({
     await expect(title).toHaveCSS("color", `rgb(${rgb.join(", ")})`);
     await page.mouse.move(0, 0);
     await expect(title).toHaveCSS("color", restingColor);
+    for (const action of ["view", "edit"]) {
+      const button = page.getByTestId(`button-${action}-kanban-${id}`);
+      const icon = button.locator("svg");
+      const restingIconColor = await icon.evaluate(el => getComputedStyle(el).color);
+      await button.hover();
+      await expect(icon).toHaveCSS("color", `rgb(${rgb.join(", ")})`);
+      await page.mouse.move(0, 0);
+      await expect(icon).toHaveCSS("color", restingIconColor);
+    }
     await expect(title).toHaveCSS("text-decoration-line", "none");
     await expect(page.getByTestId(`card-kanban-${id}`)).toHaveCSS("background-color", "rgb(255, 255, 255)");
   }
@@ -437,6 +446,11 @@ test("status title hover is optional, readable and leaves cards white", async ({
   const title = page.getByTestId("button-open-kanban-2000");
   await title.hover();
   await expect(title).toHaveCSS("color", "rgb(37, 99, 235)");
+  for (const action of ["view", "edit"]) {
+    const button = page.getByTestId(`button-${action}-kanban-2000`);
+    await button.hover();
+    await expect(button.locator("svg")).toHaveCSS("color", "rgb(37, 99, 235)");
+  }
   expect(fixture.errors).toEqual([]);
 });
 

@@ -5,6 +5,12 @@ description: Product constraints for the reusable CRM-first Kanban entity view.
 
 **Rule:** The first intended use is the future CRM section, but Kanban must be universal and reusable for any existing or future section.
 
+**Rule:** The status-coloured title hover option also applies to the eye and pencil icons on hover.
+
+**Why:** The user explicitly requested that these actions match the title instead of remaining blue.
+
+**How to apply:** Keep all three hover colours consistent under the same option; preserve ordinary blue when disabled.
+
 **Rule:** Show «Без статуса» only when the entity explicitly permits no status, including when legacy null-status records exist.
 
 **Why:** The user clarified that the disabled option must hide the column, not merely prohibit moving cards into it.
