@@ -29,6 +29,12 @@ The user subsequently requested the all-destinations option because this is a un
 
 **How to apply:** Reuse the existing status/tag rendering and its display settings rather than introducing a plain-text-only status list.
 
+**Rule:** Do not display status tags in Kanban column headers; retain them in status-change menus.
+
+**Why:** The user explicitly excluded column headers from tag display.
+
+**How to apply:** Keep the column's status name, color and count, without tag labels.
+
 **How to apply:** Allow overlapping page status sets. The shared-status record remains visible on both pages until its status leaves one page's set; it is the same record, not a copy.
 
 **Rule:** The status-coloured title hover option also applies to the eye and pencil icons on hover.

@@ -904,7 +904,7 @@ export function KanbanView(props: KanbanViewProps) {
               <header className="flex items-center gap-2 border-b border-slate-200 px-3 py-2" style={{ boxShadow: `inset 0 3px 0 ${color}` }}>
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700">
-                  {status ? <CompactStatus name={ml(status.nameJson)} nameJson={status.nameJson} displayTags={status.displayTags} ml={ml} /> : laneLabel(lane)}
+                  {status ? <CompactStatus name={ml(status.nameJson)} nameJson={status.nameJson} ml={ml} /> : laneLabel(lane)}
                 </span>
                 <span className="rounded-full bg-white px-1.5 text-xs tabular-nums text-slate-500 ring-1 ring-slate-200" data-testid={`text-lane-count-${lane}`}>
                   {s.loading ? "…" : s.total}

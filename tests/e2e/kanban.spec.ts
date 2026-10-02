@@ -464,6 +464,8 @@ for (const allowAllChanges of [false, true]) {
     await page.getByRole("checkbox", { name: /Show hidden|Показать скрытые/ }).check();
     await expect(lane(page, "s:3")).toBeVisible();
     await expect(lane(page, "s:2")).toHaveCount(0);
+    await expect(lane(page, "s:3").locator("header")).toContainText("Hidden done");
+    await expect(lane(page, "s:3").locator("header")).not.toContainText("Department tag");
     await page.getByRole("button", { name: "Статус", exact: true }).click();
     await expect(page.getByRole("dialog").getByText("Working", { exact: true })).toHaveCount(0);
     await page.keyboard.press("Escape");
