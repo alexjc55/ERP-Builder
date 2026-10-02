@@ -3793,8 +3793,12 @@ export function EntityRecords({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recordsLoading, hasLoadedRecords]);
 
+  const fallbackView = views.find((v: View) => v.isDefault)
+    ?? [...views].sort((a: View, b: View) => a.sortOrder - b.sortOrder)[0];
+  // A configured view always applies, even while reconciling a removed or
+  // newly available selection. Unconfigured tables alone use the base view.
   const selectedView: View | undefined =
-    selectedViewId === NO_VIEW ? undefined : views.find((v: View) => String(v.id) === selectedViewId);
+    views.find((v: View) => String(v.id) === selectedViewId) ?? fallbackView;
   const selectedConfig = (selectedView?.configJson ?? {}) as ViewConfig;
 
   // Rows per page: the PAGE's own override wins, then the selected view's
@@ -3842,17 +3846,17 @@ export function EntityRecords({
     setGroupExceptions(new Set());
   }, [entityId, pageId, groupByFieldKey, groupDefaultExpanded]);
 
-  // Auto-select after the exact main/mirror scope has loaded. Mirror pages with
-  // assigned views cannot fall back to "all records"; main pages keep that option
-  // unless an explicit default exists.
+  // Apply the default (or first) configured view for both main and mirror pages.
+  // Reconcile refetched lists too: deleted/inaccessible views cannot leave an
+  // invisible "all records" selection behind.
   useEffect(() => {
-    if (viewInitialized || viewsLoading || viewsError) return;
-    const def = views.find((v: View) => v.isDefault);
-    const first = [...views].sort((a: View, b: View) => a.sortOrder - b.sortOrder)[0];
-    const initial = def ?? (isMirror ? first : undefined);
-    setSelectedViewId(initial ? String(initial.id) : NO_VIEW);
+    if (viewsLoading || viewsError) return;
+    if (viewInitialized && views.some((v: View) => String(v.id) === selectedViewId)) return;
+    const nextId = fallbackView ? String(fallbackView.id) : NO_VIEW;
+    setSelectedViewId(nextId);
+    if (nextId !== selectedViewId) setPage(1);
     setViewInitializedScope(initializationScopeKey);
-  }, [views, viewsLoading, viewsError, viewInitialized, isMirror, initializationScopeKey]);
+  }, [views, viewsLoading, viewsError, viewInitialized, initializationScopeKey, selectedViewId, fallbackView]);
 
   const queryMutation = useQueryEntityRecords();
   const runQuery = queryMutation.mutateAsync;
@@ -7337,17 +7341,14 @@ export function EntityRecords({
       <div className={cn("space-y-2", !mobileToolbarOpen && "max-sm:hidden")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          {views.length > 0 && !(isMirror && views.length === 1) && (
+          {views.length > 1 && (
             <div className="flex items-center gap-1.5 w-full sm:w-auto">
               <LayoutList className="w-4 h-4 text-slate-400 shrink-0" />
-              <Select value={selectedViewId} onValueChange={handleViewChange}>
-                <SelectTrigger className="h-9 w-full sm:w-56 text-sm">
+              <Select value={selectedView ? String(selectedView.id) : selectedViewId} onValueChange={handleViewChange}>
+                <SelectTrigger data-testid="records-view-select" className="h-9 w-full sm:w-56 text-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {(!isMirror || views.length === 0) && (
-                    <SelectItem value={NO_VIEW}>{t("records.allRecords", "Все записи")}</SelectItem>
-                  )}
                   {views.map((v: View) => (
                     <SelectItem key={v.id} value={String(v.id)}>
                       <span className="inline-flex items-center gap-1.5">

@@ -18,6 +18,13 @@ description: POST query consumption plus page-scoped, server-authoritative named
 ## View bootstrap must reset on entity AND page context
 A component that auto-selects a default/first view can remain mounted while moving between the main page and a mirror of the same entity. Reset view bootstrap/state on `(entityId,pageId)`, not entity alone, or a view from one page leaks into another scope.
 
+## Configured-view selector policy
+For all entities/pages, one available configured view applies automatically with no selector; multiple views show only configured options, never a synthetic “All records” option. Choose the default, otherwise the first ordered view. No configured views still means a usable base table. Preserve the Table/Kanban display switch within a Kanban view.
+
+**Why:** The user explicitly approved removing the redundant selector and synthetic option throughout the ERP after seeing both controls in CRM.
+
+**How to apply:** Apply this to main and mirror pages and reconcile selection after views are removed or visibility changes. This is a UI policy, not a change to backend RBAC or the base-query contract.
+
 ## Named views are page-scoped and server-authoritative
 Each named view belongs to exactly one runtime scope: `targetPageId = null` for the entity's main page, or one concrete mirror page. A page-scoped view may use that page's local fields; a main view may not.
 

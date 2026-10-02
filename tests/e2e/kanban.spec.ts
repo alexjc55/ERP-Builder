@@ -26,7 +26,7 @@ type FixtureRecord = {
   updatedAt: string;
 };
 
-async function installFixture(page: Page, options: { editable?: boolean; manyCards?: boolean } = {}) {
+async function installFixture(page: Page, options: { editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default" } = {}) {
   const queries: Query[] = [];
   const writes: { id: number; body: Record<string, unknown> }[] = [];
   const unexpectedWrites: string[] = [];
@@ -80,8 +80,9 @@ async function installFixture(page: Page, options: { editable?: boolean; manyCar
       })),
     );
     if (path === `/api/pages/${pageId}/fields`) return reply([]);
-    if (path.endsWith("/views") || path.endsWith("/main-views")) return reply([
-      { id: boardViewId - 1, entityId, pageId, nameJson: { en: "Table fixture" }, isDefault: true, sortOrder: 0, configJson: {} },
+    if (path.endsWith("/views") || path.endsWith("/main-views")) return reply(options.viewMode === "none" ? [] : [
+      ...options.viewMode === "single" ? [] : [
+      { id: boardViewId - 1, entityId, pageId, nameJson: { en: "Table fixture" }, isDefault: options.viewMode !== "multiple-no-default", sortOrder: 0, configJson: {} }],
       { id: boardViewId, entityId, pageId, nameJson: { en: "Board fixture" }, isDefault: false, sortOrder: 1,
         configJson: { viewType: "kanban", kanban: { titleField: "title", fields: ["summary", "empty"], showLabels: true, hideEmptyFields: true } } },
     ]);
@@ -175,6 +176,44 @@ test("selects a persisted Kanban view and preserves its card field configuration
   await page.getByRole("button", { name: /^(Kanban|Канбан)$/ }).click();
   await expect(page.getByTestId("kanban-board")).toBeVisible();
   expect(fixture.unexpectedWrites).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("one non-default configured view applies automatically without a selector", async ({ page }) => {
+  const fixture = await installFixture(page, { viewMode: "single" });
+  await page.goto(fixturePath);
+  await expect(page.getByTestId("kanban-board")).toBeVisible();
+  await expect(page.getByTestId("records-view-select")).toHaveCount(0);
+  expect(fixture.queries.length).toBeGreaterThan(0);
+  expect(fixture.queries.every(query => query.viewId === boardViewId)).toBe(true);
+  await page.getByRole("button", { name: /^(Table|Таблица)$/ }).click();
+  await expect(page.getByTestId("kanban-board")).toHaveCount(0);
+  await page.getByRole("button", { name: /^(Kanban|Канбан)$/ }).click();
+  await expect(page.getByTestId("kanban-board")).toBeVisible();
+  expect(fixture.unexpectedWrites).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("multiple views without a default select the first and exclude all-records", async ({ page }) => {
+  const fixture = await installFixture(page, { viewMode: "multiple-no-default" });
+  await page.goto(fixturePath);
+  const selector = page.getByTestId("records-view-select");
+  await expect(selector).toContainText("Table fixture");
+  await selector.click();
+  await expect(page.getByRole("option")).toHaveCount(2);
+  await expect(page.getByRole("option", { name: /All records|Все записи/ })).toHaveCount(0);
+  await page.getByRole("option", { name: "Board fixture", exact: true }).click();
+  await expect(page.getByTestId("kanban-board")).toBeVisible();
+  expect(fixture.errors).toEqual([]);
+});
+
+test("no configured views still renders the base table without a selector", async ({ page }) => {
+  const fixture = await installFixture(page, { viewMode: "none" });
+  await page.goto(fixturePath);
+  await expect(page.getByRole("columnheader").filter({ has: page.getByRole("button", { name: "title", exact: true }) })).toBeVisible();
+  await expect(page.getByTestId("records-view-select")).toHaveCount(0);
+  await expect(page.getByTestId("kanban-board")).toHaveCount(0);
+  expect(fixture.queries.some(query => query.viewId != null)).toBe(false);
   expect(fixture.errors).toEqual([]);
 });
 
