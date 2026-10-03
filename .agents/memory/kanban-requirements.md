@@ -19,6 +19,12 @@ description: Product constraints for the reusable CRM-first Kanban entity view.
 
 **Rule:** The default departmental handoff uses a shared status included on both pages. Optionally, a page can allow choosing destinations outside its visible set.
 
+**Rule:** Explicitly selecting a status in the filter temporarily overrides that status's presentation hiding in both Kanban and table views. Deselecting it or clearing the filter restores hiding, without toggling the global “Show hidden” control.
+
+**Why:** The user expects choosing a hidden status to show its records immediately, not an empty result requiring another switch.
+
+**How to apply:** Override only soft status exclusions and default status hiding. Preserve other field exclusions, page status scope, archive filters, and server-enforced access restrictions.
+
 **Why:** The user specified “КП подписано” as a status visible in sales and as the first status in contracting. Sales moves a project there; contracting sees it and moves it through its own statuses, at which point it disappears from sales.
 
 The user subsequently requested the all-destinations option because this is a universal product and some pages may need direct handoff to a status outside their visible set.

@@ -436,6 +436,54 @@ for (const scope of ["own", "filter", "mixed"] as const) {
   }
 }
 
+for (const mode of ["table", "kanban"] as const) {
+  test(`explicit status filter reveals soft-hidden rows: ${mode}`, async ({ browser, page }) => {
+    await guard(page);
+    await setup();
+    const f = fixture!;
+    const context = await browser.newContext();
+    try {
+      await db.update(viewsTable).set({ configJson: {
+        viewType: mode, ...(mode === "kanban" ? { kanban: { titleField: "title", fields: ["summary"] } } : {}),
+      } }).where(eq(viewsTable.entityId, f.entity));
+      await db.update(entityStatusesTable).set({ hideByDefault: true }).where(eq(entityStatusesTable.id, f.working));
+      await db.update(pagesTable).set({ defaultQuickFilterJson: { excludeStatusIds: [f.working] } }).where(eq(pagesTable.id, f.page));
+      await db.update(entityRecordsTable).set({ statusId: f.working }).where(eq(entityRecordsTable.id, f.records[0]));
+      const employee = await context.newPage();
+      await employee.addInitScript(token => localStorage.setItem("erp_token", token),
+        signToken({ userId: f.users[0], roleId: f.role }));
+      await employee.goto(path);
+      const row = (id: number) => mode === "kanban" ? card(employee, id)
+        : employee.locator(`[data-testid="record-cell"][data-record-id="${id}"][data-field-key="title"]`);
+      await expect(row(f.records[1])).toBeVisible();
+      await expect(row(f.records[0])).toHaveCount(0);
+      const toggle = async () => {
+        await employee.getByRole("button", { name: /^Status(?: \d+)?$/ }).click();
+        await employee.getByRole("dialog").getByText("Working", { exact: true }).click();
+        await employee.keyboard.press("Escape");
+      };
+      await toggle();
+      await expect(row(f.records[0])).toBeVisible();
+      await expect(row(f.records[1])).toHaveCount(0);
+      if (mode === "kanban") await expect(employee.getByTestId(`text-lane-count-s:${f.working}`)).toHaveText("1");
+      await toggle();
+      await expect(row(f.records[1])).toBeVisible();
+      await expect(row(f.records[0])).toHaveCount(0);
+      await toggle();
+      await expect(row(f.records[0])).toBeVisible();
+      await employee.getByRole("button", { name: /^Status(?: \d+)?$/ }).click();
+      await employee.getByRole("dialog").getByRole("button", { name: /Clear|Очистить/ }).click();
+      await employee.keyboard.press("Escape");
+      await expect(row(f.records[1])).toBeVisible();
+      await expect(row(f.records[0])).toHaveCount(0);
+      if (mode === "kanban") await expect(lane(employee, f.working)).toHaveCount(0);
+    } finally {
+      await context.close();
+      await cleanup();
+    }
+  });
+}
+
 for (const mirror of [false, true]) {
   test(`create mapped status respects page scope: mirror=${mirror}`, async ({ page }) => {
     await guard(page);

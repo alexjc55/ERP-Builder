@@ -589,6 +589,93 @@ after(async () => { await cleanup(); });
 
 test("page-local select mappings synchronize entity status atomically", async (t) => {
   await setup();
+  await t.test("page_ref mapped destinations use the initiating page but retain both access boundaries", async (t) => {
+    await db.insert(pageFieldsTable).values({
+      pageId: ids.targetPage, fieldKey: "untouched_target", nameJson: { en: "Preserved value" }, fieldType: "text",
+    });
+    for (const bulk of [false, true]) {
+      for (const scenario of [
+        "target-denies-source-all", "target-all-source-denies", "target-selected-source-denies",
+        "both-deny", "source-row-hidden", "source-field-hidden", "alias-field-hidden", "source-page-denied",
+      ]) await t.test(`${scenario}, bulk=${bulk}`, async () => {
+        await reset();
+        const selected = bulk ? [ids.one, ids.two] : [ids.one];
+        const snapshot = () => Promise.all(selected.map(pageRefRollbackSnapshot));
+        const policy = (statusIds: number[], allowAllChanges = false) => ({
+          statusIds, includeNoStatus: false, allowAllChanges,
+        });
+        const deniesDestination = scenario === "target-denies-source-all" || scenario === "both-deny";
+        const allowsDestination = scenario === "target-all-source-denies" || scenario === "target-selected-source-denies";
+        try {
+          await db.update(pagesTable).set({
+            statusScopeJson: scenario === "target-selected-source-denies" || (bulk && scenario === "source-row-hidden")
+              ? policy([ids.base, ids.done]) : policy([ids.base], !deniesDestination),
+          }).where(eq(pagesTable.id, ids.targetPage));
+          await db.update(pagesTable).set({
+            statusScopeJson: policy(scenario === "source-row-hidden" && !bulk ? [ids.done] : [ids.base], scenario === "target-denies-source-all"),
+          }).where(eq(pagesTable.id, ids.sourcePage));
+          if (bulk && scenario === "source-row-hidden") {
+            // First row is writable; only the second fails the source-page
+            // boundary. Its denial must roll back the entire batch.
+            await db.update(entityRecordsTable).set({ statusId: ids.done }).where(eq(entityRecordsTable.id, ids.two));
+          }
+          await db.update(rolesTable).set({
+            permissionsJson: permissions(scenario === "source-page-denied" ? [ids.targetPage] : [ids.targetPage, ids.sourcePage]),
+          }).where(eq(rolesTable.id, ids.role));
+          if (scenario === "source-field-hidden" || scenario === "alias-field-hidden") {
+            await db.update(pageFieldsTable).set({ permissionsJson: { [String(ids.role)]: "hidden" } })
+              .where(and(
+                eq(pageFieldsTable.pageId, scenario === "source-field-hidden" ? ids.sourcePage : ids.targetPage),
+                eq(pageFieldsTable.fieldKey, scenario === "source-field-hidden" ? "stage" : "source_stage"),
+              ));
+          }
+          // Existing maps prove key-level preservation and page version rollback,
+          // not merely absence of newly inserted value rows.
+          await db.insert(pageRecordValuesTable).values(selected.flatMap(recordId => [
+            { pageId: ids.sourcePage, recordId, valuesJson: { untouched_source: "keep" } },
+            { pageId: ids.targetPage, recordId, valuesJson: { untouched_target: "keep" } },
+          ]));
+          const before = await snapshot();
+          const response = bulk
+            ? await request(`/pages/${ids.targetPage}/records/bulk-field-values`, {
+              fieldKey: "source_stage", value: "done", recordIds: selected,
+            }, "POST")
+            : await request(`/pages/${ids.targetPage}/records/${ids.one}/values`, {
+              valuesJson: { source_stage: "done" },
+            }, "PUT");
+          if (!allowsDestination) {
+            assert.equal(response.status, scenario === "source-row-hidden" ? 404 : deniesDestination && !bulk ? 400 : 403, JSON.stringify(response.body));
+            if (deniesDestination) assert.match(String(response.body.error), /This status is not available on this page/);
+            else if (scenario !== "source-row-hidden") assertPageRefDenialRedacted(response);
+            else {
+              assert.ok(!String(response.body.error).includes(`${runId} source`));
+              assert.ok(!String(response.body.error).includes('"stage"'));
+            }
+            assert.deepEqual(await snapshot(), before);
+          } else {
+            assert.equal(response.status, 200, JSON.stringify(response.body));
+            const after = await snapshot();
+            for (const [i, row] of after.entries()) {
+              assert.equal(row.statusId, ids.done);
+              assert.equal(row.version, before[i].version + 1);
+              assert.deepEqual(row.sourceRow!.valuesJson, { untouched_source: "keep", stage: "done" });
+              assert.equal(row.sourceRow!.version, before[i].sourceRow!.version + 1);
+              assert.deepEqual(row.targetRow, before[i].targetRow, "alias must never write a target-page copy");
+              assert.ok(row.audits.some(entry => entry.fieldKey === "__status__"));
+              assert.ok(row.events.some(entry => entry.eventName === "status.changed"));
+            }
+          }
+        } finally {
+          await db.update(pagesTable).set({ statusScopeJson: null }).where(inArray(pagesTable.id, [ids.targetPage, ids.sourcePage]));
+          await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) }).where(eq(rolesTable.id, ids.role));
+          await db.update(pageFieldsTable).set({ permissionsJson: {} })
+            .where(and(inArray(pageFieldsTable.pageId, [ids.targetPage, ids.sourcePage]), inArray(pageFieldsTable.fieldKey, ["stage", "source_stage"])));
+          await reset();
+        }
+      });
+    }
+    await db.delete(pageFieldsTable).where(and(eq(pageFieldsTable.pageId, ids.targetPage), eq(pageFieldsTable.fieldKey, "untouched_target")));
+  });
   await t.test("page-field format inheritance persists across create, reload, change, and clear", async () => {
     const normalPermissions = permissions([ids.targetPage, ids.sourcePage]);
     await db.update(rolesTable).set({

@@ -14,3 +14,9 @@ Rules that must stay consistent:
 **Why:** users need one value to stay synchronized across mirror pages without fake self-relations or duplicated storage. The double boundary prevents B from becoming a permission bypass into A.
 
 **How to apply:** treat `page_ref` as a typed alias and explicit source-key patch, never as a second stored value or as a full-map field. Build reads from the authorized entity-record universe rather than requiring either page to already have a value row.
+
+For a mapped select edited through an alias, destination policy belongs to the initiating page, not the source storage page. Its all-destinations option may allow a move outside either page's visible statuses. Source-page row visibility and field/page edit access still apply before the write.
+
+**Why:** Storage authority and the employee's workflow page are different concerns. Intersecting both destination lists would unexpectedly restrict handoffs from the initiating page; ignoring source access would make the alias a permission bypass.
+
+**How to apply:** Test differing source/target selections and both all-destinations settings. A source-inaccessible row must reject the whole batch even when the initiating page allows the destination. Preserve the target map and unrelated source values, and never create an alias copy.

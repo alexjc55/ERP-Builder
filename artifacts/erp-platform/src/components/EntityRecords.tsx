@@ -4069,7 +4069,10 @@ export function EntityRecords({
   // hidden rows. Setup mode always shows everything so admins can review.
   const applyExclusion = hasExclusion && !showHidden && !setupMode;
   const activeExcludeFilters = applyExclusion && excludeFieldFilters.length > 0 ? excludeFieldFilters : undefined;
-  const activeExcludeStatusIds = applyExclusion && excludeStatusIds.length > 0 ? excludeStatusIds : undefined;
+  // An explicit status selection overrides only its presentation-level hiding.
+  // Other exclusions and the server's page/RBAC boundaries remain unchanged.
+  const unselectedExcludedStatuses = excludeStatusIds.filter(id => !statusFilter.includes(id));
+  const activeExcludeStatusIds = applyExclusion && unselectedExcludedStatuses.length > 0 ? unselectedExcludedStatuses : undefined;
   const activeExcludePageFilters =
     applyExclusion && excludePageFieldFilters.length > 0 && permPageId != null ? excludePageFieldFilters : undefined;
   const excludeKey = JSON.stringify([activeExcludeFilters, activeExcludeStatusIds, activeExcludePageFilters]);
@@ -4091,7 +4094,7 @@ export function EntityRecords({
       excludeFilters: activeExcludeFilters,
       excludeStatusIds: activeExcludeStatusIds,
       excludePageLocalFilters: activeExcludePageFilters,
-      showHiddenStatuses: showHidden || setupMode,
+      showHiddenStatuses: showHidden || setupMode || statusFilter.length > 0,
       sorts: effectiveSorts,
       search: debouncedSearch.trim() || undefined,
       archived,
