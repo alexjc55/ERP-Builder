@@ -8,6 +8,7 @@ import {
   entityStatusesTable, entityTransitionsTable, viewsTable, rolesTable, usersTable,
   NO_ACCESS_PERMS, entityAutomationsTable, entityAutomationRunsTable,
   auditLogTable, systemEventsTable, loginHistoryTable, userRolesTable,
+  pageFieldsTable, pageRecordValuesTable,
 } from "@workspace/db";
 
 // Obtain independently with executeSql(environment:"development"):
@@ -431,6 +432,105 @@ for (const scope of ["own", "filter", "mixed"] as const) {
           expect(await db.select().from(userRolesTable).where(inArray(userRolesTable.userId, f.users))).toHaveLength(0);
         }
       });
+    }
+  }
+}
+
+for (const fieldSource of ["entity", "page"] as const) {
+  for (const bulk of [false, true]) {
+    for (const destinationSelected of [false, true]) {
+    test(`mapped page status scope: ${fieldSource}, bulk=${bulk}, selected=${destinationSelected}`, async ({ page }) => {
+      await guard(page);
+      await setup();
+      const f = fixture!;
+      let mirrorId: number | undefined;
+      try {
+        const policy = { statusIds: destinationSelected ? [f.ready, f.working] : [f.ready], includeNoStatus: false, allowAllChanges: false };
+        const [mirror] = await db.insert(pagesTable).values({
+          path: `${path}-mapped`, nameJson: { en: key }, mirrorEntityId: f.entity, statusScopeJson: policy,
+        }).returning();
+        mirrorId = mirror.id;
+        await db.update(rolesTable).set({ permissionsJson: {
+          ...NO_ACCESS_PERMS, pageIds: [f.page, mirror.id],
+          records: { [f.entity]: { view: true, create: false, update: true, delete: false, scope: "all" } },
+        } }).where(eq(rolesTable.id, f.role));
+        const definition = {
+          fieldKey: "mapped_stage", nameJson: { en: "Mapped stage" }, fieldType: "select",
+          optionsJson: [{ value: "working", labelJson: { en: "Working" }, statusId: f.working }],
+        };
+        if (fieldSource === "entity") await db.insert(entityFieldsTable).values({ ...definition, entityId: f.entity });
+        else await db.insert(pageFieldsTable).values({ ...definition, pageId: mirror.id });
+        const recordIds = bulk ? f.records.slice(0, 2) : f.records.slice(0, 1);
+        const headers = { Authorization: `Bearer ${signToken({ userId: f.users[0], roleId: f.role })}` };
+        const snapshot = async () => ({
+          records: await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.entityId, f.entity)).orderBy(entityRecordsTable.id),
+          values: await db.select().from(pageRecordValuesTable).where(eq(pageRecordValuesTable.pageId, mirror.id)),
+          audit: await db.select().from(auditLogTable).where(eq(auditLogTable.entityId, f.entity)),
+          events: await db.select().from(systemEventsTable).where(eq(systemEventsTable.entityId, f.entity)),
+        });
+        const before = await snapshot();
+        const versions = Object.fromEntries(before.records.map(row => [row.id, row.version]));
+        const write = async () => {
+          if (fieldSource === "entity") {
+            return bulk
+              ? page.request.post("/api/records/bulk-field", { headers, data: {
+                pageId: mirror.id, entityId: f.entity, recordIds, fieldKey: definition.fieldKey,
+                value: "working", expectedVersions: versions,
+              } })
+              : page.request.put(`/api/records/${recordIds[0]}`, { headers, data: {
+                pageId: mirror.id, valuesJson: { mapped_stage: "working" }, expectedVersion: versions[recordIds[0]],
+              } });
+          }
+          return bulk
+            ? page.request.post(`/api/pages/${mirror.id}/records/bulk-field-values`, { headers, data: {
+              fieldKey: definition.fieldKey, value: "working", recordIds,
+            } })
+            : page.request.put(`/api/pages/${mirror.id}/records/${recordIds[0]}/values`, { headers, data: {
+              valuesJson: { mapped_stage: "working" }, expectedVersions: { [mirror.id]: 0 },
+            } });
+        };
+        if (!destinationSelected) {
+          const denied = await write();
+          // The single page-value route classifies locked validation as 400;
+          // other write routes classify this policy restriction as 403.
+          expect(denied.status(), await denied.text()).toBe(fieldSource === "page" && !bulk ? 400 : 403);
+          expect((await denied.json()).error).toContain("This status is not available on this page");
+          expect(await snapshot()).toEqual(before);
+          await db.update(pagesTable).set({ statusScopeJson: { ...policy, allowAllChanges: true } })
+            .where(eq(pagesTable.id, mirror.id));
+        }
+        const allowed = await write();
+        expect(allowed.ok(), await allowed.text()).toBe(true);
+        const after = await snapshot();
+        for (const id of recordIds) {
+          const row = after.records.find(row => row.id === id)!;
+          expect(row.statusId).toBe(f.working);
+          expect(row.version).toBeGreaterThan(versions[id]);
+          expect(row.valuesJson).toMatchObject({ workflow_mark: "transition ran" });
+          const values = fieldSource === "entity" ? row.valuesJson : after.values.find(value => value.recordId === id)?.valuesJson;
+          expect(values).toMatchObject({ mapped_stage: "working" });
+          expect(after.audit.some(entry => entry.recordId === id && entry.fieldKey === "__status__")).toBe(true);
+          expect(after.events.some(entry => entry.recordId === id && entry.eventName === "status.changed")).toBe(true);
+        }
+        for (const row of before.records.filter(row => !recordIds.includes(row.id))) {
+          expect(after.records.find(current => current.id === row.id)).toEqual(row);
+        }
+        const visible = await page.request.post(`/api/entities/${f.entity}/records/query`, {
+          headers, data: { pageId: mirror.id, pageSize: 100, showHiddenStatuses: true },
+        });
+        expect(visible.ok(), await visible.text()).toBe(true);
+        const body = await visible.json();
+        expect(body.total).toBe(f.records.length - (destinationSelected ? 0 : recordIds.length));
+        expect(body.data.some((row: { id: number }) => recordIds.includes(row.id))).toBe(destinationSelected);
+      } finally {
+        if (mirrorId != null) {
+          await db.delete(pagesTable).where(eq(pagesTable.id, mirrorId));
+          expect(await db.select().from(pageFieldsTable).where(eq(pageFieldsTable.pageId, mirrorId))).toHaveLength(0);
+          expect(await db.select().from(pageRecordValuesTable).where(eq(pageRecordValuesTable.pageId, mirrorId))).toHaveLength(0);
+        }
+        await cleanup();
+      }
+    });
     }
   }
 }
