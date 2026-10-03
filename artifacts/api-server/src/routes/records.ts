@@ -5021,7 +5021,13 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const deleted = await performRecordDelete(req, existing.entityId, params.data.id, body.data.expectedVersion);
+  const deleted = await performRecordDelete(req, existing.entityId, params.data.id, body.data.expectedVersion, body.data.pageId)
+    .catch(err => {
+      if (!(err instanceof DestructiveAccessLostError)) throw err;
+      res.status(404).json({ error: "Record not found" });
+      return undefined;
+    });
+  if (res.headersSent) return;
   if (!deleted) {
     const [current] = await db.select({ version: entityRecordsTable.version }).from(entityRecordsTable).where(eq(entityRecordsTable.id, params.data.id)).limit(1);
     res.status(409).json({ error: "Stale record version", recordId: params.data.id, currentVersion: current?.version });
@@ -5034,14 +5040,33 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
 /**
  * Physical deletion of a record + the accompanying bookkeeping (file trash,
  * audit marker with a data snapshot, delete event). ALL permission/ownership
- * checks must have passed before calling this — it is shared by the single
- * DELETE endpoint and the bulk action, so it performs no checks itself.
+ * checks must have passed before calling this. The shared helper additionally
+ * rechecks row visibility after locking, before any dependent/link mutation.
  */
+class DestructiveAccessLostError extends Error {}
+
+export async function assertDestructiveVisibility(
+  req: import("express").Request,
+  row: typeof entityRecordsTable.$inferSelect,
+  pageId: number | undefined,
+  tx: DbExecutor,
+): Promise<void> {
+  const perms = await getPermissions(req);
+  const fields = await loadActiveFields(row.entityId, tx);
+  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, row.entityId, pageId, tx);
+  const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, row.entityId);
+  if ((row.statusId != null && hiddenRowStatusIds.includes(row.statusId)) ||
+      (scope === "own" && !await isRecordOwned(row.entityId, row, scopeFieldKeys, req.user!.userId, fields, tx))) {
+    throw new DestructiveAccessLostError();
+  }
+}
+
 async function performRecordDelete(
   req: import("express").Request,
   entityId: number,
   recordId: number,
   expectedVersion?: number,
+  pageId?: number,
 ): Promise<typeof entityRecordsTable.$inferSelect | undefined> {
   const result = await db.transaction(async (tx) => {
     await tx.select({ id: relationsTable.id }).from(relationsTable)
@@ -5056,7 +5081,9 @@ async function performRecordDelete(
       .where(inArray(entityRecordsTable.id, [recordId, ...counterpartIds].sort((a, b) => a - b)))
       .orderBy(asc(entityRecordsTable.id)).for("update");
     const deleting = locked.find((record) => record.id === recordId && record.entityId === entityId);
-    if (!deleting || (expectedVersion != null && deleting.version !== expectedVersion)) return null;
+    if (!deleting) return null;
+    await assertDestructiveVisibility(req, deleting, pageId, tx);
+    if (expectedVersion != null && deleting.version !== expectedVersion) return null;
     for (const link of links) {
       const otherId = link.sourceRecordId === recordId ? link.targetRecordId : link.sourceRecordId;
       const other = locked.find(row => row.id === otherId);
@@ -5176,7 +5203,13 @@ async function setArchived(
     res.status(409).json({ error: "Stale record version", recordId, currentVersion: existing.version });
     return;
   }
-  const record = await applyArchiveFlag(req, existing.entityId, existing.id, archived, expectedVersion);
+  const record = await applyArchiveFlag(req, existing.entityId, existing.id, archived, expectedVersion, pageId)
+    .catch(err => {
+      if (!(err instanceof DestructiveAccessLostError)) throw err;
+      res.status(404).json({ error: "Record not found" });
+      return undefined;
+    });
+  if (res.headersSent) return;
   if (!record) {
     const [current] = await db.select({ version: entityRecordsTable.version }).from(entityRecordsTable).where(eq(entityRecordsTable.id, recordId)).limit(1);
     res.status(409).json({ error: "Stale record version", recordId, currentVersion: current?.version });
@@ -5189,7 +5222,7 @@ async function setArchived(
 
 /**
  * Flip the archive flag + audit. Shared by the single archive/unarchive
- * endpoints and the bulk action; performs NO permission checks itself.
+ * endpoints and the bulk action; rechecks visibility after locking.
  *
  * Unarchive sets the exemption so the auto-archive sweep won't immediately
  * re-archive a record still sitting in a (delay=0) archive-trigger status; the
@@ -5205,12 +5238,15 @@ async function applyArchiveFlag(
   recordId: number,
   archived: boolean,
   expectedVersion?: number,
+  pageId?: number,
 ): Promise<typeof entityRecordsTable.$inferSelect | undefined> {
   const result = await db.transaction(async (tx) => {
     const [current] = await tx.select().from(entityRecordsTable)
       .where(and(eq(entityRecordsTable.id, recordId), eq(entityRecordsTable.entityId, entityId)))
       .for("update");
-    if (!current || (expectedVersion != null && current.version !== expectedVersion)) return undefined;
+    if (!current) return undefined;
+    await assertDestructiveVisibility(req, current, pageId, tx);
+    if (expectedVersion != null && current.version !== expectedVersion) return undefined;
     const currentlyArchived = current.archivedAt != null;
     if (currentlyArchived === archived) return { record: current, changed: false };
     const [record] = await tx.update(entityRecordsTable)
@@ -5755,6 +5791,7 @@ router.post("/records/bulk", requireAuth, async (req, res): Promise<void> => {
           entityId,
           id,
           expectedVersion,
+          pageId,
         );
         if (!deleted) {
           failedIds.push(id);
@@ -5767,6 +5804,7 @@ router.post("/records/bulk", requireAuth, async (req, res): Promise<void> => {
           id,
           action === "archive",
           expectedVersion,
+          pageId,
         );
         if (!updated) {
           failedIds.push(id);
@@ -5776,7 +5814,9 @@ router.post("/records/bulk", requireAuth, async (req, res): Promise<void> => {
       }
       successIds.push(id);
     } catch (err) {
-      req.log.error({ err, recordId: id, action }, "bulk record action failed");
+      if (!(err instanceof DestructiveAccessLostError)) {
+        req.log.error({ err, recordId: id, action }, "bulk record action failed");
+      }
       failedIds.push(id);
     }
   }

@@ -3,8 +3,15 @@ name: Bulk record actions
 description: Multi-select record actions — partial archive/delete behavior and atomic one-field update boundaries.
 ---
 
-- POST /records/bulk re-checks EVERY record individually against the same boundary as the single endpoints: entity cap via assertRecord (delete honours mirror pageId, archive = update cap without pageId, parity with singles), then per-row own-scope; wrong-entity/missing/unowned ids go to failedIds, never 403 the batch. No transaction on purpose — each record's outcome is independent, like N single calls.
-- Single delete/archive cores are extracted (performRecordDelete / applyArchiveFlag) and shared with bulk; they perform NO permission checks — callers must have checked already. Any new bookkeeping (audit/trash/events/archiveExempt) goes in the core so single+bulk can't drift.
+- Bulk archive/delete results remain per-record, not all-or-nothing: losing page visibility for one record must not roll back another record's successful mutation.
+  **Why:** Bulk destructive actions are intentionally equivalent to independent single calls, unlike atomic bulk field edits.
+  **How to apply:** Reject a newly hidden row without side effects; report it in failedIds for bulk and as a non-disclosing 404 for a single request. Check both record orders (a success before and after a rejected row).
+- Re-read initiating-page status policy after destructive-operation record locks, before dependent-link clearing, archive no-op checks, or version-conflict reporting. Destination allowances never grant row visibility.
+  **Why:** Pre-lock authorization can become stale while another transaction holds a record, exposing hidden rows to deletion or archiving; late refusal cannot undo post-commit trash/audit/events.
+  **How to apply:** Keep the visibility guard and bookkeeping shared by single and bulk paths. This fresh page-policy read does not imply that request-cached role permissions are refreshed.
+- Locked authorization reads must reuse the transaction connection, including field metadata and uncached mirror-page resolution.
+  **Why:** Borrowing another pooled connection while holding a transaction can deadlock the entire pool when concurrent destructive requests consume all available connections.
+  **How to apply:** Thread the transaction executor through every database-reading helper; test with an isolated one-connection pool and no preloaded mirror context. A warmed request cache must not be required for correctness.
 - UI gating has two intentional paths: destructive bulk actions require the visible actions column plus their normal update/delete gate, while atomic **Edit fields** requires only record-update permission plus at least one field the role may edit. **Why:** hiding per-row actions must not remove a safe accountant-style bulk correction. Keep archive/delete/merge out of the edit-only menu.
 - Table layout: the checkbox column is sticky via `insetInlineStart: 0` (works LTR+RTL); existing pinned columns use physical `left`, so the pinned-offset measurement adds the checkbox width in LTR ONLY (in RTL checkbox sticks physically right, pinned stick left — no overlap). Every `<tr>` variant (totals, header, add-row link, adding row, record rows, group headers, empty/loading colSpans) must gain the extra cell/colSpan when bulk mode is on.
 - Selection is pruned to the currently loaded result set on records change, so a bulk action never hits rows the user no longer sees.

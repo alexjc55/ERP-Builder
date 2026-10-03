@@ -45,6 +45,9 @@ async function login(page: Page, email: string) {
 
 async function newSession(context: BrowserContext, email: string) {
   const page = await context.newPage();
+  // Keep interception enabled while individual write/refresh barriers are
+  // removed; disabling Chromium Fetch can otherwise strand live SSE requests.
+  await page.route("**/api/**", route => route.continue());
   await login(page, email);
   return page;
 }

@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import test, { after } from "node:test";
 import express from "express";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import * as schema from "@workspace/db/schema";
 import {
   auditLogTable,
   db,
+  pool,
   deletedFilesTable,
   entitiesTable,
   entityFieldsTable,
@@ -26,7 +31,8 @@ import {
 } from "@workspace/db";
 import { signToken } from "../lib/jwt";
 import pageFieldsRouter from "./page-fields";
-import recordsRouter from "./records";
+import recordsRouter, { assertDestructiveVisibility } from "./records";
+import { UPLOADS_ROOT } from "../lib/localStorage";
 
 const runId = `page-select-sync-${randomUUID()}`;
 const ids: Record<string, number> = {};
@@ -65,7 +71,7 @@ function permissions(
 async function request(
   path: string,
   body: unknown,
-  method: "POST" | "PUT",
+  method: "POST" | "PUT" | "DELETE",
   roleId = ids.role,
 ): Promise<{ status: number; body: Record<string, unknown> }> {
   const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
@@ -589,6 +595,39 @@ after(async () => { await cleanup(); });
 
 test("page-local select mappings synchronize entity status atomically", async (t) => {
   await setup();
+  await t.test("locked destructive visibility needs only one pool connection with uncached mirror context", async (t) => {
+    // An isolated pool borrows the same connection configuration without
+    // touching the shared pool's limits or closing any shared connections.
+    const Pool = pool.constructor as new (options: typeof pool.options) => typeof pool;
+    const limitedPool = new Pool({ ...pool.options, max: 1, connectionTimeoutMillis: 250 });
+    const limitedDb = drizzle(limitedPool, { schema });
+    const select = t.mock.method(db, "select", limitedDb.select.bind(limitedDb));
+    try {
+      await limitedDb.transaction(async tx => {
+        await tx.update(pagesTable).set({
+          statusScopeJson: { statusIds: [ids.base], includeNoStatus: false, allowAllChanges: true },
+        }).where(eq(pagesTable.id, ids.targetPage));
+        const [row] = await tx.select().from(entityRecordsTable)
+          .where(eq(entityRecordsTable.id, ids.one)).for("update");
+        const perms = permissions([ids.targetPage]);
+        perms.records[String(ids.entity)] = {
+          view: true, create: true, update: true, delete: true,
+          scope: "own", scopeFieldKeys: ["owner"],
+        };
+        const req = {
+          user: { userId: ids.user, roleId: ids.role }, permissions: perms,
+        } as unknown as express.Request;
+        // No _pageMirror or page-status cache: exercises the bulk-archive path.
+        await assertDestructiveVisibility(req, row!, ids.targetPage, tx);
+        assert.equal(limitedPool.totalCount, 1);
+        assert.equal(select.mock.callCount(), 0, "locked guard must not borrow a second connection through global db.select");
+        await tx.update(pagesTable).set({ statusScopeJson: null }).where(eq(pagesTable.id, ids.targetPage));
+      });
+    } finally {
+      select.mock.restore();
+      await limitedPool.end();
+    }
+  });
   await t.test("multiple page_ref sources agree or roll back as one status mutation", async (t) => {
     const [source] = await db.insert(pagesTable).values({
       nameJson: { en: `${runId} second source` }, mirrorEntityId: ids.entity,
@@ -2414,6 +2453,121 @@ test("page-local select mappings synchronize entity status atomically", async (t
     } finally {
       await db.delete(entityFieldsTable).where(and(eq(entityFieldsTable.entityId, ids.entity), inArray(entityFieldsTable.fieldKey, ["rename_child", "rename_parent"])));
     }
+  });
+  await t.test("destructive operations recheck page visibility under record locks", async (t) => {
+    await db.insert(pageFieldsTable).values({
+      pageId: ids.targetPage, fieldKey: "delete_guard_file",
+      nameJson: { en: "Guarded file" }, fieldType: "file",
+    });
+    await mkdir(UPLOADS_ROOT, { recursive: true });
+    for (const action of ["delete", "archive", "unarchive"] as const) {
+      for (const bulk of [false, true]) for (const initiallyScoped of [false, true]) {
+        await t.test(`${action}, bulk=${bulk}, scoped=${initiallyScoped}`, async () => {
+          const rows = await db.insert(entityRecordsTable).values([
+            { entityId: ids.entity, statusId: ids.done, valuesJson: { name: "Denied", owner: ids.user },
+              archivedAt: action === "unarchive" ? new Date() : null },
+            { entityId: ids.entity, statusId: ids.base, valuesJson: { name: "Allowed", owner: ids.user },
+              archivedAt: action === "unarchive" ? new Date() : null },
+          ]).returning();
+          const [denied, allowed] = rows;
+          let release!: () => void;
+          let ready!: (pid: number) => void;
+          const gate = new Promise<void>(resolve => { release = resolve; });
+          const acquired = new Promise<number>(resolve => { ready = resolve; });
+          let holder: Promise<unknown> | undefined;
+          let pending: ReturnType<typeof request> | undefined;
+          const fileDirectory = await mkdtemp(path.join(UPLOADS_ROOT, "policy-guard-"));
+          try {
+            const fileValue = (name: string) => ({
+              kind: "server", name, path: `/local/${path.basename(fileDirectory)}/${name}`,
+            });
+            await writeFile(path.join(fileDirectory, "entity.txt"), "entity evidence");
+            await writeFile(path.join(fileDirectory, "page.txt"), "page evidence");
+            await db.update(entityRecordsTable).set({
+              valuesJson: { ...denied!.valuesJson as Record<string, unknown>, attachment: fileValue("entity.txt") },
+            }).where(eq(entityRecordsTable.id, denied!.id));
+            await db.insert(pageRecordValuesTable).values({
+              pageId: ids.targetPage, recordId: denied!.id,
+              valuesJson: { delete_guard_file: fileValue("page.txt"), preserved: "keep" },
+            });
+            await db.update(pagesTable).set({ statusScopeJson: initiallyScoped
+              ? { statusIds: [ids.base, ids.done], includeNoStatus: false, allowAllChanges: true } : null,
+            }).where(eq(pagesTable.id, ids.targetPage));
+            await db.insert(recordLinksTable).values({
+              relationId: ids.relation, relationType: "many_to_one",
+              sourceRecordId: denied!.id, targetRecordId: ids.relatedRecord,
+            });
+            const snapshot = async () => ({
+              denied: await record(denied!.id),
+              related: await record(ids.relatedRecord),
+              effects: await pageRefRollbackSnapshot(denied!.id),
+              links: await db.select().from(recordLinksTable).where(eq(recordLinksTable.sourceRecordId, denied!.id)),
+              relatedAudits: await db.select().from(auditLogTable).where(eq(auditLogTable.recordId, ids.relatedRecord)),
+              relatedEvents: await db.select().from(systemEventsTable).where(eq(systemEventsTable.recordId, ids.relatedRecord)),
+              entityFile: await readFile(path.join(fileDirectory, "entity.txt"), "utf8"),
+              pageFile: await readFile(path.join(fileDirectory, "page.txt"), "utf8"),
+            });
+            const before = await snapshot();
+            holder = db.transaction(async tx => {
+              await tx.select().from(entityRecordsTable).where(eq(entityRecordsTable.id, denied!.id)).for("update");
+              const result = await tx.execute(sql`SELECT pg_backend_pid() AS pid`);
+              ready(Number(result.rows[0].pid));
+              await gate;
+            });
+            const pid = await Promise.race([acquired, holder.then(() => { throw new Error("holder ended early"); })]);
+            pending = request(bulk ? "/records/bulk" : `/records/${denied!.id}${action === "delete" ? "" : `/${action}`}`, {
+              pageId: ids.targetPage,
+              ...(bulk ? { entityId: ids.entity, action, recordIds: initiallyScoped
+                ? [allowed!.id, denied!.id] : [denied!.id, allowed!.id] }
+                : { expectedVersion: before.denied.version }),
+            }, !bulk && action === "delete" ? "DELETE" : "POST");
+            let waiting = false;
+            const deadline = Date.now() + 5000;
+            while (Date.now() < deadline) {
+              const result = await db.execute(sql`SELECT pid FROM pg_stat_activity
+                WHERE ${pid} = ANY(pg_blocking_pids(pid)) AND query ILIKE '%entity_records%'`);
+              if (result.rows.length) { waiting = true; break; }
+              await new Promise(resolve => setTimeout(resolve, 10));
+            }
+            assert.ok(waiting, "mutation must wait on the real record lock");
+            await db.update(pagesTable).set({ statusScopeJson: {
+              statusIds: [ids.base], includeNoStatus: false, allowAllChanges: true,
+            } }).where(eq(pagesTable.id, ids.targetPage));
+            release();
+            await holder;
+            const response = await pending;
+            assert.equal(response.status, bulk ? 200 : 404, JSON.stringify(response.body));
+            if (bulk) {
+              assert.deepEqual(response.body.failedIds, [denied!.id]);
+              assert.deepEqual(response.body.successIds, [allowed!.id]);
+              const [survivor] = await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.id, allowed!.id));
+              if (action === "delete") assert.equal(survivor, undefined);
+              else {
+                assert.equal(survivor!.archivedAt != null, action === "archive");
+                assert.equal(survivor!.archiveExempt, action === "unarchive");
+                assert.equal(survivor!.version, allowed!.version + 1);
+                assert.equal((response.body.versions as Record<string, number>)[String(allowed!.id)], survivor!.version);
+              }
+            } else {
+              assert.deepEqual(await record(allowed!.id), allowed);
+            }
+            assert.deepEqual(await snapshot(), before, "denied mutation must preserve row, links and side effects");
+          } finally {
+            release?.();
+            await holder?.catch(() => undefined);
+            await pending?.catch(() => undefined);
+            await db.update(pagesTable).set({ statusScopeJson: null }).where(eq(pagesTable.id, ids.targetPage));
+            const recordIds = rows.map(row => row.id);
+            await db.delete(systemEventsTable).where(inArray(systemEventsTable.recordId, recordIds));
+            await db.delete(auditLogTable).where(inArray(auditLogTable.recordId, recordIds));
+            await db.delete(deletedFilesTable).where(inArray(deletedFilesTable.recordId, recordIds));
+            await db.delete(entityRecordsTable).where(inArray(entityRecordsTable.id, recordIds));
+            await rm(fileDirectory, { recursive: true, force: true });
+          }
+        });
+      }
+    }
+    await db.delete(pageFieldsTable).where(and(eq(pageFieldsTable.pageId, ids.targetPage), eq(pageFieldsTable.fieldKey, "delete_guard_file")));
   });
   const lockPolicyCases = [
     { boundary: "source", fieldKey: "source_stage", visible: false, allowAllChanges: true, destination: true },

@@ -388,11 +388,13 @@ export function isPrivilegedRole(perms: RolePermissions): boolean {
 }
 
 /** Resolve and cache a page's mirrorEntityId on the request (one DB hit per page per request). */
-async function getPageMirrorEntityId(req: Request, pageId: number): Promise<number | null> {
+async function getPageMirrorEntityId(
+  req: Request, pageId: number, exec: Pick<typeof db, "select"> = db,
+): Promise<number | null> {
   if (!req._pageMirror) req._pageMirror = new Map();
   const cached = req._pageMirror.get(pageId);
   if (cached !== undefined) return cached;
-  const [page] = await db
+  const [page] = await exec
     .select({ mirrorEntityId: pagesTable.mirrorEntityId })
     .from(pagesTable)
     .where(eq(pagesTable.id, pageId))
@@ -555,10 +557,11 @@ async function baseEffectiveScopeFor(
   perms: RolePermissions,
   entityId: number,
   pageId?: number,
+  exec: Pick<typeof db, "select"> = db,
 ): Promise<{ scope: RecordScope; scopeFieldKeys: string[] }> {
   if (perms.superAdmin) return { scope: "all", scopeFieldKeys: [] };
   if (pageId != null && (perms.pageIds?.includes(pageId) ?? false)) {
-    const mirrorEntityId = await getPageMirrorEntityId(req, pageId);
+    const mirrorEntityId = await getPageMirrorEntityId(req, pageId, exec);
     if (mirrorEntityId === entityId) {
       const override = perms.records[mirrorPermKey(pageId)];
       if (override) {
@@ -573,7 +576,7 @@ export async function effectiveScopeFor(
   req: Request, perms: RolePermissions, entityId: number, pageId?: number,
   freshExecutor?: Pick<typeof db, "select">,
 ): Promise<{ scope: RecordScope; scopeFieldKeys: string[] }> {
-  const base = await baseEffectiveScopeFor(req, perms, entityId, pageId);
+  const base = await baseEffectiveScopeFor(req, perms, entityId, pageId, freshExecutor);
   let cache = pageStatusScopeCache.get(req);
   if (!cache) { cache = new Map(); pageStatusScopeCache.set(req, cache); }
   const key = `${entityId}:${pageId ?? "main"}`;
