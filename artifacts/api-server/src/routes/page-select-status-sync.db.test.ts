@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test, { after } from "node:test";
 import express from "express";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   auditLogTable,
   db,
@@ -2314,6 +2314,67 @@ test("page-local select mappings synchronize entity status atomically", async (t
     }
   });
 
+  for (const bulk of [false, true]) for (const initiallyScoped of [false, true]) {
+    await t.test(`page_ref reloads source status policy after record lock: bulk=${bulk}, scoped=${initiallyScoped}`, async () => {
+      await reset();
+      const recordIds = bulk ? [ids.one, ids.two] : [ids.one];
+      await db.update(pagesTable).set({
+        statusScopeJson: initiallyScoped
+          ? { statusIds: [ids.base, ids.done], includeNoStatus: true, allowAllChanges: true } : null,
+      }).where(eq(pagesTable.id, ids.sourcePage));
+      await db.insert(pageRecordValuesTable).values(recordIds.flatMap(recordId => [
+        { pageId: ids.sourcePage, recordId, valuesJson: { unrelated_value: "keep" } },
+        { pageId: ids.targetPage, recordId, valuesJson: { stage: null } },
+      ]));
+      const before = await Promise.all(recordIds.map(pageRefRollbackSnapshot));
+      let release!: () => void;
+      const unlocked = new Promise<void>(resolve => { release = resolve; });
+      let ready!: (pid: number) => void;
+      const locked = new Promise<number>(resolve => { ready = resolve; });
+      const holder = db.transaction(async tx => {
+        await tx.select().from(entityRecordsTable)
+          .where(eq(entityRecordsTable.id, recordIds.at(-1)!)).for("update");
+        const result = await tx.execute(sql`SELECT pg_backend_pid() AS pid`);
+        ready(Number(result.rows[0].pid));
+        await unlocked;
+      });
+      let pending: ReturnType<typeof request> | undefined;
+      try {
+        const pid = await Promise.race([locked, holder.then(() => { throw new Error("Lock holder ended early"); })]);
+        pending = bulk
+          ? request(`/pages/${ids.targetPage}/records/bulk-field-values`, {
+            fieldKey: "source_stage", value: "done", recordIds,
+          }, "POST")
+          : request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { source_stage: "done" } }, "PUT");
+        // Observe a real blocked backend; no timer-based assumption that preflight ran.
+        let waiting = false;
+        const deadline = Date.now() + 5000;
+        while (Date.now() < deadline) {
+          const result = await db.execute(sql`SELECT pid FROM pg_stat_activity
+            WHERE ${pid} = ANY(pg_blocking_pids(pid)) AND query ILIKE '%entity_records%'`);
+          if (result.rows.length) { waiting = true; break; }
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        assert.ok(waiting, "page_ref request must reach its record lock before policy changes");
+        await db.update(pagesTable).set({
+          statusScopeJson: { statusIds: [ids.done], includeNoStatus: false, allowAllChanges: true },
+        }).where(eq(pagesTable.id, ids.sourcePage));
+        release();
+        await holder;
+        const response = await pending;
+        assert.equal(response.status, 404, JSON.stringify(response.body));
+        assert.ok(!JSON.stringify(response.body).includes(`${runId} source`));
+        assert.ok(!JSON.stringify(response.body).includes('"stage"'));
+        assert.deepEqual(await Promise.all(recordIds.map(pageRefRollbackSnapshot)), before);
+      } finally {
+        release();
+        await holder.catch(() => undefined);
+        await pending?.catch(() => undefined);
+        await db.update(pagesTable).set({ statusScopeJson: null }).where(eq(pagesTable.id, ids.sourcePage));
+        await reset();
+      }
+    });
+  }
   await t.test("single page_ref rechecks source own-scope after locking the entity record", async () => {
     await reset([ids.one]);
     const sourceOwn = permissions([ids.targetPage, ids.sourcePage]);

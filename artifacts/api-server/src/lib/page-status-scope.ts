@@ -22,12 +22,12 @@ export function decodePageScope(keys: string[]): ScopedRows | null {
 }
 
 /** Explicit context must belong to this entity. Main-page context is inferred. */
-export async function getPageStatusScope(entityId: number, pageId?: number): Promise<PageStatusScope | null> {
-  const [entity] = await db.select({ pageId: entitiesTable.pageId }).from(entitiesTable)
+export async function getPageStatusScope(entityId: number, pageId?: number, executor: Pick<typeof db, "select"> = db): Promise<PageStatusScope | null> {
+  const [entity] = await executor.select({ pageId: entitiesTable.pageId }).from(entitiesTable)
     .where(eq(entitiesTable.id, entityId)).limit(1);
   const id = pageId ?? entity?.pageId;
   if (id == null) return null;
-  const [page] = await db.select().from(pagesTable).where(eq(pagesTable.id, id)).limit(1);
+  const [page] = await executor.select().from(pagesTable).where(eq(pagesTable.id, id)).limit(1);
   if (!page || (page.mirrorEntityId !== entityId && entity?.pageId !== page.id)) {
     // Invalid page contexts cannot widen a page-scoped read.
     return { statusIds: [], includeNoStatus: false, allowAllChanges: false };

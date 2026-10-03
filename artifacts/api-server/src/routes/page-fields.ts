@@ -1922,7 +1922,7 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
       // and the source write/status effects.
       if (!perms.superAdmin) {
         for (const sourceState of sourceStates.values()) {
-          const sourceScope = sourceState.scope;
+          const sourceScope = await effectiveScopeFor(req, perms, entityId, sourceState.pageId, tx);
           if (
             sourceScope?.scope === "own" &&
             !(await isRecordOwned(
@@ -2517,6 +2517,9 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
         .orderBy(asc(entityRecordsTable.id))
         .for("update");
       const recordsById = new Map(records.map((record) => [record.id, record]));
+      if (sourceScope) {
+        sourceScope = await effectiveScopeFor(req, perms, entityId, writePageId, tx);
+      }
       for (const recordId of recordIds) {
         const record = recordsById.get(recordId);
         if (!record) throw new BulkPageFieldUpdateError(404, recordId, "запись не найдена");

@@ -571,13 +571,17 @@ async function baseEffectiveScopeFor(
 
 export async function effectiveScopeFor(
   req: Request, perms: RolePermissions, entityId: number, pageId?: number,
+  freshExecutor?: Pick<typeof db, "select">,
 ): Promise<{ scope: RecordScope; scopeFieldKeys: string[] }> {
   const base = await baseEffectiveScopeFor(req, perms, entityId, pageId);
   let cache = pageStatusScopeCache.get(req);
   if (!cache) { cache = new Map(); pageStatusScopeCache.set(req, cache); }
   const key = `${entityId}:${pageId ?? "main"}`;
-  if (!cache.has(key)) cache.set(key, getPageStatusScope(entityId, pageId));
-  const policy = await cache.get(key)!;
+  if (!freshExecutor && !cache.has(key)) cache.set(key, getPageStatusScope(entityId, pageId));
+  // Locked writes must not authorize from a policy cached before a lock wait.
+  const policy = freshExecutor
+    ? await getPageStatusScope(entityId, pageId, freshExecutor)
+    : await cache.get(key)!;
   if (!policy) return base;
   return { scope: "own", scopeFieldKeys: [PAGE_SCOPE_PREFIX + JSON.stringify({
     policy, base: base.scope === "all" ? null : base.scopeFieldKeys,
