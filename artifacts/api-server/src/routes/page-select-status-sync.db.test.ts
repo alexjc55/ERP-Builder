@@ -2323,6 +2323,13 @@ test("page-local select mappings synchronize entity status atomically", async (t
       { boundary: "target", fieldKey, visible: true, allowAllChanges: false, destination: false },
       { boundary: "target", fieldKey, visible: true, allowAllChanges: false, destination: true },
     ]),
+    ...["mapped_stage", "name"].flatMap(fieldKey => [
+      { boundary: "entity", fieldKey, visible: false, allowAllChanges: true, destination: true },
+      { boundary: "entity", fieldKey, visible: false, allowAllChanges: false, destination: true },
+      { boundary: "entity", fieldKey, visible: true, allowAllChanges: true, destination: false },
+      { boundary: "entity", fieldKey, visible: true, allowAllChanges: false, destination: true },
+    ]),
+    { boundary: "entity", fieldKey: "mapped_stage", visible: true, allowAllChanges: false, destination: false },
   ];
   for (const scenario of lockPolicyCases) for (const bulk of [false, true]) for (const initiallyScoped of [false, true]) {
     await t.test(`reload page policy after record lock: ${JSON.stringify(scenario)}, bulk=${bulk}, scoped=${initiallyScoped}`, async () => {
@@ -2352,7 +2359,18 @@ test("page-local select mappings synchronize entity status atomically", async (t
       let pending: ReturnType<typeof request> | undefined;
       try {
         const pid = await Promise.race([locked, holder.then(() => { throw new Error("Lock holder ended early"); })]);
-        pending = bulk
+        const expectedVersions = Object.fromEntries(recordIds.map((id, i) => [id, before[i].version]));
+        pending = scenario.boundary === "entity"
+          ? bulk
+            ? request("/records/bulk-field", {
+              entityId: ids.entity, pageId: ids.targetPage, recordIds, expectedVersions,
+              fieldKey: scenario.fieldKey, value: "done",
+            }, "POST")
+            : request(`/records/${ids.one}`, {
+              pageId: ids.targetPage, expectedVersion: before[0].version,
+              valuesJson: { ...(before[0].valuesJson as Record<string, unknown>), [scenario.fieldKey]: "done" },
+            }, "PUT")
+          : bulk
           ? request(`/pages/${ids.targetPage}/records/bulk-field-values`, {
             fieldKey: scenario.fieldKey, value: "done", recordIds,
           }, "POST")
@@ -2378,15 +2396,23 @@ test("page-local select mappings synchronize entity status atomically", async (t
         const response = await pending;
         const after = await Promise.all(recordIds.map(pageRefRollbackSnapshot));
         if (!scenario.visible || (!scenario.allowAllChanges && !scenario.destination)) {
-          assert.equal(response.status, !scenario.visible ? 404 : bulk ? 403 : 400, JSON.stringify(response.body));
+          assert.equal(response.status, !scenario.visible ? 404 : bulk || scenario.boundary === "entity" ? 403 : 400, JSON.stringify(response.body));
           assert.match(String(response.body.error), !scenario.visible
             ? /^(Record not found|Запись \d+: запись недоступна)$/ : /This status is not available on this page/);
           assert.deepEqual(after, before);
         } else {
           assert.equal(response.status, 200, JSON.stringify(response.body));
           for (const [i, row] of after.entries()) {
-            assert.equal(row.statusId, ids.done);
+            assert.equal(row.statusId, scenario.fieldKey === "name" ? ids.base : ids.done);
             assert.equal(row.version, before[i].version + 1);
+            if (scenario.boundary === "entity") {
+              assert.deepEqual(row.sourceRow, before[i].sourceRow);
+              assert.deepEqual(row.targetRow, before[i].targetRow);
+              assert.deepEqual(row.valuesJson, { ...(before[i].valuesJson as Record<string, unknown>), [scenario.fieldKey]: "done" });
+              assert.equal(row.audits.filter(a => a.fieldKey === "__status__").length, scenario.fieldKey === "name" ? 0 : 1);
+              assert.equal(row.events.filter(e => e.eventName === "status.changed").length, scenario.fieldKey === "name" ? 0 : 1);
+              continue;
+            }
             const alias = scenario.fieldKey === "source_stage";
             const written = alias ? row.sourceRow : row.targetRow;
             const previous = alias ? before[i].sourceRow : before[i].targetRow;

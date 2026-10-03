@@ -4677,9 +4677,10 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
       if (!locked) throw new LockedUpdateError(404, "Record not found");
       if (input.expectedVersion != null && locked.version !== input.expectedVersion) return undefined;
       if (locked.entityId !== existing.entityId) throw new LockedUpdateError(404, "Record not found");
+      const lockedScope = await effectiveScopeFor(req, perms, locked.entityId, input.pageId ?? undefined, tx);
       if (
-        scope === "own" &&
-        !(await isRecordOwned(locked.entityId, locked, scopeFieldKeys, req.user!.userId, fields, tx))
+        lockedScope.scope === "own" &&
+        !(await isRecordOwned(locked.entityId, locked, lockedScope.scopeFieldKeys, req.user!.userId, fields, tx))
       ) {
         throw new LockedUpdateError(404, "Record not found");
       }
@@ -5337,7 +5338,6 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
     res.status(403).json({ error: `Field "${fieldKey}" is read-only for your role` });
     return;
   }
-  const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, entityId, pageId);
   const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, entityId);
   const gdriveModuleEnabled = await isGoogleDriveModuleEnabled();
   const keyFields = fields.filter((candidate) => candidate.isKey);
@@ -5386,6 +5386,7 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
         .orderBy(asc(entityRecordsTable.id))
         .for("update");
       const byId = new Map(rows.map((row) => [row.id, row]));
+      const lockedScope = await effectiveScopeFor(req, perms, entityId, pageId, tx);
       for (const recordId of recordIds) {
         const row = byId.get(recordId);
         if (!row) throw new BulkFieldUpdateError(404, recordId, "запись не найдена");
@@ -5397,8 +5398,8 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
           throw new BulkFieldUpdateError(409, recordId, `устаревшая версия (текущая ${row.version})`);
         }
         if (
-          scope === "own" &&
-          !(await isRecordOwned(entityId, row, scopeFieldKeys, userId, fields))
+          lockedScope.scope === "own" &&
+          !(await isRecordOwned(entityId, row, lockedScope.scopeFieldKeys, userId, fields, tx))
         ) {
           throw new BulkFieldUpdateError(404, recordId, "запись недоступна");
         }
