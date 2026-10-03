@@ -14,6 +14,7 @@ import { requireAdmin, getPermissions } from "../middlewares/permissions";
 import { buildRelationMeta } from "./own-scope";
 import { cascadeDeletePageRefFields } from "./page-fields";
 import { validatePageStatusScope } from "../lib/page-status-scope";
+import { broadcast } from "../lib/collaboration";
 import { computePivot, type PivotConfigInput } from "./pivot-compute";
 import { buildRecordQuery, type RecordQuerySpec, type FilterCondition } from "./record-query";
 import { mergeLinkedFormulaInputs, systemFormulaPermissions } from "../lib/formula-runtime";
@@ -568,6 +569,10 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
     return;
   }
 
+  if ("statusScopeJson" in body &&
+      JSON.stringify(current.statusScopeJson) !== JSON.stringify(page.statusScopeJson)) {
+    broadcast(page.id, "page_config_changed", {});
+  }
   res.json({ ...page, children: [] });
 });
 

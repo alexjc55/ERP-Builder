@@ -10,6 +10,7 @@ function harness() {
   const slots: any[] = [];
   let cursor = 0;
   let pageId = 10;
+  let configInvalidations = 0;
   let queuedEffects: Array<() => void> = [];
   const timers = new Map<number, { callback: () => void; interval: boolean; delay?: number }>();
   let timerId = 0;
@@ -88,7 +89,7 @@ function harness() {
   vm.runInContext(compiled, context);
   const render = () => {
     cursor = 0;
-    const result = exports.useCollaboration(pageId);
+    const result = exports.useCollaboration(pageId, () => { configInvalidations++; });
     const effects = queuedEffects;
     queuedEffects = [];
     effects.forEach(effect => effect());
@@ -96,6 +97,7 @@ function harness() {
   };
   return {
     render, requests, presenceResponses, streamResponses, timers,
+    get configInvalidations() { return configInvalidations; },
     retryAccess() {
       for (const [id, timer] of [...timers]) if (timer.delay === 30_000) {
         timers.delete(id);
@@ -115,6 +117,25 @@ function harness() {
 const settle = () => new Promise<void>(resolve => setImmediate(resolve));
 const editing = { entityId: 2, recordId: 3, fieldKey: "title", source: "entity" };
 const presence = [{ userId: 2, name: "Bob", color: "#123456", editing }];
+
+test("configuration invalidations survive batched record events and snapshots repair missed settings", async () => {
+  const h = harness();
+  try {
+    h.render();
+    await settle();
+    h.send("snapshot", { presence: [] });
+    h.send("page_config_changed", {});
+    h.send("table_changed", {});
+    await settle();
+    assert.equal(h.configInvalidations, 2);
+    assert.equal(h.render().lastMessage.type, "table_changed");
+    h.changePage(11);
+    await settle();
+    h.send("snapshot", { presence: [] });
+    await settle();
+    assert.equal(h.configInvalidations, 3);
+  } finally { h.cleanup(); }
+});
 
 test("SSE denial clears presence/messages/editing and stops heartbeat/fast reconnect", async () => {
   const h = harness();

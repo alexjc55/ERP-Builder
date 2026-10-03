@@ -137,7 +137,7 @@ test("open stream rechecks access before changes and presence; revoked participa
     const baseline = alice.writes.length;
     const baselineChecks = checks;
     allowed = false; // No close/disconnect before revocation.
-    broadcast(pageId, "table_changed", {});
+    broadcast(pageId, "page_config_changed", { statusIds: [12345], privateMetadata: "secret" });
     putPresence(pageId, "bob", { id: 602, name: "Secret after revocation" },
       { entityId: 90, recordId: 42, fieldKey: "secret", source: "entity" });
     await settle();
@@ -148,7 +148,7 @@ test("open stream rechecks access before changes and presence; revoked participa
     assert.equal(alice.endCalls, 1);
     assert.equal(presenceSnapshot(pageId).some(entry => entry.userId === 601), false);
     assert.equal(globalPresenceSnapshot().some(entry => entry.userId === 601), false);
-    assert.ok(bob.writes.some(frame => frame.includes("event:table_changed")));
+    assert.ok(bob.writes.some(frame => frame === "event:page_config_changed\ndata:{}\n\n"));
     assert.equal(bob.writableEnded, false);
   } finally {
     disposeCollaboration();

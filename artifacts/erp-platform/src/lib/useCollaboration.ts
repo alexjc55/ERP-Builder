@@ -34,7 +34,9 @@ function getClientId() {
   return newId;
 }
 
-export function useCollaboration(pageId?: number | null) {
+export function useCollaboration(pageId?: number | null, onPageConfigChange?: () => void) {
+  const onPageConfigChangeRef = useRef(onPageConfigChange);
+  onPageConfigChangeRef.current = onPageConfigChange;
   const { user, isGuest } = useAuth();
   const userId = user?.id;
   const [users, setUsers] = useState<CollaborationPresence[]>([]);
@@ -152,6 +154,12 @@ export function useCollaboration(pageId?: number | null) {
           return;
         }
         const type = (eventName || data.type) as CollaborationMessage["type"];
+        // Refresh metadata on reconnect too: notifications missed while offline
+        // are not replayed. Call directly so a following table event cannot
+        // overwrite this invalidation in React's batched lastMessage state.
+        if (eventName === "page_config_changed" || type === "snapshot") {
+          onPageConfigChangeRef.current?.();
+        }
         const message = { ...data, type } as CollaborationMessage;
         if (type === "snapshot" || type === "presence") {
           const presence = data.presence;

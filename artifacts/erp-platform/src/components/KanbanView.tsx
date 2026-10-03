@@ -196,6 +196,7 @@ export function KanbanView(props: KanbanViewProps) {
   );
   const baseKey = JSON.stringify(baseQuery);
   const lanesKey = lanes.join(",");
+  const statusScopeKey = JSON.stringify(statusScope ?? null);
 
   const [laneState, setLaneState] = useState<Map<KanbanLaneKey, LaneState>>(new Map());
   const laneStateRef = useRef(laneState);
@@ -261,7 +262,7 @@ export function KanbanView(props: KanbanViewProps) {
     laneStateRef.current = new Map(lanes.map((l) => [l, emptyLane()]));
     for (const l of lanes) void loadLane(l, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entityId, baseKey, lanesKey]);
+  }, [entityId, baseKey, lanesKey, statusScopeKey]);
 
   useEffect(() => () => {
     epochRef.current += 1; // unmount: drop every late response

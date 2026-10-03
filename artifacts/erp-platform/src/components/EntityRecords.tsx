@@ -2577,7 +2577,9 @@ export function EntityRecords({
   const statusManualEditable = canManuallyEditStatus(entity, user?.id);
   const statusColumnName = ml(entity?.statusNameJson) || t("records.status", "Статус");
   const collabPageId = pageId ?? entity?.pageId;
-  const collab = useCollaboration(collabPageId);
+  const collab = useCollaboration(collabPageId, () => {
+    void queryClient.invalidateQueries({ queryKey: getListPagesQueryKey() });
+  });
   const otherCollabSessions = useMemo(
     () => {
       const others = collab.users.filter((u) => u.userId !== user?.id);
@@ -4722,7 +4724,7 @@ export function EntityRecords({
   }, [fieldFilters, pageFieldFilters, allFields, pageFields, fieldLabelOverrides, ml]);
 
   const queryKey = JSON.stringify(recordQuery);
-  const recordsScopeKey = `${entityId}:${pageId ?? "none"}:${permPageId ?? "none"}:${groupByFieldKey ?? "none"}`;
+  const recordsScopeKey = `${entityId}:${pageId ?? "none"}:${permPageId ?? "none"}:${groupByFieldKey ?? "none"}:${JSON.stringify(pageStatusScope ?? null)}`;
   const recordsRequestIdRef = useRef(0);
   const recordsStartedScopeRef = useRef<string | null>(null);
   const recordsLoadSubscriptionKeyRef = useRef<string | null>(null);

@@ -9,8 +9,8 @@ The shared refresh control must refresh all active query-backed data and every m
 
 **How to apply:** Any new mutation-backed read surface must register a lifecycle-safe refresh task. Coalesce overlapping global refreshes, preserve the current filters/sort/pagination, and invalidate request tokens on cleanup so stale responses cannot win.
 
-For page status-selection settings changed by another administrator, the guaranteed freshness mechanism is the global “Refresh data” control, without browser reload. A Kanban-only lane refresh is not a substitute for refreshing page metadata.
+For page status-selection settings changed by another administrator, active collaboration sessions refresh page metadata automatically. The global “Refresh data” control remains a fallback; a Kanban-only lane refresh is not a substitute for refreshing page metadata.
 
-**Why:** Page policy affects rows, lanes, filters and change destinations together; refreshing records alone cannot update every affected control. Live propagation of page configuration would be a separate feature.
+**Why:** Page policy affects rows, lanes, filters and change destinations together; refreshing records alone cannot update every affected control. Notifications are opaque and authorization-checked; policy values come from the normal authenticated metadata request.
 
-**How to apply:** Cross-session tests must use the global control, exercise selected/empty/all and destination-only changes, and deliver a held old records response after the new page policy is rendered.
+**How to apply:** Revalidate metadata on both configuration notifications and connection snapshots so offline gaps heal. Keep configuration invalidation independent of batched record notifications, and include policy in render/request generations. Test automatic and manual paths with selected/empty/all, destination-only changes, and a held old response.

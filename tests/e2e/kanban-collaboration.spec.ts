@@ -536,7 +536,8 @@ for (const fieldSource of ["entity", "page"] as const) {
 }
 
 for (const mode of ["table", "kanban"] as const) {
-  test(`open page status policy refresh: ${mode}`, async ({ browser, page }) => {
+  for (const automatic of [false, true]) {
+  test(`open page status policy refresh: ${mode}, automatic=${automatic}`, async ({ browser, page }) => {
     test.setTimeout(90_000);
     await guard(page);
     await setup(true);
@@ -571,6 +572,7 @@ for (const mode of ["table", "kanban"] as const) {
         expect(response.ok(), await response.text()).toBe(true);
       };
       const refresh = async () => {
+        if (automatic) return;
         await expect(employee.getByTestId("button-refresh-data-desktop")).toBeEnabled();
         await employee.getByTestId("button-refresh-data-desktop").click();
         await expect(employee.getByTestId("button-refresh-data-desktop")).toBeEnabled();
@@ -657,6 +659,8 @@ for (const mode of ["table", "kanban"] as const) {
       await cleanup();
     }
   });
+}
+
 }
 
 const lane = (page: Page, status: number) => page.getByTestId(`lane-kanban-s:${status}`);

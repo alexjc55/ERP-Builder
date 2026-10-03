@@ -320,6 +320,8 @@ export function addStream(
 }
 
 export function broadcast(pageId: number, event: string, data: unknown): void {
+  // Configuration notifications never carry policy values or page metadata.
+  if (event === "page_config_changed") data = {};
   // All mutation notifications cross this boundary as opaque table-wide
   // invalidations. Coalescing must not drop a second record's refresh coverage,
   // or disclose identifiers/versions to a row-restricted recipient.
