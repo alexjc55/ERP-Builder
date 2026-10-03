@@ -5,6 +5,12 @@ description: Why destructive install, collaboration E2E, and PostgreSQL fixture 
 
 The dependency-install validation, collaboration/relation E2E, and PostgreSQL fixture release gates must share a repository-specific execution lock.
 
+Fixture automations must either be awaited to completion or omitted from tests that do not exercise them.
+
+**Why:** A successful record-write response does not guarantee that background automation effects have finished; their events can arrive after fixture deletion and fail cleanup.
+
+**How to apply:** Keep automation fixtures in automation/collaboration coverage, but omit them from short policy-only cases. Do not solve this with arbitrary cleanup delays or weaker cleanup assertions.
+
 Keep a pass-through API route installed for the lifetime of browser tests that
 add and remove individual write barriers.
 

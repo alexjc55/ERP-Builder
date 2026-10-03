@@ -598,6 +598,10 @@ for (const fieldSource of ["entity", "page"] as const) {
       const f = fixture!;
       let mirrorId: number | undefined;
       try {
+        // This matrix checks synchronous mapping/workflow policy, not automation
+        // execution (covered by the collaboration test). Do not start background
+        // automation writes which can outlive these short API-only cases.
+        await db.delete(entityAutomationsTable).where(eq(entityAutomationsTable.entityId, f.entity));
         const policy = { statusIds: destinationSelected ? [f.ready, f.working] : [f.ready], includeNoStatus: false, allowAllChanges: false };
         const [mirror] = await db.insert(pagesTable).values({
           path: `${path}-mapped`, nameJson: { en: key }, mirrorEntityId: f.entity, statusScopeJson: policy,

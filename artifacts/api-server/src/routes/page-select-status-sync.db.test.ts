@@ -589,6 +589,78 @@ after(async () => { await cleanup(); });
 
 test("page-local select mappings synchronize entity status atomically", async (t) => {
   await setup();
+  await t.test("multiple page_ref sources agree or roll back as one status mutation", async (t) => {
+    const [source] = await db.insert(pagesTable).values({
+      nameJson: { en: `${runId} second source` }, mirrorEntityId: ids.entity,
+    }).returning({ id: pagesTable.id });
+    const sourceId = source!.id;
+    try {
+      await db.insert(pageFieldsTable).values([
+        { pageId: sourceId, fieldKey: "stage", nameJson: { en: "Second stage" }, fieldType: "select",
+          optionsJson: [
+            { value: "done", labelJson: { en: "Done" }, statusId: ids.done },
+            { value: "archive", labelJson: { en: "Archive" }, statusId: ids.archive },
+          ] },
+        { pageId: ids.targetPage, fieldKey: "second_stage", nameJson: { en: "Second alias" }, fieldType: "page_ref",
+          pageRefConfigJson: { sourcePageId: sourceId, sourceFieldKey: "stage" } },
+        { pageId: ids.targetPage, fieldKey: "preserved", nameJson: { en: "Preserved" }, fieldType: "text" },
+      ]);
+      await db.update(rolesTable).set({
+        permissionsJson: permissions([ids.targetPage, ids.sourcePage, sourceId]),
+      }).where(eq(rolesTable.id, ids.role));
+      for (const scenario of ["agree", "sources-conflict", "direct-conflict", "target-denies"] as const) {
+        await t.test(scenario, async () => {
+          await reset();
+          await db.update(pagesTable).set({
+            statusScopeJson: scenario === "target-denies"
+              ? { statusIds: [ids.base], includeNoStatus: false, allowAllChanges: false } : null,
+          }).where(eq(pagesTable.id, ids.targetPage));
+          await db.insert(pageRecordValuesTable).values([
+            { pageId: ids.sourcePage, recordId: ids.one, valuesJson: { unrelated_value: "keep first" } },
+            { pageId: sourceId, recordId: ids.one, valuesJson: { preserved: "keep second" } },
+            { pageId: ids.targetPage, recordId: ids.one, valuesJson: { preserved: "keep target" } },
+          ]);
+          const snapshot = async () => ({
+            ...await pageRefRollbackSnapshot(ids.one),
+            secondSourceRow: await pageValue(sourceId, ids.one),
+          });
+          const before = await snapshot();
+          const response = await request(`/pages/${ids.targetPage}/records/${ids.one}/values`, {
+            valuesJson: {
+              source_stage: "done",
+              second_stage: scenario === "sources-conflict" ? "archive" : "done",
+              ...(scenario === "direct-conflict" ? { stage: "archive" } : {}),
+            },
+          }, "PUT");
+          const after = await snapshot();
+          if (scenario !== "agree") {
+            assert.equal(response.status, 400, JSON.stringify(response.body));
+            assert.match(String(response.body.error), scenario === "target-denies"
+              ? /This status is not available on this page/ : /different system statuses/);
+            assert.deepEqual(after, before, "all source/target maps, versions, audit and events must roll back");
+          } else {
+            assert.equal(response.status, 200, JSON.stringify(response.body));
+            assert.equal(after.statusId, ids.done);
+            assert.equal(after.version, before.version + 1);
+            assert.deepEqual(after.valuesJson, before.valuesJson);
+            assert.deepEqual(after.targetRow, before.targetRow);
+            assert.deepEqual(after.sourceRow!.valuesJson, { unrelated_value: "keep first", stage: "done" });
+            assert.deepEqual(after.secondSourceRow!.valuesJson, { preserved: "keep second", stage: "done" });
+            assert.equal(after.sourceRow!.version, before.sourceRow!.version + 1);
+            assert.equal(after.secondSourceRow!.version, before.secondSourceRow!.version + 1);
+            assert.equal(after.audits.filter(a => a.fieldKey === "__status__").length, 1);
+            assert.equal(after.events.filter(e => e.eventName === "status.changed").length, 1);
+          }
+        });
+      }
+    } finally {
+      await reset();
+      await db.update(pagesTable).set({ statusScopeJson: null }).where(eq(pagesTable.id, ids.targetPage));
+      await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) }).where(eq(rolesTable.id, ids.role));
+      await db.delete(pageFieldsTable).where(and(eq(pageFieldsTable.pageId, ids.targetPage), inArray(pageFieldsTable.fieldKey, ["second_stage", "preserved"])));
+      await db.delete(pagesTable).where(eq(pagesTable.id, sourceId));
+    }
+  });
   await t.test("page_ref mapped destinations use the initiating page but retain both access boundaries", async (t) => {
     await db.insert(pageFieldsTable).values({
       pageId: ids.targetPage, fieldKey: "untouched_target", nameJson: { en: "Preserved value" }, fieldType: "text",
