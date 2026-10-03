@@ -2314,6 +2314,107 @@ test("page-local select mappings synchronize entity status atomically", async (t
     }
   });
 
+  await t.test("dependent rename uses current page visibility after discovery", async (t) => {
+    const [renameField] = await db.insert(entityFieldsTable).values({
+      entityId: ids.entity, fieldKey: "rename_parent", nameJson: { en: "Rename parent" }, fieldType: "text",
+      dependencyConfigJson: { dependsOnFieldKey: "name" },
+    }).returning();
+    await db.insert(entityFieldsTable).values({
+      entityId: ids.entity, fieldKey: "rename_child", nameJson: { en: "Rename child" }, fieldType: "text",
+      dependencyConfigJson: { dependsOnFieldKey: "rename_parent" },
+    });
+    try {
+      for (const initiallyScoped of [false, true]) for (const mode of ["none", "partial", "all", "validation"] as const) {
+        await t.test(`${mode}, scoped=${initiallyScoped}`, async () => {
+          await reset();
+          await db.update(pagesTable).set({
+            statusScopeJson: initiallyScoped ? { statusIds: [ids.base, ids.done], includeNoStatus: false, allowAllChanges: true } : null,
+          }).where(eq(pagesTable.id, ids.targetPage));
+          await db.update(entityFieldsTable).set({
+            validationRulesJson: mode === "validation"
+              ? [{ applyToValues: ["New"], conditionFieldKey: "owner", operator: "equals", value: String(ids.user) }] : [],
+          }).where(eq(entityFieldsTable.id, renameField!.id));
+          for (const id of [ids.one, ids.two]) {
+            const existing = await record(id);
+            await db.update(entityRecordsTable).set({
+              statusId: id === ids.one ? ids.base : ids.done,
+              valuesJson: {
+                ...(existing.valuesJson as Record<string, unknown>), rename_parent: "Old", rename_child: "Keep",
+                // The second row fails only after the first was processed:
+                // validation must roll back the entire rename transaction.
+                ...(mode === "validation" && id === ids.two ? { owner: null } : {}),
+              },
+            }).where(eq(entityRecordsTable.id, id));
+          }
+          const before = await Promise.all([ids.one, ids.two].map(pageRefRollbackSnapshot));
+          let release!: () => void;
+          const unlocked = new Promise<void>(resolve => { release = resolve; });
+          let ready!: (pid: number) => void;
+          const locked = new Promise<number>(resolve => { ready = resolve; });
+          const holder = db.transaction(async tx => {
+            await tx.select().from(entityRecordsTable).where(eq(entityRecordsTable.id, ids.two)).for("update");
+            const result = await tx.execute(sql`SELECT pg_backend_pid() AS pid`);
+            ready(Number(result.rows[0].pid));
+            await unlocked;
+          });
+          let pending: ReturnType<typeof request> | undefined;
+          try {
+            const pid = await Promise.race([locked, holder.then(() => { throw new Error("Lock holder ended early"); })]);
+            pending = request(`/entities/${ids.entity}/fields/${renameField!.id}/rename-value`, {
+              pageId: ids.targetPage, oldValue: "Old", newValue: "New", parentValues: [{ field: "name", value: "Ready" }],
+            }, "POST");
+            let waiting = false;
+            const deadline = Date.now() + 5000;
+            while (Date.now() < deadline) {
+              const result = await db.execute(sql`SELECT pid FROM pg_stat_activity
+                WHERE ${pid} = ANY(pg_blocking_pids(pid)) AND query ILIKE '%entity_records%'`);
+              if (result.rows.length) { waiting = true; break; }
+              await new Promise(resolve => setTimeout(resolve, 10));
+            }
+            assert.ok(waiting, "rename must finish discovery and wait for record locks");
+            await db.update(pagesTable).set({
+              statusScopeJson: {
+                statusIds: mode === "none" ? [] : mode === "partial" ? [ids.base] : [ids.base, ids.done],
+                includeNoStatus: false, allowAllChanges: true,
+              },
+            }).where(eq(pagesTable.id, ids.targetPage));
+            release();
+            await holder;
+            const response = await pending;
+            assert.equal(response.status, mode === "validation" ? 422 : 200, JSON.stringify(response.body));
+            if (mode !== "validation") assert.deepEqual(response.body, { updated: mode === "none" ? 0 : mode === "partial" ? 1 : 2 });
+            const after = await Promise.all([ids.one, ids.two].map(pageRefRollbackSnapshot));
+            for (const [i, row] of after.entries()) {
+              if (mode === "none" || mode === "validation" || (mode === "partial" && i === 1)) {
+                assert.deepEqual(row, before[i]);
+              } else {
+                const expected: Record<string, unknown> = { ...(before[i].valuesJson as Record<string, unknown>), rename_parent: "New" };
+                delete expected.rename_child;
+                assert.deepEqual(row.valuesJson, expected);
+                assert.equal(row.version, before[i].version + 1);
+                assert.equal(row.statusId, before[i].statusId);
+                assert.deepEqual(row.sourceRow, before[i].sourceRow);
+                assert.deepEqual(row.targetRow, before[i].targetRow);
+                assert.equal(row.audits.length, 1);
+                assert.equal(row.audits[0].fieldKey, "rename_parent");
+                assert.equal(row.events.length, 1);
+                assert.equal(row.events[0].eventName, "record.updated");
+                assert.deepEqual(new Set((row.events[0].payloadJson as { changedFields: string[] }).changedFields), new Set(["rename_parent", "rename_child"]));
+              }
+            }
+          } finally {
+            release();
+            await holder.catch(() => undefined);
+            await pending?.catch(() => undefined);
+            await db.update(pagesTable).set({ statusScopeJson: null }).where(eq(pagesTable.id, ids.targetPage));
+            await reset();
+          }
+        });
+      }
+    } finally {
+      await db.delete(entityFieldsTable).where(and(eq(entityFieldsTable.entityId, ids.entity), inArray(entityFieldsTable.fieldKey, ["rename_child", "rename_parent"])));
+    }
+  });
   const lockPolicyCases = [
     { boundary: "source", fieldKey: "source_stage", visible: false, allowAllChanges: true, destination: true },
     ...["stage", "source_stage"].flatMap(fieldKey => [

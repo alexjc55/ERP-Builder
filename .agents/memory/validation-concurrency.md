@@ -11,6 +11,12 @@ Fixture automations must either be awaited to completion or omitted from tests t
 
 **How to apply:** Keep automation fixtures in automation/collaboration coverage, but omit them from short policy-only cases. Do not solve this with arbitrary cleanup delays or weaker cleanup assertions.
 
+A standalone browser-test pass is not proof that a release-gate timeout has been fixed.
+
+**Why:** A collaboration run passed in under 30 seconds after navigation-wait changes, but the full gate later exhausted even a doubled timeout during login and several Kanban scenarios. The navigation change did not establish the root cause.
+
+**How to apply:** Keep the shared execution lock, inspect actual phase timings and resource contention, and avoid repeatedly raising timeouts or claiming a fix from a standalone pass. Leave unrelated tests unchanged when the cause remains unproven.
+
 Keep a pass-through API route installed for the lifetime of browser tests that
 add and remove individual write barriers.
 

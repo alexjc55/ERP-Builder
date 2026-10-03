@@ -4057,8 +4057,14 @@ router.post(
           .where(and(where, inArray(entityRecordsTable.id, matches.map((match) => match.id)))!)
           .orderBy(asc(entityRecordsTable.id))
           .for("update");
+        // The discovery SQL includes a snapshot of page policy. Re-read it
+        // after the lock wait; rows no longer visible are no-ops, just like
+        // candidates whose value/parent changed before locking.
+        const lockedScope = await effectiveScopeFor(req, perms, entityId, body.data.pageId, tx);
         const changed: RenamedRow[] = [];
         for (const row of locked) {
+          if (lockedScope.scope === "own" &&
+              !await isRecordOwned(entityId, row, lockedScope.scopeFieldKeys, req.user!.userId, fields, tx)) continue;
           const before = (row.valuesJson as Record<string, unknown>) ?? {};
           let next = { ...before, [target.fieldKey]: newValue };
           if (JSON.stringify(before[target.fieldKey] ?? null) !== JSON.stringify(newValue)) {

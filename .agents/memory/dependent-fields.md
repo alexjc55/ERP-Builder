@@ -12,6 +12,17 @@ record's **parent-chain** values (closest parent + all ancestors).
 
 ## Invariants that must stay consistent
 
+- **Rename discovers candidates first, then skips rows that lose page visibility
+  while waiting for record locks.** It returns only the count actually renamed;
+  zero remaining visible candidates is a successful no-op, not a disclosure of
+  hidden rows.
+  **Why:** Rename already treats candidates whose parent/value changed before
+  locking as no-ops. Page-policy changes must have the same narrowing behavior,
+  and destination permission must not grant row visibility.
+  **How to apply:** Reload page scope through the transaction after record locks,
+  before descendant clearing or validation. Still roll back all eligible changes
+  if a later eligible row fails validation.
+
 - **Chain computation is duplicated client+server and must stay in lockstep.**
   Server `dependencyAncestorKeys` (records.ts) and client `dependencyChainKeys`
   (EntityRecords.tsx) walk the same closest-parent-first, cycle-guarded chain.
