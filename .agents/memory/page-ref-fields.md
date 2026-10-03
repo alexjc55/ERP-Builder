@@ -21,8 +21,8 @@ For a mapped select edited through an alias, destination policy belongs to the i
 
 **How to apply:** Test differing source/target selections and both all-destinations settings. A source-inaccessible row must reject the whole batch even when the initiating page allows the destination. Preserve the target map and unrelated source values, and never create an alias copy.
 
-Rechecking source row access after a record lock must reload the source page's status policy, not reuse the request's preflight scope.
+Rechecking row access after a record lock must reload both the initiating page's and the source page's status policies, not reuse the request's preflight scope.
 
-**Why:** A page policy can change while a write waits for the record lock. Even an initially unrestricted source can become restricted; checking the locked record against cached metadata would still permit the write.
+**Why:** A page policy can change while a write waits for the record lock. Even an initially unrestricted page can become restricted; checking the locked record against cached metadata would still permit the write. Allowing destination statuses does not grant visibility of the original row.
 
-**How to apply:** Read current source policy through the transaction after acquiring record locks for both single and bulk alias writes. Use a real observed PostgreSQL lock wait in regression tests. Preserve generic not-found denials and full rollback; this is a row-read boundary, independent of allowed destination statuses.
+**How to apply:** Read current policies through the transaction after acquiring record locks for both single and bulk page-local writes, including direct fields and aliases. Use a real observed PostgreSQL lock wait in regression tests. Preserve generic not-found denials and full rollback; this is a row-read boundary, independent of allowed destination statuses.

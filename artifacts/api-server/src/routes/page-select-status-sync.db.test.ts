@@ -2314,14 +2314,25 @@ test("page-local select mappings synchronize entity status atomically", async (t
     }
   });
 
-  for (const bulk of [false, true]) for (const initiallyScoped of [false, true]) {
-    await t.test(`page_ref reloads source status policy after record lock: bulk=${bulk}, scoped=${initiallyScoped}`, async () => {
+  const lockPolicyCases = [
+    { boundary: "source", fieldKey: "source_stage", visible: false, allowAllChanges: true, destination: true },
+    ...["stage", "source_stage"].flatMap(fieldKey => [
+      { boundary: "target", fieldKey, visible: false, allowAllChanges: true, destination: true },
+      { boundary: "target", fieldKey, visible: false, allowAllChanges: false, destination: true },
+      { boundary: "target", fieldKey, visible: true, allowAllChanges: true, destination: false },
+      { boundary: "target", fieldKey, visible: true, allowAllChanges: false, destination: false },
+      { boundary: "target", fieldKey, visible: true, allowAllChanges: false, destination: true },
+    ]),
+  ];
+  for (const scenario of lockPolicyCases) for (const bulk of [false, true]) for (const initiallyScoped of [false, true]) {
+    await t.test(`reload page policy after record lock: ${JSON.stringify(scenario)}, bulk=${bulk}, scoped=${initiallyScoped}`, async () => {
       await reset();
+      const policyPageId = scenario.boundary === "source" ? ids.sourcePage : ids.targetPage;
       const recordIds = bulk ? [ids.one, ids.two] : [ids.one];
       await db.update(pagesTable).set({
         statusScopeJson: initiallyScoped
           ? { statusIds: [ids.base, ids.done], includeNoStatus: true, allowAllChanges: true } : null,
-      }).where(eq(pagesTable.id, ids.sourcePage));
+      }).where(eq(pagesTable.id, policyPageId));
       await db.insert(pageRecordValuesTable).values(recordIds.flatMap(recordId => [
         { pageId: ids.sourcePage, recordId, valuesJson: { unrelated_value: "keep" } },
         { pageId: ids.targetPage, recordId, valuesJson: { stage: null } },
@@ -2343,9 +2354,9 @@ test("page-local select mappings synchronize entity status atomically", async (t
         const pid = await Promise.race([locked, holder.then(() => { throw new Error("Lock holder ended early"); })]);
         pending = bulk
           ? request(`/pages/${ids.targetPage}/records/bulk-field-values`, {
-            fieldKey: "source_stage", value: "done", recordIds,
+            fieldKey: scenario.fieldKey, value: "done", recordIds,
           }, "POST")
-          : request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { source_stage: "done" } }, "PUT");
+          : request(`/pages/${ids.targetPage}/records/${ids.one}/values`, { valuesJson: { [scenario.fieldKey]: "done" } }, "PUT");
         // Observe a real blocked backend; no timer-based assumption that preflight ran.
         let waiting = false;
         const deadline = Date.now() + 5000;
@@ -2357,20 +2368,40 @@ test("page-local select mappings synchronize entity status atomically", async (t
         }
         assert.ok(waiting, "page_ref request must reach its record lock before policy changes");
         await db.update(pagesTable).set({
-          statusScopeJson: { statusIds: [ids.done], includeNoStatus: false, allowAllChanges: true },
-        }).where(eq(pagesTable.id, ids.sourcePage));
+          statusScopeJson: {
+            statusIds: [...(scenario.visible ? [ids.base] : []), ...(scenario.destination ? [ids.done] : [])],
+            includeNoStatus: false, allowAllChanges: scenario.allowAllChanges,
+          },
+        }).where(eq(pagesTable.id, policyPageId));
         release();
         await holder;
         const response = await pending;
-        assert.equal(response.status, 404, JSON.stringify(response.body));
-        assert.ok(!JSON.stringify(response.body).includes(`${runId} source`));
-        assert.ok(!JSON.stringify(response.body).includes('"stage"'));
-        assert.deepEqual(await Promise.all(recordIds.map(pageRefRollbackSnapshot)), before);
+        const after = await Promise.all(recordIds.map(pageRefRollbackSnapshot));
+        if (!scenario.visible || (!scenario.allowAllChanges && !scenario.destination)) {
+          assert.equal(response.status, !scenario.visible ? 404 : bulk ? 403 : 400, JSON.stringify(response.body));
+          assert.match(String(response.body.error), !scenario.visible
+            ? /^(Record not found|Запись \d+: запись недоступна)$/ : /This status is not available on this page/);
+          assert.deepEqual(after, before);
+        } else {
+          assert.equal(response.status, 200, JSON.stringify(response.body));
+          for (const [i, row] of after.entries()) {
+            assert.equal(row.statusId, ids.done);
+            assert.equal(row.version, before[i].version + 1);
+            const alias = scenario.fieldKey === "source_stage";
+            const written = alias ? row.sourceRow : row.targetRow;
+            const previous = alias ? before[i].sourceRow : before[i].targetRow;
+            assert.deepEqual(written!.valuesJson, { ...(previous!.valuesJson as Record<string, unknown>), stage: "done" });
+            assert.equal(written!.version, previous!.version + 1);
+            assert.deepEqual(alias ? row.targetRow : row.sourceRow, alias ? before[i].targetRow : before[i].sourceRow);
+            assert.equal(row.audits.filter(a => a.fieldKey === "__status__").length, 1);
+            assert.equal(row.events.filter(e => e.eventName === "status.changed").length, 1);
+          }
+        }
       } finally {
         release();
         await holder.catch(() => undefined);
         await pending?.catch(() => undefined);
-        await db.update(pagesTable).set({ statusScopeJson: null }).where(eq(pagesTable.id, ids.sourcePage));
+        await db.update(pagesTable).set({ statusScopeJson: null }).where(eq(pagesTable.id, policyPageId));
         await reset();
       }
     });

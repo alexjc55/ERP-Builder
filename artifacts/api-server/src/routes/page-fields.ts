@@ -1904,11 +1904,12 @@ router.put("/pages/:pageId/records/:recordId/values", requireAuth, async (req, r
         .where(and(eq(entityRecordsTable.id, recordId), eq(entityRecordsTable.entityId, entityId)))
         .for("update");
       if (!lockedEntityRecord) throw new LockedPageValidationError("Record not found");
+      const lockedTargetScope = await effectiveScopeFor(req, perms, entityId, pageId, tx);
       if (
-        scope === "own" &&
-        !(await isRecordOwned(entityId, lockedEntityRecord, scopeFieldKeys, req.user!.userId, entityFields, tx))
+        lockedTargetScope.scope === "own" &&
+        !(await isRecordOwned(entityId, lockedEntityRecord, lockedTargetScope.scopeFieldKeys, req.user!.userId, entityFields, tx))
       ) {
-        throw new LockedPageValidationError("Record not found");
+        throw new LockedPageNotFoundError("Record not found");
       }
       if (
         lockedEntityRecord.statusId != null &&
@@ -2427,7 +2428,6 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
   }
 
   const requested = isEmpty(value) ? undefined : value;
-  const targetScope = await effectiveScopeFor(req, perms, entityId, pageId);
   let writePageId = pageId;
   let writeField = field;
   let writeFields = fields;
@@ -2517,6 +2517,7 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
         .orderBy(asc(entityRecordsTable.id))
         .for("update");
       const recordsById = new Map(records.map((record) => [record.id, record]));
+      const lockedTargetScope = await effectiveScopeFor(req, perms, entityId, pageId, tx);
       if (sourceScope) {
         sourceScope = await effectiveScopeFor(req, perms, entityId, writePageId, tx);
       }
@@ -2524,13 +2525,14 @@ router.post("/pages/:pageId/records/bulk-field-values", requireAuth, async (req,
         const record = recordsById.get(recordId);
         if (!record) throw new BulkPageFieldUpdateError(404, recordId, "запись не найдена");
         if (
-          targetScope.scope === "own" &&
+          lockedTargetScope.scope === "own" &&
           !(await isRecordOwned(
             entityId,
             record,
-            targetScope.scopeFieldKeys,
+            lockedTargetScope.scopeFieldKeys,
             req.user!.userId,
             entityFields,
+            tx,
           ))
         ) {
           throw new BulkPageFieldUpdateError(404, recordId, "запись недоступна");
