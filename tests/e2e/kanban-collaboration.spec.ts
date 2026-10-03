@@ -435,6 +435,130 @@ for (const scope of ["own", "filter", "mixed"] as const) {
   }
 }
 
+for (const mode of ["table", "kanban"] as const) {
+  test(`open page status policy refresh: ${mode}`, async ({ browser, page }) => {
+    test.setTimeout(90_000);
+    await guard(page);
+    await setup(true);
+    const f = fixture!;
+    const contexts = await Promise.all([browser.newContext(), browser.newContext()]);
+    let release = () => {};
+    try {
+      await db.update(rolesTable).set({ permissionsJson: {
+        ...NO_ACCESS_PERMS, superAdmin: true,
+      } }).where(eq(rolesTable.id, f.bobRole));
+      await db.update(viewsTable).set({ configJson: {
+        viewType: mode, ...(mode === "kanban" ? { kanban: { titleField: "title", fields: ["summary"] } } : {}),
+      } }).where(eq(viewsTable.entityId, f.entity));
+      await db.update(entityRecordsTable).set({ statusId: f.working }).where(eq(entityRecordsTable.id, f.records[1]));
+      const [employee, admin] = await Promise.all(contexts.map(c => c.newPage()));
+      for (const [index, p] of [employee, admin].entries()) {
+        const token = signToken({ userId: f.users[index], roleId: index ? f.bobRole : f.role });
+        await p.addInitScript(token => localStorage.setItem("erp_token", token), token);
+        await p.goto(path);
+      }
+      const row = (id: number) => mode === "kanban"
+        ? employee.getByTestId(`card-kanban-${id}`)
+        : employee.locator(`[data-testid="record-cell"][data-record-id="${id}"][data-field-key="title"]`);
+      await expect(row(f.records[1])).toBeVisible();
+      await expect(employee.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "connected");
+      const origin = await employee.evaluate(() => performance.timeOrigin);
+      const updatePolicy = async (policy: { statusIds: number[]; includeNoStatus: boolean; allowAllChanges: boolean } | null) => {
+        const response = await admin.request.put(`/api/pages/${f.page}`, {
+          headers: { Authorization: `Bearer ${signToken({ userId: f.users[1], roleId: f.bobRole })}` },
+          data: { statusScopeJson: policy },
+        });
+        expect(response.ok(), await response.text()).toBe(true);
+      };
+      const refresh = async () => {
+        await expect(employee.getByTestId("button-refresh-data-desktop")).toBeEnabled();
+        await employee.getByTestId("button-refresh-data-desktop").click();
+        await expect(employee.getByTestId("button-refresh-data-desktop")).toBeEnabled();
+      };
+      const checkDestination = async (available: boolean) => {
+        if (mode === "kanban") {
+          await employee.getByTestId(`button-actions-kanban-${f.records[0]}`).click();
+          await expect(employee.getByRole("menuitem", { name: "Working", exact: true })).toHaveCount(available ? 1 : 0);
+          await employee.keyboard.press("Escape");
+        } else {
+          await employee.locator(`[data-testid="record-edit-button"][data-record-id="${f.records[0]}"]`).click();
+          await employee.getByRole("dialog").getByRole("combobox").click();
+          await expect(employee.getByRole("option", { name: "Working", exact: true })).toHaveCount(available ? 1 : 0);
+          await employee.keyboard.press("Escape");
+          await employee.keyboard.press("Escape");
+        }
+      };
+      // Hold an already-authorized old response; the server bytes remain real.
+      let seen!: () => void;
+      const captured = new Promise<void>(resolve => { seen = resolve; });
+      const barrier = new Promise<void>(resolve => { release = resolve; });
+      let held = false;
+      let delivered!: () => void;
+      const oldDelivered = new Promise<void>(resolve => { delivered = resolve; });
+      await employee.route(`**/api/entities/${f.entity}/records/query`, async route => {
+        if (held || (mode === "kanban" && route.request().postDataJSON().statusIds?.[0] !== f.working)) return route.continue();
+        held = true;
+        const response = await route.fetch();
+        seen();
+        await barrier;
+        await route.fulfill({ response });
+        delivered();
+      });
+      // Trigger the old read via a real event from the other session, leaving
+      // global refresh available while that response is held.
+      const changed = await admin.request.put(`/api/records/${f.records[0]}`, {
+        headers: { Authorization: `Bearer ${signToken({ userId: f.users[1], roleId: f.bobRole })}` },
+        data: { expectedVersion: 1, valuesJson: { title: "Refreshed card" } },
+      });
+      expect(changed.ok(), await changed.text()).toBe(true);
+      await captured;
+      const selected = { statusIds: [f.ready], includeNoStatus: false, allowAllChanges: false };
+      await updatePolicy(selected);
+      await refresh();
+      await expect(row(f.records[1])).toHaveCount(0);
+      await expect(row(f.records[0])).toBeVisible();
+      release();
+      await oldDelivered;
+      // Let the fulfilled response and React's scheduled work reach the DOM,
+      // rather than asserting absence before the old result is processed.
+      await employee.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      await expect(row(f.records[1])).toHaveCount(0);
+      if (mode === "kanban") await expect(employee.getByTestId(`text-lane-count-s:${f.ready}`)).toHaveText("5");
+      else await expect(employee.getByText("Shown 1–5 of 5", { exact: true })).toBeVisible();
+      await employee.getByRole("button", { name: "Status", exact: true }).click();
+      await expect(employee.getByRole("dialog").getByText("Working", { exact: true })).toHaveCount(0);
+      await employee.keyboard.press("Escape");
+      await checkDestination(false);
+      await updatePolicy({ ...selected, allowAllChanges: true });
+      await refresh();
+      await checkDestination(true);
+      await expect(row(f.records[1])).toHaveCount(0);
+      await updatePolicy({ ...selected, statusIds: [] });
+      await refresh();
+      await expect(row(f.records[0])).toHaveCount(0);
+      if (mode === "kanban") await expect(employee.locator("[data-kanban-lane]")).toHaveCount(0);
+      else await expect(employee.getByText("Shown 1–5 of 5", { exact: true })).toHaveCount(0);
+      await updatePolicy(null);
+      await refresh();
+      await expect(row(f.records[0])).toBeVisible();
+      await expect(row(f.records[1])).toBeVisible();
+      if (mode === "kanban") {
+        await expect(employee.getByTestId(`text-lane-count-s:${f.ready}`)).toHaveText("5");
+        await expect(employee.getByTestId(`text-lane-count-s:${f.working}`)).toHaveText("1");
+      } else await expect(employee.getByText("Shown 1–6 of 6", { exact: true })).toBeVisible();
+      await employee.getByRole("button", { name: "Status", exact: true }).click();
+      await expect(employee.getByRole("dialog").getByText("Working", { exact: true })).toBeVisible();
+      await employee.keyboard.press("Escape");
+      await checkDestination(true);
+      expect(await employee.evaluate(() => performance.timeOrigin)).toBe(origin);
+    } finally {
+      release();
+      await Promise.all(contexts.map(c => c.close()));
+      await cleanup();
+    }
+  });
+}
+
 const lane = (page: Page, status: number) => page.getByTestId(`lane-kanban-s:${status}`);
 const card = (page: Page, record: number) => page.getByTestId(`card-kanban-${record}`);
 async function move(page: Page, record: number, destination: string) {
