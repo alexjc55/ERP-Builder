@@ -436,6 +436,111 @@ for (const scope of ["own", "filter", "mixed"] as const) {
   }
 }
 
+for (const mirror of [false, true]) {
+  test(`create mapped status respects page scope: mirror=${mirror}`, async ({ page }) => {
+    await guard(page);
+    await setup();
+    const f = fixture!;
+    let mirrorId: number | undefined;
+    try {
+      if (mirror) {
+        const [created] = await db.insert(pagesTable).values({
+          path: `${path}-create`, nameJson: { en: key }, mirrorEntityId: f.entity,
+        }).returning();
+        mirrorId = created.id;
+      }
+      const policyPageId = mirrorId ?? f.page;
+      await db.update(rolesTable).set({ permissionsJson: {
+        ...NO_ACCESS_PERMS, pageIds: [f.page, ...(mirrorId ? [mirrorId] : [])],
+        records: { [f.entity]: { view: true, create: true, update: false, delete: false, scope: "all" } },
+      } }).where(eq(rolesTable.id, f.role));
+      await db.update(entityStatusesTable).set({ isDefault: true }).where(eq(entityStatusesTable.id, f.ready));
+      await db.update(entitiesTable).set({ allowNoStatus: true }).where(eq(entitiesTable.id, f.entity));
+      await db.insert(entityFieldsTable).values({
+        entityId: f.entity, fieldKey: "mapped_stage", nameJson: { en: "Mapped stage" }, fieldType: "select",
+        optionsJson: [{ value: "working", labelJson: { en: "Working" }, statusId: f.working }],
+      });
+      const headers = { Authorization: `Bearer ${signToken({ userId: f.users[0], roleId: f.role })}` };
+      const snapshot = async () => ({
+        rows: await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.entityId, f.entity)).orderBy(entityRecordsTable.id),
+        audit: await db.select().from(auditLogTable).where(eq(auditLogTable.entityId, f.entity)).orderBy(auditLogTable.id),
+        events: await db.select().from(systemEventsTable).where(eq(systemEventsTable.entityId, f.entity)).orderBy(systemEventsTable.id),
+      });
+      const cases: Array<{
+        name: string; statuses: number[]; mapped?: boolean; explicit?: number | null;
+        all?: boolean; includeNull?: boolean; expected: number | null; code: number;
+      }> = [
+        { name: "default within selection", statuses: [f.ready], expected: f.ready, code: 201 },
+        { name: "default outside selection", statuses: [f.working], expected: f.ready, code: 403 },
+        { name: "default all destinations", statuses: [f.working], all: true, expected: f.ready, code: 201 },
+        { name: "explicit within selection", statuses: [f.working], explicit: f.working, expected: f.working, code: 201 },
+        { name: "explicit outside selection", statuses: [f.ready], explicit: f.working, expected: f.working, code: 403 },
+        { name: "mapped overrides default", statuses: [f.working], mapped: true, expected: f.working, code: 201 },
+        { name: "matching explicit mapping", statuses: [f.working], mapped: true, explicit: f.working, expected: f.working, code: 201 },
+        { name: "conflicting explicit mapping", statuses: [f.ready, f.working], mapped: true, explicit: f.ready, expected: f.working, code: 422 },
+        { name: "null conflicts with mapping", statuses: [f.working], mapped: true, explicit: null, includeNull: true, expected: f.working, code: 422 },
+        { name: "mapping outside selection", statuses: [f.ready], mapped: true, expected: f.working, code: 403 },
+        { name: "matching mapping outside selection", statuses: [f.ready], mapped: true, explicit: f.working, expected: f.working, code: 403 },
+        { name: "mapping all destinations", statuses: [f.ready], mapped: true, all: true, expected: f.working, code: 201 },
+        { name: "matching mapping all destinations", statuses: [f.ready], mapped: true, explicit: f.working, all: true, expected: f.working, code: 201 },
+        { name: "conflict still denied with all destinations", statuses: [f.ready], mapped: true, explicit: f.ready, all: true, expected: f.working, code: 422 },
+        { name: "empty selection denies default", statuses: [], expected: f.ready, code: 403 },
+        { name: "empty selection denies mapping", statuses: [], mapped: true, expected: f.working, code: 403 },
+        { name: "empty selection with all destinations", statuses: [], mapped: true, all: true, expected: f.working, code: 201 },
+        { name: "no status included", statuses: [], includeNull: true, explicit: null, expected: null, code: 201 },
+        { name: "no status excluded", statuses: [f.ready], explicit: null, expected: null, code: 403 },
+      ];
+      for (const scenario of cases) await test.step(scenario.name, async () => {
+        await db.update(pagesTable).set({ statusScopeJson: {
+          statusIds: scenario.statuses, includeNoStatus: scenario.includeNull ?? false, allowAllChanges: scenario.all ?? false,
+        } }).where(eq(pagesTable.id, policyPageId));
+        const before = await snapshot();
+        const valuesJson = { title: scenario.name, ...(scenario.mapped ? { mapped_stage: "working" } : {}) };
+        const response = await page.request.post(`/api/entities/${f.entity}/records`, {
+          headers, data: {
+            valuesJson, ...(mirrorId ? { pageId: mirrorId } : {}),
+            ...(scenario.explicit !== undefined ? { statusId: scenario.explicit } : {}),
+          },
+        });
+        expect(response.status(), await response.text()).toBe(scenario.code);
+        const body = await response.json();
+        if (scenario.code !== 201) {
+          expect(body.error).toContain(scenario.code === 403
+            ? "This status is not available on this page"
+            : "conflicts with the explicitly selected system status");
+          expect(await snapshot()).toEqual(before);
+          return;
+        }
+        f.records.push(body.id);
+        const after = await snapshot();
+        expect(after.rows).toHaveLength(before.rows.length + 1);
+        expect(after.rows.filter(row => row.id !== body.id)).toEqual(before.rows);
+        expect(after.rows.find(row => row.id === body.id)).toMatchObject({
+          statusId: scenario.expected, version: 1, valuesJson,
+        });
+        expect(body.statusId).toBe(scenario.expected);
+        expect(after.events.filter(event => event.recordId === body.id).map(event => event.eventName)).toContain("record.created");
+        expect(after.audit.some(entry => entry.recordId === body.id && entry.fieldKey === "title")).toBe(true);
+        if (scenario.expected != null) expect(after.audit.some(entry =>
+          entry.recordId === body.id && entry.fieldKey === "__status__" && entry.newValue === String(scenario.expected))).toBe(true);
+        const visible = await page.request.post(`/api/entities/${f.entity}/records/query`, {
+          headers, data: { pageSize: 100, ...(mirrorId ? { pageId: mirrorId } : {}) },
+        });
+        expect(visible.ok(), await visible.text()).toBe(true);
+        const result = await visible.json();
+        const shouldAppear = scenario.expected === null ? !!scenario.includeNull : scenario.statuses.includes(scenario.expected);
+        expect(result.data.some((row: { id: number }) => row.id === body.id)).toBe(shouldAppear);
+      });
+    } finally {
+      if (mirrorId != null) {
+        await db.delete(pagesTable).where(eq(pagesTable.id, mirrorId));
+        expect(await db.select().from(pagesTable).where(eq(pagesTable.id, mirrorId))).toHaveLength(0);
+      }
+      await cleanup();
+    }
+  });
+}
+
 for (const fieldSource of ["entity", "page"] as const) {
   for (const bulk of [false, true]) {
     for (const destinationSelected of [false, true]) {
