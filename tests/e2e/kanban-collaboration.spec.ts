@@ -700,6 +700,124 @@ async function apiMove(page: Page, record: number, statusId: number, expectedVer
   expect(response.status()).toBe(200);
 }
 
+for (const fails of [false, true]) {
+  for (const scope of ["selected", "empty", "all", "destinations"] as const) {
+    test(`pending move page policy: ${scope}, conflict=${fails}`, async ({ browser, page }) => {
+      test.setTimeout(90_000);
+      await guard(page);
+      await setup(true);
+      const f = fixture!;
+      const context = await browser.newContext();
+      let release = () => {};
+      try {
+        await db.update(rolesTable).set({ permissionsJson: { ...NO_ACCESS_PERMS, superAdmin: true } })
+          .where(eq(rolesTable.id, f.bobRole));
+        const employee = await context.newPage();
+        const employeeToken = signToken({ userId: f.users[0], roleId: f.role });
+        const adminHeaders = { Authorization: `Bearer ${signToken({ userId: f.users[1], roleId: f.bobRole })}` };
+        const selected = { statusIds: [f.ready], includeNoStatus: false, allowAllChanges: false };
+        // Destination-only case keeps the visible lane set unchanged.
+        if (scope === "destinations") await db.update(pagesTable).set({
+          statusScopeJson: { ...selected, allowAllChanges: true },
+        }).where(eq(pagesTable.id, f.page));
+        await employee.addInitScript(token => localStorage.setItem("erp_token", token), employeeToken);
+        await employee.goto(path);
+        const record = f.records[0];
+        await expect(card(employee, record)).toBeVisible();
+        await expect(employee.getByTestId("collab-connection-status")).toHaveAttribute("data-state", "connected");
+        const origin = await employee.evaluate(() => performance.timeOrigin);
+        let captured!: () => void;
+        const seen = new Promise<void>(resolve => { captured = resolve; });
+        const gate = new Promise<void>(resolve => { release = resolve; });
+        let delivered!: () => void;
+        const delivery = new Promise<void>(resolve => { delivered = resolve; });
+        let status = 0;
+        await employee.route(`**/api/records/${record}`, async route => {
+          if (route.request().method() !== "PUT") return route.continue();
+          expect(route.request().postDataJSON()).toMatchObject({ expectedVersion: 1, statusId: f.working });
+          if (fails) {
+            // Advance CAS through a second authorized session, never by rewriting
+            // the response or mutating the database version behind the API.
+            const winner = await page.request.put(`/api/records/${record}`, {
+              headers: adminHeaders, data: { valuesJson: { title: "Concurrent edit" }, expectedVersion: 1 },
+            });
+            expect(winner.ok(), await winner.text()).toBe(true);
+          }
+          const response = await route.fetch();
+          status = response.status();
+          if (fails) {
+            // Keep the source row visible until the real stale write reaches
+            // CAS (otherwise page read restrictions correctly return 404).
+            const moved = await page.request.put(`/api/records/${record}`, {
+              headers: adminHeaders,
+              data: { statusId: f.working, expectedVersion: (await stored(record)).version },
+            });
+            expect(moved.ok(), await moved.text()).toBe(true);
+          }
+          captured();
+          await gate;
+          await route.fulfill({ response });
+          delivered();
+        });
+        await move(employee, record, "Working");
+        await seen;
+        expect(status).toBe(fails ? 409 : 200);
+        const policy = scope === "all" ? null : {
+          ...selected, statusIds: scope === "empty" ? [] : selected.statusIds,
+        };
+        // Force an actual selected -> all transition, not a no-op save.
+        if (scope === "all") {
+          const intermediate = await page.request.put(`/api/pages/${f.page}`, {
+            headers: adminHeaders, data: { statusScopeJson: { ...selected, statusIds: [] } },
+          });
+          expect(intermediate.ok(), await intermediate.text()).toBe(true);
+          await expect(employee.locator("[data-kanban-lane]")).toHaveCount(0);
+        }
+        const changed = await page.request.put(`/api/pages/${f.page}`, {
+          headers: adminHeaders, data: { statusScopeJson: policy },
+        });
+        expect(changed.ok(), await changed.text()).toBe(true);
+        await employee.getByTestId("button-refresh-data-desktop").click();
+        await expect(employee.getByTestId("button-refresh-data-desktop")).toBeEnabled();
+        const verify = async () => {
+          const authoritative = await page.request.post(`/api/entities/${f.entity}/records/query`, {
+            headers: { Authorization: `Bearer ${employeeToken}` },
+            data: { pageSize: 100 },
+          });
+          expect(authoritative.ok(), await authoritative.text()).toBe(true);
+          const result = await authoritative.json();
+          const expectedTotal = scope === "all" ? 6 : scope === "empty" ? 0 : 5;
+          expect(result.total).toBe(expectedTotal);
+          await expect(employee.locator("[data-kanban-card]")).toHaveCount(expectedTotal);
+          for (const id of f.records) {
+            await expect(card(employee, id)).toHaveCount(result.data.some((row: { id: number }) => row.id === id) ? 1 : 0);
+          }
+          if (scope === "empty") await expect(employee.locator("[data-kanban-lane]")).toHaveCount(0);
+          else {
+            await expect(employee.getByTestId(`text-lane-count-s:${f.ready}`)).toHaveText("5");
+            if (scope === "all") await expect(employee.getByTestId(`text-lane-count-s:${f.working}`)).toHaveText("1");
+            else await expect(lane(employee, f.working)).toHaveCount(0);
+          }
+        };
+        await verify();
+        const before = await stored(record);
+        release();
+        await delivery;
+        // Includes the late response callback, rollback and debounced refresh.
+        await employee.waitForTimeout(1_200);
+        await verify();
+        expect(await stored(record)).toEqual(before);
+        expect(before.statusId).toBe(f.working);
+        expect(await employee.evaluate(() => performance.timeOrigin)).toBe(origin);
+      } finally {
+        release();
+        await context.close();
+        await cleanup();
+      }
+    });
+  }
+}
+
 test("real independent Kanban sessions: stale CAS, SSE lanes, transition effects and pending filter epochs", async ({ browser, page }) => {
   test.setTimeout(180_000);
   const contexts = await Promise.all([browser.newContext(), browser.newContext()]);

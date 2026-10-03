@@ -93,6 +93,12 @@ surviving record once whenever its effective state changes. On a client 409,
 keep the local draft mounted, refresh the server version, and reset only the
 one-shot submit guard so the user can retry without retyping.
 
+Conflict testing must preserve the stale writer's read access until the stale request reaches CAS.
+
+**Why:** If a competing move first removes the row from the writer's page, a not-found denial is correct and must not reveal the hidden row's current version. That is different from testing a version conflict.
+
+**How to apply:** For a real delayed conflict response, advance the version with a still-visible edit, obtain the stale write's actual response, then move the authoritative row outside the page before releasing that response to the browser.
+
 When a nested editor commits a version-changing mutation before its parent form
 is saved (for example, a relation picker writing `record_links`), the mutation
 must return the resulting base-record version and the parent must synchronously
