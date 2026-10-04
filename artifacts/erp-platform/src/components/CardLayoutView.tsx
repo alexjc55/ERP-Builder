@@ -124,7 +124,7 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
     <div
       data-testid="card-layout"
       data-card-style={style}
-      className="min-w-0"
+      className="erp-card-form min-w-0"
       style={appearance.root}
     >
       {body}

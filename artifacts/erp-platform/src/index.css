@@ -196,3 +196,14 @@
     pointer-events: none;
   }
 }
+
+/* Card/section colors are surfaces, not input colors. Keep real controls
+   opaque like the builder's field previews; do not restyle other app forms,
+   checkboxes, switches, action buttons, or portaled picker contents. */
+.erp-card-form input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]),
+.erp-card-form textarea,
+.erp-card-form select,
+.erp-card-form button[role="combobox"],
+.erp-card-form button.w-full[aria-haspopup="dialog"] {
+  background-color: hsl(var(--card));
+}

@@ -196,7 +196,7 @@ test("runtime: tabs/columns, snapshot survives a publication, view is read-only,
   const errors: string[] = [];
   page.on("pageerror", e => errors.push(e.message));
   await auth(page);
-  let currentLayout = { ...layout("Lines"), style: "custom", customStyle: { background: "#123456", textColor: "#ffffff" } };
+  let currentLayout = { ...layout("Lines"), style: "custom", customStyle: { background: "#123456", sectionBackground: "#d2e9ff", textColor: "#ffffff" } };
   const resolves: Record<string, any>[] = [];
   const writes: string[] = [];
   const record = { id: 50, entityId: A, statusId: null, valuesJson: { title: "Order 50", note: "Rush" }, version: 4, archivedAt: null, createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z" };
@@ -233,6 +233,8 @@ test("runtime: tabs/columns, snapshot survives a publication, view is read-only,
   await expect(page.getByTestId("card-text-blk_text")).toHaveText("Fill the order header");
   // View is immutable: the title input is disabled, no save, an explicit Edit button.
   await expect(page.getByTestId("form-field-title").locator("input")).toBeDisabled();
+  await expect(page.getByTestId("form-field-title").locator("input")).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(page.getByTestId("card-section-sec_main")).toHaveCSS("background-color", "rgb(210, 233, 255)");
   await expect(page.getByTestId("record-dialog-save")).toHaveCount(0);
 
   // Related table on the second tab: allowed record rendered, 403 counted, not hidden as error.
@@ -245,6 +247,7 @@ test("runtime: tabs/columns, snapshot survives a publication, view is read-only,
   // Switch to edit; type; a publication happens meanwhile; the open form keeps its layout and the typed value.
   await page.getByTestId("record-dialog-to-edit").click();
   await page.getByTestId("card-tab-tab_main").click();
+  await expect(page.getByTestId("form-field-title").locator("input")).toHaveCSS("background-color", "rgb(255, 255, 255)");
   const title = page.getByTestId("form-field-title").locator("input");
   await expect(title).toBeEnabled();
   await expect(page.getByTestId("form-field-title").locator("label")).toHaveCSS("color", "rgb(255, 255, 255)");
