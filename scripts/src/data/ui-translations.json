@@ -1,4 +1,5 @@
 [
+  { "key": "cards.moveSectionTab", "ru": "Перенести на вкладку", "en": "Move to tab", "he": "העבר ללשונית" },
   { "key": "pages.mainTab", "ru": "Основные", "en": "Main", "he": "ראשיים" },
   { "key": "pages.systemTab", "ru": "Системные", "en": "System", "he": "מערכת" },
   { "key": "pages.pageCategories", "ru": "Категории страниц", "en": "Page categories", "he": "קטגוריות עמודים" },

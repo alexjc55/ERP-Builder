@@ -785,6 +785,30 @@ function TemplateEditor({ id }: { id: number }) {
                     </button>
                     {!readOnly && (
                       <div className="flex items-center gap-0.5">
+                        <Select value="" disabled={layout.tabs.length < 2} onValueChange={targetId => {
+                          if (targetId === tab.id) return;
+                          change(l => {
+                            const source = l.tabs.find(x => x.id === tab.id);
+                            const section = source?.sections.find(s => s.id === sec.id);
+                            const target = l.tabs.find(x => x.id === targetId);
+                            if (!section || !target || target.sections.length >= 30) return l;
+                            return { ...l, tabs: l.tabs.map(x =>
+                              x.id === tab.id ? { ...x, sections: x.sections.filter(s => s.id !== sec.id) }
+                                : x.id === targetId ? { ...x, sections: [...x.sections, section] } : x) };
+                          });
+                          setActiveTab(targetId);
+                          setSelection({ type: "section", id: sec.id });
+                        }}>
+                          <SelectTrigger data-testid={`move-section-${sec.id}`} className="me-1 h-7 w-32 text-xs"
+                            aria-label={t("cards.moveSectionTab", "Перенести на вкладку")}>
+                            <SelectValue placeholder={t("cards.moveSectionTab", "Перенести на вкладку")} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {layout.tabs.filter(x => x.id !== tab.id).map(x => (
+                              <SelectItem key={x.id} value={x.id} disabled={x.sections.length >= 30}>{ml(x.title) || `${t("cards.tab", "Вкладка")} ${layout.tabs.indexOf(x) + 1}`}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         {sec.rows ? (
                           <button type="button" data-testid={`button-add-row-${si}`} disabled={sec.rows.length >= 100}
                             onClick={() => change(l => addRow(l, sec.id, sec.rows?.[sec.rows.length - 1]?.columns ?? 2))}

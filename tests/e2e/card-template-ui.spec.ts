@@ -298,6 +298,46 @@ const rowsLayout = () => ({
     ] }] }],
 });
 
+test("builder: moving a section to another tab preserves rows and blocks after save/reload", async ({ page }) => {
+  await auth(page);
+  const initial = rowsLayout();
+  initial.tabs.push({ id: "tab_destination", title: ml("Destination"), sections: [] });
+  const originalSection = structuredClone(initial.tabs[0].sections[0]);
+  let draft: any = { id: 20, name: "Move section", entityId: A, pageId: null, state: "draft", revision: 1, layout: initial };
+  const saved: any[] = [];
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (await common(route, path)) return;
+    if (path === "/api/card-templates/20" && route.request().method() === "PUT") {
+      const body = route.request().postDataJSON();
+      saved.push(body);
+      draft = { ...draft, ...body, revision: draft.revision + 1 };
+      return route.fulfill({ json: draft });
+    }
+    return route.fulfill({ json: path === "/api/card-templates" ? [draft] : [] });
+  });
+  await page.goto("/admin/card-templates/20");
+  const move = page.getByTestId(`move-section-${originalSection.id}`);
+  await move.click();
+  await page.getByRole("option", { name: "Destination", exact: true }).click();
+  await expect(page.getByTestId("editor-tab-1")).toHaveClass(/border-blue-600/);
+  for (const [i, n] of [2, 1, 3, 2, 1].entries())
+    await expect(page.getByTestId(`editor-row-0-${i}`)).toHaveAttribute("data-row-columns", String(n));
+  await page.getByTestId("button-save-draft").click();
+  await expect.poll(() => saved.length).toBe(1);
+  expect(saved[0].layout.tabs[0].sections).toEqual([]);
+  expect(saved[0].layout.tabs[1].sections).toEqual([originalSection]);
+  await page.reload();
+  await page.getByTestId("editor-tab-1").click();
+  await expect(move).toBeVisible();
+  await move.click();
+  await page.getByRole("option").first().click();
+  await page.getByTestId("button-save-draft").click();
+  await expect.poll(() => saved.length).toBe(2);
+  expect(saved[1].layout.tabs[0].sections).toEqual([originalSection]);
+  expect(saved[1].layout.tabs[1].sections).toEqual([]);
+});
+
 test("builder: rows 2,1,3,2,1 edit, move, delete without loss, save/reload and cross-entity copy keeps rows", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", e => errors.push(e.message));
