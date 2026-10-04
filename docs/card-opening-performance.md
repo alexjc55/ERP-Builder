@@ -63,6 +63,31 @@ and click-to-visible-form separately. If most time remains before response,
 investigate production connection/pool/query/network timings rather than
 weakening template freshness or access checks.
 
+## Remote follow-up observations
+
+The live site was subsequently verified serving the updated frontend. User
+screenshots of three successful resolve requests showed approximately 185/147/146
+ms waiting for response, with card_auth 14/3/4 ms and card_data 15/5/5 ms.
+These are screenshot readings, not a browser trace or click-to-paint measurement.
+The user reports, after rebooting their computer, about 3 seconds on the first
+opening and 2 seconds on subsequent openings on the remote server, visibly slower
+than Replit. Therefore the remote end-to-end delay remains unresolved.
+
+The opening handler has no awaited network prerequisite, but still updates state
+in the large records component. Re-render cost before template resolution is a
+hypothesis to measure, not a confirmed diagnosis. Different production data,
+other concurrent requests, form construction, and browser workload remain possible.
+
+The optional console diagnostic at scripts/measure-card-opening.browser.js opens
+and closes an empty create form three times, with no save. It reports request
+start relative to the programmatic click, request duration, response-to-visible
+custom layout, and the route's server spans. It requires an already authenticated
+browser on the target records page; never supply credentials to the script.
+It measures initial layout visibility, not completion of every field lookup.
+Long-task information is optional (unsupported in Firefox); it is not a CPU
+profile or proof of the responsible function. A DOM visibility check at an
+animation frame is only an approximation of painting.
+
 ## Regression coverage
 
 - Slow response never exposes the standard form before the custom presentation.

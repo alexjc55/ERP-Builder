@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { eq, sql } from "drizzle-orm";
 import { db, pool, rolesTable, usersTable } from "@workspace/db";
 import { signToken } from "../../artifacts/api-server/src/lib/jwt";
+import { readFileSync } from "node:fs";
 
 // Opt-in, read-only benchmark of an existing published development card.
 // Never creates/saves records; never prints credentials or record contents.
@@ -67,6 +68,17 @@ test("measure live development card request and first rendered form separately",
       await expect(page.getByTestId("record-dialog")).toHaveCount(0);
     }
     console.log(JSON.stringify({ label: process.env.CARD_PERF_LABEL ?? "sample", apiMs: apiTimes, browser: samples }));
+    // Validate the same data-free console diagnostic intended for a user's
+    // already-authenticated browser. It never signs into a remote deployment.
+    const phases = await page.evaluate(readFileSync("scripts/measure-card-opening.browser.js", "utf8")) as Array<Record<string, unknown>>;
+    expect(phases).toHaveLength(3);
+    for (const phase of phases) {
+      expect(phase.totalMs).toEqual(expect.any(Number));
+      expect(phase.beforeRequestMs).toEqual(expect.any(Number));
+      expect(phase.requestMs).toEqual(expect.any(Number));
+      expect(phase.afterResponseMs).toEqual(expect.any(Number));
+    }
+    console.log(JSON.stringify({ phaseDiagnostic: phases }));
   } finally {
     await pool.end();
   }
