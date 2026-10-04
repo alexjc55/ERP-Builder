@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { resolveCardTemplate } from "@workspace/api-client-react";
 import { parseCardLayout, type CardLayout, type CardMode } from "./cardLayout";
+import { useAuth } from "./auth";
 
 export type CardSnapshot =
   | { status: "idle" | "loading"; layout: null }
@@ -11,16 +12,18 @@ export type CardSnapshot =
  * Resolves the active card template ONCE per form opening and freezes it.
  * A publication that happens while the form is open never swaps the layout
  * under the user; the next opening picks up the new template. Any failure
- * failure is surfaced as an explicit error with retry; only an explicit
+ * is surfaced as an explicit error with retry; only an explicit
  * `template: null` means "use the standard form" (fail fast, no silent fallback).
  */
 export function useCardTemplateSnapshot(opts: {
   open: boolean; entityId: number | null | undefined; pageId?: number | null; mode: CardMode;
 }): CardSnapshot & { retry: () => void } {
   const { open, entityId, pageId, mode } = opts;
+  const { user, permissions, isGuest } = useAuth();
+  const authScope = JSON.stringify([user?.id, user?.roleId, user?.roleIds, permissions, isGuest]);
   const [snap, setSnap] = useState<CardSnapshot>({ status: "idle", layout: null });
   const [snapshotKey, setSnapshotKey] = useState<string | null>(null);
-  const requestedKey = open && entityId != null ? `${entityId}:${pageId ?? ""}:${mode}` : null;
+  const requestedKey = open && entityId != null ? `${entityId}:${pageId ?? ""}:${mode}:${authScope}` : null;
   const keyRef = useRef<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -30,13 +33,14 @@ export function useCardTemplateSnapshot(opts: {
       setSnap({ status: "idle", layout: null });
       return;
     }
-    const key = `${entityId}:${pageId ?? ""}:${mode}`;
+    const key = `${entityId}:${pageId ?? ""}:${mode}:${authScope}`;
     if (keyRef.current === key) return;
     keyRef.current = key;
     setSnapshotKey(key);
     let cancelled = false;
+    const controller = new AbortController();
     setSnap({ status: "loading", layout: null });
-    resolveCardTemplate({ entityId, ...(pageId != null ? { pageId } : {}), mode })
+    resolveCardTemplate({ entityId, ...(pageId != null ? { pageId } : {}), mode }, { signal: controller.signal, cache: "no-store" })
       .then(res => {
         if (cancelled) return;
         if (res && typeof res === "object" && !Array.isArray(res) && res.template === null) {
@@ -58,10 +62,11 @@ export function useCardTemplateSnapshot(opts: {
       });
     return () => {
       cancelled = true;
+      controller.abort();
       // Allow a retry if this effect is torn down before the request settled.
       if (keyRef.current === key) keyRef.current = null;
     };
-  }, [open, entityId, pageId, mode, attempt]);
+  }, [open, entityId, pageId, mode, attempt, authScope]);
   // Effects run after render: never expose the preceding scope's ready layout
   // for one frame when a new opening or mode is requested.
   const current: CardSnapshot = requestedKey == null ? { status: "idle", layout: null }

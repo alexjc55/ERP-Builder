@@ -268,6 +268,101 @@ test("runtime: tabs/columns, snapshot survives a publication, view is read-only,
   expect(errors).toEqual([]);
 });
 
+test("runtime: reopen uses fresh publication/permissions and discards a late closed response", async ({ page }) => {
+  await auth(page);
+  let currentLayout = layout("Before");
+  let denied = false;
+  let release: (() => void) | undefined;
+  let hold = false;
+  let requests = 0;
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (await common(route, path)) return;
+    if (path === "/api/card-templates/resolve") {
+      requests++;
+      const snapshot = structuredClone(currentLayout);
+      const wasDenied = denied;
+      if (hold) await new Promise<void>(r => { release = r; });
+      await route.fulfill({ status: wasDenied ? 403 : 200, json: wasDenied ? { error: "Forbidden" } : { template: { id: 1, layout: snapshot } } });
+      return;
+    }
+    await route.fulfill({ json: [] });
+  });
+  await page.goto("/card-orders");
+  const add = page.getByRole("button", { name: /^(Добавить запись|Add record)$/ });
+  await add.click();
+  await expect(page.getByTestId("card-tab-tab_lines")).toHaveText("Before");
+  currentLayout = layout("Published afterwards");
+  await expect(page.getByTestId("card-tab-tab_lines")).toHaveText("Before");
+  await page.getByTestId("button-card-close").click();
+  await add.click();
+  await expect(page.getByTestId("card-tab-tab_lines")).toHaveText("Published afterwards");
+  await page.getByTestId("button-card-close").click();
+  denied = true;
+  await add.click();
+  await expect(page.getByTestId("card-resolve-error")).toBeVisible();
+  await expect(page.getByTestId("card-layout")).toHaveCount(0);
+  denied = false;
+  await page.getByTestId("button-card-resolve-retry").click();
+  await expect(page.getByTestId("card-layout")).toBeVisible();
+  await page.getByTestId("button-card-close").click();
+  hold = true;
+  currentLayout = layout("Late obsolete response");
+  await add.click();
+  await expect.poll(() => !!release).toBe(true);
+  await expect(page.getByTestId("card-opening")).toBeVisible();
+  await page.keyboard.press("Escape");
+  hold = false;
+  currentLayout = layout("Newest");
+  await add.click();
+  await expect(page.getByTestId("card-tab-tab_lines")).toHaveText("Newest");
+  release!();
+  await expect(page.getByTestId("card-tab-tab_lines")).toHaveText("Newest");
+  expect(requests).toBe(6);
+});
+
+test("runtime: pending templates cannot cross an auth or entity change", async ({ page }) => {
+  await auth(page);
+  await page.clock.install();
+  let actor = 1;
+  let authReads = 0;
+  let release!: () => void;
+  let count = 0;
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/auth/me") {
+      authReads++;
+      await route.fulfill({ json: { ...me(true), id: actor } });
+      return;
+    }
+    if (await common(route, path)) return;
+    if (path === "/api/card-templates/resolve") {
+      const input = route.request().postDataJSON();
+      const snapshot = layout(`Actor ${actor}, entity ${input.entityId}`);
+      if (++count === 1) await new Promise<void>(r => { release = r; });
+      await route.fulfill({ json: { template: { id: 1, layout: snapshot } } });
+      return;
+    }
+    await route.fulfill({ json: [] });
+  });
+  await page.goto("/card-orders");
+  await page.getByRole("button", { name: /^(Добавить запись|Add record)$/ }).click();
+  await expect.poll(() => count).toBe(1);
+  actor = 2;
+  // Simulate a session refresh while the first actor's template is in flight.
+  await page.clock.fastForward(31_000);
+  await page.clock.resume();
+  await page.evaluate(() => window.dispatchEvent(new Event("visibilitychange")));
+  await expect.poll(() => authReads).toBeGreaterThan(1);
+  await expect(page.getByTestId("card-tab-tab_lines")).toHaveText(`Actor 2, entity ${A}`);
+  release();
+  await expect(page.getByTestId("card-tab-tab_lines")).toHaveText(`Actor 2, entity ${A}`);
+  await page.getByTestId("button-card-close").click();
+  await page.goto("/card-items");
+  await page.getByRole("button", { name: /^(Добавить запись|Add record)$/ }).click();
+  await expect(page.getByTestId("card-tab-tab_lines")).toHaveText(`Actor 2, entity ${B}`);
+});
+
 test("runtime: a failed resolve shows an explicit error with retry instead of silently using the standard form", async ({ page }) => {
   await auth(page);
   let fail = true;

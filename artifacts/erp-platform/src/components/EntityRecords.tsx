@@ -7,7 +7,7 @@ import { MultipleRelationPicker } from "./MultipleRelationPicker";
 import { draftRelationSelections, relationDraftIds } from "@/lib/relationSelections";
 import { CardLayoutView, CardTextBlock, CardDividerBlock, CardSnapshotGate } from "./CardLayoutView";
 import { CardRelatedRecordsTable } from "./CardRelatedRecordsTable";
-import { useCardTemplateSnapshot } from "@/lib/useCardTemplateSnapshot";
+import { CardTemplateSnapshot } from "@/components/CardTemplateSnapshot";
 import { CardDialogShell } from "./CardDialogShell";
 import { layoutIsWide, layoutPresentation, type CardBlock, type CardLayout } from "@/lib/cardLayout";
 import { columnGroupBodyStyle, resolveColumnGroupCellStyle } from "@/lib/columnGroupStyles";
@@ -3320,10 +3320,6 @@ export function EntityRecords({
   const [statusDirty, setStatusDirty] = useState(false);
   const [dialogRelationEditing, setDialogRelationEditing] = useState(false);
   const [viewing, setViewing] = useState(false);
-  // Card template frozen for this opening of the record dialog (see hook docs).
-  const cardSnapshot = useCardTemplateSnapshot({
-    open: dialogOpen, entityId, pageId, mode: viewing ? "view" : editing ? "edit" : "create",
-  });
   const editingVersionRef = useRef<number | undefined>(undefined);
 
   // Google-Sheets-style inline editing: which cell is currently being edited.
@@ -9531,7 +9527,8 @@ export function EntityRecords({
       </>
       )}
 
-      <CardDialogShell
+      <CardTemplateSnapshot open={dialogOpen} entityId={entityId} pageId={pageId} mode={viewing ? "view" : editing ? "edit" : "create"}>
+      {cardSnapshot => <CardDialogShell
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open);
@@ -9653,7 +9650,8 @@ export function EntityRecords({
             )}
 
           </div>
-      </CardDialogShell>
+      </CardDialogShell>}
+      </CardTemplateSnapshot>
 
       {writeThroughEdit && (
         <RecordEditModal
@@ -11458,7 +11456,6 @@ function RecordEditModal({
   const draftVersionRef = useRef<number | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [relationEditing, setRelationEditing] = useState(false);
-  const cardSnapshot = useCardTemplateSnapshot({ open, entityId, mode: "edit" });
 
   // User options for `user` field selects; without them a `user` field's dropdown
   // is empty and cannot be selected. Relation/lookup values are now fetched inside
@@ -11536,7 +11533,8 @@ function RecordEditModal({
   const loading = recordLoading || fieldsLoading;
 
   return (
-    <CardDialogShell open={open} onOpenChange={onOpenChange}
+    <CardTemplateSnapshot open={open} entityId={entityId} mode="edit">
+    {cardSnapshot => <CardDialogShell open={open} onOpenChange={onOpenChange}
         presentation={cardSnapshot.layout ? layoutPresentation(cardSnapshot.layout) : null}
         wide={layoutIsWide(cardSnapshot.layout)} testId="record-edit-modal"
         pending={cardSnapshot.status === "idle" || cardSnapshot.status === "loading"}
@@ -11611,7 +11609,8 @@ function RecordEditModal({
             )}
           </div>
         )}
-      </CardDialogShell>
+      </CardDialogShell>}
+    </CardTemplateSnapshot>
   );
 }
 
@@ -11675,10 +11674,6 @@ function QuickCreateRelatedRecordDialog({
   const [contextError, setContextError] = useState("");
   // The caller's page may belong to the PARENT entity; only pass it to card
   // resolution when it is genuinely this related entity's page.
-  const cardSnapshot = useCardTemplateSnapshot({
-    open, entityId: relatedEntityId, mode: "create",
-    pageId: pageId != null && relatedEntity?.pageId === pageId ? pageId : undefined,
-  });
 
   // The form's field set is computed EXACTLY like the main record form's
   // visibleFormFields (isActive + sortOrder above, field perms + per-role
@@ -11824,7 +11819,9 @@ function QuickCreateRelatedRecordDialog({
   };
 
   return (
-    <CardDialogShell open={open} onOpenChange={onOpenChange}
+    <CardTemplateSnapshot open={open} entityId={relatedEntityId} mode="create"
+      pageId={pageId != null && relatedEntity?.pageId === pageId ? pageId : undefined}>
+    {cardSnapshot => <CardDialogShell open={open} onOpenChange={onOpenChange}
         presentation={cardSnapshot.layout ? layoutPresentation(cardSnapshot.layout) : null}
         wide={layoutIsWide(cardSnapshot.layout)} testId="quick-create-related-dialog"
         pending={cardSnapshot.status === "idle" || cardSnapshot.status === "loading"}
@@ -11896,7 +11893,8 @@ function QuickCreateRelatedRecordDialog({
             )}
           </div>
         )}
-      </CardDialogShell>
+    </CardDialogShell>}
+    </CardTemplateSnapshot>
   );
 }
 

@@ -64,25 +64,36 @@ async function publicationErrors(reader: Reader, entityId: number, layout: CardL
 }
 
 router.post("/card-templates/resolve", requireAuth, async (req, res) => {
+  const started = performance.now();
+  res.setHeader("Cache-Control", "no-store");
   const parsed = ResolveCardTemplateBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { entityId, pageId, mode } = parsed.data;
   if (!Number.isSafeInteger(entityId) || entityId <= 0 || (pageId != null && (!Number.isSafeInteger(pageId) || pageId <= 0))) {
     res.status(400).json({ error: "Invalid scope" }); return;
   }
-  if (!await scopeValid(db, entityId, pageId ?? null)) { res.status(404).json({ error: "Entity/page not found" }); return; }
-  const perms = await getPermissions(req);
+  // Independent reads run concurrently, but no template is returned before
+  // every existing authorization gate has passed. Nothing is cached across requests.
+  const [validScope, perms] = await Promise.all([
+    scopeValid(db, entityId, pageId ?? null), getPermissions(req),
+  ]);
+  if (!validScope) { res.status(404).json({ error: "Entity/page not found" }); return; }
   if (pageId != null && !perms.superAdmin && !perms.pageIds.includes(pageId)) { res.status(403).json({ error: "Forbidden" }); return; }
   if (!await assertRecord(req, res, entityId, mode === "edit" ? "update" : mode === "create" ? "create" : "view", pageId)) return;
-  const matches = await db.select().from(cards).where(and(
+  const authorizedAt = performance.now();
+  const [matches, roleIds, fields, recordPerm] = await Promise.all([
+    db.select().from(cards).where(and(
     eq(cards.entityId, entityId), eq(cards.state, "published"),
     pageId == null ? isNull(cards.pageId) : or(isNull(cards.pageId), eq(cards.pageId, pageId)),
-  ));
+    )),
+    getUserRoleIds(req),
+    db.select().from(entityFieldsTable)
+      .where(and(eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.isActive, true))),
+    effectiveRecordPerm(req, perms, entityId, pageId),
+  ]);
+  res.setHeader("Server-Timing", `card_auth;dur=${(authorizedAt - started).toFixed(1)}, card_data;dur=${(performance.now() - authorizedAt).toFixed(1)}`);
   const template = matches.find(c => c.pageId === pageId) ?? matches.find(c => c.pageId === null);
   if (!template) { res.json({ template: null }); return; }
-  const roleIds = await getUserRoleIds(req);
-  const fields = await db.select().from(entityFieldsTable).where(and(eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.isActive, true)));
-  const recordPerm = await effectiveRecordPerm(req, perms, entityId, pageId);
   const visible = new Set(fields.filter(f => resolveFieldAccess(f, perms, roleIds, entityId, recordPerm, pageId) !== "hidden").map(f => f.fieldKey));
   const layout = structuredClone(template.layout);
   const activeKeys = new Set(fields.map(f => f.fieldKey));

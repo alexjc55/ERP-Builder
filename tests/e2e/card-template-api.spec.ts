@@ -298,6 +298,13 @@ test("card registry: scope inheritance, draft validation, permission gates and a
     await expect(inlinePreview.getByTestId("card-divider-divider")).toHaveCSS("min-height", "64px");
     await page.screenshot({ path: "screenshots/card-inline-preview.png" });
     expect(errors).toEqual([]);
+    // No response cache: the same token must observe a role revocation on
+    // the next resolve, even after successfully reading a published template.
+    expect((await api("/resolve", { entityId: entity.id, mode: "view" }, "POST", readerHeaders)).status()).toBe(200);
+    await db.update(rolesTable).set({ permissionsJson: NO_ACCESS_PERMS }).where(eq(rolesTable.id, readerRole.id));
+    const revoked = await api("/resolve", { entityId: entity.id, mode: "view" }, "POST", readerHeaders);
+    expect(revoked.status()).toBe(403);
+    expect(revoked.headers()["cache-control"]).toBe("no-store");
   } finally {
     if (entityIds.length) {
       await db.delete(cardTemplatesTable).where(inArray(cardTemplatesTable.entityId, entityIds));
