@@ -59,7 +59,7 @@ corepack pnpm exec playwright test tests/e2e/card-open-performance.spec.ts
 
 For the remote deployment after its owner updates it, collect the browser
 Network timing for `POST /api/card-templates/resolve`, its `Server-Timing` header,
-and click-to-visible-form separately. If most time remains before response,
+and click-to-visible-form separately. If most time is spent inside the request,
 investigate production connection/pool/query/network timings rather than
 weakening template freshness or access checks.
 
@@ -87,6 +87,43 @@ It measures initial layout visibility, not completion of every field lookup.
 Long-task information is optional (unsupported in Firefox); it is not a CPU
 profile or proof of the responsible function. A DOM visibility check at an
 animation frame is only an approximation of painting.
+
+### Measured remote phases
+
+The user subsequently ran the console diagnostic on the remote application and
+returned these numbers (milliseconds):
+
+| Opening in this series | Total | Before request | Request | After response | card_auth | card_data |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 1365 | 1176 | 158 | 31 | 10 | 5 |
+| 2 | 1345 | 1152 | 167 | 26 | 5 | 3 |
+| 3 | 1311 | 1118 | 167 | 26 | 4 | 6 |
+
+Median total: 1345 ms. Median pre-request interval: 1152 ms (about 86% of
+the median total). Median request: 167 ms. Median response-to-layout: 26 ms.
+The two measured server spans account for 15, 8 and 10 ms; they exclude
+authentication middleware and other overhead, so the remaining request duration
+must not be attributed solely to network latency.
+
+Long-task entries were unsupported in this browser. The dominant measured delay
+is on the client before dispatching the template request, not inside that request
+or after its response. Parent records-page rendering is a strong candidate because
+the open handler changes parent state and the resolve starts from an effect, but
+these measurements do not identify the exact costly function. Profile the initial
+state update/render, field initialization and effect scheduling before choosing
+a fix. Do not remove fresh authorization or use cached templates to hide it.
+
+These are three programmatic openings on an already loaded page, not a controlled
+cold-start run. They do not contradict the user's rough 3-second first / 2-second
+repeat observation: startup, event queue delay before programmatic execution,
+and later field loading are not fully covered. The diagnostic itself was checked
+by the development Playwright benchmark before the user ran it; that check does
+not stand in for the remote measurements above.
+
+Outcome: remote measurement completed; the remaining opening delay is NOT fixed.
+No remote source, configuration, database, or deployment was modified by the
+agent. Updating the deployment and running the console diagnostic were performed
+by the user.
 
 ## Regression coverage
 
