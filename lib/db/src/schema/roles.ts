@@ -76,6 +76,7 @@ export interface RecordPermission {
 
 /** Admin-builder capability areas. */
 export interface RoleAdminCaps {
+  cardTemplates?: boolean;
   pages: boolean;
   entities: boolean;
   roles: boolean;
@@ -156,7 +157,7 @@ export interface RolePermissions {
 /** Default permissions for new/existing roles: no access until granted. */
 export const NO_ACCESS_PERMS: RolePermissions = {
   superAdmin: false,
-  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, automations: false, customFilters: false, columnGroups: false, googleDrive: false, settings: false, dataImport: false, inboundIntegrations: false, documentGeneration: false, tags: false },
+  admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, automations: false, customFilters: false, columnGroups: false, googleDrive: false, settings: false, dataImport: false, inboundIntegrations: false, documentGeneration: false, tags: false, cardTemplates: false },
   pageIds: [],
   records: {},
 };

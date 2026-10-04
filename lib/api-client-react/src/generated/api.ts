@@ -47,6 +47,12 @@ import type {
   BulkRecordFieldUpdate,
   BulkRecordsAction,
   BulkRecordsResult,
+  CardPublicationConflict,
+  CardPublicationInput,
+  CardResolution,
+  CardResolveInput,
+  CardTemplate,
+  CardTemplateInput,
   ChangePasswordInput,
   CollaborationPageId,
   CollaborationPresenceInput,
@@ -224,6 +230,469 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
+
+export const getListCardTemplatesUrl = () => {
+
+
+
+
+  return `/api/card-templates`
+}
+
+export const listCardTemplates = async ( options?: RequestInit): Promise<CardTemplate[]> => {
+
+  return customFetch<CardTemplate[]>(getListCardTemplatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCardTemplatesQueryKey = () => {
+    return [
+    `/api/card-templates`
+    ] as const;
+    }
+
+
+export const getListCardTemplatesQueryOptions = <TData = Awaited<ReturnType<typeof listCardTemplates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCardTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCardTemplatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCardTemplates>>> = ({ signal }) => listCardTemplates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCardTemplates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCardTemplatesQueryResult = NonNullable<Awaited<ReturnType<typeof listCardTemplates>>>
+export type ListCardTemplatesQueryError = ErrorType<unknown>
+
+
+
+export function useListCardTemplates<TData = Awaited<ReturnType<typeof listCardTemplates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCardTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCardTemplatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateCardTemplateUrl = () => {
+
+
+
+
+  return `/api/card-templates`
+}
+
+export const createCardTemplate = async (cardTemplateInput: CardTemplateInput, options?: RequestInit): Promise<CardTemplate> => {
+
+  return customFetch<CardTemplate>(getCreateCardTemplateUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      cardTemplateInput,)
+  }
+);}
+
+
+
+
+export const getCreateCardTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCardTemplate>>, TError,{data: BodyType<CardTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCardTemplate>>, TError,{data: BodyType<CardTemplateInput>}, TContext> => {
+
+const mutationKey = ['createCardTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCardTemplate>>, {data: BodyType<CardTemplateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCardTemplate(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCardTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof createCardTemplate>>>
+    export type CreateCardTemplateMutationBody = BodyType<CardTemplateInput>
+    export type CreateCardTemplateMutationError = ErrorType<unknown>
+
+    export const useCreateCardTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCardTemplate>>, TError,{data: BodyType<CardTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCardTemplate>>,
+        TError,
+        {data: BodyType<CardTemplateInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCardTemplateMutationOptions(options));
+    }
+
+export const getUpdateCardTemplateUrl = (id: number,) => {
+
+
+
+
+  return `/api/card-templates/${id}`
+}
+
+export const updateCardTemplate = async (id: number,
+    cardTemplateInput: CardTemplateInput, options?: RequestInit): Promise<CardTemplate> => {
+
+  return customFetch<CardTemplate>(getUpdateCardTemplateUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      cardTemplateInput,)
+  }
+);}
+
+
+
+
+export const getUpdateCardTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCardTemplate>>, TError,{id: number;data: BodyType<CardTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCardTemplate>>, TError,{id: number;data: BodyType<CardTemplateInput>}, TContext> => {
+
+const mutationKey = ['updateCardTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCardTemplate>>, {id: number;data: BodyType<CardTemplateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateCardTemplate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCardTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof updateCardTemplate>>>
+    export type UpdateCardTemplateMutationBody = BodyType<CardTemplateInput>
+    export type UpdateCardTemplateMutationError = ErrorType<unknown>
+
+    export const useUpdateCardTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCardTemplate>>, TError,{id: number;data: BodyType<CardTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCardTemplate>>,
+        TError,
+        {id: number;data: BodyType<CardTemplateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateCardTemplateMutationOptions(options));
+    }
+
+export const getDeleteCardTemplateUrl = (id: number,) => {
+
+
+
+
+  return `/api/card-templates/${id}`
+}
+
+export const deleteCardTemplate = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteCardTemplateUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteCardTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCardTemplate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCardTemplate>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteCardTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCardTemplate>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteCardTemplate(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCardTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCardTemplate>>>
+
+    export type DeleteCardTemplateMutationError = ErrorType<unknown>
+
+    export const useDeleteCardTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCardTemplate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCardTemplate>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteCardTemplateMutationOptions(options));
+    }
+
+export const getPublishCardTemplateUrl = (id: number,) => {
+
+
+
+
+  return `/api/card-templates/${id}/publish`
+}
+
+export const publishCardTemplate = async (id: number,
+    cardPublicationInput: CardPublicationInput, options?: RequestInit): Promise<CardTemplate> => {
+
+  return customFetch<CardTemplate>(getPublishCardTemplateUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      cardPublicationInput,)
+  }
+);}
+
+
+
+
+export const getPublishCardTemplateMutationOptions = <TError = ErrorType<CardPublicationConflict>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishCardTemplate>>, TError,{id: number;data: BodyType<CardPublicationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof publishCardTemplate>>, TError,{id: number;data: BodyType<CardPublicationInput>}, TContext> => {
+
+const mutationKey = ['publishCardTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishCardTemplate>>, {id: number;data: BodyType<CardPublicationInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  publishCardTemplate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PublishCardTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof publishCardTemplate>>>
+    export type PublishCardTemplateMutationBody = BodyType<CardPublicationInput>
+    export type PublishCardTemplateMutationError = ErrorType<CardPublicationConflict>
+
+    export const usePublishCardTemplate = <TError = ErrorType<CardPublicationConflict>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishCardTemplate>>, TError,{id: number;data: BodyType<CardPublicationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof publishCardTemplate>>,
+        TError,
+        {id: number;data: BodyType<CardPublicationInput>},
+        TContext
+      > => {
+      return useMutation(getPublishCardTemplateMutationOptions(options));
+    }
+
+export const getUnpublishCardTemplateUrl = (id: number,) => {
+
+
+
+
+  return `/api/card-templates/${id}/unpublish`
+}
+
+export const unpublishCardTemplate = async (id: number,
+    cardPublicationInput: CardPublicationInput, options?: RequestInit): Promise<CardTemplate> => {
+
+  return customFetch<CardTemplate>(getUnpublishCardTemplateUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      cardPublicationInput,)
+  }
+);}
+
+
+
+
+export const getUnpublishCardTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unpublishCardTemplate>>, TError,{id: number;data: BodyType<CardPublicationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unpublishCardTemplate>>, TError,{id: number;data: BodyType<CardPublicationInput>}, TContext> => {
+
+const mutationKey = ['unpublishCardTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unpublishCardTemplate>>, {id: number;data: BodyType<CardPublicationInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  unpublishCardTemplate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnpublishCardTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof unpublishCardTemplate>>>
+    export type UnpublishCardTemplateMutationBody = BodyType<CardPublicationInput>
+    export type UnpublishCardTemplateMutationError = ErrorType<unknown>
+
+    export const useUnpublishCardTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unpublishCardTemplate>>, TError,{id: number;data: BodyType<CardPublicationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unpublishCardTemplate>>,
+        TError,
+        {id: number;data: BodyType<CardPublicationInput>},
+        TContext
+      > => {
+      return useMutation(getUnpublishCardTemplateMutationOptions(options));
+    }
+
+export const getResolveCardTemplateUrl = () => {
+
+
+
+
+  return `/api/card-templates/resolve`
+}
+
+export const resolveCardTemplate = async (cardResolveInput: CardResolveInput, options?: RequestInit): Promise<CardResolution> => {
+
+  return customFetch<CardResolution>(getResolveCardTemplateUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      cardResolveInput,)
+  }
+);}
+
+
+
+
+export const getResolveCardTemplateMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveCardTemplate>>, TError,{data: BodyType<CardResolveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resolveCardTemplate>>, TError,{data: BodyType<CardResolveInput>}, TContext> => {
+
+const mutationKey = ['resolveCardTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resolveCardTemplate>>, {data: BodyType<CardResolveInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  resolveCardTemplate(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResolveCardTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof resolveCardTemplate>>>
+    export type ResolveCardTemplateMutationBody = BodyType<CardResolveInput>
+    export type ResolveCardTemplateMutationError = ErrorType<unknown>
+
+    export const useResolveCardTemplate = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resolveCardTemplate>>, TError,{data: BodyType<CardResolveInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resolveCardTemplate>>,
+        TError,
+        {data: BodyType<CardResolveInput>},
+        TContext
+      > => {
+      return useMutation(getResolveCardTemplateMutationOptions(options));
+    }
 
 export const getListDocumentGenerationRunsUrl = (params?: ListDocumentGenerationRunsParams,) => {
   const normalizedParams = new URLSearchParams();

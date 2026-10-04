@@ -72,7 +72,7 @@ type StatusTagRecordPermission = RecordPermission & {
 function emptyPerms(): RolePermissions {
   return {
     superAdmin: false,
-    admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, columnGroups: false, googleDrive: false, settings: false, automations: false, customFilters: false, dataImport: false, inboundIntegrations: false, documentGeneration: false, tags: false },
+    admin: { pages: false, entities: false, roles: false, users: false, translations: false, events: false, modules: false, columnGroups: false, googleDrive: false, settings: false, automations: false, customFilters: false, dataImport: false, inboundIntegrations: false, documentGeneration: false, tags: false, cardTemplates: false },
     pageIds: [],
     records: {},
   };
@@ -95,6 +95,7 @@ const ADMIN_CAP_LABELS: { key: keyof RoleAdminCaps; label: string; help?: string
   { key: "dataImport", label: "Импорт данных" },
   { key: "inboundIntegrations", label: "Входящие вебхуки" },
   { key: "documentGeneration", label: "Генерация документов", help: "Manage document templates and their generation history." },
+  { key: "cardTemplates", label: "Конструктор карточек", help: "Create, copy and publish record card templates." },
 ];
 
 const RECORD_ACTIONS: { key: keyof RecordPermission; label: string }[] = [
@@ -123,6 +124,7 @@ const CAP_SHORT: { key: keyof RoleAdminCaps; label: string }[] = [
   { key: "dataImport", label: "Импорт" },
   { key: "inboundIntegrations", label: "Вебхуки" },
   { key: "documentGeneration", label: "Документы" },
+  { key: "cardTemplates", label: "Карточки" },
 ];
 
 export default function RolesPage() {

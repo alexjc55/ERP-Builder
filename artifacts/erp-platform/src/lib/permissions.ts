@@ -18,6 +18,7 @@ export function adminCapForPath(path: string): keyof RoleAdminCaps | null {
   if (path.startsWith("/admin/tags")) return "tags";
   if (path.startsWith("/admin/google-drive")) return "googleDrive";
   if (path.startsWith("/admin/documents")) return "documentGeneration";
+  if (path.startsWith("/admin/card-templates")) return "cardTemplates";
   if (path.startsWith("/admin/import")) return "dataImport";
   if (path.startsWith("/admin/inbound-integrations")) return "inboundIntegrations";
   return null;

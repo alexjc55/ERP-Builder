@@ -4,7 +4,11 @@ import { CellCollabTooltip } from "./CellCollabTooltip";
 import { sameAggregateTopology } from "@/lib/aggregateSnapshot";
 import { isGroupExpanded, toggleGroupException, groupedQueryOptions } from "@/lib/groupAccordion";
 import { MultipleRelationPicker } from "./MultipleRelationPicker";
-import { draftRelationSelections } from "@/lib/relationSelections";
+import { draftRelationSelections, relationDraftIds } from "@/lib/relationSelections";
+import { CardLayoutView, CardTextBlock, CardDividerBlock, CardSnapshotGate } from "./CardLayoutView";
+import { CardRelatedRecordsTable } from "./CardRelatedRecordsTable";
+import { useCardTemplateSnapshot } from "@/lib/useCardTemplateSnapshot";
+import { layoutIsWide, type CardBlock, type CardLayout } from "@/lib/cardLayout";
 import { columnGroupBodyStyle, resolveColumnGroupCellStyle } from "@/lib/columnGroupStyles";
 import { InlineListPicker } from "@/components/InlineListPicker";
 import { InlineStatusPicker } from "@/components/InlineStatusPicker";
@@ -211,7 +215,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCollaboration, type CollaborationPresence } from "@/lib/useCollaboration";
 import { CollaborationNotice } from "@/components/CollaborationNotice";
 import { useManualDataRefresh } from "@/lib/manualDataRefresh";
-import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown, ListChecks, Merge, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown, ListChecks, Merge, RefreshCw, Eye } from "lucide-react";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Link, useLocation, useSearch } from "wouter";
 import { Calendar } from "@/components/ui/calendar";
@@ -346,6 +350,7 @@ type RecordRowContext = {
   commitPageCell: (record: EntityRecord, field: PageField, raw: CellValue) => boolean;
   commitStatus: (record: EntityRecord, value: string) => boolean;
   openEdit: (record: EntityRecord) => void;
+  openView: (record: EntityRecord) => void;
   archiveRecord: (record: EntityRecord) => void;
   unarchiveRecord: (record: EntityRecord) => void;
 };
@@ -391,7 +396,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
     pageRefEditable, pageRefAsField, relationAsField, renderProjectionState,
     getCellEditors, bulkColStyle, colWidthStyle, pinStyle, columnBodyStyles, setHighlightedRowId,
     setSelectedIds, setEditingCell, setRefreshTick, setWriteThroughEdit, setHistoryFor,
-    setToDelete, markCellDirty, commitCell, commitPageCell, commitStatus, openEdit,
+    setToDelete, markCellDirty, commitCell, commitPageCell, commitStatus, openEdit, openView,
     archiveRecord, unarchiveRecord, cellDirection,
   } = context;
   const { formulaValues, formatting, pageValues } = rowDisplay;
@@ -803,6 +808,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
       {showActionsColumn && (
         <td className="px-4 py-3">
           <div className="flex items-center justify-end gap-1">
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500" data-testid="record-view-button" data-record-id={record.id} title={t("records.view", "Просмотр")} onClick={() => openView(record)}><Eye className="w-3.5 h-3.5" /></Button>
             {canUpdate && <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="record-edit-button" data-record-id={record.id} onClick={() => openEdit(record)}><Pencil className="w-3.5 h-3.5" /></Button>}
             <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500" title={t("records.history", "История изменений")} onClick={() => setHistoryFor(record)}><History className="w-3.5 h-3.5" /></Button>
             {canUpdate && (record.archivedAt
@@ -3311,6 +3317,11 @@ export function EntityRecords({
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
   const [statusDirty, setStatusDirty] = useState(false);
   const [dialogRelationEditing, setDialogRelationEditing] = useState(false);
+  const [viewing, setViewing] = useState(false);
+  // Card template frozen for this opening of the record dialog (see hook docs).
+  const cardSnapshot = useCardTemplateSnapshot({
+    open: dialogOpen, entityId, pageId, mode: viewing ? "view" : editing ? "edit" : "create",
+  });
   const editingVersionRef = useRef<number | undefined>(undefined);
 
   // Google-Sheets-style inline editing: which cell is currently being edited.
@@ -5795,6 +5806,7 @@ export function EntityRecords({
     },
   });
   const openCreate = () => {
+    setViewing(false);
     setEditing(null);
     setDialogRelationEditing(false);
     editingVersionRef.current = undefined;
@@ -5812,7 +5824,13 @@ export function EntityRecords({
     setDialogOpen(true);
   };
 
+  const openView = (record: EntityRecord) => {
+    openEdit(record);
+    setViewing(true);
+  };
+
   const openEdit = (record: EntityRecord) => {
+    setViewing(false);
     setEditing(record);
     setDialogRelationEditing(false);
     editingVersionRef.current = record.version;
@@ -6991,6 +7009,7 @@ export function EntityRecords({
   const rowCommitPageCell = useCommittedCommand(commitPageCell);
   const rowCommitStatus = useCommittedCommand(commitStatus);
   const rowOpenEdit = useCommittedCommand(openEdit);
+  const rowOpenView = useCommittedCommand(openView);
   const rowArchiveRecord = useCommittedCommand((record: EntityRecord) => {
     archiveMutation.mutate({ id: record.id, data: { expectedVersion: record.version } });
   });
@@ -7020,7 +7039,7 @@ export function EntityRecords({
     getCellEditors, bulkColStyle, colWidthStyle, pinStyle, columnBodyStyles, setHighlightedRowId,
     setSelectedIds, setEditingCell, setRefreshTick, setWriteThroughEdit, setHistoryFor,
     setToDelete, markCellDirty, commitCell: rowCommitCell, commitPageCell: rowCommitPageCell,
-    commitStatus: rowCommitStatus, openEdit: rowOpenEdit,
+    commitStatus: rowCommitStatus, openEdit: rowOpenEdit, openView: rowOpenView,
     archiveRecord: rowArchiveRecord, unarchiveRecord: rowUnarchiveRecord,
   }), [
     cellDirection,
@@ -9516,18 +9535,20 @@ export function EntityRecords({
           if (!open) setDialogRelationEditing(false);
         }}
       >
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className={cn("max-h-[85vh] overflow-y-auto", layoutIsWide(cardSnapshot.layout) ? "max-w-4xl" : "max-w-lg")}>
           <DialogHeader>
-            <DialogTitle>{editing ? t("records.editTitle", "Редактировать запись") : t("records.newTitle", "Новая запись")}</DialogTitle>
+            <DialogTitle>{viewing ? t("records.viewTitle", "Просмотр записи") : editing ? t("records.editTitle", "Редактировать запись") : t("records.newTitle", "Новая запись")}</DialogTitle>
             <DialogDescription>
-              {t("records.dialogDesc", "Заполните поля записи. Обязательные поля помечены звёздочкой.")}
+              {viewing ? t("records.viewDesc", "Запись открыта только для чтения.") : t("records.dialogDesc", "Заполните поля записи. Обязательные поля помечены звёздочкой.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2 min-w-0">
+            <CardSnapshotGate snapshot={cardSnapshot}>{cardLayout => (
             <RecordFormBody
+              cardLayout={cardLayout}
               entityId={entityId}
               pageId={permPageId}
-              mode={editing ? "edit" : "create"}
+              mode={viewing ? "view" : editing ? "edit" : "create"}
               recordId={editing?.id ?? null}
               expectedVersion={editing?.version}
               allFields={fields}
@@ -9548,11 +9569,12 @@ export function EntityRecords({
               }}
               onRelationEditingChange={setDialogRelationEditing}
             />
+            )}</CardSnapshotGate>
 
             {statuses.length > 0 && (
               <div className="space-y-1.5">
                 <Label>{statusColumnName}</Label>
-                {statusManualEditable ? <Select
+                {statusManualEditable && !viewing ? <Select
                   value={statusId}
                   onValueChange={(next) => {
                     setStatusId(next);
@@ -9606,15 +9628,26 @@ export function EntityRecords({
 
           </div>
           <DialogFooter>
+            {viewing ? (
+              <>
+                <Button variant="outline" data-testid="record-dialog-close" onClick={() => setDialogOpen(false)}>{t("common.close", "Закрыть")}</Button>
+                {canUpdate && editing && (
+                  <Button data-testid="record-dialog-to-edit" className="bg-blue-600 hover:bg-blue-700" onClick={() => setViewing(false)}>
+                    <Pencil className="w-3.5 h-3.5 me-1.5" />{t("records.edit", "Редактировать")}
+                  </Button>
+                )}
+              </>
+            ) : (<>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("records.cancel", "Отмена")}</Button>
             <Button
               data-testid="record-dialog-save"
               onClick={handleSubmit}
-              disabled={isPending || dialogRelationEditing}
+              disabled={isPending || dialogRelationEditing || cardSnapshot.status !== "ready"}
               className="bg-blue-600 hover:bg-blue-700"
             >
               {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? t("records.save", "Сохранить") : t("records.create", "Создать")}
             </Button>
+            </>)}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -10796,7 +10829,7 @@ function relationFieldLocked(field: Field, linkedRecordId: number | null | undef
 function RecordFormBody({
   entityId,
   pageId,
-  mode,
+  mode: requestedMode,
   recordId,
   expectedVersion,
   allFields,
@@ -10809,10 +10842,12 @@ function RecordFormBody({
   onRelationEditingChange,
   lockedFieldKeys,
   formulaOptions: providedFormulaOptions,
+  cardLayout,
 }: {
   entityId: number;
   pageId?: number;
-  mode: "create" | "edit";
+  /** "view" renders the same controls strictly read-only over an existing record. */
+  mode: "create" | "edit" | "view";
   recordId: number | null;
   expectedVersion?: number;
   /** Full field list — needed for dependency-chain resolution. */
@@ -10833,7 +10868,13 @@ function RecordFormBody({
   lockedFieldKeys?: ReadonlySet<string>;
   /** Parent-provided app time zone; standalone forms fetch the shared settings query. */
   formulaOptions?: FormulaEvaluationOptions;
+  /** Card-template layout snapshot taken when the form opened. Null/undefined =
+   * the standard field list (unchanged legacy behavior). */
+  cardLayout?: CardLayout | null;
 }) {
+  // View is an existing record shown read-only: data loading follows edit.
+  const mode: "create" | "edit" = requestedMode === "view" ? "edit" : requestedMode;
+  const viewOnly = requestedMode === "view";
   const t = useT();
   const ml = useML();
   const { fieldAccess, canRecord, user: formUser } = useAuth();
@@ -11058,7 +11099,9 @@ function RecordFormBody({
   const lookupEditNode = (field: Field): React.ReactNode => {
     const meta = relColMetaMap.get(field.fieldKey);
     const relVal = relByField.get(field.fieldKey);
+    // View mode never opens an editable linked record.
     const canOpen =
+      !viewOnly &&
       !!meta?.writeThrough &&
       meta?.relatedEntityId != null &&
       relVal?.linkedRecordId != null &&
@@ -11098,114 +11141,87 @@ function RecordFormBody({
     );
   };
 
-  return (
-    <>
-      {formFields.map((field: Field) => {
-        const rawAccess = fieldAccess(field, entityId, pageId);
-        const access = rawAccess === "edit" && roleDisplayView(field) ? "view" : rawAccess;
-        const relVal = relByField.get(field.fieldKey);
-        const callerLocked = lockedFieldKeys?.has(field.fieldKey) === true;
-        const relLocked =
-          (mode === "edit" && relationFieldLocked(field, relVal?.linkedRecordId ?? relVal?.linkedRecordIds?.[0])) ||
-          (callerLocked && field.fieldType === "relation");
-        // A lookup is always read-only (it projects a linked record's value); a
-        // lockAfterCreate scalar becomes read-only in edit mode once it has a value.
-        const readOnly =
-          access === "view" ||
-          field.fieldType === "lookup" ||
-          (callerLocked && field.fieldType !== "relation") ||
-          (mode === "edit" && scalarFieldLocked(field, form[field.fieldKey]));
-        const dep = depInfo(field);
-        return (
-          <div key={field.id} className="min-w-0 space-y-1.5">
-            <Label>
-              {ml(field.nameJson)}
-              {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
-              {(readOnly || relLocked) && (
-                <span className="ml-1.5 text-xs font-normal text-slate-400">
-                  {t("records.readOnly", "(только чтение)")}
-                </span>
-              )}
-            </Label>
-            {field.fieldType === "relation" && field.relationConfigJson?.selectionMode === "multiple" ? (
-              <MultipleRelationPicker entityId={entityId} fieldKey={field.fieldKey}
-                showStatus={field.relationConfigJson?.showStatus} allowCreate={field.relationConfigJson?.allowCreate}
-                countSuffixJson={field.relationConfigJson?.countSuffixJson}
-                recordId={mode === "edit" ? recordId ?? undefined : undefined} expectedVersion={expectedVersion}
-                value={form[field.fieldKey]} ids={relVal?.linkedRecordIds} members={relVal?.members}
-                disabled={access !== "edit" || relLocked || (mode === "edit" && !relVal?.editable)} dependent={dep.dependent} parentValue={dep.parentValue}
-                renderQuickCreate={field.relationConfigJson?.relatedPageId ? undefined : props => <QuickCreateRelatedRecordDialog {...props} pageId={pageId}
-                  lockedFieldKey={dep.relatedFilterFieldKey} lockedValue={dep.parentValue} labelFieldKey={field.relationConfigJson?.relatedFieldKey} />}
-                onChange={value => setForm(prev => clearDependentDescendants({ ...prev, [field.fieldKey]: value }, field.fieldKey, allFields))}
-                onChanged={handleRelationChanged} onEditingChange={open => onRelationEditingChange?.(open)} />
-            ) : field.fieldType === "relation" ? (
-              access === "edit" && !relLocked ? (
-                mode === "edit" && recordId != null ? (
-                  <EntityRelationLinkPicker
-                    entityId={entityId}
-                    fieldKey={field.fieldKey}
-                    recordId={recordId}
-                    expectedVersion={expectedVersion}
-                    currentLinkedId={relVal?.linkedRecordId ?? null}
-                    display={relDisplayFor(field)}
-                    onChanged={handleRelationChanged}
-                    onEditingChange={(open) => onRelationEditingChange?.(open)}
-                    dependent={dep.dependent}
-                    parentValue={dep.parentValue}
-                    relatedFilterFieldKey={dep.relatedFilterFieldKey}
-                    pageId={pageId}
-                    pageSource={!!field.relationConfigJson?.relatedPageId}
-                  />
-                ) : (
-                  <RelationCreatePicker
-                    entityId={entityId}
-                    fieldKey={field.fieldKey}
-                    pageId={pageId}
-                    value={typeof form[field.fieldKey] === "number" ? (form[field.fieldKey] as number) : null}
-                    onChange={(id) =>
-                      setForm((prev) =>
-                        clearDependentDescendants({ ...prev, [field.fieldKey]: id ?? "" }, field.fieldKey, allFields),
-                      )
-                    }
-                    dependent={dep.dependent}
-                    parentValue={dep.parentValue}
-                    relatedFilterFieldKey={dep.relatedFilterFieldKey}
-                    pageSource={!!field.relationConfigJson?.relatedPageId}
-                  />
-                )
-              ) : mode === "create" && callerLocked ? (
-                // Caller-locked relation in a create flow: the link doesn't exist
-                // yet (committed atomically on create), so preview the prefilled target record's
-                // display field (not its raw #id).
-                roBox(
-                  typeof form[field.fieldKey] === "number" ? (
-                    (() => {
-                      const meta = relColMetaMap.get(field.fieldKey);
-                      const fallbackField = {
-                        ...field,
-                        fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
-                        optionsJson: meta?.optionsJson ?? [],
-                      } as unknown as Field;
-                      return (
-                        <LookupCreatePreview
-                          linkedRecordId={form[field.fieldKey] as number}
-                          relatedFieldKey={field.relationConfigJson?.relatedFieldKey ?? ""}
-                          fallbackField={fallbackField}
-                          userNames={userNames}
-                        />
-                      );
-                    })()
-                  ) : (
-                    <span className="text-slate-300">—</span>
-                  ),
-                )
-              ) : (
-                roBox(relDisplayFor(field))
-              )
-            ) : field.fieldType === "lookup" ? (
-              mode === "edit" ? (
-                lookupEditNode(field)
-              ) : lookupLinkedId(field) != null ? (
+  const fieldByKey = new Map(formFields.map((f: Field) => [f.fieldKey, f]));
+  const renderField = (field: Field, opts: { label?: string; suppressQuickCreate?: boolean; pickerTrigger?: React.ReactNode } = {}) => {
+    const rawAccess = fieldAccess(field, entityId, pageId);
+    const access = rawAccess === "edit" && (viewOnly || roleDisplayView(field)) ? "view" : rawAccess;
+    const relVal = relByField.get(field.fieldKey);
+    const callerLocked = lockedFieldKeys?.has(field.fieldKey) === true;
+    const relLocked =
+      (mode === "edit" && relationFieldLocked(field, relVal?.linkedRecordId ?? relVal?.linkedRecordIds?.[0])) ||
+      (callerLocked && field.fieldType === "relation");
+    // A lookup is always read-only (it projects a linked record's value); a
+    // lockAfterCreate scalar becomes read-only in edit mode once it has a value.
+    const readOnly =
+      access === "view" ||
+      field.fieldType === "lookup" ||
+      (callerLocked && field.fieldType !== "relation") ||
+      (mode === "edit" && scalarFieldLocked(field, form[field.fieldKey]));
+    const dep = depInfo(field);
+    return (
+      <div key={field.id} className="min-w-0 space-y-1.5" data-testid={`form-field-${field.fieldKey}`}>
+        <Label>
+          {opts.label || ml(field.nameJson)}
+          {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
+          {(readOnly || relLocked) && (
+            <span className="ml-1.5 text-xs font-normal text-slate-400">
+              {t("records.readOnly", "(только чтение)")}
+            </span>
+          )}
+        </Label>
+        {field.fieldType === "relation" && field.relationConfigJson?.selectionMode === "multiple" ? (
+          <MultipleRelationPicker entityId={entityId} fieldKey={field.fieldKey}
+            trigger={opts.pickerTrigger}
+            showStatus={field.relationConfigJson?.showStatus} allowCreate={field.relationConfigJson?.allowCreate}
+            countSuffixJson={field.relationConfigJson?.countSuffixJson}
+            recordId={mode === "edit" ? recordId ?? undefined : undefined} expectedVersion={expectedVersion}
+            value={form[field.fieldKey]} ids={relVal?.linkedRecordIds} members={relVal?.members}
+            disabled={access !== "edit" || relLocked || (mode === "edit" && !relVal?.editable)} dependent={dep.dependent} parentValue={dep.parentValue}
+            renderQuickCreate={field.relationConfigJson?.relatedPageId || opts.suppressQuickCreate ? undefined : props => <QuickCreateRelatedRecordDialog {...props} pageId={pageId}
+              lockedFieldKey={dep.relatedFilterFieldKey} lockedValue={dep.parentValue} labelFieldKey={field.relationConfigJson?.relatedFieldKey} />}
+            onChange={value => setForm(prev => clearDependentDescendants({ ...prev, [field.fieldKey]: value }, field.fieldKey, allFields))}
+            onChanged={handleRelationChanged} onEditingChange={open => onRelationEditingChange?.(open)} />
+        ) : field.fieldType === "relation" ? (
+          access === "edit" && !relLocked ? (
+            mode === "edit" && recordId != null ? (
+              <EntityRelationLinkPicker
+                entityId={entityId}
+                fieldKey={field.fieldKey}
+                recordId={recordId}
+                expectedVersion={expectedVersion}
+                currentLinkedId={relVal?.linkedRecordId ?? null}
+                display={relDisplayFor(field)}
+                onChanged={handleRelationChanged}
+                onEditingChange={(open) => onRelationEditingChange?.(open)}
+                dependent={dep.dependent}
+                parentValue={dep.parentValue}
+                relatedFilterFieldKey={dep.relatedFilterFieldKey}
+                pageId={pageId}
+                pageSource={!!field.relationConfigJson?.relatedPageId}
+              />
+            ) : (
+              <RelationCreatePicker
+                entityId={entityId}
+                fieldKey={field.fieldKey}
+                pageId={pageId}
+                value={typeof form[field.fieldKey] === "number" ? (form[field.fieldKey] as number) : null}
+                onChange={(id) =>
+                  setForm((prev) =>
+                    clearDependentDescendants({ ...prev, [field.fieldKey]: id ?? "" }, field.fieldKey, allFields),
+                  )
+                }
+                dependent={dep.dependent}
+                parentValue={dep.parentValue}
+                relatedFilterFieldKey={dep.relatedFilterFieldKey}
+                pageSource={!!field.relationConfigJson?.relatedPageId}
+              />
+            )
+          ) : mode === "create" && callerLocked ? (
+            // Caller-locked relation in a create flow: the link doesn't exist
+            // yet (committed atomically on create), so preview the prefilled target record's
+            // display field (not its raw #id).
+            roBox(
+              typeof form[field.fieldKey] === "number" ? (
                 (() => {
                   const meta = relColMetaMap.get(field.fieldKey);
                   const fallbackField = {
@@ -11213,83 +11229,182 @@ function RecordFormBody({
                     fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
                     optionsJson: meta?.optionsJson ?? [],
                   } as unknown as Field;
-                  return roBox(
+                  return (
                     <LookupCreatePreview
-                      linkedRecordId={lookupLinkedId(field) as number}
+                      linkedRecordId={form[field.fieldKey] as number}
                       relatedFieldKey={field.relationConfigJson?.relatedFieldKey ?? ""}
                       fallbackField={fallbackField}
                       userNames={userNames}
-                    />,
+                    />
                   );
                 })()
               ) : (
-                roBox(<span className="text-slate-300">—</span>)
-              )
-            ) : field.fieldType === "user" && readOnly ? (
-              // A disabled UserCombobox may fall back to the raw numeric id when
-              // its option list is still loading. Read-only user fields are
-              // presentation-only, so render them through the same id→name map
-              // used by table cells instead of showing an implementation id.
-              roBox(renderCellValue(field, form[field.fieldKey], t, userNames, undefined, ml))
-            ) : field.fieldType === "created_at" ? (
-              // Системная дата создания записи — read-only. On edit it shows the
-              // server-injected timestamp; on create the value doesn't exist yet.
-              roBox(
-                form[field.fieldKey] ? (
-                  renderCellValue(field, form[field.fieldKey], t, userNames, undefined, ml)
-                ) : (
-                  <span className="text-slate-300">—</span>
-                ),
-              )
-            ) : field.fieldType === "function" ? (
-              // Read-only live-computed formula preview from the current form
-              // values — updates as the user types, not only after saving.
-              roBox(
-                (() => {
-                  const computed = formatFormulaResult(
-                    field.formulaConfigJson?.expression ?? "",
-                    formFormulaScope,
-                    field.formulaConfigJson?.decimals,
-                    formulaOptions,
-                  );
-                  return computed.error ? (
-                    <span className="text-red-400">#ОШИБКА</span>
-                  ) : computed.text === "" ? (
-                    <span className="text-slate-300">—</span>
-                  ) : directFormFormulaTypes.get(field.fieldKey) === "user" ? (
-                    String(directFormulaDisplayValue(computed.text, "user", userNames))
-                  ) : computed.bool !== undefined ? (
-                    computed.bool ? "Да" : "Нет"
-                  ) : computed.numeric ? (
-                    <AffixedNumericValue config={field.formulaConfigJson}>{computed.text}</AffixedNumericValue>
-                  ) : (
-                    computed.text
-                  );
-                })(),
-              )
+                <span className="text-slate-300">—</span>
+              ),
+            )
+          ) : (
+            roBox(relDisplayFor(field))
+          )
+        ) : field.fieldType === "lookup" ? (
+          mode === "edit" ? (
+            lookupEditNode(field)
+          ) : lookupLinkedId(field) != null ? (
+            (() => {
+              const meta = relColMetaMap.get(field.fieldKey);
+              const fallbackField = {
+                ...field,
+                fieldType: (meta?.relatedFieldType ?? "text") as Field["fieldType"],
+                optionsJson: meta?.optionsJson ?? [],
+              } as unknown as Field;
+              return roBox(
+                <LookupCreatePreview
+                  linkedRecordId={lookupLinkedId(field) as number}
+                  relatedFieldKey={field.relationConfigJson?.relatedFieldKey ?? ""}
+                  fallbackField={fallbackField}
+                  userNames={userNames}
+                />,
+              );
+            })()
+          ) : (
+            roBox(<span className="text-slate-300">—</span>)
+          )
+        ) : field.fieldType === "user" && readOnly ? (
+          // A disabled UserCombobox may fall back to the raw numeric id when
+          // its option list is still loading. Read-only user fields are
+          // presentation-only, so render them through the same id→name map
+          // used by table cells instead of showing an implementation id.
+          roBox(renderCellValue(field, form[field.fieldKey], t, userNames, undefined, ml))
+        ) : field.fieldType === "created_at" ? (
+          // Системная дата создания записи — read-only. On edit it shows the
+          // server-injected timestamp; on create the value doesn't exist yet.
+          roBox(
+            form[field.fieldKey] ? (
+              renderCellValue(field, form[field.fieldKey], t, userNames, undefined, ml)
             ) : (
-              <FieldInput
-                field={field}
-                value={form[field.fieldKey]}
-                onChange={(v) =>
-                  setForm((prev) =>
-                    clearDependentDescendants({ ...prev, [field.fieldKey]: v }, field.fieldKey, allFields),
-                  )
-                }
-                disabled={readOnly}
-                userOptions={userOptions}
-                allFields={allFields}
-                rowValues={formWithRelationParents}
-                entityId={entityId}
-                pageId={pageId}
-              />
-            )}
-            {ml(field.descriptionJson) && (
-              <p className="text-xs text-slate-400">{ml(field.descriptionJson)}</p>
-            )}
-          </div>
-        );
-      })}
+              <span className="text-slate-300">—</span>
+            ),
+          )
+        ) : field.fieldType === "function" ? (
+          // Read-only live-computed formula preview from the current form
+          // values — updates as the user types, not only after saving.
+          roBox(
+            (() => {
+              const computed = formatFormulaResult(
+                field.formulaConfigJson?.expression ?? "",
+                formFormulaScope,
+                field.formulaConfigJson?.decimals,
+                formulaOptions,
+              );
+              return computed.error ? (
+                <span className="text-red-400">#ОШИБКА</span>
+              ) : computed.text === "" ? (
+                <span className="text-slate-300">—</span>
+              ) : directFormFormulaTypes.get(field.fieldKey) === "user" ? (
+                String(directFormulaDisplayValue(computed.text, "user", userNames))
+              ) : computed.bool !== undefined ? (
+                computed.bool ? "Да" : "Нет"
+              ) : computed.numeric ? (
+                <AffixedNumericValue config={field.formulaConfigJson}>{computed.text}</AffixedNumericValue>
+              ) : (
+                computed.text
+              );
+            })(),
+          )
+        ) : (
+          <FieldInput
+            field={field}
+            value={form[field.fieldKey]}
+            onChange={(v) =>
+              setForm((prev) =>
+                clearDependentDescendants({ ...prev, [field.fieldKey]: v }, field.fieldKey, allFields),
+              )
+            }
+            disabled={readOnly}
+            userOptions={userOptions}
+            allFields={allFields}
+            rowValues={formWithRelationParents}
+            entityId={entityId}
+            pageId={pageId}
+          />
+        )}
+        {ml(field.descriptionJson) && (
+          <p className="text-xs text-slate-400">{ml(field.descriptionJson)}</p>
+        )}
+      </div>
+    );
+  };
+
+  // Required fields the layout does not place for this mode (e.g. a field made
+  // required after publication) are appended so a create never becomes unusable.
+  const placedForMode = new Set<string>();
+  if (cardLayout) for (const tab of cardLayout.tabs) for (const sec of tab.sections) for (const b of sec.blocks)
+    if (b.fieldKey && b.modes.includes(requestedMode)) placedForMode.add(b.fieldKey);
+  const fallbackRequired = cardLayout && requestedMode === "create"
+    ? formFields.filter((f: Field) => f.isRequired && !placedForMode.has(f.fieldKey)) : [];
+
+  const renderCardBlock = (block: CardBlock): React.ReactNode => {
+    if (block.kind === "text") return <CardTextBlock block={block} />;
+    if (block.kind === "divider") return <CardDividerBlock block={block} />;
+    // Unbound slots and fields this viewer may not see render nothing: the
+    // template can never widen field permissions.
+    const field = block.fieldKey ? fieldByKey.get(block.fieldKey) : undefined;
+    if (!field) return null;
+    const label = ml(block.label) || undefined;
+    if (block.kind === "field" || field.fieldType !== "relation") return renderField(field, { label });
+    const relVal = relByField.get(field.fieldKey);
+    const multiple = field.relationConfigJson?.selectionMode === "multiple";
+    const ids = mode === "edit"
+      ? relVal?.linkedRecordIds ?? (relVal?.linkedRecordId != null ? [relVal.linkedRecordId] : [])
+      : multiple ? relationDraftIds(form[field.fieldKey])
+        : typeof form[field.fieldKey] === "number" ? [form[field.fieldKey] as number] : [];
+    return (
+      <div className="min-w-0 space-y-2" data-testid={`card-related-${field.fieldKey}`}>
+        {renderField(field, {
+          label,
+          suppressQuickCreate: mode === "create",
+          pickerTrigger: multiple ? (
+            <>
+              {viewOnly ? <Search className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+              {viewOnly
+                ? t("cards.relatedShow", "Показать список")
+                : mode === "create"
+                  ? t("cards.relatedLinkExisting", "Выбрать существующие")
+                  : t("cards.relatedAddLink", "Добавить / связать")}
+              <span className="text-slate-400">({ids.length})</span>
+            </>
+          ) : undefined,
+        })}
+        {mode === "create" && multiple && field.relationConfigJson?.allowCreate !== false && (
+          <p className="text-xs text-slate-500" data-testid={`text-save-first-${field.fieldKey}`}>
+            {t("cards.saveFirstForChild", "Новую связанную запись можно создать после сохранения этой записи. Существующие записи можно выбрать уже сейчас.")}
+          </p>
+        )}
+        <CardRelatedRecordsTable
+          entityId={entityId}
+          field={field}
+          relatedEntityIdHint={relColMetaMap.get(field.fieldKey)?.relatedEntityId}
+          ids={ids}
+          columns={block.columns}
+          refreshKey={relTick}
+          renderValue={(f, v) => renderCellValue(f, v, t, userNames, undefined, ml)}
+        />
+      </div>
+    );
+  };
+
+  return (
+    <>
+      {cardLayout ? (
+        <>
+          <CardLayoutView layout={cardLayout} mode={requestedMode} renderBlock={renderCardBlock} />
+          {fallbackRequired.length > 0 && (
+            <div className="space-y-4 border-t border-amber-200 pt-4" data-testid="card-fallback-required">
+              <p className="text-xs text-amber-700">{t("cards.fallbackRequired", "Обязательные поля, отсутствующие в карточке:")}</p>
+              {fallbackRequired.map((f: Field) => renderField(f))}
+            </div>
+          )}
+        </>
+      ) : formFields.map((field: Field) => renderField(field))}
       {writeThroughEdit && (
         <RecordEditModal
           entityId={writeThroughEdit.entityId}
@@ -11340,6 +11455,7 @@ function RecordEditModal({
   const draftVersionRef = useRef<number | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [relationEditing, setRelationEditing] = useState(false);
+  const cardSnapshot = useCardTemplateSnapshot({ open, entityId, mode: "edit" });
 
   // User options for `user` field selects; without them a `user` field's dropdown
   // is empty and cannot be selected. Relation/lookup values are now fetched inside
@@ -11418,7 +11534,7 @@ function RecordEditModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className={cn("max-h-[85vh] overflow-y-auto", layoutIsWide(cardSnapshot.layout) ? "max-w-4xl" : "max-w-lg")}>
         <DialogHeader>
           <DialogTitle>{t("records.editLinkedTitle", "Редактировать связанную запись")}</DialogTitle>
           <DialogDescription>
@@ -11429,7 +11545,9 @@ function RecordEditModal({
           <div className="py-8 text-center text-sm text-slate-400">{t("common.loading", "Загрузка...")}</div>
         ) : (
           <div className="space-y-4 py-2 min-w-0">
+            <CardSnapshotGate snapshot={cardSnapshot}>{cardLayout => (
             <RecordFormBody
+              cardLayout={cardLayout}
               entityId={entityId}
               mode="edit"
               recordId={recordId}
@@ -11447,6 +11565,7 @@ function RecordEditModal({
               }}
               onRelationEditingChange={setRelationEditing}
             />
+            )}</CardSnapshotGate>
             {statuses.length > 0 && (
               <div className="space-y-1.5">
                 <Label>{statusColumnName}</Label>
@@ -11483,7 +11602,7 @@ function RecordEditModal({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             {t("records.cancel", "Отмена")}
           </Button>
-          <Button onClick={submit} disabled={submitting || loading || relationEditing} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={submit} disabled={submitting || loading || relationEditing || cardSnapshot.status !== "ready"} className="bg-blue-600 hover:bg-blue-700">
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t("records.save", "Сохранить")}
           </Button>
         </DialogFooter>
@@ -11550,6 +11669,12 @@ function QuickCreateRelatedRecordDialog({
   const [lockedFieldKeys, setLockedFieldKeys] = useState<Set<string>>(new Set());
   const [contextLoading, setContextLoading] = useState(false);
   const [contextError, setContextError] = useState("");
+  // The caller's page may belong to the PARENT entity; only pass it to card
+  // resolution when it is genuinely this related entity's page.
+  const cardSnapshot = useCardTemplateSnapshot({
+    open, entityId: relatedEntityId, mode: "create",
+    pageId: pageId != null && relatedEntity?.pageId === pageId ? pageId : undefined,
+  });
 
   // The form's field set is computed EXACTLY like the main record form's
   // visibleFormFields (isActive + sortOrder above, field perms + per-role
@@ -11696,7 +11821,7 @@ function QuickCreateRelatedRecordDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="quick-create-related-dialog" className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent data-testid="quick-create-related-dialog" className={cn("max-h-[85vh] overflow-y-auto", layoutIsWide(cardSnapshot.layout) ? "max-w-4xl" : "max-w-lg")}>
         <DialogHeader>
           <DialogTitle>{t("records.relatedCreateTitle", "Новая связанная запись")}</DialogTitle>
           <DialogDescription>
@@ -11710,7 +11835,9 @@ function QuickCreateRelatedRecordDialog({
             {formFields.length === 0 && (
               <p className="text-sm text-slate-400">{t("records.relatedCreateNoFields", "Нет полей для заполнения")}</p>
             )}
+            <CardSnapshotGate snapshot={cardSnapshot}>{cardLayout => (
             <RecordFormBody
+              cardLayout={cardLayout}
               entityId={relatedEntityId}
               mode="create"
               recordId={null}
@@ -11721,6 +11848,7 @@ function QuickCreateRelatedRecordDialog({
               userOptions={userOptions}
               lockedFieldKeys={lockedFieldKeys}
             />
+            )}</CardSnapshotGate>
             {relStatuses.length > 0 && (
               <div className="space-y-1.5">
                 <Label>{statusColumnName}</Label>
@@ -11758,7 +11886,7 @@ function QuickCreateRelatedRecordDialog({
             {t("common.cancel", "Отмена")}
           </Button>
           {contextError && <p role="alert" className="text-sm text-red-600">{contextError}</p>}
-          <Button onClick={submit} disabled={submitting || fieldsLoading || contextLoading || !!contextError}>
+          <Button onClick={submit} disabled={submitting || fieldsLoading || contextLoading || !!contextError || cardSnapshot.status !== "ready"}>
             {t("common.create", "Создать")}
           </Button>
         </DialogFooter>

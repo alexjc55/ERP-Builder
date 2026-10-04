@@ -5,6 +5,68 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+export type CardTemplateState = typeof CardTemplateState[keyof typeof CardTemplateState];
+
+
+export const CardTemplateState = {
+  draft: 'draft',
+  published: 'published',
+} as const;
+
+export type CardTemplateLayout = { [key: string]: unknown };
+
+export interface CardTemplate {
+  id: number;
+  name: string;
+  entityId: number;
+  /** @nullable */
+  pageId: number | null;
+  state: CardTemplateState;
+  layout: CardTemplateLayout;
+  revision: number;
+}
+
+export type CardTemplateInputLayout = { [key: string]: unknown };
+
+export interface CardTemplateInput {
+  name: string;
+  entityId: number;
+  /** @nullable */
+  pageId?: number | null;
+  layout: CardTemplateInputLayout;
+  expectedRevision?: number;
+}
+
+export interface CardPublicationInput {
+  expectedRevision: number;
+  replaceId?: number;
+  replaceRevision?: number;
+}
+
+export interface CardPublicationConflict {
+  error: string;
+  active?: CardTemplate;
+}
+
+export type CardResolveInputMode = typeof CardResolveInputMode[keyof typeof CardResolveInputMode];
+
+
+export const CardResolveInputMode = {
+  view: 'view',
+  create: 'create',
+  edit: 'edit',
+} as const;
+
+export interface CardResolveInput {
+  entityId: number;
+  pageId?: number;
+  mode: CardResolveInputMode;
+}
+
+export interface CardResolution {
+  template: CardTemplate | null;
+}
+
 export type DocumentTemplateRevisionState = typeof DocumentTemplateRevisionState[keyof typeof DocumentTemplateRevisionState];
 
 
@@ -877,6 +939,7 @@ export const UserProfileDirection = {
 } as const;
 
 export interface RoleAdminCaps {
+  cardTemplates?: boolean;
   pages: boolean;
   entities: boolean;
   roles: boolean;

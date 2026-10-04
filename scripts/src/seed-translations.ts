@@ -51,14 +51,22 @@ async function main() {
   for (const e of curated) curatedMap.set(e.key, e);
 
   const sourceKeys = extractSourceKeys();
+  // Card-builder translations are kept together; Russian source fallbacks are
+  // the canonical Russian labels, as with the existing source-key extraction.
+  const cardTranslations = JSON.parse(readFileSync(join(__dirname, "data", "card-translations.json"), "utf8")) as Record<string, [string, string]>;
+  for (const [key, [en, he]] of Object.entries(cardTranslations)) {
+    curatedMap.set(key, { key, ru: sourceKeys.get(key) ?? key, en, he });
+  }
 
   // Union of curated keys and source keys.
   const allKeys = new Set<string>([...curatedMap.keys(), ...sourceKeys.keys()]);
+  const prefix = process.argv.find(arg => arg.startsWith("--prefix="))?.slice("--prefix=".length);
 
   const rows: { translationKey: string; translationsJson: { ru: string; en: string; he: string } }[] = [];
   let curatedOnly = 0;
   let sourceFallback = 0;
   for (const key of allKeys) {
+    if (prefix && !key.startsWith(prefix)) continue;
     const c = curatedMap.get(key);
     const srcRu = sourceKeys.get(key);
     const ru = c?.ru ?? srcRu ?? key;

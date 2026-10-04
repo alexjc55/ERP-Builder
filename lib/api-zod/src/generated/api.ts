@@ -8,6 +8,116 @@
 import * as zod from 'zod';
 
 
+export const ListCardTemplatesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "entityId": zod.number(),
+  "pageId": zod.number().nullable(),
+  "state": zod.enum(['draft', 'published']),
+  "layout": zod.record(zod.string(), zod.unknown()),
+  "revision": zod.number()
+})
+export const ListCardTemplatesResponse = zod.array(ListCardTemplatesResponseItem)
+
+
+export const CreateCardTemplateBody = zod.object({
+  "name": zod.string(),
+  "entityId": zod.number(),
+  "pageId": zod.number().nullish(),
+  "layout": zod.record(zod.string(), zod.unknown()),
+  "expectedRevision": zod.number().optional()
+})
+
+
+export const UpdateCardTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateCardTemplateBody = zod.object({
+  "name": zod.string(),
+  "entityId": zod.number(),
+  "pageId": zod.number().nullish(),
+  "layout": zod.record(zod.string(), zod.unknown()),
+  "expectedRevision": zod.number().optional()
+})
+
+export const UpdateCardTemplateResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "entityId": zod.number(),
+  "pageId": zod.number().nullable(),
+  "state": zod.enum(['draft', 'published']),
+  "layout": zod.record(zod.string(), zod.unknown()),
+  "revision": zod.number()
+})
+
+
+export const DeleteCardTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+export const PublishCardTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const PublishCardTemplateBody = zod.object({
+  "expectedRevision": zod.number(),
+  "replaceId": zod.number().optional(),
+  "replaceRevision": zod.number().optional()
+})
+
+export const PublishCardTemplateResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "entityId": zod.number(),
+  "pageId": zod.number().nullable(),
+  "state": zod.enum(['draft', 'published']),
+  "layout": zod.record(zod.string(), zod.unknown()),
+  "revision": zod.number()
+})
+
+
+export const UnpublishCardTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UnpublishCardTemplateBody = zod.object({
+  "expectedRevision": zod.number(),
+  "replaceId": zod.number().optional(),
+  "replaceRevision": zod.number().optional()
+})
+
+export const UnpublishCardTemplateResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "entityId": zod.number(),
+  "pageId": zod.number().nullable(),
+  "state": zod.enum(['draft', 'published']),
+  "layout": zod.record(zod.string(), zod.unknown()),
+  "revision": zod.number()
+})
+
+
+export const ResolveCardTemplateBody = zod.object({
+  "entityId": zod.number(),
+  "pageId": zod.number().optional(),
+  "mode": zod.enum(['view', 'create', 'edit'])
+})
+
+export const ResolveCardTemplateResponse = zod.object({
+  "template": zod.union([zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "entityId": zod.number(),
+  "pageId": zod.number().nullable(),
+  "state": zod.enum(['draft', 'published']),
+  "layout": zod.record(zod.string(), zod.unknown()),
+  "revision": zod.number()
+}),zod.null()])
+})
+
+
 
 
 export const listDocumentGenerationRunsQueryPageDefault = 1;
@@ -1199,6 +1309,7 @@ export const LoginResponse = zod.object({
   "permissions": zod.object({
   "superAdmin": zod.boolean(),
   "admin": zod.object({
+  "cardTemplates": zod.boolean().optional(),
   "pages": zod.boolean(),
   "entities": zod.boolean(),
   "roles": zod.boolean(),
@@ -1279,6 +1390,7 @@ export const GetMeResponse = zod.object({
   "permissions": zod.object({
   "superAdmin": zod.boolean(),
   "admin": zod.object({
+  "cardTemplates": zod.boolean().optional(),
   "pages": zod.boolean(),
   "entities": zod.boolean(),
   "roles": zod.boolean(),
@@ -1357,6 +1469,7 @@ export const UpdateMeResponse = zod.object({
   "permissions": zod.object({
   "superAdmin": zod.boolean(),
   "admin": zod.object({
+  "cardTemplates": zod.boolean().optional(),
   "pages": zod.boolean(),
   "entities": zod.boolean(),
   "roles": zod.boolean(),
@@ -1433,6 +1546,7 @@ export const ImpersonateResponse = zod.object({
   "permissions": zod.object({
   "superAdmin": zod.boolean(),
   "admin": zod.object({
+  "cardTemplates": zod.boolean().optional(),
   "pages": zod.boolean(),
   "entities": zod.boolean(),
   "roles": zod.boolean(),
@@ -1506,6 +1620,7 @@ export const StopImpersonationResponse = zod.object({
   "permissions": zod.object({
   "superAdmin": zod.boolean(),
   "admin": zod.object({
+  "cardTemplates": zod.boolean().optional(),
   "pages": zod.boolean(),
   "entities": zod.boolean(),
   "roles": zod.boolean(),
@@ -1583,6 +1698,7 @@ export const RedeemGuestLinkResponse = zod.object({
   "permissions": zod.object({
   "superAdmin": zod.boolean(),
   "admin": zod.object({
+  "cardTemplates": zod.boolean().optional(),
   "pages": zod.boolean(),
   "entities": zod.boolean(),
   "roles": zod.boolean(),
@@ -2023,6 +2139,7 @@ export const ListRolesResponseItem = zod.object({
   "permissionsJson": zod.object({
   "superAdmin": zod.boolean(),
   "admin": zod.object({
+  "cardTemplates": zod.boolean().optional(),
   "pages": zod.boolean(),
   "entities": zod.boolean(),
   "roles": zod.boolean(),
@@ -2087,6 +2204,7 @@ export const CreateRoleBody = zod.object({
   "permissionsJson": zod.object({
   "superAdmin": zod.boolean(),
   "admin": zod.object({
+  "cardTemplates": zod.boolean().optional(),
   "pages": zod.boolean(),
   "entities": zod.boolean(),
   "roles": zod.boolean(),
@@ -2152,6 +2270,7 @@ export const GetRoleResponse = zod.object({
   "permissionsJson": zod.object({
   "superAdmin": zod.boolean(),
   "admin": zod.object({
+  "cardTemplates": zod.boolean().optional(),
   "pages": zod.boolean(),
   "entities": zod.boolean(),
   "roles": zod.boolean(),
@@ -2219,6 +2338,7 @@ export const UpdateRoleBody = zod.object({
   "permissionsJson": zod.object({
   "superAdmin": zod.boolean(),
   "admin": zod.object({
+  "cardTemplates": zod.boolean().optional(),
   "pages": zod.boolean(),
   "entities": zod.boolean(),
   "roles": zod.boolean(),
@@ -2276,6 +2396,7 @@ export const UpdateRoleResponse = zod.object({
   "permissionsJson": zod.object({
   "superAdmin": zod.boolean(),
   "admin": zod.object({
+  "cardTemplates": zod.boolean().optional(),
   "pages": zod.boolean(),
   "entities": zod.boolean(),
   "roles": zod.boolean(),

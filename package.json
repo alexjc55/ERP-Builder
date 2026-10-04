@@ -14,6 +14,7 @@
     "test:e2e:page-load-profile": "bash scripts/with-validation-lock.sh env RUN_PAGE_LOAD_PROFILE=1 playwright test tests/e2e/page-load-profile.spec.ts",
     "test:e2e:relation-edit": "playwright test tests/e2e/relation-edit.spec.ts",
     "test:e2e:delivery-workflow": "bash scripts/validate-delivery-workflow-e2e.sh",
+    "test:e2e:card-templates": "bash scripts/validate-card-templates.sh",
     "test:e2e:inline-editor-profile:prod": "node scripts/run-inline-editor-profile.mjs",
     "test:inline-row-dependencies": "node --test tests/inline-row-dependencies.test.mjs",
     "test:e2e:stable-background-refresh:prod": "node scripts/run-inline-editor-profile.mjs --full-spec",

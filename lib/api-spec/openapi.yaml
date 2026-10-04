@@ -38,6 +38,101 @@ tags:
     description: Entity-bound DOCX document templates and generation
 
 paths:
+  /card-templates:
+    get:
+      operationId: listCardTemplates
+      responses:
+        "200":
+          description: All templates for card administrators
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CardTemplate" }
+    post:
+      operationId: createCardTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CardTemplateInput" }
+      responses:
+        "201":
+          description: Draft created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardTemplate" }
+  /card-templates/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    put:
+      operationId: updateCardTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CardTemplateInput" }
+      responses:
+        "200":
+          description: Draft saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardTemplate" }
+    delete:
+      operationId: deleteCardTemplate
+      responses:
+        "204": { description: Draft deleted }
+  /card-templates/{id}/publish:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: publishCardTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CardPublicationInput" }
+      responses:
+        "200":
+          description: Published atomically, former active template becomes a draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardTemplate" }
+        "409":
+          description: Replacement confirmation required or revision conflict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardPublicationConflict" }
+  /card-templates/{id}/unpublish:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: unpublishCardTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CardPublicationInput" }
+      responses:
+        "200":
+          description: Unpublished
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardTemplate" }
+  /card-templates/resolve:
+    post:
+      operationId: resolveCardTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CardResolveInput" }
+      responses:
+        "200":
+          description: Active page override or entity template; null means standard ERP form
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardResolution" }
   /document-generation-runs:
     get:
       operationId: listDocumentGenerationRuns
@@ -4535,6 +4630,54 @@ components:
       scheme: bearer
       description: Opaque one-time-disclosed inbound integration secret
   schemas:
+    CardTemplate:
+      type: object
+      required: [id, name, entityId, pageId, state, layout, revision]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        entityId: { type: integer }
+        pageId: { type: [integer, "null"] }
+        state: { type: string, enum: [draft, published] }
+        layout: { type: object, additionalProperties: true }
+        revision: { type: integer }
+    CardTemplateInput:
+      type: object
+      required: [name, entityId, layout]
+      properties:
+        name: { type: string }
+        entityId: { type: integer }
+        pageId: { type: [integer, "null"] }
+        layout: { type: object, additionalProperties: true }
+        expectedRevision: { type: integer }
+    CardPublicationInput:
+      type: object
+      required: [expectedRevision]
+      properties:
+        expectedRevision: { type: integer }
+        replaceId: { type: integer }
+        replaceRevision: { type: integer }
+    CardPublicationConflict:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        active: { $ref: "#/components/schemas/CardTemplate" }
+    CardResolveInput:
+      type: object
+      required: [entityId, mode]
+      properties:
+        entityId: { type: integer }
+        pageId: { type: integer }
+        mode: { type: string, enum: [view, create, edit] }
+    CardResolution:
+      type: object
+      required: [template]
+      properties:
+        template:
+          oneOf:
+            - { $ref: "#/components/schemas/CardTemplate" }
+            - { type: "null" }
     DocumentTemplate:
       type: object
       required: [id, entityId, name, isArchived, revisions]
@@ -6029,6 +6172,8 @@ components:
       type: object
       required: [pages, entities, roles, users, translations, events, modules, automations, customFilters, columnGroups, googleDrive, settings, dataImport]
       properties:
+        cardTemplates:
+          type: boolean
         pages:
           type: boolean
         entities:

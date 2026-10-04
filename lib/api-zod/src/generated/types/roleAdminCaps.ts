@@ -7,6 +7,7 @@
  */
 
 export interface RoleAdminCaps {
+  cardTemplates?: boolean;
   pages: boolean;
   entities: boolean;
   roles: boolean;

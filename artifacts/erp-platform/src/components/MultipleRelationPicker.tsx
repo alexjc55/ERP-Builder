@@ -20,6 +20,8 @@ export function MultipleRelationPicker(props: {
   dependent?: boolean; parentValue?: string | null;
   onChange?: (value: string) => void; onChanged?: (version?: number) => void;
   onEditingChange?: (open: boolean) => void;
+  /** Optional replacement for the count trigger (e.g. card related tables show an explicit add/link button). */
+  trigger?: ReactNode;
   renderQuickCreate?: (props: { open: boolean; onOpenChange: (open: boolean) => void; relatedEntityId: number; onCreated: (id: number, label: string | null) => void }) => ReactNode;
 }) {
   const { entityId, fieldKey, recordId, pageId, pageField, parentValue, dependent } = props;
@@ -89,9 +91,15 @@ export function MultipleRelationPicker(props: {
   const filtered = visible.filter(c => c.label.toLocaleLowerCase().includes(search.toLocaleLowerCase()));
   const labels = new Map([...(props.members ?? []), ...candidates].map(c => [c.id, c.label]));
   return <>
+    {props.trigger != null ? (
+      <button type="button" data-testid={`button-relation-picker-${fieldKey}`} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={() => changeOpen(true)}>
+        {props.trigger}
+      </button>
+    ) : (
     <button type="button" className="text-sm text-blue-700 underline underline-offset-4" onClick={() => changeOpen(true)}>
       <AffixedNumericValue config={{ displayAffix: ml(props.countSuffixJson), displayAffixPosition: "after" }}>{ids.length}</AffixedNumericValue>
     </button>
+    )}
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>Связанные записи ({selected.length})</DialogTitle></DialogHeader>
