@@ -82,3 +82,4 @@
 - [Global status tags](status-tags.md) — shared catalog; expand per-role restrictions before merging; serialize deletion with JSON-reference writes.
 - [API memory lifecycle](api-memory-lifecycle.md) — bounded expiry, invalidation-safe cache fills, explicit SSE cleanup, and cautious RSS attribution.
 - [Kanban requirements](kanban-requirements.md) — CRM-first use, universal entity view; terminal-column hiding, archiving, responsive dragging, viewport scrolling, configurable cards.
+- [Конструктор карточек](card-builder-requirements.md) — требования к будущему модулю: черновики, копирование между сущностями с сохранением структуры и разные режимы карточки.
