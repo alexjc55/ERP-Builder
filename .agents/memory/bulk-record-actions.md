@@ -8,7 +8,7 @@ description: Multi-select record actions — partial archive/delete behavior and
   **How to apply:** Reject a newly hidden row without side effects; report it in failedIds for bulk and as a non-disclosing 404 for a single request. Check both record orders (a success before and after a rejected row).
 - Re-read initiating-page status policy after destructive-operation record locks, before dependent-link clearing, archive no-op checks, or version-conflict reporting. Destination allowances never grant row visibility.
   **Why:** Pre-lock authorization can become stale while another transaction holds a record, exposing hidden rows to deletion or archiving; late refusal cannot undo post-commit trash/audit/events.
-  **How to apply:** Keep the visibility guard and bookkeeping shared by single and bulk paths. This fresh page-policy read does not imply that request-cached role permissions are refreshed.
+  **How to apply:** Keep the visibility guard and bookkeeping shared by single and bulk paths. Reload active-user roles and role/page grants on the transaction connection for each locked row; never reuse pre-wait request permissions. Single denials remain non-disclosing, and successful earlier bulk rows stay committed.
 - Locked authorization reads must reuse the transaction connection, including field metadata and uncached mirror-page resolution.
   **Why:** Borrowing another pooled connection while holding a transaction can deadlock the entire pool when concurrent destructive requests consume all available connections.
   **How to apply:** Thread the transaction executor through every database-reading helper; test with an isolated one-connection pool and no preloaded mirror context. A warmed request cache must not be required for correctness.

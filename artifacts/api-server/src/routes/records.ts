@@ -14,6 +14,7 @@ import {
   requireRecordParam,
   assertRecord,
   getPermissions,
+  freshPermissions,
   getUserRoleIds,
   effectiveScope,
   effectiveScopeFor,
@@ -5050,8 +5051,14 @@ export async function assertDestructiveVisibility(
   row: typeof entityRecordsTable.$inferSelect,
   pageId: number | undefined,
   tx: DbExecutor,
+  action: "delete" | "update" = "delete",
 ): Promise<void> {
-  const perms = await getPermissions(req);
+  const perms = await freshPermissions(req, tx);
+  // A local context prevents mirror/role caches from surviving across bulk rows.
+  req = { user: req.user } as Request;
+  const grant = await effectiveRecordPerm(req, perms, row.entityId, pageId, tx);
+  if (!perms.superAdmin && ((pageId != null && !perms.pageIds.includes(pageId)) ||
+      !grant?.view || !grant[action])) throw new DestructiveAccessLostError();
   const fields = await loadActiveFields(row.entityId, tx);
   const { scope, scopeFieldKeys } = await effectiveScopeFor(req, perms, row.entityId, pageId, tx);
   const { hiddenRowStatusIds } = effectiveStatusVisibility(perms, row.entityId);
@@ -5245,7 +5252,7 @@ async function applyArchiveFlag(
       .where(and(eq(entityRecordsTable.id, recordId), eq(entityRecordsTable.entityId, entityId)))
       .for("update");
     if (!current) return undefined;
-    await assertDestructiveVisibility(req, current, pageId, tx);
+    await assertDestructiveVisibility(req, current, pageId, tx, "update");
     if (expectedVersion != null && current.version !== expectedVersion) return undefined;
     const currentlyArchived = current.archivedAt != null;
     if (currentlyArchived === archived) return { record: current, changed: false };

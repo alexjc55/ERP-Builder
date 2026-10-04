@@ -2461,8 +2461,8 @@ test("page-local select mappings synchronize entity status atomically", async (t
     });
     await mkdir(UPLOADS_ROOT, { recursive: true });
     for (const action of ["delete", "archive", "unarchive"] as const) {
-      for (const bulk of [false, true]) for (const initiallyScoped of [false, true]) {
-        await t.test(`${action}, bulk=${bulk}, scoped=${initiallyScoped}`, async () => {
+      for (const bulk of [false, true]) for (const initiallyScoped of [false, true]) for (const revoke of ["status", "cap", "page", "roles"] as const) {
+        await t.test(`${action}, bulk=${bulk}, scoped=${initiallyScoped}, revoke=${revoke}`, async () => {
           const rows = await db.insert(entityRecordsTable).values([
             { entityId: ids.entity, statusId: ids.done, valuesJson: { name: "Denied", owner: ids.user },
               archivedAt: action === "unarchive" ? new Date() : null },
@@ -2530,18 +2530,32 @@ test("page-local select mappings synchronize entity status atomically", async (t
               await new Promise(resolve => setTimeout(resolve, 10));
             }
             assert.ok(waiting, "mutation must wait on the real record lock");
-            await db.update(pagesTable).set({ statusScopeJson: {
+            if (revoke === "status") await db.update(pagesTable).set({ statusScopeJson: {
               statusIds: [ids.base], includeNoStatus: false, allowAllChanges: true,
             } }).where(eq(pagesTable.id, ids.targetPage));
+            else if (revoke === "roles") {
+              const [role] = await db.insert(rolesTable).values({
+                nameJson: { en: `${runId}-revoked` }, permissionsJson: permissions([]),
+              }).returning();
+              ids.revokedRole = role!.id;
+              await db.delete(userRolesTable).where(eq(userRolesTable.userId, ids.user));
+              await db.update(usersTable).set({ roleId: role!.id }).where(eq(usersTable.id, ids.user));
+            } else {
+              const next = permissions(revoke === "page" ? [] : [ids.targetPage, ids.sourcePage]);
+              if (revoke === "cap") next.records[String(ids.entity)]![action === "delete" ? "delete" : "update"] = false;
+              await db.update(rolesTable).set({ permissionsJson: next }).where(eq(rolesTable.id, ids.role));
+            }
             release();
             await holder;
             const response = await pending;
             assert.equal(response.status, bulk ? 200 : 404, JSON.stringify(response.body));
             if (bulk) {
-              assert.deepEqual(response.body.failedIds, [denied!.id]);
-              assert.deepEqual(response.body.successIds, [allowed!.id]);
+              const allowedSucceeds = revoke === "status" || initiallyScoped;
+              assert.deepEqual(response.body.failedIds, allowedSucceeds ? [denied!.id] : [denied!.id, allowed!.id]);
+              assert.deepEqual(response.body.successIds, allowedSucceeds ? [allowed!.id] : []);
               const [survivor] = await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.id, allowed!.id));
-              if (action === "delete") assert.equal(survivor, undefined);
+              if (!allowedSucceeds) assert.deepEqual(survivor, allowed);
+              else if (action === "delete") assert.equal(survivor, undefined);
               else {
                 assert.equal(survivor!.archivedAt != null, action === "archive");
                 assert.equal(survivor!.archiveExempt, action === "unarchive");
@@ -2556,6 +2570,13 @@ test("page-local select mappings synchronize entity status atomically", async (t
             release?.();
             await holder?.catch(() => undefined);
             await pending?.catch(() => undefined);
+            await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) }).where(eq(rolesTable.id, ids.role));
+            await db.update(usersTable).set({ roleId: ids.role }).where(eq(usersTable.id, ids.user));
+            await db.insert(userRolesTable).values({ userId: ids.user, roleId: ids.role }).onConflictDoNothing();
+            if (ids.revokedRole) {
+              await db.delete(rolesTable).where(eq(rolesTable.id, ids.revokedRole));
+              delete ids.revokedRole;
+            }
             await db.update(pagesTable).set({ statusScopeJson: null }).where(eq(pagesTable.id, ids.targetPage));
             const recordIds = rows.map(row => row.id);
             await db.delete(systemEventsTable).where(inArray(systemEventsTable.recordId, recordIds));

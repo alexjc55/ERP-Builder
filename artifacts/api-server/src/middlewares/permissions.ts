@@ -151,7 +151,7 @@ export function mergePermissions(list: RolePermissions[]): RolePermissions {
  * consume the canonical concrete status arrays used by server enforcement, while
  * role CRUD continues to return/store the authored tag-id configuration.
  */
-export async function expandStatusTagRestrictions(perms: RolePermissions): Promise<RolePermissions> {
+export async function expandStatusTagRestrictions(perms: RolePermissions, exec: Pick<typeof db, "select"> = db): Promise<RolePermissions> {
   const records = perms.records ?? {};
   const tagIds = new Set<number>();
   const mirrorPageIds = new Set<number>();
@@ -167,13 +167,13 @@ export async function expandStatusTagRestrictions(perms: RolePermissions): Promi
 
   const mirrorEntity = new Map<number, number>();
   if (mirrorPageIds.size > 0) {
-    const rows = await db.select({ id: pagesTable.id, entityId: pagesTable.mirrorEntityId })
+    const rows = await exec.select({ id: pagesTable.id, entityId: pagesTable.mirrorEntityId })
       .from(pagesTable).where(inArray(pagesTable.id, [...mirrorPageIds]));
     for (const row of rows) if (row.entityId != null) mirrorEntity.set(row.id, row.entityId);
   }
   const matchingStatuses = new Map<string, number[]>();
   if (tagIds.size > 0) {
-    const rows = await db
+    const rows = await exec
       .select({ entityId: entityStatusesTable.entityId, statusId: entityStatusesTable.id, tagId: statusTagsTable.tagId })
       .from(statusTagsTable)
       .innerJoin(entityStatusesTable, eq(statusTagsTable.statusId, entityStatusesTable.id))
@@ -229,10 +229,10 @@ export async function loadPermissionsForRoles(roleIds: number[]): Promise<RolePe
  * attached (per-role specs keyed by role id). Field-access resolution uses the
  * map so a role that grants nothing on an entity cannot widen field access.
  */
-export async function loadMergedPermissions(roleIds: number[]): Promise<RolePermissions> {
+export async function loadMergedPermissions(roleIds: number[], exec: Pick<typeof db, "select"> = db): Promise<RolePermissions> {
   const ids = [...new Set(roleIds)];
   if (ids.length === 0) return NO_ACCESS_PERMS;
-  const rows = await db
+  const rows = await exec
     .select({ id: rolesTable.id, permissionsJson: rolesTable.permissionsJson })
     .from(rolesTable)
     .where(inArray(rolesTable.id, ids));
@@ -240,7 +240,7 @@ export async function loadMergedPermissions(roleIds: number[]): Promise<RolePerm
   // guarantee, and homePageId is resolved as "first non-null in list order".
   const byId = new Map(rows.map((r) => [r.id, r]));
   const ordered = ids.map((id) => byId.get(id)).filter((r): r is NonNullable<typeof r> => r != null);
-  const expanded = await Promise.all(ordered.map((r) => expandStatusTagRestrictions(r.permissionsJson ?? NO_ACCESS_PERMS)));
+  const expanded = await Promise.all(ordered.map((r) => expandStatusTagRestrictions(r.permissionsJson ?? NO_ACCESS_PERMS, exec)));
   const merged = mergePermissions(expanded);
   if (ordered.length > 1) {
     merged.perRole = Object.fromEntries(ordered.map((r, index) => [String(r.id), expanded[index]]));
@@ -345,6 +345,16 @@ export async function getPermissions(req: Request): Promise<RolePermissions> {
   return perms;
 }
 
+/** Locked writes must not reuse role assignments or permissions from before the wait. */
+export async function freshPermissions(req: Request, exec: Pick<typeof db, "select">): Promise<RolePermissions> {
+  if (!req.user) return NO_ACCESS_PERMS;
+  const [user] = await exec.select().from(usersTable).where(eq(usersTable.id, req.user.userId)).limit(1);
+  if (!user?.isActive) return NO_ACCESS_PERMS;
+  const roles = await exec.select({ roleId: userRolesTable.roleId }).from(userRolesTable)
+    .where(eq(userRolesTable.userId, user.id));
+  return loadMergedPermissions(primaryFirstRoleIds(roles.map(r => r.roleId), user.roleId), exec);
+}
+
 /** Guard an admin-builder mutation by capability area. Use after requireAuth. */
 export function requireAdmin(area: keyof RoleAdminCaps) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -420,9 +430,10 @@ export async function effectiveRecordPerm(
   perms: RolePermissions,
   entityId: number,
   pageId?: number,
+  exec: Pick<typeof db, "select"> = db,
 ): Promise<RecordPermission | undefined> {
   if (pageId != null && (perms.pageIds?.includes(pageId) ?? false)) {
-    const mirrorEntityId = await getPageMirrorEntityId(req, pageId);
+    const mirrorEntityId = await getPageMirrorEntityId(req, pageId, exec);
     if (mirrorEntityId === entityId) {
       const override = perms.records[mirrorPermKey(pageId)];
       if (override) return override;
