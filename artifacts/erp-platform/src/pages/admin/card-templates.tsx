@@ -47,6 +47,7 @@ import {
   CARD_MODES, boundFieldKeys, copyLayout, findBlock, insertBlock, layoutIssues, makeBlock, moveBlock, moveItem,
   newId, parseCardLayout, presetLayout, removeBlock, updateBlock, mlIsEmpty,
   addRow, blockColumnLimit, convertSectionToRows, effectiveSpan, spanChoices, findRowOf, insertBlockInRow, moveBlockAcrossRows, moveBlockToRow, moveRow, removeRow, setRowColumns,
+  CARD_PRESENTATIONS, layoutPresentation, type CardPresentation,
   type CardBlock, type CardBlockKind, type CardLayout, type CardMode, type CardSection, type CardStyle, type LayoutPreset,
 } from "@/lib/cardLayout";
 import { cardAppearance } from "@/lib/cardAppearance";
@@ -913,14 +914,14 @@ function TemplateEditor({ id }: { id: number }) {
         </main>
 
         {/* Inspector */}
-        <aside className="space-y-3 lg:sticky lg:top-16 lg:max-h-[calc(100dvh-5rem)] lg:overflow-y-auto">
+        <aside data-testid="card-inspector" className="min-w-0 space-y-3 lg:sticky lg:top-16 lg:max-h-[calc(100dvh-5rem)] lg:overflow-y-auto [&_fieldset]:min-w-0 [&_fieldset]:max-w-full [&_button[role=combobox]]:min-w-0 [&_button[role=combobox]>span]:min-w-0 [&_button[role=combobox]>svg]:shrink-0">
           <div className="flex gap-1 rounded-md bg-slate-200/60 p-0.5 text-xs">
             <button type="button" data-testid="button-inspector-style" onClick={() => setSelection({ type: "style" })}
               className={cn("flex-1 rounded px-2 py-1 font-medium", selection.type === "style" ? "bg-white shadow-sm" : "text-slate-600")}>{t("cards.styleAndScope", "Оформление")}</button>
             <button type="button" onClick={() => setSelection({ type: "tab", id: tab.id })}
               className={cn("flex-1 rounded px-2 py-1 font-medium", selection.type !== "style" ? "bg-white shadow-sm" : "text-slate-600")}>{t("cards.element", "Элемент")}</button>
           </div>
-          <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
+          <div className="min-w-0 space-y-4 rounded-xl border border-slate-200 bg-white p-4">
             {selection.type === "style" && (
               <StylePanel layout={layout} readOnly={readOnly} onChange={change}
                 scope={<><EntityPageFields entityId={template.entityId} pageId={pageId} lockEntity onEntity={() => undefined}
@@ -1018,6 +1019,18 @@ function IconBtn({ children, label, onClick, disabled, danger }: { children: Rea
   );
 }
 
+/** Tiny schematic of the window placement (screen outline + card area). */
+function PresentationGlyph({ kind, active }: { kind: CardPresentation; active: boolean }) {
+  const fill = active ? "bg-blue-500" : "bg-slate-300";
+  return (
+    <span aria-hidden className="relative block h-6 w-9 rounded-sm border border-slate-300 bg-white">
+      {kind === "modal" && <span className={cn("absolute inset-x-2 inset-y-1 rounded-[2px]", fill)} />}
+      {kind === "side" && <span className={cn("absolute inset-y-0 end-0 w-1/2 rounded-e-[2px]", fill)} />}
+      {kind === "fullscreen" && <span className={cn("absolute inset-0.5 rounded-[1px]", fill)} />}
+    </span>
+  );
+}
+
 function StylePanel({ layout, readOnly, onChange, scope }: { layout: CardLayout; readOnly: boolean; onChange: (fn: (l: CardLayout) => CardLayout) => void; scope: ReactNode }) {
   const t = useT();
   const styles: { key: CardStyle; label: string }[] = [
@@ -1053,6 +1066,23 @@ function StylePanel({ layout, readOnly, onChange, scope }: { layout: CardLayout;
           ))}
         </div>
         <p className="text-xs text-slate-500">{t("cards.styleHint", "Без изменений параметров «Свой» выглядит как стандартная форма ERP.")}</p>
+      </div>
+      <div className="space-y-1.5" data-testid="group-presentation">
+        <Label id="label-presentation">{t("cards.presentation", "Открытие карточки")}</Label>
+        <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-labelledby="label-presentation">
+          {CARD_PRESENTATIONS.map(p => {
+            const active = layoutPresentation(layout) === p;
+            return (
+              <button key={p} type="button" role="radio" aria-checked={active} data-testid={`button-presentation-${p}`}
+                onClick={() => onChange(l => ({ ...l, presentation: p }))}
+                className={cn("flex min-w-0 flex-col items-center gap-1 rounded-md border px-1.5 py-2 text-center text-[11px] font-medium [overflow-wrap:anywhere]", active ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600 hover:border-slate-300")}>
+                <PresentationGlyph kind={p} active={active} />
+                {p === "modal" ? t("cards.presentationModal", "Окно") : p === "side" ? t("cards.presentationSide", "Боковая панель") : t("cards.presentationFullscreen", "Весь экран")}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-slate-500">{t("cards.presentationHint", "На телефоне карточка всегда открывается на весь экран. Пользователь может развернуть окно кнопкой в заголовке.")}</p>
       </div>
       {layout.style === "custom" && (
         <div className="space-y-3 border-t border-slate-100 pt-3">

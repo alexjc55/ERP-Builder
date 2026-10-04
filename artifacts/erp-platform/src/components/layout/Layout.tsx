@@ -38,6 +38,7 @@ function SidebarItem({
   children,
   depth = 0,
   collapsed = false,
+  defaultExpanded = true,
 }: {
   name: string;
   icon?: string;
@@ -45,9 +46,10 @@ function SidebarItem({
   children?: React.ReactNode;
   depth?: number;
   collapsed?: boolean;
+  defaultExpanded?: boolean;
 }) {
   const [location] = useLocation();
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const hasChildren = !!children;
   const isActive = route ? (route === "/" ? location === route : location.startsWith(route)) : false;
   const IconComp = getIconComponent(icon, LayoutDashboard);
@@ -75,6 +77,7 @@ function SidebarItem({
       <div>
         <button
           onClick={() => setExpanded(!expanded)}
+          aria-expanded={expanded}
           className={cn(
             "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
             "text-slate-300 hover:bg-slate-700/60 hover:text-white",
@@ -276,7 +279,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               ));
             }
             return (
-              <SidebarItem key={page.id} name={name} icon={page.icon || "settings"} depth={0}>
+              <SidebarItem key={`${page.id}:${page.menuDefaultExpanded ?? true}`} defaultExpanded={page.menuDefaultExpanded ?? true} name={name} icon={page.icon || "settings"} depth={0}>
                 {children.map((child: Page) => (
                   <SidebarItem
                     key={child.id}

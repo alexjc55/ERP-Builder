@@ -62,6 +62,20 @@ test("card registry: scope inheritance, draft validation, permission gates and a
     expect((await api("", { name: "Unsafe style", entityId: entity.id, layout: { ...layout, style: "custom", customStyle: { background: "url(https://example.invalid)" } } })).status()).toBe(400);
     const colored = await create("White text", null, { ...layout, style: "custom", customStyle: { textColor: "#ffffff" } });
     expect(colored.layout.customStyle.textColor).toBe("#ffffff");
+    expect((await api("", { name: "Invalid presentation", entityId: entity.id, layout: { ...layout, presentation: "unknown" } })).status()).toBe(400);
+    for (const presentation of ["modal", "side", "fullscreen"]) {
+      const card = await create(`Presentation ${presentation}`, null, { ...layout, presentation });
+      expect(card.layout.presentation).toBe(presentation);
+      const saved = await api(`/${card.id}`, { name: card.name, entityId: entity.id, layout: card.layout, expectedRevision: card.revision }, "PUT");
+      expect(saved.status()).toBe(200);
+      expect((await saved.json()).layout.presentation).toBe(presentation);
+      const published = await api(`/${card.id}/publish`, { expectedRevision: card.revision + 1 });
+      expect(published.status()).toBe(200);
+      const resolved = await api("/resolve", { entityId: entity.id, mode: "view" });
+      expect(resolved.status()).toBe(200);
+      expect((await resolved.json()).template.layout.presentation).toBe(presentation);
+      expect((await api(`/${card.id}/unpublish`, { expectedRevision: card.revision + 2 })).status()).toBe(200);
+    }
     const formattedLayout = {
       ...layout, tabs: [{ ...layout.tabs[0], sections: [{
         ...layout.tabs[0].sections[0],

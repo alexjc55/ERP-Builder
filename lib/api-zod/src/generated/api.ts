@@ -2486,6 +2486,7 @@ export const ListPagesResponseItem = zod.object({
   "icon": zod.string(),
   "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
+  "menuDefaultExpanded": zod.boolean().optional(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({
@@ -2623,6 +2624,7 @@ export const CreatePageBody = zod.object({
   "icon": zod.string(),
   "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
+  "menuDefaultExpanded": zod.boolean().optional(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({
@@ -2756,6 +2758,7 @@ export const GetPageResponse = zod.object({
   "icon": zod.string(),
   "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
+  "menuDefaultExpanded": zod.boolean().optional(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({
@@ -2891,6 +2894,7 @@ export const UpdatePageBody = zod.object({
   "icon": zod.string().optional(),
   "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
+  "menuDefaultExpanded": zod.boolean().optional(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({
@@ -3016,6 +3020,7 @@ export const UpdatePageResponse = zod.object({
   "icon": zod.string(),
   "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
+  "menuDefaultExpanded": zod.boolean().optional(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({

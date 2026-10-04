@@ -8,7 +8,8 @@ import { draftRelationSelections, relationDraftIds } from "@/lib/relationSelecti
 import { CardLayoutView, CardTextBlock, CardDividerBlock, CardSnapshotGate } from "./CardLayoutView";
 import { CardRelatedRecordsTable } from "./CardRelatedRecordsTable";
 import { useCardTemplateSnapshot } from "@/lib/useCardTemplateSnapshot";
-import { layoutIsWide, type CardBlock, type CardLayout } from "@/lib/cardLayout";
+import { CardDialogShell } from "./CardDialogShell";
+import { layoutIsWide, layoutPresentation, type CardBlock, type CardLayout } from "@/lib/cardLayout";
 import { columnGroupBodyStyle, resolveColumnGroupCellStyle } from "@/lib/columnGroupStyles";
 import { InlineListPicker } from "@/components/InlineListPicker";
 import { InlineStatusPicker } from "@/components/InlineStatusPicker";
@@ -9528,20 +9529,42 @@ export function EntityRecords({
       </>
       )}
 
-      <Dialog
+      <CardDialogShell
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open);
           if (!open) setDialogRelationEditing(false);
         }}
-      >
-        <DialogContent className={cn("max-h-[85vh] overflow-y-auto", layoutIsWide(cardSnapshot.layout) ? "max-w-4xl" : "max-w-lg")}>
-          <DialogHeader>
+        presentation={cardSnapshot.layout ? layoutPresentation(cardSnapshot.layout) : null}
+        wide={layoutIsWide(cardSnapshot.layout)} testId="record-dialog"
+        header={<>
             <DialogTitle>{viewing ? t("records.viewTitle", "Просмотр записи") : editing ? t("records.editTitle", "Редактировать запись") : t("records.newTitle", "Новая запись")}</DialogTitle>
             <DialogDescription>
               {viewing ? t("records.viewDesc", "Запись открыта только для чтения.") : t("records.dialogDesc", "Заполните поля записи. Обязательные поля помечены звёздочкой.")}
             </DialogDescription>
-          </DialogHeader>
+          </>}
+        footer={<>
+            {viewing ? (
+              <>
+                <Button variant="outline" data-testid="record-dialog-close" onClick={() => setDialogOpen(false)}>{t("common.close", "Закрыть")}</Button>
+                {canUpdate && editing && (
+                  <Button data-testid="record-dialog-to-edit" className="bg-blue-600 hover:bg-blue-700" onClick={() => setViewing(false)}>
+                    <Pencil className="w-3.5 h-3.5 me-1.5" />{t("records.edit", "Редактировать")}
+                  </Button>
+                )}
+              </>
+            ) : (<>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("records.cancel", "Отмена")}</Button>
+            <Button
+              data-testid="record-dialog-save"
+              onClick={handleSubmit}
+              disabled={isPending || dialogRelationEditing || cardSnapshot.status !== "ready"}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? t("records.save", "Сохранить") : t("records.create", "Создать")}
+            </Button>
+            </>)}
+          </>}>
           <div className="space-y-4 py-2 min-w-0">
             <CardSnapshotGate snapshot={cardSnapshot}>{cardLayout => (
             <RecordFormBody
@@ -9627,30 +9650,7 @@ export function EntityRecords({
             )}
 
           </div>
-          <DialogFooter>
-            {viewing ? (
-              <>
-                <Button variant="outline" data-testid="record-dialog-close" onClick={() => setDialogOpen(false)}>{t("common.close", "Закрыть")}</Button>
-                {canUpdate && editing && (
-                  <Button data-testid="record-dialog-to-edit" className="bg-blue-600 hover:bg-blue-700" onClick={() => setViewing(false)}>
-                    <Pencil className="w-3.5 h-3.5 me-1.5" />{t("records.edit", "Редактировать")}
-                  </Button>
-                )}
-              </>
-            ) : (<>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("records.cancel", "Отмена")}</Button>
-            <Button
-              data-testid="record-dialog-save"
-              onClick={handleSubmit}
-              disabled={isPending || dialogRelationEditing || cardSnapshot.status !== "ready"}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : editing ? t("records.save", "Сохранить") : t("records.create", "Создать")}
-            </Button>
-            </>)}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </CardDialogShell>
 
       {writeThroughEdit && (
         <RecordEditModal
@@ -11533,14 +11533,23 @@ function RecordEditModal({
   const loading = recordLoading || fieldsLoading;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn("max-h-[85vh] overflow-y-auto", layoutIsWide(cardSnapshot.layout) ? "max-w-4xl" : "max-w-lg")}>
-        <DialogHeader>
+    <CardDialogShell open={open} onOpenChange={onOpenChange}
+        presentation={cardSnapshot.layout ? layoutPresentation(cardSnapshot.layout) : null}
+        wide={layoutIsWide(cardSnapshot.layout)} testId="record-edit-modal"
+        header={<>
           <DialogTitle>{t("records.editLinkedTitle", "Редактировать связанную запись")}</DialogTitle>
           <DialogDescription>
             {t("records.dialogDesc", "Заполните поля записи. Обязательные поля помечены звёздочкой.")}
           </DialogDescription>
-        </DialogHeader>
+        </>}
+        footer={<>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+            {t("records.cancel", "Отмена")}
+          </Button>
+          <Button onClick={submit} disabled={submitting || loading || relationEditing || cardSnapshot.status !== "ready"} className="bg-blue-600 hover:bg-blue-700">
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t("records.save", "Сохранить")}
+          </Button>
+        </>}>
         {loading ? (
           <div className="py-8 text-center text-sm text-slate-400">{t("common.loading", "Загрузка...")}</div>
         ) : (
@@ -11598,16 +11607,7 @@ function RecordEditModal({
             )}
           </div>
         )}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            {t("records.cancel", "Отмена")}
-          </Button>
-          <Button onClick={submit} disabled={submitting || loading || relationEditing || cardSnapshot.status !== "ready"} className="bg-blue-600 hover:bg-blue-700">
-            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t("records.save", "Сохранить")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </CardDialogShell>
   );
 }
 
@@ -11820,14 +11820,24 @@ function QuickCreateRelatedRecordDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="quick-create-related-dialog" className={cn("max-h-[85vh] overflow-y-auto", layoutIsWide(cardSnapshot.layout) ? "max-w-4xl" : "max-w-lg")}>
-        <DialogHeader>
+    <CardDialogShell open={open} onOpenChange={onOpenChange}
+        presentation={cardSnapshot.layout ? layoutPresentation(cardSnapshot.layout) : null}
+        wide={layoutIsWide(cardSnapshot.layout)} testId="quick-create-related-dialog"
+        header={<>
           <DialogTitle>{t("records.relatedCreateTitle", "Новая связанная запись")}</DialogTitle>
           <DialogDescription>
             {t("records.dialogDesc", "Заполните поля записи. Обязательные поля помечены звёздочкой.")}
           </DialogDescription>
-        </DialogHeader>
+        </>}
+        footer={<>
+          <Button data-testid="quick-create-related-cancel" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+            {t("common.cancel", "Отмена")}
+          </Button>
+          {contextError && <p role="alert" className="text-sm text-red-600">{contextError}</p>}
+          <Button onClick={submit} disabled={submitting || fieldsLoading || contextLoading || !!contextError || cardSnapshot.status !== "ready"}>
+            {t("common.create", "Создать")}
+          </Button>
+        </>}>
         {fieldsLoading || contextLoading ? (
           <div className="py-8 text-center text-sm text-slate-400">{t("common.loading", "Загрузка...")}</div>
         ) : (
@@ -11881,17 +11891,7 @@ function QuickCreateRelatedRecordDialog({
             )}
           </div>
         )}
-        <DialogFooter>
-          <Button data-testid="quick-create-related-cancel" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            {t("common.cancel", "Отмена")}
-          </Button>
-          {contextError && <p role="alert" className="text-sm text-red-600">{contextError}</p>}
-          <Button onClick={submit} disabled={submitting || fieldsLoading || contextLoading || !!contextError || cardSnapshot.status !== "ready"}>
-            {t("common.create", "Создать")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </CardDialogShell>
   );
 }
 

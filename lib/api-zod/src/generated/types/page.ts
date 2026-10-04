@@ -27,6 +27,7 @@ export interface Page {
   path?: string | null;
   /** @nullable */
   parentPageId?: number | null;
+  menuDefaultExpanded?: boolean;
   /** @nullable */
   mirrorEntityId?: number | null;
   /** @nullable */

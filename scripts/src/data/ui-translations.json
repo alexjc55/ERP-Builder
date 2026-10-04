@@ -1,5 +1,29 @@
 [
   {
+    "key": "pages.menuDefaultState",
+    "ru": "Состояние группы в меню по умолчанию",
+    "en": "Default menu group state",
+    "he": "מצב ברירת המחדל של הקבוצה בתפריט"
+  },
+  {
+    "key": "pages.menuExpanded",
+    "ru": "Раскрыта",
+    "en": "Expanded",
+    "he": "פתוחה"
+  },
+  {
+    "key": "pages.menuCollapsed",
+    "ru": "Свёрнута",
+    "en": "Collapsed",
+    "he": "סגורה"
+  },
+  {
+    "key": "pages.menuDefaultHint",
+    "ru": "Применяется при загрузке меню, если у страницы есть подпункты. Их можно раскрывать и сворачивать вручную.",
+    "en": "Applied when the menu loads if the page has child pages. You can still expand and collapse it manually.",
+    "he": "חל בעת טעינת התפריט אם לעמוד יש עמודי משנה. ניתן לפתוח ולסגור ידנית."
+  },
+  {
     "key": "pages.statusScope",
     "ru": "Статусы страницы",
     "en": "Page statuses",

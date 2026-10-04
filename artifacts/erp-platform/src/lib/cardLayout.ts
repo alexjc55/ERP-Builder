@@ -43,8 +43,20 @@ export interface CardCustomStyle {
   border?: boolean;
   shadow?: boolean;
 }
+export type CardPresentation = "modal" | "side" | "fullscreen";
+export const CARD_PRESENTATIONS: readonly CardPresentation[] = ["modal", "side", "fullscreen"];
+/** Legacy layouts without `presentation` open as a modal. */
+export const layoutPresentation = (l: CardLayout | null | undefined): CardPresentation => l?.presentation ?? "modal";
+/** Next state of the expand/restore toggle. A fullscreen default restores to
+ * a modal; any other default expands to fullscreen and restores back to it. */
+export function togglePresentation(current: CardPresentation, base: CardPresentation): CardPresentation {
+  if (current !== "fullscreen") return "fullscreen";
+  return base === "fullscreen" ? "modal" : base;
+}
 export interface CardLayout {
   version: 1;
+  /** Window presentation of the card dialog (additive, optional; absent = modal). */
+  presentation?: CardPresentation;
   style: CardStyle;
   customStyle: CardCustomStyle;
   tabs: CardTab[];
@@ -159,7 +171,8 @@ export function parseCardLayout(raw: unknown): CardLayout | null {
   // Row ids must not collide with any tab/section/block id either.
   if (rowIds.size && nodeIds.some(id => rowIds.has(id))) return null;
   const style = CARD_STYLES.includes(raw.style as CardStyle) ? (raw.style as CardStyle) : "standard";
-  return { version: 1, style, customStyle: parseCustomStyle(raw.customStyle), tabs };
+  const presentation = CARD_PRESENTATIONS.includes(raw.presentation as CardPresentation) ? (raw.presentation as CardPresentation) : undefined;
+  return { version: 1, style, customStyle: parseCustomStyle(raw.customStyle), tabs, ...(presentation ? { presentation } : {}) };
 }
 
 export interface LayoutFieldLike { fieldKey: string; fieldType: string; isActive?: boolean; sortOrder?: number }
@@ -205,6 +218,7 @@ export function cloneLayoutWithNewIds(layout: CardLayout): CardLayout {
   return {
     version: 1,
     style: layout.style,
+    ...(layout.presentation ? { presentation: layout.presentation } : {}),
     customStyle: { ...layout.customStyle },
     tabs: layout.tabs.map(tab => ({
       id: newId("tab"), title: { ...tab.title },

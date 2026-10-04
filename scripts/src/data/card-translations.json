@@ -1,223 +1,914 @@
 {
-  "cards.row": ["Row", "שורה"],
-  "cards.rowColumns": ["Row columns", "עמודות בשורה"],
-  "cards.rowUp": ["Move row up", "הזזת שורה למעלה"],
-  "cards.rowDown": ["Move row down", "הזזת שורה למטה"],
-  "cards.rowDelete": ["Delete row", "מחיקת שורה"],
-  "cards.rowDeleteMoveUp": ["Delete row (move fields to the row above)", "מחיקת שורה (השדות יועברו לשורה שמעל)"],
-  "cards.rowDeleteMoveDown": ["Delete row (move fields to the row below)", "מחיקת שורה (השדות יועברו לשורה שמתחת)"],
-  "cards.rowDeleteOnly": ["Cannot delete the only row containing fields", "לא ניתן למחוק את השורה היחידה שמכילה שדות"],
-  "cards.rowEmpty": ["Empty row — drag a field here", "שורה ריקה — גררו לכאן שדה"],
-  "cards.addRow": ["Row", "שורה"],
-  "cards.toRows": ["Split into rows", "חלוקה לשורות"],
-  "cards.toRowsHint": ["Split into rows with independent column counts; the current layout is preserved", "חלוקה לשורות עם מספר עמודות עצמאי; הפריסה הנוכחית תישמר"],
-  "cards.noRows": ["No rows — add a row", "אין שורות — הוסיפו שורה"],
-  "cards.blockRow": ["Row", "שורה"],
-  "cards.toPrevRow": ["To row above", "לשורה שמעל"],
-  "cards.toNextRow": ["To row below", "לשורה שמתחת"],
-  "cards.blockRowHint": ["At the first or last row, a new row is created.", "בשורה הראשונה או האחרונה נוצרת שורה חדשה."],
-  "cards.issueRows": ["Section rows contain invalid field references", "שורות המקטע מכילות הפניות שגויות לשדות"],
-  "cards.sectionRowsHint": ["Each row has 1, 2 or 3 columns. Deleting a row moves its fields to a neighboring row. Phones always use one column.", "לכל שורה יש 1, 2 או 3 עמודות. מחיקת שורה מעבירה את השדות לשורה סמוכה. בטלפון מוצגת תמיד עמודה אחת."],
-  "cards.styleText": ["Card text color", "צבע טקסט הכרטיס"],
-  "cards.styleTextHint": ["Card labels and text. Values inside fields keep their own colors.", "תוויות וטקסט בכרטיס. צבעי הערכים בתוך השדות אינם משתנים."],
-  "records.view": ["View", "צפייה"],
-  "records.viewTitle": ["View record", "צפייה ברשומה"],
-  "records.viewDesc": ["This record is open in read-only mode.", "הרשומה פתוחה לצפייה בלבד."],
-  "records.edit": ["Edit", "עריכה"],
-  "common.close": ["Close", "סגירה"],
-  "common.retry": ["Retry", "ניסיון חוזר"],
-  "cards.published": ["Card published", "הכרטיס פורסם"],
-  "cards.publishFailed": ["Could not publish", "לא ניתן לפרסם"],
-  "cards.replaceTitle": ["Replace the active card?", "להחליף את הכרטיס הפעיל?"],
-  "cards.replaceDesc": ["A card is already published for this scope. It will become a draft and the new card will become active. Open forms will not reset; the new card applies the next time a form is opened.", "כבר פורסם כרטיס עבור יעד זה. הוא יעבור לטיוטה והכרטיס החדש יהפוך לפעיל. טפסים פתוחים לא יאופסו; הכרטיס החדש יחול בפתיחה הבאה."],
-  "cards.revision": ["Revision", "גרסה"],
-  "cards.replaceConfirm": ["Replace and publish", "החלפה ופרסום"],
-  "cards.statePublished": ["Published", "פורסם"],
-  "cards.stateDraft": ["Draft", "טיוטה"],
-  "cards.entity": ["Entity", "ישות"],
-  "cards.chooseEntity": ["Choose an entity", "בחירת ישות"],
-  "cards.scope": ["Applies to", "חל על"],
-  "cards.scopeEntity": ["All entity pages (default)", "כל עמודי הישות (ברירת מחדל)"],
-  "cards.scopePage": ["This page only", "עמוד זה בלבד"],
-  "cards.scopeHint": ["A page card takes priority over the entity card.", "כרטיס העמוד מקבל עדיפות על פני כרטיס הישות."],
-  "cards.createFailed": ["Could not create the card", "לא ניתן ליצור את הכרטיס"],
-  "cards.presetStandard": ["Standard", "רגיל"],
-  "cards.presetStandardDesc": ["Current ERP form: one column", "טופס ERP נוכחי: עמודה אחת"],
-  "cards.presetCompact": ["Compact", "קומפקטי"],
-  "cards.presetCompactDesc": ["Two columns, tighter spacing", "שתי עמודות, ריווח מצומצם"],
-  "cards.presetSectioned": ["Sections", "מקטעים"],
-  "cards.presetSectionedDesc": ["Data and relations in separate sections", "נתונים וקשרים במקטעים נפרדים"],
-  "cards.newTitle": ["New card", "כרטיס חדש"],
-  "cards.newDesc": ["A new card is a draft and does not affect forms until published.", "כרטיס חדש הוא טיוטה ואינו משפיע על הטפסים עד לפרסום."],
-  "cards.name": ["Name", "שם"],
-  "cards.startFrom": ["Starting layout", "פריסה התחלתית"],
-  "cards.createDraft": ["Create draft", "יצירת טיוטה"],
-  "cards.copySuffix": ["copy", "עותק"],
-  "cards.invalidLayout": ["Invalid card layout", "פריסת הכרטיס אינה תקינה"],
-  "cards.copyFailed": ["Could not copy", "לא ניתן להעתיק"],
-  "cards.copyTitle": ["Copy card", "העתקת כרטיס"],
-  "cards.copyDesc": ["The copy is a draft. Tabs, sections, text, dividers and styling are preserved.", "העותק נוצר כטיוטה. הלשוניות, המקטעים, הטקסטים, המפרידים והעיצוב נשמרים."],
-  "cards.copyCrossEntity": ["Different entity: field bindings and table columns will be cleared. Empty cells preserve the layout. Fields can be added from the palette.", "ישות אחרת: שיוכי השדות ועמודות הטבלה ינוקו. התאים הריקים שומרים על הפריסה. ניתן להוסיף שדות מהרשימה."],
-  "cards.copyConfirm": ["Create copy", "יצירת עותק"],
-  "cards.unpublished": ["Card moved to drafts", "הכרטיס הועבר לטיוטות"],
-  "cards.unpublishFailed": ["Could not unpublish", "לא ניתן לבטל את הפרסום"],
-  "cards.deleted": ["Draft deleted", "הטיוטה נמחקה"],
-  "cards.deleteFailed": ["Could not delete", "לא ניתן למחוק"],
-  "cards.kicker": ["Builder", "בונה כרטיסים"],
-  "cards.title": ["Record cards", "כרטיסי רשומות"],
-  "cards.subtitle": ["Arrange fields for viewing, creating and editing records. Field permissions and locks continue to apply.", "סידור שדות לצפייה, יצירה ועריכה של רשומות. הרשאות השדות והנעילות ממשיכות לחול."],
-  "cards.allEntities": ["All entities", "כל הישויות"],
-  "cards.new": ["New card", "כרטיס חדש"],
-  "cards.loadError": ["Could not load cards.", "לא ניתן לטעון כרטיסים."],
-  "cards.emptyTitle": ["No cards yet", "אין כרטיסים עדיין"],
-  "cards.emptyDesc": ["Until a card is published, forms use the standard ERP layout.", "עד לפרסום כרטיס, הטפסים משתמשים בפריסת ERP הרגילה."],
-  "cards.scopeEntityShort": ["Entity default", "ברירת מחדל לישות"],
-  "cards.edit": ["Edit", "עריכה"],
-  "cards.open": ["Open", "פתיחה"],
-  "cards.copy": ["Copy", "העתקה"],
-  "cards.publish": ["Publish", "פרסום"],
-  "cards.unpublish": ["Unpublish", "ביטול פרסום"],
-  "cards.deleteTitle": ["Delete draft?", "למחוק את הטיוטה?"],
-  "cards.saved": ["Draft saved", "הטיוטה נשמרה"],
-  "cards.saveFailed": ["Could not save", "לא ניתן לשמור"],
-  "cards.draftSuffix": ["draft", "טיוטה"],
-  "cards.notFound": ["Card not found", "הכרטיס לא נמצא"],
-  "cards.backToList": ["Back to list", "חזרה לרשימה"],
-  "cards.issueEmptySlot": ["Empty slot without a field", "משבצת ריקה ללא שדה"],
-  "cards.issueUnknown": ["Field not found in entity", "השדה לא נמצא בישות"],
-  "cards.issueDuplicate": ["Field placed more than once", "השדה מופיע יותר מפעם אחת"],
-  "cards.issueRequired": ["Required field missing from create mode", "שדה חובה חסר במצב יצירה"],
-  "cards.blockText": ["Text", "טקסט"],
-  "cards.blockDivider": ["Divider", "מפריד"],
-  "cards.emptySlot": ["Empty cell", "תא ריק"],
-  "cards.unsaved": ["Unsaved changes", "שינויים שלא נשמרו"],
-  "cards.previewMode": ["Preview mode", "מצב תצוגה מקדימה"],
-  "cards.modeAll": ["All", "הכול"],
-  "cards.modeView": ["View", "צפייה"],
-  "cards.modeCreate": ["Create", "יצירה"],
-  "cards.modeEdit": ["Edit", "עריכה"],
-  "cards.copyToDraft": ["Copy to draft", "העתקה לטיוטה"],
-  "cards.saveDraft": ["Save draft", "שמירת טיוטה"],
-  "cards.publishedReadonly": ["Published cards cannot be edited. Copy to a draft, make changes, then publish the replacement.", "לא ניתן לערוך כרטיס שפורסם. העתיקו אותו לטיוטה, בצעו שינויים ופרסמו את הגרסה החלופית."],
-  "cards.staleConflict": ["This card changed in another window. Your edits remain here but have not been saved to the server.", "הכרטיס השתנה בחלון אחר. השינויים שלכם נשארו כאן אך לא נשמרו בשרת."],
-  "cards.reloadServer": ["Load server version (discard local edits)", "טעינת גרסת השרת (ביטול השינויים המקומיים)"],
-  "cards.paletteBlocks": ["Elements", "רכיבים"],
-  "cards.blockSlot": ["Empty slot", "משבצת ריקה"],
-  "cards.paletteFields": ["Fields", "שדות"],
-  "cards.paletteTables": ["Related-record tables", "טבלאות רשומות מקושרות"],
-  "cards.tab": ["Tab", "לשונית"],
-  "cards.addTab": ["Tab", "לשונית"],
-  "cards.noSections": ["No sections in this tab", "אין מקטעים בלשונית זו"],
-  "cards.untitledSection": ["Untitled section", "מקטע ללא כותרת"],
-  "cards.up": ["Move up", "הזזה למעלה"],
-  "cards.down": ["Move down", "הזזה למטה"],
-  "cards.kindField": ["Field", "שדה"],
-  "cards.kindTable": ["Table", "טבלה"],
-  "cards.kindText": ["Text", "טקסט"],
-  "cards.kindDivider": ["Divider", "מפריד"],
-  "cards.columnsCount": ["columns", "עמודות"],
-  "cards.dropHere": ["Drag a field or element here", "גררו לכאן שדה או רכיב"],
-  "cards.addSection": ["Add section", "הוספת מקטע"],
-  "cards.issuesTitle": ["Before publishing", "לפני הפרסום"],
-  "cards.styleAndScope": ["Appearance", "עיצוב"],
-  "cards.element": ["Element", "רכיב"],
-  "cards.tabTitle": ["Tab title", "כותרת הלשונית"],
-  "cards.deleteTab": ["Delete tab", "מחיקת לשונית"],
-  "cards.sectionTitle": ["Section heading", "כותרת המקטע"],
-  "cards.sectionColsHint": ["Use 1/2/3 in the section header to set columns. Phones always use one column.", "השתמשו בכפתורי 1/2/3 בכותרת המקטע לבחירת מספר העמודות. בטלפון מוצגת תמיד עמודה אחת."],
-  "cards.nothingSelected": ["Select an element on the canvas", "בחרו רכיב במשטח העריכה"],
-  "cards.placed": ["in card", "בכרטיס"],
-  "cards.addToCard": ["Add to card", "הוספה לכרטיס"],
-  "cards.styleCustom": ["Custom", "מותאם אישית"],
-  "cards.reset": ["reset", "איפוס"],
-  "cards.default": ["default", "ברירת מחדל"],
-  "cards.style": ["Style", "סגנון"],
-  "cards.styleHint": ["With no custom settings, Custom looks like the standard ERP form.", "ללא שינויים בהגדרות, הסגנון המותאם אישית נראה כמו טופס ERP הרגיל."],
-  "cards.styleBg": ["Card background", "רקע הכרטיס"],
-  "cards.styleSectionBg": ["Section background", "רקע המקטעים"],
-  "cards.styleAccent": ["Heading accent", "צבע הכותרות"],
-  "cards.styleSpacing": ["Spacing", "ריווח"],
-  "cards.styleRadius": ["Corner radius", "עיגול פינות"],
-  "cards.styleFont": ["Font size", "גודל גופן"],
-  "cards.styleBorder": ["Section borders", "מסגרות המקטעים"],
-  "cards.styleShadow": ["Section shadows", "צללי המקטעים"],
-  "cards.resetCustom": ["Reset to standard", "איפוס לסגנון הרגיל"],
-  "cards.relationField": ["Relation field", "שדה קשר"],
-  "cards.field": ["Field", "שדה"],
-  "cards.unbound": ["Unassigned (empty slot)", "ללא שיוך (משבצת ריקה)"],
-  "cards.showAsTable": ["Show as table", "הצגה כטבלה"],
-  "cards.text": ["Text", "טקסט"],
-  "cards.dividerLabel": ["Divider label (optional)", "תווית המפריד (לא חובה)"],
-  "cards.labelOverride": ["Custom label (optional)", "תווית מותאמת (לא חובה)"],
-  "cards.span": ["Width", "רוחב"],
-  "cards.modes": ["Show in modes", "הצגה במצבים"],
-  "cards.tableColumns": ["Table columns", "עמודות הטבלה"],
-  "cards.relationUnknown": ["Field relation not found", "הקשר של השדה לא נמצא"],
-  "cards.tableHint": ["An add/link button appears above the table. New related records can be created after saving the main record.", "כפתור הוספה וקישור מופיע מעל הטבלה. ניתן ליצור רשומות מקושרות חדשות לאחר שמירת הרשומה הראשית."],
-  "cards.removeBlock": ["Remove from card", "הסרה מהכרטיס"],
-  "cards.resolveError": ["Could not load the record card.", "לא ניתן לטעון את כרטיס הרשומה."],
-  "cards.relatedLoadError": ["Could not load related records.", "לא ניתן לטעון רשומות מקושרות."],
-  "cards.relatedEmpty": ["No related records", "אין רשומות מקושרות"],
-  "cards.relatedDenied": ["Records without access", "רשומות ללא גישה"],
-  "cards.relatedShow": ["Show list", "הצגת רשימה"],
-  "cards.relatedLinkExisting": ["Select existing", "בחירת רשומות קיימות"],
-  "cards.relatedAddLink": ["Add / link", "הוספה / קישור"],
-  "cards.saveFirstForChild": ["Save this record before creating a new related record. Existing records can be selected now.", "שמרו רשומה זו לפני יצירת רשומה מקושרת חדשה. ניתן לבחור רשומות קיימות כבר עכשיו."],
-  "cards.fallbackRequired": ["Required fields missing from this card:", "שדות חובה שאינם מופיעים בכרטיס:"],
-  "cards.preview": ["Preview", "תצוגה מקדימה"],
-  "cards.previewTitle": ["Card preview", "תצוגה מקדימה של הכרטיס"],
-  "cards.previewDesc": ["Shows the current layout including unsaved changes. Nothing is saved.", "מוצגת הפריסה הנוכחית כולל שינויים שלא נשמרו. דבר אינו נשמר."],
-  "cards.demoData": ["Demonstration data", "נתוני הדגמה"],
-  "cards.previewEmpty": ["No blocks in this mode", "אין בלוקים במצב זה"],
-  "cards.emptySlotPreview": ["Empty slot", "תא ריק"],
-  "cards.demoStatus": ["In progress", "בתהליך"],
-  "cards.demoEmptyInput": ["Empty field", "שדה ריק"],
-  "cards.demoRecord": ["Demo record", "רשומת הדגמה"],
-  "cards.previewNoRelated": ["Related records appear after saving", "רשומות מקושרות יופיעו לאחר השמירה"],
-  "cards.formatting": ["Text formatting", "עיצוב טקסט"],
-  "cards.bold": ["Bold", "מודגש"],
-  "cards.italic": ["Italic", "נטוי"],
-  "cards.underline": ["Underline", "קו תחתון"],
-  "cards.alignStart": ["Align to line start", "יישור לתחילת השורה"],
-  "cards.alignCenter": ["Center", "מרכז"],
-  "cards.alignEnd": ["Align to line end", "יישור לסוף השורה"],
-  "cards.alignJustify": ["Justify", "יישור לשני הצדדים"],
-  "cards.textDirection": ["Text direction", "כיוון טקסט"],
-  "cards.dirAuto": ["Auto", "אוטומטי"],
-  "cards.textBlockColor": ["Text color", "צבע טקסט"],
-  "cards.textLink": ["Link (optional)", "קישור (אופציונלי)"],
-  "cards.linkInvalid": ["Only full http://, https://, mailto: addresses or a same-page anchor (#section) are allowed. Fix the link before saving.", "מותרות רק כתובות מלאות http://‏, https://‏, mailto:‏ או עוגן בעמוד (#section). תקנו את הקישור לפני השמירה."],
-  "cards.linkHint": ["Web links open in a new tab; anchors (#) stay on this page.", "קישורי אינטרנט נפתחים בכרטיסייה חדשה; עוגנים (#) נשארים בעמוד זה."],
- "cards.linkPlaceholder": ["https://… / mailto:… / #anchor", "https://… / mailto:… / #עוגן"],
- "cards.editorPlaceholder": ["Type text. Select words to format them.", "הקלידו טקסט. סמנו מילים כדי לעצב אותן."],
-  "cards.linkInvalidTitle": ["Invalid link in a text block", "קישור לא תקין בבלוק טקסט"],
-  "cards.colorInvalidTitle": ["Invalid color in a block", "צבע לא תקין בבלוק"],
-  "cards.colorInvalid": ["Use the #RRGGBB format.", "השתמשו בפורמט ‎#RRGGBB."],
-  "cards.blockStyleInvalid": ["Fix the link or color", "תקנו את הקישור או הצבע"],
-  "cards.dividerStyle": ["Divider style", "סגנון מפריד"],
-  "cards.dividerSolid": ["Solid", "רציף"],
-  "cards.dividerDashed": ["Dashed", "מקווקו"],
-  "cards.dividerDotted": ["Dotted", "מנוקד"],
-  "cards.dividerSpace": ["Empty spacer", "רווח ריק"],
-  "cards.dividerThickness": ["Thickness", "עובי"],
-  "cards.dividerColor": ["Line color", "צבע קו"],
-  "cards.textLanguage": ["Text language", "שפת הטקסט"],
-  "cards.selectionToolbar": ["Format selected text", "עיצוב הטקסט המסומן"],
-  "cards.clearFormat": ["Clear formatting of selection", "ניקוי עיצוב הטקסט המסומן"],
-  "cards.selected": ["Selected", "נבחר"],
-  "cards.selectHint": ["Select words in the text to change their formatting or add a link.", "סמנו מילים בטקסט כדי לשנות את העיצוב שלהן או להוסיף קישור."],
-  "cards.selectionColor": ["Color of selected text", "צבע הטקסט המסומן"],
-  "cards.selectionLink": ["Link for selection", "קישור לטקסט המסומן"],
-  "cards.apply": ["Apply", "החלה"],
-  "cards.removeLink": ["Remove link", "הסרת קישור"],
-  "cards.paragraph": ["Paragraph: alignment and direction", "פסקה: יישור וכיוון"],
-  "cards.livePreview": ["How it will look", "כך זה ייראה"],
-  "cards.emptyText": ["No text entered yet", "עדיין לא הוזן טקסט"],
-  "cards.spaceHeight": ["Spacer height", "גובה הריווח"],
-  "cards.spanColumns": ["Columns spanned", "מספר עמודות"],
-  "cards.spanUnavailable": ["This row has fewer columns", "בשורה זו יש פחות עמודות"],
-  "cards.spanHint": ["Columns available in the row", "עמודות זמינות בשורה"],
-  "cards.spanPhone": ["Phones always show one column.", "בטלפון תמיד מוצגת עמודה אחת."],
-  "cards.textLimitTitle": ["Text block is too large", "בלוק הטקסט גדול מדי"],
-  "cards.textLimit": ["Up to 10000 characters and 500 formatting segments per language.", "עד 10000 תווים ו-500 מקטעי עיצוב לכל שפה."]
+  "cards.row": [
+    "Row",
+    "שורה"
+  ],
+  "cards.rowColumns": [
+    "Row columns",
+    "עמודות בשורה"
+  ],
+  "cards.rowUp": [
+    "Move row up",
+    "הזזת שורה למעלה"
+  ],
+  "cards.rowDown": [
+    "Move row down",
+    "הזזת שורה למטה"
+  ],
+  "cards.rowDelete": [
+    "Delete row",
+    "מחיקת שורה"
+  ],
+  "cards.rowDeleteMoveUp": [
+    "Delete row (move fields to the row above)",
+    "מחיקת שורה (השדות יועברו לשורה שמעל)"
+  ],
+  "cards.rowDeleteMoveDown": [
+    "Delete row (move fields to the row below)",
+    "מחיקת שורה (השדות יועברו לשורה שמתחת)"
+  ],
+  "cards.rowDeleteOnly": [
+    "Cannot delete the only row containing fields",
+    "לא ניתן למחוק את השורה היחידה שמכילה שדות"
+  ],
+  "cards.rowEmpty": [
+    "Empty row — drag a field here",
+    "שורה ריקה — גררו לכאן שדה"
+  ],
+  "cards.addRow": [
+    "Row",
+    "שורה"
+  ],
+  "cards.toRows": [
+    "Split into rows",
+    "חלוקה לשורות"
+  ],
+  "cards.toRowsHint": [
+    "Split into rows with independent column counts; the current layout is preserved",
+    "חלוקה לשורות עם מספר עמודות עצמאי; הפריסה הנוכחית תישמר"
+  ],
+  "cards.noRows": [
+    "No rows — add a row",
+    "אין שורות — הוסיפו שורה"
+  ],
+  "cards.blockRow": [
+    "Row",
+    "שורה"
+  ],
+  "cards.toPrevRow": [
+    "To row above",
+    "לשורה שמעל"
+  ],
+  "cards.toNextRow": [
+    "To row below",
+    "לשורה שמתחת"
+  ],
+  "cards.blockRowHint": [
+    "At the first or last row, a new row is created.",
+    "בשורה הראשונה או האחרונה נוצרת שורה חדשה."
+  ],
+  "cards.issueRows": [
+    "Section rows contain invalid field references",
+    "שורות המקטע מכילות הפניות שגויות לשדות"
+  ],
+  "cards.sectionRowsHint": [
+    "Each row has 1, 2 or 3 columns. Deleting a row moves its fields to a neighboring row. Phones always use one column.",
+    "לכל שורה יש 1, 2 או 3 עמודות. מחיקת שורה מעבירה את השדות לשורה סמוכה. בטלפון מוצגת תמיד עמודה אחת."
+  ],
+  "cards.styleText": [
+    "Card text color",
+    "צבע טקסט הכרטיס"
+  ],
+  "cards.styleTextHint": [
+    "Card labels and text. Values inside fields keep their own colors.",
+    "תוויות וטקסט בכרטיס. צבעי הערכים בתוך השדות אינם משתנים."
+  ],
+  "records.view": [
+    "View",
+    "צפייה"
+  ],
+  "records.viewTitle": [
+    "View record",
+    "צפייה ברשומה"
+  ],
+  "records.viewDesc": [
+    "This record is open in read-only mode.",
+    "הרשומה פתוחה לצפייה בלבד."
+  ],
+  "records.edit": [
+    "Edit",
+    "עריכה"
+  ],
+  "common.close": [
+    "Close",
+    "סגירה"
+  ],
+  "common.retry": [
+    "Retry",
+    "ניסיון חוזר"
+  ],
+  "cards.published": [
+    "Card published",
+    "הכרטיס פורסם"
+  ],
+  "cards.publishFailed": [
+    "Could not publish",
+    "לא ניתן לפרסם"
+  ],
+  "cards.replaceTitle": [
+    "Replace the active card?",
+    "להחליף את הכרטיס הפעיל?"
+  ],
+  "cards.replaceDesc": [
+    "A card is already published for this scope. It will become a draft and the new card will become active. Open forms will not reset; the new card applies the next time a form is opened.",
+    "כבר פורסם כרטיס עבור יעד זה. הוא יעבור לטיוטה והכרטיס החדש יהפוך לפעיל. טפסים פתוחים לא יאופסו; הכרטיס החדש יחול בפתיחה הבאה."
+  ],
+  "cards.revision": [
+    "Revision",
+    "גרסה"
+  ],
+  "cards.replaceConfirm": [
+    "Replace and publish",
+    "החלפה ופרסום"
+  ],
+  "cards.statePublished": [
+    "Published",
+    "פורסם"
+  ],
+  "cards.stateDraft": [
+    "Draft",
+    "טיוטה"
+  ],
+  "cards.entity": [
+    "Entity",
+    "ישות"
+  ],
+  "cards.chooseEntity": [
+    "Choose an entity",
+    "בחירת ישות"
+  ],
+  "cards.scope": [
+    "Applies to",
+    "חל על"
+  ],
+  "cards.scopeEntity": [
+    "All entity pages (default)",
+    "כל עמודי הישות (ברירת מחדל)"
+  ],
+  "cards.scopePage": [
+    "This page only",
+    "עמוד זה בלבד"
+  ],
+  "cards.scopeHint": [
+    "A page card takes priority over the entity card.",
+    "כרטיס העמוד מקבל עדיפות על פני כרטיס הישות."
+  ],
+  "cards.createFailed": [
+    "Could not create the card",
+    "לא ניתן ליצור את הכרטיס"
+  ],
+  "cards.presetStandard": [
+    "Standard",
+    "רגיל"
+  ],
+  "cards.presetStandardDesc": [
+    "Current ERP form: one column",
+    "טופס ERP נוכחי: עמודה אחת"
+  ],
+  "cards.presetCompact": [
+    "Compact",
+    "קומפקטי"
+  ],
+  "cards.presetCompactDesc": [
+    "Two columns, tighter spacing",
+    "שתי עמודות, ריווח מצומצם"
+  ],
+  "cards.presetSectioned": [
+    "Sections",
+    "מקטעים"
+  ],
+  "cards.presetSectionedDesc": [
+    "Data and relations in separate sections",
+    "נתונים וקשרים במקטעים נפרדים"
+  ],
+  "cards.newTitle": [
+    "New card",
+    "כרטיס חדש"
+  ],
+  "cards.newDesc": [
+    "A new card is a draft and does not affect forms until published.",
+    "כרטיס חדש הוא טיוטה ואינו משפיע על הטפסים עד לפרסום."
+  ],
+  "cards.name": [
+    "Name",
+    "שם"
+  ],
+  "cards.startFrom": [
+    "Starting layout",
+    "פריסה התחלתית"
+  ],
+  "cards.createDraft": [
+    "Create draft",
+    "יצירת טיוטה"
+  ],
+  "cards.copySuffix": [
+    "copy",
+    "עותק"
+  ],
+  "cards.invalidLayout": [
+    "Invalid card layout",
+    "פריסת הכרטיס אינה תקינה"
+  ],
+  "cards.copyFailed": [
+    "Could not copy",
+    "לא ניתן להעתיק"
+  ],
+  "cards.copyTitle": [
+    "Copy card",
+    "העתקת כרטיס"
+  ],
+  "cards.copyDesc": [
+    "The copy is a draft. Tabs, sections, text, dividers and styling are preserved.",
+    "העותק נוצר כטיוטה. הלשוניות, המקטעים, הטקסטים, המפרידים והעיצוב נשמרים."
+  ],
+  "cards.copyCrossEntity": [
+    "Different entity: field bindings and table columns will be cleared. Empty cells preserve the layout. Fields can be added from the palette.",
+    "ישות אחרת: שיוכי השדות ועמודות הטבלה ינוקו. התאים הריקים שומרים על הפריסה. ניתן להוסיף שדות מהרשימה."
+  ],
+  "cards.copyConfirm": [
+    "Create copy",
+    "יצירת עותק"
+  ],
+  "cards.unpublished": [
+    "Card moved to drafts",
+    "הכרטיס הועבר לטיוטות"
+  ],
+  "cards.unpublishFailed": [
+    "Could not unpublish",
+    "לא ניתן לבטל את הפרסום"
+  ],
+  "cards.deleted": [
+    "Draft deleted",
+    "הטיוטה נמחקה"
+  ],
+  "cards.deleteFailed": [
+    "Could not delete",
+    "לא ניתן למחוק"
+  ],
+  "cards.kicker": [
+    "Builder",
+    "בונה כרטיסים"
+  ],
+  "cards.title": [
+    "Record cards",
+    "כרטיסי רשומות"
+  ],
+  "cards.subtitle": [
+    "Arrange fields for viewing, creating and editing records. Field permissions and locks continue to apply.",
+    "סידור שדות לצפייה, יצירה ועריכה של רשומות. הרשאות השדות והנעילות ממשיכות לחול."
+  ],
+  "cards.allEntities": [
+    "All entities",
+    "כל הישויות"
+  ],
+  "cards.new": [
+    "New card",
+    "כרטיס חדש"
+  ],
+  "cards.loadError": [
+    "Could not load cards.",
+    "לא ניתן לטעון כרטיסים."
+  ],
+  "cards.emptyTitle": [
+    "No cards yet",
+    "אין כרטיסים עדיין"
+  ],
+  "cards.emptyDesc": [
+    "Until a card is published, forms use the standard ERP layout.",
+    "עד לפרסום כרטיס, הטפסים משתמשים בפריסת ERP הרגילה."
+  ],
+  "cards.scopeEntityShort": [
+    "Entity default",
+    "ברירת מחדל לישות"
+  ],
+  "cards.edit": [
+    "Edit",
+    "עריכה"
+  ],
+  "cards.open": [
+    "Open",
+    "פתיחה"
+  ],
+  "cards.copy": [
+    "Copy",
+    "העתקה"
+  ],
+  "cards.publish": [
+    "Publish",
+    "פרסום"
+  ],
+  "cards.unpublish": [
+    "Unpublish",
+    "ביטול פרסום"
+  ],
+  "cards.deleteTitle": [
+    "Delete draft?",
+    "למחוק את הטיוטה?"
+  ],
+  "cards.saved": [
+    "Draft saved",
+    "הטיוטה נשמרה"
+  ],
+  "cards.saveFailed": [
+    "Could not save",
+    "לא ניתן לשמור"
+  ],
+  "cards.draftSuffix": [
+    "draft",
+    "טיוטה"
+  ],
+  "cards.notFound": [
+    "Card not found",
+    "הכרטיס לא נמצא"
+  ],
+  "cards.backToList": [
+    "Back to list",
+    "חזרה לרשימה"
+  ],
+  "cards.issueEmptySlot": [
+    "Empty slot without a field",
+    "משבצת ריקה ללא שדה"
+  ],
+  "cards.issueUnknown": [
+    "Field not found in entity",
+    "השדה לא נמצא בישות"
+  ],
+  "cards.issueDuplicate": [
+    "Field placed more than once",
+    "השדה מופיע יותר מפעם אחת"
+  ],
+  "cards.issueRequired": [
+    "Required field missing from create mode",
+    "שדה חובה חסר במצב יצירה"
+  ],
+  "cards.blockText": [
+    "Text",
+    "טקסט"
+  ],
+  "cards.blockDivider": [
+    "Divider",
+    "מפריד"
+  ],
+  "cards.emptySlot": [
+    "Empty cell",
+    "תא ריק"
+  ],
+  "cards.unsaved": [
+    "Unsaved changes",
+    "שינויים שלא נשמרו"
+  ],
+  "cards.previewMode": [
+    "Preview mode",
+    "מצב תצוגה מקדימה"
+  ],
+  "cards.modeAll": [
+    "All",
+    "הכול"
+  ],
+  "cards.modeView": [
+    "View",
+    "צפייה"
+  ],
+  "cards.modeCreate": [
+    "Create",
+    "יצירה"
+  ],
+  "cards.modeEdit": [
+    "Edit",
+    "עריכה"
+  ],
+  "cards.copyToDraft": [
+    "Copy to draft",
+    "העתקה לטיוטה"
+  ],
+  "cards.saveDraft": [
+    "Save draft",
+    "שמירת טיוטה"
+  ],
+  "cards.publishedReadonly": [
+    "Published cards cannot be edited. Copy to a draft, make changes, then publish the replacement.",
+    "לא ניתן לערוך כרטיס שפורסם. העתיקו אותו לטיוטה, בצעו שינויים ופרסמו את הגרסה החלופית."
+  ],
+  "cards.staleConflict": [
+    "This card changed in another window. Your edits remain here but have not been saved to the server.",
+    "הכרטיס השתנה בחלון אחר. השינויים שלכם נשארו כאן אך לא נשמרו בשרת."
+  ],
+  "cards.reloadServer": [
+    "Load server version (discard local edits)",
+    "טעינת גרסת השרת (ביטול השינויים המקומיים)"
+  ],
+  "cards.paletteBlocks": [
+    "Elements",
+    "רכיבים"
+  ],
+  "cards.blockSlot": [
+    "Empty slot",
+    "משבצת ריקה"
+  ],
+  "cards.paletteFields": [
+    "Fields",
+    "שדות"
+  ],
+  "cards.paletteTables": [
+    "Related-record tables",
+    "טבלאות רשומות מקושרות"
+  ],
+  "cards.tab": [
+    "Tab",
+    "לשונית"
+  ],
+  "cards.addTab": [
+    "Tab",
+    "לשונית"
+  ],
+  "cards.noSections": [
+    "No sections in this tab",
+    "אין מקטעים בלשונית זו"
+  ],
+  "cards.untitledSection": [
+    "Untitled section",
+    "מקטע ללא כותרת"
+  ],
+  "cards.up": [
+    "Move up",
+    "הזזה למעלה"
+  ],
+  "cards.down": [
+    "Move down",
+    "הזזה למטה"
+  ],
+  "cards.kindField": [
+    "Field",
+    "שדה"
+  ],
+  "cards.kindTable": [
+    "Table",
+    "טבלה"
+  ],
+  "cards.kindText": [
+    "Text",
+    "טקסט"
+  ],
+  "cards.kindDivider": [
+    "Divider",
+    "מפריד"
+  ],
+  "cards.columnsCount": [
+    "columns",
+    "עמודות"
+  ],
+  "cards.dropHere": [
+    "Drag a field or element here",
+    "גררו לכאן שדה או רכיב"
+  ],
+  "cards.addSection": [
+    "Add section",
+    "הוספת מקטע"
+  ],
+  "cards.issuesTitle": [
+    "Before publishing",
+    "לפני הפרסום"
+  ],
+  "cards.styleAndScope": [
+    "Appearance",
+    "עיצוב"
+  ],
+  "cards.element": [
+    "Element",
+    "רכיב"
+  ],
+  "cards.tabTitle": [
+    "Tab title",
+    "כותרת הלשונית"
+  ],
+  "cards.deleteTab": [
+    "Delete tab",
+    "מחיקת לשונית"
+  ],
+  "cards.sectionTitle": [
+    "Section heading",
+    "כותרת המקטע"
+  ],
+  "cards.sectionColsHint": [
+    "Use 1/2/3 in the section header to set columns. Phones always use one column.",
+    "השתמשו בכפתורי 1/2/3 בכותרת המקטע לבחירת מספר העמודות. בטלפון מוצגת תמיד עמודה אחת."
+  ],
+  "cards.nothingSelected": [
+    "Select an element on the canvas",
+    "בחרו רכיב במשטח העריכה"
+  ],
+  "cards.placed": [
+    "in card",
+    "בכרטיס"
+  ],
+  "cards.addToCard": [
+    "Add to card",
+    "הוספה לכרטיס"
+  ],
+  "cards.styleCustom": [
+    "Custom",
+    "מותאם אישית"
+  ],
+  "cards.reset": [
+    "reset",
+    "איפוס"
+  ],
+  "cards.default": [
+    "default",
+    "ברירת מחדל"
+  ],
+  "cards.style": [
+    "Style",
+    "סגנון"
+  ],
+  "cards.styleHint": [
+    "With no custom settings, Custom looks like the standard ERP form.",
+    "ללא שינויים בהגדרות, הסגנון המותאם אישית נראה כמו טופס ERP הרגיל."
+  ],
+  "cards.styleBg": [
+    "Card background",
+    "רקע הכרטיס"
+  ],
+  "cards.styleSectionBg": [
+    "Section background",
+    "רקע המקטעים"
+  ],
+  "cards.styleAccent": [
+    "Heading accent",
+    "צבע הכותרות"
+  ],
+  "cards.styleSpacing": [
+    "Spacing",
+    "ריווח"
+  ],
+  "cards.styleRadius": [
+    "Corner radius",
+    "עיגול פינות"
+  ],
+  "cards.styleFont": [
+    "Font size",
+    "גודל גופן"
+  ],
+  "cards.styleBorder": [
+    "Section borders",
+    "מסגרות המקטעים"
+  ],
+  "cards.styleShadow": [
+    "Section shadows",
+    "צללי המקטעים"
+  ],
+  "cards.resetCustom": [
+    "Reset to standard",
+    "איפוס לסגנון הרגיל"
+  ],
+  "cards.relationField": [
+    "Relation field",
+    "שדה קשר"
+  ],
+  "cards.field": [
+    "Field",
+    "שדה"
+  ],
+  "cards.unbound": [
+    "Unassigned (empty slot)",
+    "ללא שיוך (משבצת ריקה)"
+  ],
+  "cards.showAsTable": [
+    "Show as table",
+    "הצגה כטבלה"
+  ],
+  "cards.text": [
+    "Text",
+    "טקסט"
+  ],
+  "cards.dividerLabel": [
+    "Divider label (optional)",
+    "תווית המפריד (לא חובה)"
+  ],
+  "cards.labelOverride": [
+    "Custom label (optional)",
+    "תווית מותאמת (לא חובה)"
+  ],
+  "cards.span": [
+    "Width",
+    "רוחב"
+  ],
+  "cards.modes": [
+    "Show in modes",
+    "הצגה במצבים"
+  ],
+  "cards.tableColumns": [
+    "Table columns",
+    "עמודות הטבלה"
+  ],
+  "cards.relationUnknown": [
+    "Field relation not found",
+    "הקשר של השדה לא נמצא"
+  ],
+  "cards.tableHint": [
+    "An add/link button appears above the table. New related records can be created after saving the main record.",
+    "כפתור הוספה וקישור מופיע מעל הטבלה. ניתן ליצור רשומות מקושרות חדשות לאחר שמירת הרשומה הראשית."
+  ],
+  "cards.removeBlock": [
+    "Remove from card",
+    "הסרה מהכרטיס"
+  ],
+  "cards.resolveError": [
+    "Could not load the record card.",
+    "לא ניתן לטעון את כרטיס הרשומה."
+  ],
+  "cards.relatedLoadError": [
+    "Could not load related records.",
+    "לא ניתן לטעון רשומות מקושרות."
+  ],
+  "cards.relatedEmpty": [
+    "No related records",
+    "אין רשומות מקושרות"
+  ],
+  "cards.relatedDenied": [
+    "Records without access",
+    "רשומות ללא גישה"
+  ],
+  "cards.relatedShow": [
+    "Show list",
+    "הצגת רשימה"
+  ],
+  "cards.relatedLinkExisting": [
+    "Select existing",
+    "בחירת רשומות קיימות"
+  ],
+  "cards.relatedAddLink": [
+    "Add / link",
+    "הוספה / קישור"
+  ],
+  "cards.saveFirstForChild": [
+    "Save this record before creating a new related record. Existing records can be selected now.",
+    "שמרו רשומה זו לפני יצירת רשומה מקושרת חדשה. ניתן לבחור רשומות קיימות כבר עכשיו."
+  ],
+  "cards.fallbackRequired": [
+    "Required fields missing from this card:",
+    "שדות חובה שאינם מופיעים בכרטיס:"
+  ],
+  "cards.preview": [
+    "Preview",
+    "תצוגה מקדימה"
+  ],
+  "cards.previewTitle": [
+    "Card preview",
+    "תצוגה מקדימה של הכרטיס"
+  ],
+  "cards.previewDesc": [
+    "Shows the current layout including unsaved changes. Nothing is saved.",
+    "מוצגת הפריסה הנוכחית כולל שינויים שלא נשמרו. דבר אינו נשמר."
+  ],
+  "cards.demoData": [
+    "Demonstration data",
+    "נתוני הדגמה"
+  ],
+  "cards.previewEmpty": [
+    "No blocks in this mode",
+    "אין בלוקים במצב זה"
+  ],
+  "cards.emptySlotPreview": [
+    "Empty slot",
+    "תא ריק"
+  ],
+  "cards.demoStatus": [
+    "In progress",
+    "בתהליך"
+  ],
+  "cards.demoEmptyInput": [
+    "Empty field",
+    "שדה ריק"
+  ],
+  "cards.demoRecord": [
+    "Demo record",
+    "רשומת הדגמה"
+  ],
+  "cards.previewNoRelated": [
+    "Related records appear after saving",
+    "רשומות מקושרות יופיעו לאחר השמירה"
+  ],
+  "cards.formatting": [
+    "Text formatting",
+    "עיצוב טקסט"
+  ],
+  "cards.bold": [
+    "Bold",
+    "מודגש"
+  ],
+  "cards.italic": [
+    "Italic",
+    "נטוי"
+  ],
+  "cards.underline": [
+    "Underline",
+    "קו תחתון"
+  ],
+  "cards.alignStart": [
+    "Align to line start",
+    "יישור לתחילת השורה"
+  ],
+  "cards.alignCenter": [
+    "Center",
+    "מרכז"
+  ],
+  "cards.alignEnd": [
+    "Align to line end",
+    "יישור לסוף השורה"
+  ],
+  "cards.alignJustify": [
+    "Justify",
+    "יישור לשני הצדדים"
+  ],
+  "cards.textDirection": [
+    "Text direction",
+    "כיוון טקסט"
+  ],
+  "cards.dirAuto": [
+    "Auto",
+    "אוטומטי"
+  ],
+  "cards.textBlockColor": [
+    "Text color",
+    "צבע טקסט"
+  ],
+  "cards.textLink": [
+    "Link (optional)",
+    "קישור (אופציונלי)"
+  ],
+  "cards.linkInvalid": [
+    "Only full http://, https://, mailto: addresses or a same-page anchor (#section) are allowed. Fix the link before saving.",
+    "מותרות רק כתובות מלאות http://‏, https://‏, mailto:‏ או עוגן בעמוד (#section). תקנו את הקישור לפני השמירה."
+  ],
+  "cards.linkHint": [
+    "Web links open in a new tab; anchors (#) stay on this page.",
+    "קישורי אינטרנט נפתחים בכרטיסייה חדשה; עוגנים (#) נשארים בעמוד זה."
+  ],
+  "cards.linkPlaceholder": [
+    "https://… / mailto:… / #anchor",
+    "https://… / mailto:… / #עוגן"
+  ],
+  "cards.editorPlaceholder": [
+    "Type text. Select words to format them.",
+    "הקלידו טקסט. סמנו מילים כדי לעצב אותן."
+  ],
+  "cards.linkInvalidTitle": [
+    "Invalid link in a text block",
+    "קישור לא תקין בבלוק טקסט"
+  ],
+  "cards.colorInvalidTitle": [
+    "Invalid color in a block",
+    "צבע לא תקין בבלוק"
+  ],
+  "cards.colorInvalid": [
+    "Use the #RRGGBB format.",
+    "השתמשו בפורמט ‎#RRGGBB."
+  ],
+  "cards.blockStyleInvalid": [
+    "Fix the link or color",
+    "תקנו את הקישור או הצבע"
+  ],
+  "cards.dividerStyle": [
+    "Divider style",
+    "סגנון מפריד"
+  ],
+  "cards.dividerSolid": [
+    "Solid",
+    "רציף"
+  ],
+  "cards.dividerDashed": [
+    "Dashed",
+    "מקווקו"
+  ],
+  "cards.dividerDotted": [
+    "Dotted",
+    "מנוקד"
+  ],
+  "cards.dividerSpace": [
+    "Empty spacer",
+    "רווח ריק"
+  ],
+  "cards.dividerThickness": [
+    "Thickness",
+    "עובי"
+  ],
+  "cards.dividerColor": [
+    "Line color",
+    "צבע קו"
+  ],
+  "cards.textLanguage": [
+    "Text language",
+    "שפת הטקסט"
+  ],
+  "cards.selectionToolbar": [
+    "Format selected text",
+    "עיצוב הטקסט המסומן"
+  ],
+  "cards.clearFormat": [
+    "Clear formatting of selection",
+    "ניקוי עיצוב הטקסט המסומן"
+  ],
+  "cards.selected": [
+    "Selected",
+    "נבחר"
+  ],
+  "cards.selectHint": [
+    "Select words in the text to change their formatting or add a link.",
+    "סמנו מילים בטקסט כדי לשנות את העיצוב שלהן או להוסיף קישור."
+  ],
+  "cards.selectionColor": [
+    "Color of selected text",
+    "צבע הטקסט המסומן"
+  ],
+  "cards.selectionLink": [
+    "Link for selection",
+    "קישור לטקסט המסומן"
+  ],
+  "cards.apply": [
+    "Apply",
+    "החלה"
+  ],
+  "cards.removeLink": [
+    "Remove link",
+    "הסרת קישור"
+  ],
+  "cards.paragraph": [
+    "Paragraph: alignment and direction",
+    "פסקה: יישור וכיוון"
+  ],
+  "cards.livePreview": [
+    "How it will look",
+    "כך זה ייראה"
+  ],
+  "cards.emptyText": [
+    "No text entered yet",
+    "עדיין לא הוזן טקסט"
+  ],
+  "cards.spaceHeight": [
+    "Spacer height",
+    "גובה הריווח"
+  ],
+  "cards.spanColumns": [
+    "Columns spanned",
+    "מספר עמודות"
+  ],
+  "cards.spanUnavailable": [
+    "This row has fewer columns",
+    "בשורה זו יש פחות עמודות"
+  ],
+  "cards.spanHint": [
+    "Columns available in the row",
+    "עמודות זמינות בשורה"
+  ],
+  "cards.spanPhone": [
+    "Phones always show one column.",
+    "בטלפון תמיד מוצגת עמודה אחת."
+  ],
+  "cards.textLimitTitle": [
+    "Text block is too large",
+    "בלוק הטקסט גדול מדי"
+  ],
+  "cards.textLimit": [
+    "Up to 10000 characters and 500 formatting segments per language.",
+    "עד 10000 תווים ו-500 מקטעי עיצוב לכל שפה."
+  ],
+  "cards.presentation": [
+    "Card opening",
+    "פתיחת הכרטיס"
+  ],
+  "cards.presentationModal": [
+    "Window",
+    "חלון"
+  ],
+  "cards.presentationSide": [
+    "Side panel",
+    "חלונית צד"
+  ],
+  "cards.presentationFullscreen": [
+    "Full screen",
+    "מסך מלא"
+  ],
+  "cards.presentationHint": [
+    "On phones the card always opens full screen. Users can expand the window with the header button.",
+    "בטלפון הכרטיס נפתח תמיד במסך מלא. המשתמשים יכולים להגדיל את החלון באמצעות הכפתור בכותרת."
+  ],
+  "cards.expandWindow": [
+    "Expand to full screen",
+    "הגדלה למסך מלא"
+  ],
+  "cards.restoreWindow": [
+    "Restore window size",
+    "שחזור גודל החלון"
+  ]
 }

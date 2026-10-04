@@ -26,6 +26,7 @@ export interface PageUpdate {
   path?: string | null;
   /** @nullable */
   parentPageId?: number | null;
+  menuDefaultExpanded?: boolean;
   /** @nullable */
   mirrorEntityId?: number | null;
   /** @nullable */

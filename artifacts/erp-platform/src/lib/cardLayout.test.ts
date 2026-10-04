@@ -220,3 +220,27 @@ test("legacy sections without rows are not converted by parse", () => {
   const raw = { version: 1, style: "standard", customStyle: {}, tabs: [{ id: "t", title: {}, sections: [{ id: "s", title: {}, columns: 2, blocks: [makeBlock("text"), makeBlock("text")] }] }] };
   assert.equal(parseCardLayout(raw)!.tabs[0].sections[0].rows, undefined);
 });
+
+test("presentation: legacy absent = modal, valid values kept, invalid dropped, copy retains", async () => {
+  const { parseCardLayout, layoutPresentation, copyLayout, togglePresentation } = await import("./cardLayout.ts");
+  const base = { version: 1, style: "standard", customStyle: {}, tabs: [{ id: "t1", title: {}, sections: [] }] };
+  const legacy = parseCardLayout(base)!;
+  assert.equal(legacy.presentation, undefined);
+  assert.equal(layoutPresentation(legacy), "modal");
+  assert.equal(layoutPresentation(null), "modal");
+  for (const p of ["modal", "side", "fullscreen"] as const) {
+    const l = parseCardLayout({ ...base, presentation: p })!;
+    assert.equal(l.presentation, p);
+    assert.equal(copyLayout(l, true).presentation, p);
+    assert.equal(copyLayout(l, false).presentation, p);
+    assert.equal(JSON.parse(JSON.stringify(l)).presentation, p);
+  }
+  assert.equal(parseCardLayout({ ...base, presentation: "drawer" })!.presentation, undefined);
+  assert.equal("presentation" in copyLayout(legacy, true), false);
+  assert.equal(togglePresentation("modal", "modal"), "fullscreen");
+  assert.equal(togglePresentation("fullscreen", "modal"), "modal");
+  assert.equal(togglePresentation("side", "side"), "fullscreen");
+  assert.equal(togglePresentation("fullscreen", "side"), "side");
+  assert.equal(togglePresentation("fullscreen", "fullscreen"), "modal");
+  assert.equal(togglePresentation("modal", "fullscreen"), "fullscreen");
+});

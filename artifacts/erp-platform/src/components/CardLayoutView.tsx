@@ -100,7 +100,9 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
   const tabs = layout.tabs.filter(tab => tab.sections.some(s => visibleBlocks(s.blocks).length > 0));
   const body = tabs.length <= 1 ? (tabs[0] ? tabBody(tabs[0]) : null) : (
     <Tabs defaultValue={tabs[0].id} dir={lang === "he" ? "rtl" : "ltr"} className="min-w-0">
-      <TabsList className="mb-3 h-auto flex-wrap justify-start">
+      {/* Sticky inside the card shell scroll body: the tab bar never scrolls away. */}
+      <div className="sticky top-0 z-10 -mt-1 mb-3 bg-[var(--card-bg,hsl(var(--background)))] pt-1" data-testid="card-tabs-bar">
+      <TabsList className="h-auto flex-wrap justify-start">
         {tabs.map((tab, i) => (
           <TabsTrigger key={tab.id} value={tab.id} data-testid={`card-tab-${tab.id}`}
             style={style === "custom" && custom.accent ? ({ "--tw-ring-color": custom.accent } as CSSProperties) : undefined}>
@@ -108,6 +110,7 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
           </TabsTrigger>
         ))}
       </TabsList>
+      </div>
       {/* forceMount keeps every tab's inputs mounted: switching tabs never drops typed values or open pickers. */}
       {tabs.map(tab => (
         <TabsContent key={tab.id} value={tab.id} forceMount className="mt-0 data-[state=inactive]:hidden">

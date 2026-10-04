@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useListEntityFields, getListEntityFieldsQueryKey, type Field } from "@workspace/api-client-react";
 import { Eye, FlaskConical, Paperclip, UserRound } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { CardDialogShell } from "@/components/CardDialogShell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CardLayoutView, CardDividerBlock, CardTextBlock } from "@/components/CardLayoutView";
-import { useLang, useML, useT } from "@/lib/i18n";
+import { useML, useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { CARD_MODES, type CardBlock, type CardLayout, type CardMode } from "@/lib/cardLayout";
+import { CARD_MODES, layoutPresentation, type CardBlock, type CardLayout, type CardMode } from "@/lib/cardLayout";
 import { demoValue, demoValueText, type DemoValue } from "@/lib/cardDemoData";
 import { normalizeSelectOptions } from "@/lib/selectOptions";
 
@@ -21,7 +22,6 @@ export function CardPreviewDialog({ open, onOpenChange, layout, fields, relation
   open: boolean; onOpenChange: (o: boolean) => void; layout: CardLayout; fields: Field[]; relations: Rel[]; entityId: number; entityName: string;
 }) {
   const t = useT();
-  const { lang } = useLang();
   const [mode, setMode] = useState<CardMode>("view");
   const byKey = new Map(fields.map(f => [f.fieldKey, f]));
   const modeLabel = (m: CardMode) => m === "view" ? t("cards.modeView", "Просмотр") : m === "create" ? t("cards.modeCreate", "Создание") : t("cards.modeEdit", "Изменение");
@@ -38,35 +38,33 @@ export function CardPreviewDialog({ open, onOpenChange, layout, fields, relation
     return <DemoField block={b} field={f} mode={mode} />;
   };
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent dir={lang === "he" ? "rtl" : "ltr"} data-testid="dialog-card-preview"
-        className="flex max-h-[92dvh] w-[calc(100vw-1rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:w-full">
-        <DialogHeader className="space-y-2 border-b border-slate-200 px-4 pb-3 pt-4 text-start sm:px-6">
-          <DialogTitle className="flex items-center gap-2 pe-8 text-base"><Eye className="h-4 w-4 text-blue-600" />{t("cards.previewTitle", "Предпросмотр карточки")}<span className="truncate font-normal text-slate-500">· {entityName}</span></DialogTitle>
-          <DialogDescription className="text-xs">{t("cards.previewDesc", "Показан текущий макет, включая несохранённые изменения. Ничего не сохраняется.")}</DialogDescription>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5" role="tablist" aria-label={t("cards.previewMode", "Режим предпросмотра")}>
-              {CARD_MODES.map(m => (
-                <button key={m} type="button" role="tab" aria-selected={mode === m} data-testid={`button-preview-dialog-mode-${m}`} onClick={() => setMode(m)}
-                  className={cn("rounded px-2.5 py-1 text-xs font-medium", mode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>{modeLabel(m)}</button>
-              ))}
-            </div>
-            <span data-testid="badge-demo-data" className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-              <FlaskConical className="h-3 w-3" />{t("cards.demoData", "Демонстрационные данные")}
-            </span>
+    <CardDialogShell open={open} onOpenChange={onOpenChange} presentation={layoutPresentation(layout)} wide
+      testId="dialog-card-preview" bodyTestId="preview-scroll" bodyClassName="bg-slate-50/60"
+      header={<>
+        <DialogTitle className="flex items-center gap-2 text-base"><Eye className="h-4 w-4 text-blue-600" />{t("cards.previewTitle", "Предпросмотр карточки")}<span className="truncate font-normal text-slate-500">· {entityName}</span></DialogTitle>
+        <DialogDescription className="mt-1 text-xs">{t("cards.previewDesc", "Показан текущий макет, включая несохранённые изменения. Ничего не сохраняется.")}</DialogDescription>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5" role="tablist" aria-label={t("cards.previewMode", "Режим предпросмотра")}>
+            {CARD_MODES.map(m => (
+              <button key={m} type="button" role="tab" aria-selected={mode === m} data-testid={`button-preview-dialog-mode-${m}`} onClick={() => setMode(m)}
+                className={cn("rounded px-2.5 py-1 text-xs font-medium", mode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>{modeLabel(m)}</button>
+            ))}
           </div>
-        </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 px-3 py-4 sm:px-6" data-testid="preview-scroll">
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            {/* key: switching mode remounts so tab state starts at the first visible tab */}
-            <CardLayoutView key={mode} layout={layout} mode={mode} renderBlock={renderBlock} />
-            {!layout.tabs.some(tb => tb.sections.some(s => s.blocks.some(b => b.modes.includes(mode)))) && (
-              <p className="py-8 text-center text-sm text-slate-400" data-testid="text-preview-empty">{t("cards.previewEmpty", "В этом режиме в карточке нет блоков")}</p>
-            )}
-          </div>
+          <span data-testid="badge-demo-data" className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+            <FlaskConical className="h-3 w-3" />{t("cards.demoData", "Демонстрационные данные")}
+          </span>
         </div>
-      </DialogContent>
-    </Dialog>
+      </>}
+      footer={<button type="button" data-testid="button-preview-close" onClick={() => onOpenChange(false)}
+        className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">{t("common.close", "Закрыть")}</button>}>
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        {/* key: switching mode remounts so tab state starts at the first visible tab */}
+        <CardLayoutView key={mode} layout={layout} mode={mode} renderBlock={renderBlock} />
+        {!layout.tabs.some(tb => tb.sections.some(s => s.blocks.some(b => b.modes.includes(mode)))) && (
+          <p className="py-8 text-center text-sm text-slate-400" data-testid="text-preview-empty">{t("cards.previewEmpty", "В этом режиме в карточке нет блоков")}</p>
+        )}
+      </div>
+    </CardDialogShell>
   );
 }
 

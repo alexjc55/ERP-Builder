@@ -416,6 +416,7 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
   if (body.icon != null) updateData.icon = body.icon;
   if ("path" in body) updateData.path = body.path ?? null;
   if ("parentPageId" in body) updateData.parentPageId = body.parentPageId ?? null;
+  if (body.menuDefaultExpanded != null) updateData.menuDefaultExpanded = body.menuDefaultExpanded;
   if ("mirrorEntityId" in body) updateData.mirrorEntityId = body.mirrorEntityId ?? null;
   if ("mirrorFieldKeysJson" in body) updateData.mirrorFieldKeysJson = body.mirrorFieldKeysJson ?? null;
   if ("statusScopeJson" in body) updateData.statusScopeJson = body.statusScopeJson ?? null;

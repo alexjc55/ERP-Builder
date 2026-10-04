@@ -83,6 +83,7 @@ const section = z.object({
 });
 export const cardLayoutSchema = z.object({
   version: z.literal(1),
+  presentation: z.enum(["modal", "side", "fullscreen"]).optional(),
   style: z.enum(["standard", "compact", "sectioned", "custom"]).default("standard"),
   customStyle: z.object({
     background: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),

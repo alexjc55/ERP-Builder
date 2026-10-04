@@ -80,6 +80,7 @@ export default function PagesPage() {
   const [parentPageId, setParentPageId] = useState<string>("none");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
+  const [menuDefaultExpanded, setMenuDefaultExpanded] = useState(true);
   const [textDirection, setTextDirection] = useState<TextDirectionOverride>(null);
   const [mirrorEntityId, setMirrorEntityId] = useState<string>("none");
   const [mirrorFieldKeys, setMirrorFieldKeys] = useState<string[]>([]);
@@ -142,6 +143,7 @@ export default function PagesPage() {
   };
 
   const openCreate = () => {
+    setMenuDefaultExpanded(true);
     setEditingPage(null);
     setStatusScope(null);
     setTextDirection(null);
@@ -174,6 +176,7 @@ export default function PagesPage() {
     setParentPageId(page.parentPageId ? String(page.parentPageId) : "none");
     setSortOrder(page.sortOrder);
     setIsActive(page.isActive);
+    setMenuDefaultExpanded(page.menuDefaultExpanded ?? true);
     setMirrorEntityId(page.mirrorEntityId ? String(page.mirrorEntityId) : "none");
     setMirrorFieldKeys(page.mirrorFieldKeysJson ?? []);
     setStatusScope(page.statusScopeJson ?? null);
@@ -245,6 +248,7 @@ export default function PagesPage() {
       pivotConfigJson: isPivot ? (pivotConfig ?? { source: "entity" }) : null,
       sortOrder,
       isActive,
+      menuDefaultExpanded,
       textDirection,
     };
     if (editingPage) {
@@ -595,6 +599,17 @@ export default function PagesPage() {
             <div className="flex items-center gap-2">
               <Switch checked={isActive} onCheckedChange={setIsActive} id="page-active" />
               <Label htmlFor="page-active">{t("pages.activeInMenu", "Активна (видна в меню)")}</Label>
+            </div>
+            <div className="space-y-2">
+              <Label>{t("pages.menuDefaultState", "Состояние группы в меню по умолчанию")}</Label>
+              <Select value={menuDefaultExpanded ? "expanded" : "collapsed"} onValueChange={v => setMenuDefaultExpanded(v === "expanded")}>
+                <SelectTrigger data-testid="page-menu-default-state"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="expanded">{t("pages.menuExpanded", "Раскрыта")}</SelectItem>
+                  <SelectItem value="collapsed">{t("pages.menuCollapsed", "Свёрнута")}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{t("pages.menuDefaultHint", "Применяется при загрузке меню, если у страницы есть подпункты. Их можно раскрывать и сворачивать вручную.")}</p>
             </div>
           </div>
           <DialogFooter>
