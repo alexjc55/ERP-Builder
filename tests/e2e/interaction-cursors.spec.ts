@@ -10,6 +10,9 @@ test("ERP controls show pointer cursors without changing text, disabled or drag 
       <a data-testid="cursor-link" href="#cursor-fixture">Link</a>
       <div data-testid="cursor-menu" role="menuitem" class="cursor-default">Action</div>
       <div data-testid="cursor-option" role="option" class="cursor-default">Option</div>
+      <div data-testid="cursor-enabled-cmdk" role="option" data-disabled="false" aria-disabled="false" class="cursor-default"><span data-testid="cursor-option-label">Client</span></div>
+      <div data-testid="cursor-disabled-cmdk" role="option" data-disabled="true" class="cursor-default">Disabled</div>
+      <div data-testid="cursor-disabled-aria" role="option" aria-disabled="true" data-disabled="false">Disabled</div>
       <button data-testid="cursor-tab" role="tab">Tab</button>
       <input data-testid="cursor-checkbox" type="checkbox">
       <select data-testid="cursor-select"><option>Option</option></select>
@@ -22,9 +25,9 @@ test("ERP controls show pointer cursors without changing text, disabled or drag 
       <div data-testid="cursor-cell" data-clickable>Open editor</div>`;
     document.body.append(fixture);
   });
-  for (const id of ["button", "icon", "link", "menu", "option", "tab", "checkbox", "select", "label", "cell"])
+  for (const id of ["button", "icon", "link", "menu", "option", "enabled-cmdk", "option-label", "tab", "checkbox", "select", "label", "cell"])
     await expect(page.getByTestId(`cursor-${id}`)).toHaveCSS("cursor", "pointer");
-  for (const id of ["disabled", "disabled-menu"])
+  for (const id of ["disabled", "disabled-menu", "disabled-cmdk", "disabled-aria"])
     await expect(page.getByTestId(`cursor-${id}`)).toHaveCSS("cursor", "not-allowed");
   await expect(page.getByTestId("cursor-text")).toHaveCSS("cursor", "text");
   await expect(page.getByTestId("cursor-grab")).toHaveCSS("cursor", "grab");

@@ -161,6 +161,16 @@
 }
 
 @layer components {
+  /*
+   * react-remove-scroll publishes this inheritable custom property on body
+   * whenever a modal opens. The table has its own scroller and never uses body
+   * scrollbar compensation. Stop that unused value from invalidating every cell.
+   * Portaled dialogs/popovers still inherit the real body compensation normally.
+   */
+  .erp-table-scroll {
+    --removed-body-scroll-bar-size: 0px;
+  }
+
   /* Vertical cell separators for data tables (horizontal row borders are set
      per-row in the markup; this adds the missing vertical grid lines). */
   /* Logical side (inline-end) so the grid stays complete under RTL (Hebrew):
@@ -218,10 +228,12 @@
   input[type="button"], input[type="submit"], input[type="reset"],
   input[type="checkbox"], input[type="radio"], input[type="file"],
   [data-clickable]
-):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):not(.cursor-grab):not(.cursor-grabbing):not([class*="-resize"]) {
+):not(:disabled):not([aria-disabled="true"]):not([data-disabled=""]):not([data-disabled="true"]):not(.cursor-grab):not(.cursor-grabbing):not([class*="-resize"]) {
   cursor: pointer;
 }
 
-:where(button, input, select, textarea, [role], [data-clickable]):is(:disabled, [aria-disabled="true"], [data-disabled]) {
+/* Radix uses an empty data-disabled marker; cmdk also emits "false" for
+   enabled options. Attribute presence alone must not mean disabled. */
+:where(button, input, select, textarea, [role], [data-clickable]):is(:disabled, [aria-disabled="true"], [data-disabled=""], [data-disabled="true"]) {
   cursor: not-allowed;
 }

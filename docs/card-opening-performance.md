@@ -137,3 +137,65 @@ by the user.
 - Existing suite covers entity/page inheritance, field projection, view/edit/
   create, related create, invalid layouts, fullscreen/side/RTL/mobile and
   preservation of typed values and selected tabs.
+
+## Large-table optimization (local, not yet verified remotely)
+
+A route-intercepted fixture with 200 rows and 27 fields reproduces a long
+pre-request interval without touching any database. Its custom card contains two
+editable fields and 40 text blocks. It uses the same phase diagnostic.
+
+| Phase, ms | Before (three openings) | After (three openings) |
+|---|---|---|
+| Before request | 830, 564, 1531 | 306, 404, 373 |
+| Request | 5, 6, 4 | 4, 4, 9 |
+| After response | 103, 81, 91 | 87, 99, 142 |
+| Total | 938, 652, 1626 | 398, 507, 524 |
+
+Median total: 938 → 507 ms (about 46% lower). Median pre-request interval:
+830 → 373 ms (about 55% lower). Development CPU timings are noisy; these three
+samples establish a local improvement, not a guarantee of remote latency.
+
+Profiling found two separate costs:
+
+- Draft/open state was owned by the large records page. It now lives in a
+  dialog-only boundary, with stable functional setters. The parent still supplies
+  current metadata/permissions and retains the original mutation/invalidation
+  handlers; submit receives the current draft explicitly. The boundary resets
+  on entity/page changes. CAS versions and relation-driven version updates remain
+  part of the existing write contract.
+- Isolating React state alone did not substantially reduce the measured latency.
+  Browser CPU sampling showed expensive computed-style reads in Radix presence
+  and native focus. The scroll-lock library updates an inheritable body CSS
+  variable; the table's independent scroll container does not need that value.
+  Pinning the unused value inside this container stops its propagation through
+  thousands of cells. Portals remain outside that container and still inherit
+  body scrollbar compensation. Body pointer blocking, modal focus trapping,
+  scroll locking and outside-click prevention were not disabled or replaced.
+
+Layout/style containment, fixed table layout, row content-visibility and altered
+pointer inheritance were investigated but not shipped. No modal library was
+replaced and no reusable template/permission cache was added.
+
+Verification:
+- Frontend TypeScript passed.
+- 32 card/presentation UI cases passed, including the large-table fixture and
+  current-draft create/save, view→edit, conflict preservation, CAS retry and reset
+  on reopening. A tooling connection interruption occurred after these cases;
+  the remaining suites were subsequently run separately.
+- Quick-create ancestor-lock and lookup-format test passed after its older mock
+  explicitly returned `template: null` for the standard form.
+- Real development relation-write/CAS/navigation test passed after its older
+  fixture accepted the existing parent-change confirmation instead of silently
+  dismissing it. No production database or server was used.
+
+To repeat the large fixture and optionally collect CPU sample summaries:
+
+```sh
+corepack pnpm exec playwright test tests/e2e/card-presentation.spec.ts --grep 'large table'
+CARD_PROFILE=1 corepack pnpm exec playwright test tests/e2e/card-presentation.spec.ts --grep 'large table'
+```
+
+This change is frontend-only; no API rebuild or SQL migration is required for it.
+The owner still needs to update/rebuild the remote frontend before repeating the
+browser diagnostic there. The recorded remote 1118–1176 ms pre-request interval
+belongs to the previous frontend, not this optimization.

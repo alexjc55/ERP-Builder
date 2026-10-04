@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { readFileSync } from "node:fs";
 
 // Route-intercepted frontend tests for card presentation modes (modal / side /
 // fullscreen). Every /api request is fulfilled here; no real API/DB data is touched.
@@ -91,6 +92,93 @@ async function openView(page: Page) {
   await expect(dlg.getByTestId("card-layout")).toBeVisible();
   return dlg;
 }
+
+test("card user picker: enabled options show pointer and still select", async ({ page }) => {
+  await setup(page);
+  await page.route(`**/api/entities/${A}/fields`, r => r.fulfill({ json: [field(10, A, "client", "user")] }));
+  await page.route("**/api/card-templates/resolve", r => r.fulfill({ json: { template: null } }));
+  await page.route("**/api/users/options**", r => r.fulfill({ json: [{ id: 7, name: "Client example", firstName: "Client", lastName: "example" }] }));
+  await page.goto("/pres-orders");
+  await page.getByRole("button", { name: /^(Добавить запись|Add record)$/ }).click();
+  const input = page.getByTestId("record-dialog").getByTestId("form-field-client");
+  await input.getByRole("combobox").click();
+  const option = page.getByRole("option").filter({ hasText: "Client example" });
+  await expect(option).toHaveAttribute("data-disabled", "false");
+  await option.hover();
+  await expect(option).toHaveCSS("cursor", "pointer");
+  await option.click();
+  await expect(input).toContainText("Client example");
+});
+
+test("large table: opening phase benchmark", async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors = await setup(page, { presentation: "modal" });
+  const extraFields = Array.from({ length: 24 }, (_, i) => field(100 + i, A, `column_${i}`, "text"));
+  await page.route(`**/api/entities/${A}/fields`, r => r.fulfill({ json: [...fieldsA, ...extraFields] }));
+  const rows = Array.from({ length: 200 }, (_, i) => ({ ...record, id: 1000 + i,
+    valuesJson: { ...record.valuesJson, title: `Order ${i}`, ...Object.fromEntries(extraFields.map(f => [f.fieldKey, `Value ${i}`])) },
+  }));
+  await page.route(`**/api/entities/${A}/records/query`, r => r.fulfill({ json: { data: rows, total: 200, numericTotals: {} } }));
+  await page.goto("/pres-orders");
+  await expect(page.locator('[data-testid="record-view-button"]')).toHaveCount(200);
+  await expect(page.locator(".erp-table-scroll")).toHaveCSS("--removed-body-scroll-bar-size", "0px");
+  const profiler = process.env.CARD_PROFILE ? await page.context().newCDPSession(page) : null;
+  if (profiler) { await profiler.send("Profiler.enable"); await profiler.send("Profiler.start"); }
+  const samples = await page.evaluate(readFileSync("scripts/measure-card-opening.browser.js", "utf8"));
+  if (profiler) {
+    const { profile } = await profiler.send("Profiler.stop");
+    console.log("CARD_PROFILE", JSON.stringify([...profile.nodes].sort((a, b) => (b.hitCount ?? 0) - (a.hitCount ?? 0)).slice(0, 35).map(n => ({
+      hits: n.hitCount, fn: n.callFrame.functionName, url: n.callFrame.url.split("/").pop(), line: n.callFrame.lineNumber,
+    }))));
+    await profiler.detach();
+  }
+  console.log("LARGE_TABLE_CARD_PHASES", JSON.stringify(samples));
+  expect(samples).toHaveLength(3);
+  expect(errors).toEqual([]);
+});
+
+test("isolated draft: create, view/edit, CAS conflict and retry preserve current values", async ({ page }) => {
+  const errors = await setup(page, { presentation: "modal" });
+  const creates: any[] = [];
+  const updates: any[] = [];
+  await page.route(`**/api/entities/${A}/records`, async route => {
+    expect(route.request().method()).toBe("POST");
+    creates.push(route.request().postDataJSON());
+    await route.fulfill({ json: { ...record, id: 61 } });
+  });
+  await page.route("**/api/records/60", async route => {
+    expect(route.request().method()).toBe("PUT");
+    updates.push(route.request().postDataJSON());
+    await route.fulfill(updates.length === 1
+      ? { status: 409, json: { error: "Conflict", currentVersion: 3 } }
+      : { json: { ...record, version: 3 } });
+  });
+  await page.goto("/pres-orders");
+  const dlg = page.getByTestId("record-dialog");
+  await page.getByRole("button", { name: /^(Добавить запись|Add record)$/ }).click();
+  const title = dlg.getByTestId("form-field-title").locator("input");
+  await title.fill("New draft");
+  await dlg.getByTestId("record-dialog-save").click();
+  await expect(dlg).toHaveCount(0);
+  expect(creates[0].valuesJson.title).toBe("New draft");
+  await page.getByTestId("record-view-button").click();
+  await expect(dlg.getByTestId("record-dialog-save")).toHaveCount(0);
+  await dlg.getByTestId("record-dialog-to-edit").click();
+  await title.fill("Edited draft");
+  await dlg.getByTestId("record-dialog-save").click();
+  await expect.poll(() => updates.length).toBe(1);
+  await expect(title).toHaveValue("Edited draft");
+  expect(updates[0].expectedVersion).toBe(2);
+  await expect(dlg.getByTestId("record-dialog-save")).toBeEnabled();
+  await dlg.getByTestId("record-dialog-save").click();
+  await expect(dlg).toHaveCount(0);
+  expect(updates[1].valuesJson.title).toBe("Edited draft");
+  expect(updates[1].expectedVersion).toBe(2); // never silently adopts a conflicting version
+  await page.getByRole("button", { name: /^(Добавить запись|Add record)$/ }).click();
+  await expect(title).toHaveValue("");
+  await dlg.getByTestId("button-card-close").click();
+  expect(errors).toEqual([]);
+});
 
 const box = async (page: Page, testId: string) => {
   // Wait for the open animation and the async card resolve to settle.

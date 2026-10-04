@@ -8,6 +8,7 @@ import { draftRelationSelections, relationDraftIds } from "@/lib/relationSelecti
 import { CardLayoutView, CardTextBlock, CardDividerBlock, CardSnapshotGate } from "./CardLayoutView";
 import { CardRelatedRecordsTable } from "./CardRelatedRecordsTable";
 import { CardTemplateSnapshot } from "@/components/CardTemplateSnapshot";
+import { DialogStateBoundary, type DialogStateHandle } from "./DialogStateBoundary";
 import { CardDialogShell } from "./CardDialogShell";
 import { layoutIsWide, layoutPresentation, type CardBlock, type CardLayout } from "@/lib/cardLayout";
 import { columnGroupBodyStyle, resolveColumnGroupCellStyle } from "@/lib/columnGroupStyles";
@@ -955,6 +956,19 @@ function canManuallyEditStatus(entity: Entity | undefined, userId: number | unde
 
 type CellValue = string | number | boolean | FileValue;
 type FormState = Record<string, CellValue>;
+type RecordDialogState = {
+  dialogOpen: boolean;
+  editing: EntityRecord | null;
+  form: FormState;
+  statusId: string;
+  statusDirty: boolean;
+  dialogRelationEditing: boolean;
+  viewing: boolean;
+};
+const emptyRecordDialog: RecordDialogState = {
+  dialogOpen: false, editing: null, form: {}, statusId: NO_STATUS,
+  statusDirty: false, dialogRelationEditing: false, viewing: false,
+};
 type BulkEditableField = {
   token: string;
   kind: "entity" | "page";
@@ -3294,8 +3308,10 @@ export function EntityRecords({
       ? { valuesJson, pageId: permPageId }
       : { valuesJson, statusId: statusValue, pageId: permPageId };
 
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<EntityRecord | null>(null);
+  const recordDialogRef = useRef<DialogStateHandle<RecordDialogState>>(null);
+  const closeRecordDialog = () => recordDialogRef.current?.setState(current => ({
+    ...current, dialogOpen: false, dialogRelationEditing: false,
+  }));
   const [toDelete, setToDelete] = useState<EntityRecord | null>(null);
   // Bulk actions: selection mode with per-row checkboxes + a mass
   // archive/unarchive/delete over the selected rows.
@@ -3315,11 +3331,6 @@ export function EntityRecords({
   // the same row again clears the highlight.
   const [highlightedRowId, setHighlightedRowId] = useState<number | null>(null);
   const [historyFor, setHistoryFor] = useState<EntityRecord | null>(null);
-  const [form, setForm] = useState<FormState>({});
-  const [statusId, setStatusId] = useState<string>(NO_STATUS);
-  const [statusDirty, setStatusDirty] = useState(false);
-  const [dialogRelationEditing, setDialogRelationEditing] = useState(false);
-  const [viewing, setViewing] = useState(false);
   const editingVersionRef = useRef<number | undefined>(undefined);
 
   // Google-Sheets-style inline editing: which cell is currently being edited.
@@ -3498,26 +3509,29 @@ export function EntityRecords({
   // Statuses the user may move the record to, mirroring the server's workflow boundary.
   // Free choice when: creating, no transitions defined, current status is null, or superAdmin.
   // Otherwise: current status + targets of transitions allowed for the user's role.
-  const currentEditStatusId = editing?.statusId ?? null;
-  const workflowActive =
-    !!editing && transitions.length > 0 && currentEditStatusId != null && !isSuperAdmin;
-  const allowedStatusIds: Set<number> | null = workflowActive
-    ? new Set<number>([
-        currentEditStatusId as number,
-        ...transitions
-          .filter(
-            (t: Transition) =>
-              t.fromStatusId === currentEditStatusId &&
-              ((t.allowedRoleIds?.length ?? 0) === 0 ||
-                t.allowedRoleIds.some((rid) => userRoleIds.includes(rid))),
-          )
-          .map((t: Transition) => t.toStatusId),
-      ])
-    : null;
-  const selectableStatuses = dropHidden(
-    allowedStatusIds ? statuses.filter((s: Status) => allowedStatusIds.has(s.id)) : statuses,
-    currentEditStatusId,
-  );
+  const dialogStatusOptions = (editing: EntityRecord | null) => {
+    const currentEditStatusId = editing?.statusId ?? null;
+    const workflowActive =
+      !!editing && transitions.length > 0 && currentEditStatusId != null && !isSuperAdmin;
+    const allowedStatusIds: Set<number> | null = workflowActive
+      ? new Set<number>([
+          currentEditStatusId as number,
+          ...transitions
+            .filter(
+              (t: Transition) =>
+                t.fromStatusId === currentEditStatusId &&
+                ((t.allowedRoleIds?.length ?? 0) === 0 ||
+                  t.allowedRoleIds.some((rid) => userRoleIds.includes(rid))),
+            )
+            .map((t: Transition) => t.toStatusId),
+        ])
+      : null;
+    const selectableStatuses = dropHidden(
+      allowedStatusIds ? statuses.filter((s: Status) => allowedStatusIds.has(s.id)) : statuses,
+      currentEditStatusId,
+    );
+    return { currentEditStatusId, workflowActive, selectableStatuses };
+  };
 
   // View / filter / search / pagination state for the server-side query endpoint.
   const [selectedViewId, setSelectedViewId] = useState<string>(NO_VIEW);
@@ -5658,7 +5672,7 @@ export function EntityRecords({
 
   const createMutation = useCreateEntityRecord({
     mutation: {
-      onSuccess: () => { toast({ title: t("records.created", "Запись создана") }); setDialogOpen(false); setAddingRow(false); setNewRowProjectedValues(new Map()); invalidate(); },
+      onSuccess: () => { toast({ title: t("records.created", "Запись создана") }); closeRecordDialog(); setAddingRow(false); setNewRowProjectedValues(new Map()); invalidate(); },
       onError: (err) => toast({ title: t("records.createError", "Ошибка создания записи"), description: extractError(err), variant: "destructive" }),
     },
   });
@@ -5670,7 +5684,7 @@ export function EntityRecords({
   const statusUpdateMutation = useUpdateRecord();
   const updateMutation = useUpdateRecord({
     mutation: {
-      onSuccess: () => { toast({ title: t("records.updated", "Запись обновлена") }); setDialogOpen(false); invalidate(); },
+      onSuccess: () => { toast({ title: t("records.updated", "Запись обновлена") }); closeRecordDialog(); invalidate(); },
       onError: (err) => toast({
         title: (err as { status?: number })?.status === 409
           ? t("collaboration.conflict", "Данные изменились на сервере")
@@ -5804,41 +5818,30 @@ export function EntityRecords({
     },
   });
   const openCreate = () => {
-    setViewing(false);
-    setEditing(null);
-    setDialogRelationEditing(false);
     editingVersionRef.current = undefined;
     const initial: FormState = {};
     for (const f of fields) initial[f.fieldKey] = initialForField(f);
-    setForm(initial);
     // Preselect the default status — but if it is hidden from this role's picker,
     // leave it unset so the server assigns the (hidden) default itself instead of
     // rejecting an explicit forbidden statusId.
     const def = pageStatusScope
       ? statuses.find(s => s.isDefault && !hiddenStatusIds.has(s.id)) ?? statuses.find(s => !hiddenStatusIds.has(s.id))
       : statuses.find((s: Status) => s.isDefault);
-    setStatusId(def && !hiddenStatusIds.has(def.id) ? String(def.id) : NO_STATUS);
-    setStatusDirty(false);
-    setDialogOpen(true);
+    recordDialogRef.current?.setState({ ...emptyRecordDialog, dialogOpen: true, form: initial,
+      statusId: def && !hiddenStatusIds.has(def.id) ? String(def.id) : NO_STATUS });
   };
 
   const openView = (record: EntityRecord) => {
-    openEdit(record);
-    setViewing(true);
+    openEdit(record, true);
   };
 
-  const openEdit = (record: EntityRecord) => {
-    setViewing(false);
-    setEditing(record);
-    setDialogRelationEditing(false);
+  const openEdit = (record: EntityRecord, viewing = false) => {
     editingVersionRef.current = record.version;
     const initial: FormState = {};
     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
     for (const f of fields) initial[f.fieldKey] = valueToForm(f, values[f.fieldKey]);
-    setForm(initial);
-    setStatusId(record.statusId != null ? String(record.statusId) : NO_STATUS);
-    setStatusDirty(false);
-    setDialogOpen(true);
+    recordDialogRef.current?.setState({ ...emptyRecordDialog, dialogOpen: true, editing: record,
+      viewing, form: initial, statusId: record.statusId != null ? String(record.statusId) : NO_STATUS });
   };
 
   // Deep-link support: a `?record=<id>` query param (e.g. from a dashboard
@@ -5905,7 +5908,7 @@ export function EntityRecords({
     return { dependent, parentValue, relatedFilterFieldKey: dep?.relatedFilterFieldKey ?? null };
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = ({ dialogRelationEditing, form, statusId, editing, statusDirty }: RecordDialogState) => {
     if (dialogRelationEditing) return;
     // Only send fields the user can see; hidden/view-only are preserved server-side.
     const valuesJson = formToValues(visibleFormFields, form);
@@ -8624,7 +8627,7 @@ export function EntityRecords({
               {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : (
-            <div ref={tableScrollRef} className="overflow-auto pb-3" style={{ maxHeight: tableMaxHeight }}>
+            <div ref={tableScrollRef} className="erp-table-scroll overflow-auto pb-3" style={{ maxHeight: tableMaxHeight }}>
               <table
                 className="w-full text-sm"
                 style={borderColor ? ({ "--erp-table-border": borderColor } as CSSProperties) : undefined}
@@ -9527,7 +9530,16 @@ export function EntityRecords({
       </>
       )}
 
-      <CardTemplateSnapshot open={dialogOpen} entityId={entityId} pageId={pageId} mode={viewing ? "view" : editing ? "edit" : "create"}>
+      <DialogStateBoundary key={`${entityId}:${pageId ?? ""}`} controlRef={recordDialogRef} initialState={emptyRecordDialog}>
+      {(dialog, setDialog, setters) => {
+        const { dialogOpen, editing, viewing, form, statusId, dialogRelationEditing } = dialog;
+        const setDialogOpen = (open: boolean) => setDialog(current => ({
+          ...current, dialogOpen: open, ...(!open ? { dialogRelationEditing: false } : {}),
+        }));
+        const { viewing: setViewing, statusId: setStatusId, statusDirty: setStatusDirty,
+          dialogRelationEditing: setDialogRelationEditing, form: setForm, editing: setEditing } = setters;
+        const { currentEditStatusId, workflowActive, selectableStatuses } = dialogStatusOptions(editing);
+        return <CardTemplateSnapshot open={dialogOpen} entityId={entityId} pageId={pageId} mode={viewing ? "view" : editing ? "edit" : "create"}>
       {cardSnapshot => <CardDialogShell
         open={dialogOpen}
         onOpenChange={(open) => {
@@ -9557,7 +9569,7 @@ export function EntityRecords({
             <Button variant="outline" onClick={() => setDialogOpen(false)}>{t("records.cancel", "Отмена")}</Button>
             <Button
               data-testid="record-dialog-save"
-              onClick={handleSubmit}
+              onClick={() => handleSubmit(dialog)}
               disabled={isPending || dialogRelationEditing || cardSnapshot.status !== "ready"}
               className="bg-blue-600 hover:bg-blue-700"
             >
@@ -9651,7 +9663,9 @@ export function EntityRecords({
 
           </div>
       </CardDialogShell>}
-      </CardTemplateSnapshot>
+      </CardTemplateSnapshot>;
+      }}
+      </DialogStateBoundary>
 
       {writeThroughEdit && (
         <RecordEditModal

@@ -33,6 +33,7 @@ test("quick create resolves and locks arbitrary ancestors and formats a user loo
     if (path === "/api/pages") return reply([{ id: 1, path: "/quick-fixture", nameJson: { en: "Fixture" }, isActive: true }]);
     if (path === "/api/entities") return reply(entities);
     if (path === "/api/settings") return reply({ defaultLanguage: "en" });
+    if (path === "/api/card-templates/resolve") return reply({ template: null });
     if (path.includes("/collaboration/")) return route.abort();
     if (path.includes("user-options") || path === "/api/users/options") return reply([{ id: 7, name: "Manager delta" }]);
     const match = path.match(/\/entities\/(\d+)(.*)/);

@@ -285,6 +285,10 @@ test("relation change saves with its returned version and stays fresh across pag
       response.request().method() === "PUT" &&
       response.status() === 200,
   );
+  page.once("dialog", async dialog => {
+    expect(dialog.type()).toBe("confirm");
+    await dialog.accept();
+  });
   await page.getByText(newProjectLabel, { exact: true }).click();
   const linkResponse = await linkResponsePromise;
   const linkResult = (await linkResponse.json()) as { version: number };
