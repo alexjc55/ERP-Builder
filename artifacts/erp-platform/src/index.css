@@ -207,3 +207,21 @@
 .erp-card-form button.w-full[aria-haspopup="dialog"] {
   background-color: hsl(var(--card));
 }
+
+/* Outside layers to override upstream cursor-default menu styles.
+   Text inputs and drag/resize handles retain their specialized cursors. */
+:where(
+  button, a[href], select, summary, label[for],
+  [role="button"], [role="tab"], [role="link"], [role="menuitem"],
+  [role="menuitemcheckbox"], [role="menuitemradio"], [role="option"],
+  [role="combobox"], [role="checkbox"], [role="radio"], [role="switch"],
+  input[type="button"], input[type="submit"], input[type="reset"],
+  input[type="checkbox"], input[type="radio"], input[type="file"],
+  [data-clickable]
+):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):not(.cursor-grab):not(.cursor-grabbing):not([class*="-resize"]) {
+  cursor: pointer;
+}
+
+:where(button, input, select, textarea, [role], [data-clickable]):is(:disabled, [aria-disabled="true"], [data-disabled]) {
+  cursor: not-allowed;
+}

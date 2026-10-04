@@ -224,6 +224,9 @@ test("runtime: tabs/columns, snapshot survives a publication, view is read-only,
   await page.goto("/card-orders");
   const viewBtn = page.locator('[data-testid="record-view-button"][data-record-id="50"]');
   await expect(viewBtn).toBeVisible();
+  await expect(viewBtn).toHaveCSS("cursor", "pointer");
+  await expect(viewBtn.locator("svg")).toHaveCSS("cursor", "pointer");
+  await expect(viewBtn.locator("xpath=ancestor::tr")).toHaveCSS("cursor", "pointer");
   await viewBtn.click();
 
   const card = page.getByTestId("card-layout");

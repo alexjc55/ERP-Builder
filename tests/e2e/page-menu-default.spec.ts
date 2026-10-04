@@ -24,6 +24,8 @@ test("menu group uses configured default after reload and allows manual toggling
   await group.click();
   await expect(group).toHaveAttribute("aria-expanded", "true");
   const systemRow = page.getByRole("row").filter({ hasText: "Administration fixture" });
+  await expect(group).toHaveCSS("cursor", "pointer");
+  await expect(page.getByRole("tab", { name: /^(Системные|System)$/ })).toHaveCSS("cursor", "pointer");
   await expect(systemRow).toHaveCount(0);
   await expect(page.getByRole("row").filter({ hasText: "Legacy group" }).locator("button.text-red-500")).toHaveCount(1);
   await page.getByRole("tab", { name: /^(Системные|System)$/ }).click();

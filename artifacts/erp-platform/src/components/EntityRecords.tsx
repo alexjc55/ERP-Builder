@@ -434,6 +434,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
   return (
     <tr
       className={`border-b border-slate-100 hover:bg-slate-50 ${highlighted ? "erp-row-selected" : ""}`}
+      data-clickable
       style={rowBgForTr ? { backgroundColor: rowBgForTr } : undefined}
       onClick={() => setHighlightedRowId(prev => prev === record.id ? null : record.id)}
     >
@@ -629,7 +630,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
             }
             return (
               <td key={f.id} onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: f.fieldKey }) : undefined}
-                className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
+                className={`px-4 py-3 max-w-[240px] ${f.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${cellEditable ? "cursor-pointer hover:bg-blue-50/60 rounded" : ""}`}
                 style={{ ...pinStyle(`f:${f.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`f:${f.id}`) }}
                 title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}>
                 {renderCellValue(f, values[f.fieldKey], t, userNames, cellText, ml)}
@@ -731,7 +732,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
             }
             return (
               <td key={`pf-${pf.id}`} onClick={refEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
-                className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${refEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
+                className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${refEditable ? "cursor-pointer hover:bg-blue-50/60 rounded" : ""}`}
                 style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
                 title={refEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}>
                 {v == null || v === "" ? <span className="text-slate-300" style={cellText ? { color: cellText } : undefined}>—</span> : renderCellValue(refField, v, t, userNames, cellText, ml)}
@@ -789,7 +790,7 @@ const EntityRecordTableRow = memo(function EntityRecordTableRow({
           }
           return (
             <td key={`pf-${pf.id}`} onClick={cellEditable ? () => setEditingCell({ recordId: record.id, fieldKey: pfKey }) : undefined}
-              className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${cellEditable ? "cursor-text hover:bg-blue-50/60 rounded" : ""}`}
+              className={`px-4 py-3 max-w-[240px] ${pf.wrapText ? "whitespace-normal break-words align-top" : "truncate"} ${cellEditable ? "cursor-pointer hover:bg-blue-50/60 rounded" : ""}`}
               style={{ ...pinStyle(`pf:${pf.id}`, rowBgConcrete), ...cellStyle, ...colWidthStyle(`pf:${pf.id}`) }}
               title={cellEditable ? t("records.clickToEdit", "Нажмите, чтобы изменить") : undefined}>
               {renderCellValue(pageFieldAsField, pageValues[pf.fieldKey], t, userNames, cellText, ml)}

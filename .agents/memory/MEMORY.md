@@ -84,3 +84,4 @@
 - [API memory lifecycle](api-memory-lifecycle.md) — bounded expiry, invalidation-safe cache fills, explicit SSE cleanup, and cautious RSS attribution.
 - [Kanban requirements](kanban-requirements.md) — CRM-first use, universal entity view; terminal-column hiding, archiving, responsive dragging, viewport scrolling, configurable cards.
 - [Конструктор карточек](card-builder-requirements.md) — черновики, копирование между сущностями, приоритет страницы и сохранение открытой формы при публикации.
+- [ERP interaction feedback](interaction-affordances.md) — pointer cursors identify clickable controls across ERP; preserve text, drag, resize, and disabled affordances.
