@@ -38,6 +38,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { MultilingualInput } from "@/components/MultilingualInput";
+import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
 import { useML, useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -933,12 +934,8 @@ function StylePanel({ layout, readOnly, onChange, scope }: { layout: CardLayout;
   const c = layout.customStyle;
   const setC = (patch: Partial<CardLayout["customStyle"]>) => onChange(l => ({ ...l, customStyle: { ...l.customStyle, ...patch } }));
   const color = (key: "background" | "sectionBackground" | "accent", label: string) => (
-    <div className="flex items-center justify-between gap-2">
-      <Label className="text-xs">{label}</Label>
-      <div className="flex items-center gap-1.5">
-        <input type="color" data-testid={`input-style-${key}`} value={c[key] ?? "#ffffff"} onChange={e => setC({ [key]: e.target.value })} className="h-7 w-9 cursor-pointer rounded border border-slate-200" />
-        {c[key] && <button type="button" className="text-xs text-slate-400 hover:text-slate-700" onClick={() => setC({ [key]: undefined })}>{t("cards.reset", "сброс")}</button>}
-      </div>
+    <div data-testid={`input-style-${key}`}>
+      <ColorPickerControl label={label} value={c[key] ?? ""} onChange={value => setC({ [key]: value || undefined })} />
     </div>
   );
   const range = (key: "spacing" | "radius" | "fontSize", label: string, min: number, max: number) => (

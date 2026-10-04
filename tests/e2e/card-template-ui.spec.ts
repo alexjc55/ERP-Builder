@@ -67,6 +67,41 @@ async function auth(page: Page) {
   await page.addInitScript(() => localStorage.setItem("erp_token", "intercepted-card-ui"));
 }
 
+test("builder: custom style uses the shared saved-color palette and clears overrides", async ({ page }) => {
+  await auth(page);
+  await page.addInitScript(() => localStorage.setItem("erp.colorPresets", JSON.stringify(["#123456"])));
+  const draft = { id: 8, name: "Color card", entityId: A, pageId: null, state: "draft", revision: 1, layout: layout("Lines") };
+  const saved: any[] = [];
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (await common(route, path)) return;
+    const reply = (body: unknown) => route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    if (path === "/api/card-templates") return reply([draft]);
+    if (path === "/api/card-templates/8" && route.request().method() === "PUT") {
+      const body = route.request().postDataJSON();
+      saved.push(body);
+      return reply({ ...draft, ...body, revision: 2 });
+    }
+    return reply([]);
+  });
+  await page.goto("/admin/card-templates/8");
+  await page.getByTestId("button-style-custom").click();
+  await expect(page.locator('input[type="color"]')).toHaveCount(0);
+  for (const key of ["background", "sectionBackground", "accent"]) {
+    const control = page.getByTestId(`input-style-${key}`);
+    await control.getByRole("button").first().click();
+    await expect(page.locator(".react-colorful")).toBeVisible();
+    await page.getByTitle("#123456", { exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".react-colorful")).toHaveCount(0);
+    await expect(control.getByRole("textbox")).toHaveValue("#123456");
+  }
+  await page.getByTestId("input-style-accent").getByRole("button").last().click();
+  await page.getByTestId("button-save-draft").click();
+  await expect.poll(() => saved.length).toBe(1);
+  expect(saved[0].layout.customStyle).toEqual({ background: "#123456", sectionBackground: "#123456" });
+});
+
 test("builder: copy across entities clears bindings; publish asks before replacing the active card", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", e => errors.push(e.message));
