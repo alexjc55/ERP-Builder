@@ -39,7 +39,7 @@ async function publicationErrors(reader: Reader, entityId: number, layout: CardL
         register(block.id);
         if (block.kind !== "field" && block.kind !== "relatedTable") continue;
         const f = block.fieldKey ? fieldMap.get(block.fieldKey) : undefined;
-        if (!f) { errors.push(`Assign an active field to block ${block.id}`); continue; }
+        if (!f) continue; // Unbound or removed fields are intentional empty cells.
         for (const mode of block.modes) {
           const key = `${mode}:${f.fieldKey}`;
           if (seen.has(key)) errors.push(`Field ${f.fieldKey} appears twice in ${mode}`);
@@ -58,11 +58,6 @@ async function publicationErrors(reader: Reader, entityId: number, layout: CardL
         if (!block.columns.length) errors.push(`${f.fieldKey}: choose table columns`);
         for (const key of block.columns) if (!targetFields.some(f => f.fieldKey === key)) errors.push(`${f.fieldKey}: unknown related column ${key}`);
       }
-    }
-  }
-  for (const field of fields) {
-    if (field.isRequired && !["lookup", "formula", "function", "created_at"].includes(field.fieldType) && !seen.has(`create:${field.fieldKey}`)) {
-      errors.push(`Required field ${field.fieldKey} must appear in create mode`);
     }
   }
   return errors;
@@ -90,8 +85,11 @@ router.post("/card-templates/resolve", requireAuth, async (req, res) => {
   const recordPerm = await effectiveRecordPerm(req, perms, entityId, pageId);
   const visible = new Set(fields.filter(f => resolveFieldAccess(f, perms, roleIds, entityId, recordPerm, pageId) !== "hidden").map(f => f.fieldKey));
   const layout = structuredClone(template.layout);
+  const activeKeys = new Set(fields.map(f => f.fieldKey));
   for (const tab of layout.tabs) for (const section of tab.sections) {
-    section.blocks = section.blocks.filter(b => b.kind === "text" || b.kind === "divider" || (b.fieldKey != null && visible.has(b.fieldKey)));
+    section.blocks = section.blocks.filter(b => b.kind === "text" || b.kind === "divider" || !b.fieldKey || !activeKeys.has(b.fieldKey) || visible.has(b.fieldKey))
+      .map(b => (b.kind === "field" || b.kind === "relatedTable") && (!b.fieldKey || !activeKeys.has(b.fieldKey))
+        ? { ...b, fieldKey: null, columns: [], label: {} } : b);
     if (section.rows) {
       const visibleIds = new Set(section.blocks.map(b => b.id));
       section.rows = section.rows.map(row => ({ ...row, blockIds: row.blockIds.filter(id => visibleIds.has(id)) }));

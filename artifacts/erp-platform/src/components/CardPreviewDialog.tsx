@@ -94,7 +94,7 @@ function DemoField({ block, field, mode }: { block: CardBlock; field?: Field; mo
   const t = useT();
   const ml = useML();
   if (!field) {
-    return <div className="rounded-md border border-dashed border-amber-300 bg-amber-50/50 px-3 py-2 text-xs text-amber-700" data-testid={`preview-empty-${block.id}`}>{t("cards.emptySlotPreview", "Пустая ячейка")}</div>;
+    return <div aria-hidden className="min-h-8" data-testid={`preview-empty-${block.id}`} data-blank="true" />;
   }
   const label = ml(block.label) || ml(field.nameJson) || field.fieldKey;
   const v = demoValue(field, field.id ?? 0);
@@ -118,7 +118,13 @@ function DemoField({ block, field, mode }: { block: CardBlock; field?: Field; mo
   );
 }
 
-function DemoRelatedTable({ block, field, relatedEntityId, mode }: { block: CardBlock; field?: Field; relatedEntityId: number; mode: CardMode }) {
+function DemoRelatedTable(props: { block: CardBlock; field?: Field; relatedEntityId: number; mode: CardMode }) {
+  // Unbound table slot: an intentional, invisible layout spacer.
+  if (!props.field) return <div aria-hidden className="min-h-8" data-testid={`preview-empty-${props.block.id}`} data-blank="true" />;
+  return <BoundDemoRelatedTable {...props} />;
+}
+
+function BoundDemoRelatedTable({ block, field, relatedEntityId, mode }: { block: CardBlock; field?: Field; relatedEntityId: number; mode: CardMode }) {
   const t = useT();
   const ml = useML();
   // Metadata only: related field definitions; no related records are read.
@@ -133,9 +139,7 @@ function DemoRelatedTable({ block, field, relatedEntityId, mode }: { block: Card
         <div className="text-sm font-medium text-slate-700" style={{ color: "var(--card-text)" }}>{title}</div>
         {mode !== "view" && <span aria-hidden className="rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-400">{t("cards.relatedAddLink", "Добавить / привязать")}</span>}
       </div>
-      {!field ? (
-        <div className="rounded-md border border-dashed border-amber-300 bg-amber-50/50 px-3 py-2 text-xs text-amber-700">{t("cards.emptySlotPreview", "Пустая ячейка")}</div>
-      ) : isLoading ? <Skeleton className="h-20 w-full" /> : (
+      {isLoading ? <Skeleton className="h-20 w-full" /> : (
         <div className="overflow-x-auto rounded-md border border-slate-200">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">

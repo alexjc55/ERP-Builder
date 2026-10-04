@@ -72,7 +72,7 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
               return (
                 <div key={row.id} data-testid={`card-row-${row.id}`} data-row-columns={rc} className={cn("grid min-w-0", SECTION_GRID[rc], gap)} style={appearance.grid}>
                   {rowBlocks.map(b => (
-                    <div key={b.id} data-block-span={effectiveSpan(b.span, rc)} className={cn("min-w-0", BLOCK_SPAN[effectiveSpan(b.span, rc)])}>{renderBlock(b)}</div>
+                    <div key={b.id} data-testid={`card-cell-${b.id}`} data-block-span={effectiveSpan(b.span, rc)} className={cn("min-w-0", !b.fieldKey && (b.kind === "field" || b.kind === "relatedTable") && "min-h-8", BLOCK_SPAN[effectiveSpan(b.span, rc)])}>{renderBlock(b)}</div>
                   ))}
                 </div>
               );
@@ -81,7 +81,7 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
         ) : (
           <div className={cn("grid min-w-0", SECTION_GRID[cols], gap)} style={appearance.grid}>
             {blocks.map(b => (
-              <div key={b.id} data-block-span={effectiveSpan(b.span, cols)} className={cn("min-w-0", BLOCK_SPAN[effectiveSpan(b.span, cols)])}>
+              <div key={b.id} data-testid={`card-cell-${b.id}`} data-block-span={effectiveSpan(b.span, cols)} className={cn("min-w-0", !b.fieldKey && (b.kind === "field" || b.kind === "relatedTable") && "min-h-8", BLOCK_SPAN[effectiveSpan(b.span, cols)])}>
                 {renderBlock(b)}
               </div>
             ))}

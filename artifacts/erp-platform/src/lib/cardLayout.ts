@@ -245,6 +245,18 @@ export function copyLayout(layout: CardLayout, sameEntity: boolean): CardLayout 
   return sameEntity ? cloned : clearBindings(cloned);
 }
 
+/** Stale bindings (field no longer in the entity metadata) become blanks. Call
+ * only with LOADED metadata; returns the same object when nothing changed. */
+export function normalizeUnknownBindings(layout: CardLayout, fields: LayoutFieldLike[]): CardLayout {
+  const known = new Set(fields.map(f => f.fieldKey));
+  let changed = false;
+  const tabs = layout.tabs.map(tab => ({ ...tab, sections: tab.sections.map(s => ({ ...s, blocks: s.blocks.map(b => {
+    if ((b.kind === "field" || b.kind === "relatedTable") && b.fieldKey && !known.has(b.fieldKey)) { changed = true; return { ...b, fieldKey: null, columns: [] }; }
+    return b;
+  }) })) }));
+  return changed ? { ...layout, tabs } : layout;
+}
+
 export function boundFieldKeys(layout: CardLayout): Set<string> {
   const keys = new Set<string>();
   for (const tab of layout.tabs) for (const s of tab.sections) for (const b of s.blocks)
@@ -252,19 +264,18 @@ export function boundFieldKeys(layout: CardLayout): Set<string> {
   return keys;
 }
 
-export interface LayoutIssue { kind: "emptySlot" | "unknownField" | "duplicate" | "requiredMissing" | "rowInvalid"; fieldKey?: string; blockId?: string }
-/** Client-side pre-publish hints. The server remains authoritative. */
-export function layoutIssues(layout: CardLayout, fields: (LayoutFieldLike & { isRequired?: boolean })[]): LayoutIssue[] {
+export interface LayoutIssue { kind: "duplicate" | "rowInvalid"; fieldKey?: string; blockId?: string }
+/** Client-side pre-publish hints. The server remains authoritative. Unbound or
+ * unknown field slots are intentional blanks (layout spacers), never issues;
+ * required-field coverage is enforced by the record form, not the card. */
+export function layoutIssues(layout: CardLayout, fields: LayoutFieldLike[]): LayoutIssue[] {
   const issues: LayoutIssue[] = [];
   const known = new Set(fields.map(f => f.fieldKey));
   const seen = new Map<string, number>();
-  const createKeys = new Set<string>();
   for (const tab of layout.tabs) for (const s of tab.sections) for (const b of s.blocks) {
     if (b.kind !== "field" && b.kind !== "relatedTable") continue;
-    if (!b.fieldKey) { issues.push({ kind: "emptySlot", blockId: b.id }); continue; }
-    if (!known.has(b.fieldKey)) issues.push({ kind: "unknownField", fieldKey: b.fieldKey, blockId: b.id });
+    if (!b.fieldKey || !known.has(b.fieldKey)) continue;
     seen.set(b.fieldKey, (seen.get(b.fieldKey) ?? 0) + 1);
-    if (b.modes.includes("create")) createKeys.add(b.fieldKey);
   }
   const rowIds = new Set<string>();
   for (const tab of layout.tabs) for (const s of tab.sections) {
@@ -276,7 +287,6 @@ export function layoutIssues(layout: CardLayout, fields: (LayoutFieldLike & { is
     if (bad) issues.push({ kind: "rowInvalid" });
   }
   for (const [k, n] of seen) if (n > 1) issues.push({ kind: "duplicate", fieldKey: k });
-  for (const f of fields) if (f.isRequired && f.isActive !== false && !createKeys.has(f.fieldKey)) issues.push({ kind: "requiredMissing", fieldKey: f.fieldKey });
   return issues;
 }
 

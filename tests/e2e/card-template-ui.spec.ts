@@ -890,3 +890,55 @@ test("builder: compact header — icon actions with tooltips, preview-mode filte
   await expect(modes.getByTestId("button-preview-create")).toHaveAttribute("aria-pressed", "true");
   await page.screenshot({ path: "screenshots/card-compact-header.png", clip: { x: 0, y: 0, width: 1280, height: 120 } });
 });
+
+// ---- intentional blanks ------------------------------------------------------
+test("blanks: copied slots are invisible spacers, no slot warnings, publish allowed, fill by drag", async ({ page }) => {
+  await auth(page);
+  const l: any = rowsLayout(); // b3..b9 unbound; add a stale unknown key
+  l.tabs[0].sections[0].blocks[2].fieldKey = "ghost_field";
+  const draft: any = { id: 40, name: "Blanks", entityId: A, pageId: null, state: "draft", revision: 1, layout: l };
+  const saved: any[] = []; const publishes: any[] = [];
+  await page.route("**/api/**", async route => {
+    const req = route.request(); const path = new URL(req.url()).pathname;
+    if (await common(route, path)) return;
+    const reply = (body: unknown) => route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    if (path === "/api/card-templates" && req.method() === "GET") return reply([draft]);
+    if (path === "/api/card-templates/40" && req.method() === "PUT") { const b = req.postDataJSON(); saved.push(b); return reply({ ...draft, ...b, revision: 2 }); }
+    if (path === "/api/card-templates/40/publish") { publishes.push(req.postDataJSON()); return reply({ ...draft, state: "published", revision: 2 }); }
+    return reply([]);
+  });
+  await page.goto("/admin/card-templates/40");
+  await expect(page.getByTestId("editor-block-b4")).toHaveAttribute("data-blank", "true");
+  await expect(page.getByTestId("editor-block-b3")).toHaveAttribute("data-blank", "true");
+  await expect(page.getByTestId("editor-block-b4")).toContainText(/Пустая ячейка|Empty/);
+  await expect(page.getByTestId("list-issues")).toHaveCount(0);
+  await expect(page.getByTestId("editor-block-b4")).not.toHaveCSS("border-top-color", "rgb(252, 211, 77)");
+  // Fill a blank by dragging a field from the palette (fields remain available).
+  await expect(page.getByTestId("palette-field-items")).toBeVisible();
+  await page.getByTestId("palette-field-items").dragTo(page.getByTestId("editor-block-b4"));
+  await expect(page.getByTestId("editor-block-b4")).not.toHaveAttribute("data-blank", "true");
+  await page.getByTestId("button-save-draft").click();
+  await expect.poll(() => saved.length).toBe(1);
+  const bs = saved[0].layout.tabs[0].sections[0].blocks;
+  expect(bs).toHaveLength(9);
+  expect(bs.find((b: any) => b.id === "b4").fieldKey).toBe("items");
+  await expect(page.getByTestId("button-editor-publish")).toBeEnabled();
+  await page.getByTestId("button-editor-publish").click();
+  await expect.poll(() => publishes.length).toBe(1);
+});
+
+test("blanks: preview keeps slots/span invisibly", async ({ page }) => {
+  await auth(page);
+  const draft: any = { id: 41, name: "Blank preview", entityId: A, pageId: null, state: "draft", revision: 1, layout: rowsLayout() };
+  await draftRoutes(page, draft, [], []);
+  await page.goto("/admin/card-templates/41");
+  await page.getByTestId("button-card-preview").click();
+  const dlg = page.getByTestId("dialog-card-preview");
+  const blank = dlg.getByTestId("preview-empty-b6");
+  await expect(blank).toHaveAttribute("data-blank", "true");
+  await expect(blank).toHaveText("");
+  await expect(blank).toHaveCSS("border-top-width", "0px");
+  await expect(blank).toHaveCSS("min-height", "32px");
+  await expect(dlg.getByTestId("card-cell-b6")).toHaveAttribute("data-block-span", "3");
+  await expect(dlg.getByTestId("card-row-row_b")).toBeVisible();
+});

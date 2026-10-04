@@ -156,7 +156,16 @@ test("card registry: scope inheritance, draft validation, permission gates and a
     const incomplete = structuredClone(layout);
     incomplete.tabs[0].sections[0].blocks[0].fieldKey = "missing";
     const draft = await create("Incomplete", null, incomplete);
-    expect((await api(`/${draft.id}/publish`, { expectedRevision: draft.revision })).status()).toBe(400);
+    const activeForBlanks = await resolve();
+    const blankPublication = await api(`/${draft.id}/publish`, { expectedRevision: draft.revision, replaceId: activeForBlanks.id, replaceRevision: activeForBlanks.revision });
+    expect(blankPublication.status()).toBe(200);
+    expect((await resolve()).layout.tabs[0].sections[0].blocks[0].fieldKey).toBeNull();
+    const blankPublished = await blankPublication.json();
+    const blankUnpublished = await api(`/${draft.id}/unpublish`, { expectedRevision: blankPublished.revision });
+    expect(blankUnpublished.status()).toBe(200);
+    draft.revision = (await blankUnpublished.json()).revision;
+    const activeAgain = (await (await api("", undefined, "GET")).json()).find((c: { id: number }) => c.id === activeForBlanks.id);
+    expect((await api(`/${activeAgain.id}/publish`, { expectedRevision: activeAgain.revision })).status()).toBe(200);
     const updated = await api(`/${draft.id}`, { name: "Fixed", entityId: entity.id, layout, expectedRevision: draft.revision }, "PUT");
     expect(updated.status()).toBe(200);
     expect((await api(`/${draft.id}`, { name: "Stale edit", entityId: entity.id, layout, expectedRevision: draft.revision }, "PUT")).status()).toBe(409);

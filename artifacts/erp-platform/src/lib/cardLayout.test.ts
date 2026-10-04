@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  parseCardLayout, presetLayout, copyLayout, boundFieldKeys, layoutIssues, moveBlock,
+  parseCardLayout, presetLayout, copyLayout, boundFieldKeys, layoutIssues, normalizeUnknownBindings, moveBlock,
   makeBlock, insertBlock, cardStyleVars, type CardLayout,
 } from "./cardLayout.ts";
 
@@ -44,14 +44,20 @@ test("copy within entity keeps bindings with fresh ids", () => {
   assert.notEqual(copy.tabs[0].sections[0].blocks[0].id, src.tabs[0].sections[0].blocks[0].id);
 });
 
-test("issues report empty slots, duplicates and missing required create fields", () => {
+test("blank/unknown slots and required coverage are not issues; duplicates are", () => {
   let l: CardLayout = presetLayout(fields);
   const sec = l.tabs[0].sections[0].id;
   l = insertBlock(l, sec, 0, makeBlock("field", null));
   l = insertBlock(l, sec, 0, makeBlock("field", "client"));
   l.tabs[0].sections[0].blocks = l.tabs[0].sections[0].blocks.map(b => b.fieldKey === "name" ? { ...b, modes: ["view", "edit"] } : b);
+  l = insertBlock(l, sec, 0, makeBlock("relatedTable", "ghost"));
   const kinds = layoutIssues(l, fields).map(i => i.kind).sort();
-  assert.deepEqual(kinds, ["duplicate", "emptySlot", "requiredMissing"]);
+  assert.deepEqual(kinds, ["duplicate"]);
+  const copied = copyLayout(l, false);
+  assert.deepEqual(layoutIssues(copied, fields), []);
+  const norm = normalizeUnknownBindings(l, fields);
+  assert.equal(norm.tabs[0].sections[0].blocks.find(b => b.kind === "relatedTable")!.fieldKey, null);
+  assert.equal(normalizeUnknownBindings(copied, fields), copied);
 });
 
 test("moveBlock within a section respects drop-before semantics", () => {

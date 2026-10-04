@@ -297,7 +297,7 @@ function DuplicateDialog({ source, onClose, entities, pages }: { source: CardTem
           {crossEntity && (
             <div className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800" data-testid="text-cross-entity">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              {t("cards.copyCrossEntity", "Другая сущность: привязки полей и столбцы таблиц будут очищены. Пустые ячейки останутся на своих местах — перетащите в них нужные поля.")}
+              {t("cards.copyCrossEntity", "Другая сущность: привязки полей и столбцы таблиц будут очищены. Ячейки останутся на своих местах как пустые промежутки макета; при желании перетащите в них поля.")}
             </div>
           )}
         </div>
@@ -473,7 +473,7 @@ function TemplateEditor({ id }: { id: number }) {
   const { data: entities = [] } = useListEntities();
   const { data: pages = [] } = useListPages();
   const entityId = template?.entityId ?? 0;
-  const { data: fields = [] } = useListEntityFields(entityId, { query: { enabled: !!template, queryKey: getListEntityFieldsQueryKey(entityId) } });
+  const { data: fields = [], isSuccess: fieldsLoaded } = useListEntityFields(entityId, { query: { enabled: !!template, queryKey: getListEntityFieldsQueryKey(entityId) } });
   const { data: relations = [] } = useListEntityRelations(entityId, { query: { enabled: !!template, queryKey: [`/api/entities/${entityId}/relations`] } });
 
   const [layout, setLayout] = useState<CardLayout | null>(null);
@@ -584,7 +584,7 @@ function TemplateEditor({ id }: { id: number }) {
     const p = readPayload(e);
     if (!p || readOnly) return;
     if (p.type === "block") { change(l => rowId ? moveBlockToRow(l, p.blockId, sectionId, rowId, index) : moveBlock(l, p.blockId, sectionId, index)); setSelection({ type: "block", id: p.blockId }); return; }
-    if (p.type === "field" && targetBlock && (targetBlock.kind === "field" || targetBlock.kind === "relatedTable") && !targetBlock.fieldKey) {
+    if (p.type === "field" && targetBlock && (targetBlock.kind === "field" || targetBlock.kind === "relatedTable") && (!targetBlock.fieldKey || (fieldsLoaded && !fieldByKey.has(targetBlock.fieldKey)))) {
       // Fill an empty slot in place (keeps the slot's span, modes and label).
       change(l => updateBlock(l, targetBlock.id, { fieldKey: p.fieldKey, kind: p.kind, columns: [] }));
       setSelection({ type: "block", id: targetBlock.id });
@@ -638,19 +638,16 @@ function TemplateEditor({ id }: { id: number }) {
   const issueLabel = (i: (typeof issues)[number]) => {
     const fname = i.fieldKey ? ml(fieldByKey.get(i.fieldKey)?.nameJson) || i.fieldKey : "";
     switch (i.kind) {
-      case "emptySlot": return t("cards.issueEmptySlot", "Пустая ячейка без поля");
-      case "unknownField": return `${t("cards.issueUnknown", "Поле не найдено в сущности")}: ${fname}`;
       case "duplicate": return `${t("cards.issueDuplicate", "Поле размещено несколько раз")}: ${fname}`;
       case "rowInvalid": return t("cards.issueRows", "Строки раздела ссылаются на поля некорректно");
-      case "requiredMissing": return `${t("cards.issueRequired", "Обязательное поле отсутствует в режиме создания")}: ${fname}`;
     }
   };
 
   const blockTitle = (b: CardBlock) => {
     if (b.kind === "text") return ml(b.text) || t("cards.blockText", "Текст");
     if (b.kind === "divider") return ml(b.label) || t("cards.blockDivider", "Разделитель");
-    if (!b.fieldKey) return t("cards.emptySlot", "Пустая ячейка — перетащите поле");
-    const f = fieldByKey.get(b.fieldKey);
+    const f = b.fieldKey ? fieldByKey.get(b.fieldKey) : undefined;
+    if (!b.fieldKey || (!f && fieldsLoaded)) return t("cards.emptySlot", "Пустая ячейка");
     return ml(b.label) || ml(f?.nameJson) || b.fieldKey;
   };
 
@@ -815,10 +812,10 @@ function TemplateEditor({ id }: { id: number }) {
                     const tile = (b: CardBlock, bi: number, tileCols: number, rowId?: string) => {
                       const dim = previewMode !== "all" && !b.modes.includes(previewMode);
                       const isSel = selection.type === "block" && selection.id === b.id;
-                      const empty = (b.kind === "field" || b.kind === "relatedTable") && !b.fieldKey;
-                      const missing = !!b.fieldKey && !fieldByKey.has(b.fieldKey) && fields.length > 0;
+                      // Unbound or stale (unknown once metadata loaded) slots are intentional blanks.
+                      const empty = (b.kind === "field" || b.kind === "relatedTable") && (!b.fieldKey || (fieldsLoaded && !fieldByKey.has(b.fieldKey)));
                       return (
-                        <div key={b.id} draggable={!readOnly} data-testid={`editor-block-${b.id}`}
+                        <div key={b.id} draggable={!readOnly} data-testid={`editor-block-${b.id}`} data-blank={empty ? "true" : undefined}
                           style={layout.style === "custom" && (b.kind === "text" || b.kind === "divider") ? { background: "transparent" } : undefined}
                           onDragStart={e => startDrag(e, { type: "block", blockId: b.id })}
                           onDragOver={e => allowDrop(e, b.id)} onDrop={e => dropAt(e, sec.id, bi, b, rowId)}
@@ -827,8 +824,8 @@ function TemplateEditor({ id }: { id: number }) {
                             "group relative flex min-h-[52px] cursor-pointer items-start gap-2 rounded-md border bg-white px-2.5 py-2 text-sm transition",
                             BLOCK_SPAN[effectiveSpan(b.span, tileCols)],
                             isSel ? "border-blue-500 ring-1 ring-blue-500" : "border-slate-200 hover:border-slate-300",
-                            empty && "border-dashed border-amber-300 bg-amber-50/40",
-                            missing && "border-red-300 bg-red-50/40",
+                            empty && !isSel && "border-dashed border-slate-300 bg-transparent",
+                            empty && isSel && "border-dashed",
                             dim && "opacity-35",
                             dropHint === b.id && "before:absolute before:-top-1 before:inset-x-0 before:h-0.5 before:rounded before:bg-blue-500",
                           )}>
@@ -836,10 +833,10 @@ function TemplateEditor({ id }: { id: number }) {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
                               {b.kind === "relatedTable" ? <Table2 className="h-3 w-3" /> : b.kind === "text" ? <FileText className="h-3 w-3" /> : b.kind === "divider" ? <Minus className="h-3 w-3" /> : null}
-                              {b.kind === "field" ? t("cards.kindField", "Поле") : b.kind === "relatedTable" ? t("cards.kindTable", "Таблица") : b.kind === "text" ? t("cards.kindText", "Текст") : t("cards.kindDivider", "Разделитель")}
+                              {empty ? null : b.kind === "field" ? t("cards.kindField", "Поле") : b.kind === "relatedTable" ? t("cards.kindTable", "Таблица") : b.kind === "text" ? t("cards.kindText", "Текст") : t("cards.kindDivider", "Разделитель")}
                               {b.modes.length < 3 && <span className="normal-case text-slate-400">· {b.modes.join("/")}</span>}
                             </div>
-                            <div style={layout.style === "custom" && (b.kind === "text" || b.kind === "divider") ? { color: layout.customStyle.textColor } : undefined} className={cn("truncate", empty ? "text-amber-700" : missing ? "text-red-700" : "text-slate-800", b.kind === "text" && "whitespace-pre-wrap line-clamp-2")}>
+                            <div style={layout.style === "custom" && (b.kind === "text" || b.kind === "divider") ? { color: layout.customStyle.textColor } : undefined} className={cn("truncate", empty ? "text-slate-400" : "text-slate-800", b.kind === "text" && "whitespace-pre-wrap line-clamp-2")}>
                               {b.kind === "text" && !mlIsEmpty(b.text) ? <div className="line-clamp-3 whitespace-normal"><CardTextBlock block={b} /></div> : blockTitle(b)}
                               {b.fieldKey && fieldByKey.get(b.fieldKey)?.isRequired && <span className="ms-0.5 text-red-500">*</span>}
                             </div>
