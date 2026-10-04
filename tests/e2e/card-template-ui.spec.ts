@@ -461,3 +461,432 @@ test("runtime: malformed explicit rows surface the snapshot error with retry", a
   await expect(page.getByTestId("record-dialog-save")).toBeDisabled();
   await expect(page.getByTestId("card-layout")).toHaveCount(0);
 });
+
+// ---- formatting, dividers, preview, one-row presets ---------------------------
+const styledLayout = () => {
+  const l: any = layout("Lines");
+  l.tabs[0].sections[0].blocks.push({ id: "blk_div", kind: "divider", label: {}, span: 2, modes: ["view", "create", "edit"], columns: [] });
+  return l;
+};
+
+async function draftRoutes(page: Page, draft: any, saved: any[], writes: string[]) {
+  await page.route("**/api/**", async route => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname;
+    if (await common(route, path)) return;
+    const reply = (body: unknown) => route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    if (req.method() !== "GET") writes.push(`${req.method()} ${path}`);
+    if (path === "/api/card-templates" && req.method() === "GET") return reply([draft]);
+    if (path === `/api/card-templates/${draft.id}` && req.method() === "PUT") {
+      const body = req.postDataJSON(); saved.push(body);
+      return reply({ ...draft, ...body, revision: draft.revision + saved.length });
+    }
+    return reply([]);
+  });
+}
+
+// The text editor is a contenteditable region: selections are DOM Ranges over its text nodes.
+async function selectText(page: Page, start: number, end: number) {
+  const ed = page.getByTestId("input-text-content");
+  await ed.click();
+  await ed.evaluate((el: HTMLElement, [a, b]) => {
+    el.focus();
+    const at = (pos: number): [Node, number] => {
+      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let n: Node | null; let i = 0;
+      while ((n = w.nextNode())) { const len = n.textContent!.length; if (pos <= i + len) return [n, pos - i]; i += len; }
+      return [el, el.childNodes.length];
+    };
+    const r = document.createRange(); r.setStart(...at(a)); r.setEnd(...at(b));
+    const s = window.getSelection()!; s.removeAllRanges(); s.addRange(r);
+  }, [start, end]);
+  await expect(page.getByTestId("text-selection-hint")).toContainText(/«/);
+}
+
+test("builder: selection formats only the selected word; link, remove, paragraph, save/reload; space height", async ({ page }) => {
+  await auth(page);
+  const draft = { id: 40, name: "Styled", entityId: A, pageId: null, state: "draft", revision: 1, layout: styledLayout() };
+  const saved: any[] = []; const writes: string[] = [];
+  await draftRoutes(page, draft, saved, writes);
+  await page.goto("/admin/card-templates/40");
+  await page.getByTestId("editor-block-blk_text").click();
+  // No selection: mark buttons disabled.
+  await expect(page.getByTestId("button-text-bold")).toBeDisabled();
+  // "Fill the order header": select "order" (9..14).
+  await selectText(page, 9, 14);
+  await page.getByTestId("button-text-bold").click();
+  await page.getByTestId("button-text-italic").click();
+  await page.getByTestId("button-text-underline").click();
+  const color = page.getByTestId("input-text-color").getByRole("textbox");
+  await color.fill("#ff0000"); await color.blur();
+  const canvasText = page.getByTestId("editor-block-blk_text").getByTestId("card-text-blk_text");
+  const word = canvasText.locator("span", { hasText: /^order$/ });
+  await expect(word).toHaveCSS("font-weight", "600");
+  await expect(word).toHaveCSS("font-style", "italic");
+  await expect(word).toHaveCSS("color", "rgb(255, 0, 0)");
+  const before = canvasText.locator("span", { hasText: /^Fill the $/ });
+  await expect(before).toHaveCSS("font-weight", "400");
+  await expect(before).toHaveCSS("font-style", "normal");
+  await expect(canvasText.locator("span", { hasText: /^ header$/ })).toHaveCSS("font-weight", "400");
+  await page.getByTestId("button-text-align-center").click();
+  await page.getByTestId("button-text-dir-rtl").click();
+  await expect(canvasText).toHaveCSS("text-align", "center");
+  await expect(canvasText).toHaveAttribute("dir", "rtl");
+
+  // Unsafe link is rejected in the input; safe link applies to "header" only.
+  await selectText(page, 15, 21);
+  await page.getByTestId("input-text-link").fill("javascript:alert(1)");
+  await expect(page.getByTestId("error-text-link")).toBeVisible();
+  await expect(page.getByTestId("button-text-link-apply")).toBeDisabled();
+  await page.getByTestId("input-text-link").fill("https://example.test/doc");
+  await page.getByTestId("button-text-link-apply").click();
+  const link = canvasText.locator("a");
+  await expect(link).toHaveCount(1);
+  await expect(link).toHaveText("header");
+  await expect(link).toHaveAttribute("href", "https://example.test/doc");
+  await expect(page.getByTestId("input-text-content").locator("span[data-link]")).toHaveText("header");
+  // Formatting is visible directly inside the editable region.
+  const edWord = page.getByTestId("input-text-content").locator("span", { hasText: /^order$/ });
+  await expect(edWord).toHaveCSS("font-weight", "600");
+  await expect(edWord).toHaveCSS("color", "rgb(255, 0, 0)");
+  await page.getByTestId("input-text-content").screenshot({ path: "test-results/card-inline-format-preview.png" });
+
+  // Remove italic from "or" and remove the link.
+  await selectText(page, 9, 11);
+  await page.getByTestId("button-text-italic").click();
+  await selectText(page, 15, 21);
+  await page.getByTestId("button-text-unlink").click();
+  await expect(canvasText.locator("a")).toHaveCount(0);
+  // Clear formatting of "Fill".
+  await selectText(page, 0, 4);
+  await page.getByTestId("button-text-bold").click();
+  await expect(canvasText.locator("span", { hasText: /^Fill$/ })).toHaveCSS("font-weight", "600");
+  await page.getByTestId("button-text-clear").click();
+  await expect(canvasText.locator("span", { hasText: /^Fill$/ })).toHaveCount(0);
+
+  // Add the link again and save.
+  await selectText(page, 15, 21);
+  await page.getByTestId("input-text-link").fill("https://example.test/doc");
+  await page.getByTestId("button-text-link-apply").click();
+
+  await page.getByTestId("editor-block-blk_div").click();
+  await page.getByTestId("button-divider-kind-dashed").click();
+  await page.getByTestId("input-divider-thickness").fill("4");
+  await expect(page.getByTestId("editor-block-blk_div").getByTestId("card-divider-blk_div")).toHaveCSS("border-top-style", "dashed");
+  await expect(page.getByTestId("editor-block-blk_div").getByTestId("card-divider-blk_div")).toHaveCSS("border-top-width", "4px");
+  await page.getByTestId("button-save-draft").click();
+  await expect.poll(() => saved.length).toBe(1);
+  const blocks = saved[0].layout.tabs[0].sections[0].blocks;
+  const tb = blocks.find((b: any) => b.id === "blk_text");
+  expect(tb.textStyle).toEqual({ align: "center", direction: "rtl" });
+  expect(tb.textRuns.en).toEqual([
+    { text: "Fill the " },
+    { text: "or", bold: true, underline: true, color: "#FF0000" },
+    { text: "der", bold: true, italic: true, underline: true, color: "#FF0000" },
+    { text: " " },
+    { text: "header", link: "https://example.test/doc" },
+  ]);
+  expect(tb.textRuns.en.map((r: any) => r.text).join("")).toBe(tb.text.en);
+  expect(tb.textRuns.ru).toEqual([{ text: "Fill the order header" }]);
+  expect(blocks.find((b: any) => b.id === "blk_div").dividerStyle).toEqual({ kind: "dashed", thickness: 4 });
+  expect(blocks.find((b: any) => b.id === "blk_title").textStyle).toBeUndefined();
+
+  // Space: no line drawn; height in px.
+  await page.getByTestId("editor-block-blk_div").click();
+  await page.getByTestId("button-divider-kind-space").click();
+  const sp = page.getByTestId("editor-block-blk_div").getByTestId("card-divider-blk_div");
+  await expect(sp).toHaveAttribute("data-divider-kind", "space");
+  await expect(page.getByTestId("editor-block-blk_div").locator("hr")).toHaveCount(0);
+  await expect(page.getByTestId("input-divider-thickness")).toHaveCount(0);
+  await page.getByTestId("input-divider-height").fill("120");
+  await expect(sp).toHaveCSS("height", "120px");
+  await page.getByTestId("button-save-draft").click();
+  await expect.poll(() => saved.length).toBe(2);
+  expect(saved[1].layout.tabs[0].sections[0].blocks.find((b: any) => b.id === "blk_div").dividerStyle).toEqual({ kind: "space", height: 120 });
+});
+
+test("builder: saved inline runs reload per language; typing keeps word formatting; legacy style migrates on edit", async ({ page }) => {
+  await auth(page);
+  const l: any = layout("Lines");
+  const tb = l.tabs[0].sections[0].blocks[2];
+  tb.text = { ru: "Привет мир", en: "Hello world", he: "שלום עולם" };
+  tb.textRuns = { ru: [{ text: "Привет " }, { text: "мир", bold: true }], en: [{ text: "Hello " }, { text: "world", link: "https://example.test" }] };
+  tb.textStyle = { align: "center" };
+  const legacyText = { id: "blk_legacy", kind: "text", text: ml("Old style"), textStyle: { italic: true, direction: "rtl" }, span: 1, modes: ["view", "create", "edit"], columns: [] };
+  l.tabs[0].sections[0].blocks.push(legacyText);
+  const draft = { id: 41, name: "Runs", entityId: A, pageId: null, state: "draft", revision: 1, layout: l };
+  const saved: any[] = []; const writes: string[] = [];
+  await draftRoutes(page, draft, saved, writes);
+  await page.goto("/admin/card-templates/41");
+  // UI language is en: canvas renders the EN runs.
+  const canvasText = page.getByTestId("editor-block-blk_text").getByTestId("card-text-blk_text");
+  await expect(canvasText.locator("a")).toHaveText("world");
+  await expect(canvasText.locator("span", { hasText: /^Hello $/ })).toHaveCSS("font-weight", "400");
+  // Legacy block renders whole-block style unchanged.
+  await expect(page.getByTestId("card-text-blk_legacy")).toHaveCSS("font-style", "italic");
+  await page.getByTestId("editor-block-blk_text").click();
+  await expect(page.getByTestId("input-text-content")).toHaveText("Hello world");
+  await page.getByTestId("tab-text-lang-ru").click();
+  await expect(page.getByTestId("input-text-content")).toHaveText("Привет мир");
+  await expect(page.getByTestId("input-text-content").locator("span", { hasText: /^мир$/ })).toHaveCSS("font-weight", "600");
+  // Type at the end: inherits bold of the previous char, prefix stays normal.
+  await page.getByTestId("input-text-content").press("End");
+  await page.getByTestId("input-text-content").pressSequentially("!");
+  await page.getByTestId("tab-text-lang-he").click();
+  await expect(page.getByTestId("input-text-content")).toHaveText("שלום עולם");
+  await selectText(page, 0, 4);
+  await page.getByTestId("button-text-underline").click();
+  await page.getByTestId("editor-block-blk_legacy").click();
+  await selectText(page, 0, 3);
+  await page.getByTestId("button-text-bold").click();
+  await page.getByTestId("button-save-draft").click();
+  await expect.poll(() => saved.length).toBe(1);
+  const blocks = saved[0].layout.tabs[0].sections[0].blocks;
+  const s = blocks.find((b: any) => b.id === "blk_text");
+  expect(s.text).toEqual({ ru: "Привет мир!", en: "Hello world", he: "שלום עולם" });
+  expect(s.textRuns.ru).toEqual([{ text: "Привет " }, { text: "мир!", bold: true }]);
+  expect(s.textRuns.en).toEqual([{ text: "Hello " }, { text: "world", link: "https://example.test" }]);
+  expect(s.textRuns.he).toEqual([{ text: "שלום", underline: true }, { text: " עולם" }]);
+  expect(s.textStyle).toEqual({ align: "center" });
+  const lg = blocks.find((b: any) => b.id === "blk_legacy");
+  expect(lg.textStyle).toEqual({ direction: "rtl" });
+  expect(lg.textRuns.en).toEqual([{ text: "Old", italic: true, bold: true }, { text: " style", italic: true }]);
+  expect(lg.textRuns.ru).toEqual([{ text: "Old style", italic: true }]);
+  expect(lg.textRuns.he).toEqual([{ text: "Old style", italic: true }]);
+});
+
+test("builder: width is a column span clamped to the row; impossible choices disabled", async ({ page }) => {
+  await auth(page);
+  const l: any = layout("Lines");
+  const sec = l.tabs[0].sections[0];
+  sec.blocks[2].span = 2; sec.blocks[1].span = 3;
+  sec.rows = [{ id: "r3", columns: 3, blockIds: ["blk_title", "blk_text"] }, { id: "r1", columns: 1, blockIds: ["blk_note"] }];
+  const draft = { id: 42, name: "Widths", entityId: A, pageId: null, state: "draft", revision: 1, layout: l };
+  const saved: any[] = []; const writes: string[] = [];
+  await draftRoutes(page, draft, saved, writes);
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await page.goto("/admin/card-templates/42");
+  const w = async (id: string) => (await page.getByTestId(`editor-block-${id}`).boundingBox())!.width;
+  await expect(page.getByTestId("editor-block-blk_text")).toBeVisible();
+  const ratio = (await w("blk_text")) / (await w("blk_title"));
+  expect(ratio).toBeGreaterThan(1.8);
+  await expect(page.getByTestId("editor-block-blk_text")).toHaveCSS("grid-column-end", "span 2");
+  await page.getByTestId("editor-block-blk_text").click();
+  await expect(page.getByText(/Columns spanned|Колонок занимает/).first()).toBeVisible();
+  for (const n of [1, 2, 3]) await expect(page.getByTestId(`button-span-${n}`)).toBeEnabled();
+  await expect(page.getByTestId("button-span-2")).toHaveAttribute("aria-pressed", "true");
+  await page.getByTestId("editor-block-blk_note").click();
+  await expect(page.getByTestId("button-span-1")).toBeEnabled();
+  await expect(page.getByTestId("button-span-2")).toBeDisabled();
+  await expect(page.getByTestId("button-span-3")).toBeDisabled();
+  await expect(page.getByTestId("button-span-1")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("text-span-hint")).toContainText("1");
+});
+
+test("builder: preview renders unsaved layout with demo data, switches modes, never writes, keeps editor state", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", e => errors.push(e.message));
+  await auth(page);
+  const draft = { id: 41, name: "Preview", entityId: A, pageId: null, state: "draft", revision: 1, layout: styledLayout() };
+  const saved: any[] = []; const writes: string[] = []; const recordReads: string[] = [];
+  page.on("request", r => { if (/\/records|related-values/.test(r.url())) recordReads.push(r.url()); });
+  await draftRoutes(page, draft, saved, writes);
+  await page.goto("/admin/card-templates/41");
+  await page.getByTestId("editor-block-blk_text").click();
+  await selectText(page, 0, 4);
+  await page.getByTestId("button-text-bold").click();
+  await expect(page.getByTestId("text-dirty")).toBeVisible();
+  await page.getByTestId("button-card-preview").click();
+  const dlg = page.getByTestId("dialog-card-preview");
+  await expect(dlg).toBeVisible();
+  await expect(dlg.getByTestId("badge-demo-data")).toBeVisible();
+  await expect(dlg.getByTestId("card-text-blk_text").locator("span", { hasText: /^Fill$/ })).toHaveCSS("font-weight", "600");
+  await expect(dlg.getByTestId("card-text-blk_text").locator("span", { hasText: /order header$/ })).toHaveCSS("font-weight", "400");
+  await expect(dlg.getByTestId("preview-field-title")).toBeVisible();
+  await expect(dlg.getByTestId("preview-field-note")).toBeVisible();
+  await expect(dlg.getByTestId("record-dialog-save")).toHaveCount(0);
+  await dlg.getByTestId("card-tab-tab_lines").click();
+  const table = dlg.getByTestId("preview-related-blk_items");
+  await expect(table).toContainText("Item name");
+  await expect(table).toContainText("qty");
+  await expect(dlg.getByTestId("preview-related-row-blk_items-1")).toBeVisible();
+  await dlg.getByTestId("button-preview-dialog-mode-create").click();
+  await expect(dlg.getByTestId("button-preview-dialog-mode-create")).toHaveAttribute("aria-selected", "true");
+  await dlg.getByTestId("button-preview-dialog-mode-edit").click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(dlg.getByTestId("preview-scroll")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dlg).toHaveCount(0);
+  await expect(page.getByTestId("text-dirty")).toBeVisible();
+  await expect(page.getByTestId("button-text-bold")).toHaveAttribute("aria-pressed", "true");
+  expect(writes).toEqual([]);
+  expect(recordReads).toEqual([]);
+  expect(saved).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("builder: new presets place all fields of each section in ONE explicit row", async ({ page }) => {
+  await auth(page);
+  const creates: any[] = [];
+  await page.route("**/api/**", async route => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname;
+    if (await common(route, path)) return;
+    const reply = (body: unknown) => route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    if (path === "/api/card-templates" && req.method() === "POST") { const body = req.postDataJSON(); creates.push(body); return reply({ id: 60, state: "draft", revision: 1, ...body }); }
+    return reply([]);
+  });
+  await page.goto("/admin/card-templates");
+  for (const preset of ["standard", "compact", "sectioned"]) {
+    await page.getByTestId("button-new-template").first().click();
+    await page.getByTestId("input-template-name").fill(`P ${preset}`);
+    await page.getByTestId("select-entity").click();
+    await page.getByRole("option", { name: "Orders" }).click();
+    await page.getByTestId(`button-preset-${preset}`).click();
+    await page.getByTestId("button-create-template").click();
+    await expect.poll(() => creates.length).toBe(["standard", "compact", "sectioned"].indexOf(preset) + 1);
+    await page.goto("/admin/card-templates");
+  }
+  for (const c of creates) for (const s of c.layout.tabs[0].sections) {
+    expect(s.rows).toHaveLength(1);
+    expect(s.rows[0].blockIds).toEqual(s.blocks.map((b: any) => b.id));
+    expect(s.rows[0].columns).toBe(s.columns);
+  }
+  expect(creates[1].layout.tabs[0].sections[0].rows[0].blockIds).toHaveLength(3);
+});
+
+test("runtime: formatted text link is safe (new tab, noopener) and unsafe link is not rendered as a link", async ({ page }) => {
+  await auth(page);
+  const l: any = layout("Lines");
+  const blocks = l.tabs[0].sections[0].blocks;
+  blocks[2].textStyle = { bold: true, color: "#123456", link: "https://example.test" };
+  blocks.push({ id: "blk_bad", kind: "text", text: ml("Bad link"), textStyle: { link: "javascript:alert(1)" }, span: 1, modes: ["view", "create", "edit"], columns: [] });
+  blocks.push({ id: "blk_sp", kind: "divider", dividerStyle: { kind: "space" }, span: 1, modes: ["view", "create", "edit"], columns: [] });
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (await common(route, path)) return;
+    const reply = (body: unknown) => route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    if (path === "/api/card-templates/resolve") return reply({ template: { id: 1, name: "F", entityId: A, pageId: null, state: "published", revision: 1, layout: l } });
+    if (path === `/api/entities/${A}/records/query`) return reply({ data: [], total: 0, numericTotals: {} });
+    return reply([]);
+  });
+  await page.goto("/card-orders");
+  await page.getByRole("button", { name: /Add record|Добавить запись/ }).first().click();
+  const link = page.getByTestId("link-card-text-blk_text");
+  await expect(link).toHaveAttribute("href", "https://example.test");
+  await expect(link).toHaveAttribute("target", "_blank");
+  await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+  await expect(page.getByTestId("card-text-blk_text")).toHaveCSS("color", "rgb(18, 52, 86)");
+  await expect(page.getByTestId("card-text-blk_bad")).toBeVisible();
+  await expect(page.getByTestId("link-card-text-blk_bad")).toHaveCount(0);
+  await expect(page.getByTestId("card-divider-blk_sp")).toHaveAttribute("data-divider-kind", "space");
+});
+
+test("builder: WYSIWYG editor - typing keeps formatting, anchor link #test, unsafe hrefs rejected, plaintext paste, save/reload multilingual", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", e => errors.push(e.message));
+  await auth(page);
+  const l: any = layout("Lines");
+  l.tabs[0].sections[0].blocks[2].text = { ru: "Привет мир", en: "Fill the order header", he: "שלום עולם" };
+  let draft: any = { id: 43, name: "WYSIWYG", entityId: A, pageId: null, state: "draft", revision: 1, layout: l };
+  const saved: any[] = [];
+  await page.route("**/api/**", async route => {
+    const req = route.request(); const path = new URL(req.url()).pathname;
+    if (await common(route, path)) return;
+    const reply = (body: unknown) => route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    if (path === "/api/card-templates" && req.method() === "GET") return reply([draft]);
+    if (path === "/api/card-templates/43" && req.method() === "PUT") { const body = req.postDataJSON(); saved.push(body); draft = { ...draft, ...body, revision: draft.revision + 1 }; return reply(draft); }
+    return reply([]);
+  });
+  await page.goto("/admin/card-templates/43");
+  await page.getByTestId("editor-block-blk_text").click();
+  const ed = page.getByTestId("input-text-content");
+  await expect(ed).toHaveAttribute("contenteditable", "true");
+  await expect(page.locator("textarea[data-testid='input-text-content']")).toHaveCount(0);
+  // Bold "order", then type inside it: inserted chars inherit bold.
+  await selectText(page, 9, 14);
+  await page.getByTestId("button-text-bold").click();
+  await expect(ed.locator("span", { hasText: /^order$/ })).toHaveCSS("font-weight", "600");
+  await selectCaret(page, 14);
+  await page.keyboard.type("s");
+  await expect(ed.locator("span", { hasText: /^orders$/ })).toHaveCSS("font-weight", "600");
+  await expect(ed.locator("span", { hasText: /^Fill the $/ })).toHaveCSS("font-weight", "400");
+  // Unsafe links rejected; selected word gets #test anchor (no new tab).
+  await selectText(page, 16, 22);
+  for (const bad of ["javascript:alert(1)", "//evil.test", "# test", "#", "data:text/html,x", "#<script>"]) {
+    await page.getByTestId("input-text-link").fill(bad);
+    await expect(page.getByTestId("error-text-link")).toBeVisible();
+    await expect(page.getByTestId("button-text-link-apply")).toBeDisabled();
+  }
+  await page.getByTestId("input-text-link").fill("#test");
+  await expect(page.getByTestId("error-text-link")).toHaveCount(0);
+  await page.getByTestId("button-text-link-apply").click(); // editor blurred: stored selection is used
+  await expect(ed.locator("span[data-link]")).toHaveText("header");
+  const a = page.getByTestId("editor-block-blk_text").getByTestId("card-text-blk_text").locator("a");
+  await expect(a).toHaveAttribute("href", "#test");
+  await expect(a).not.toHaveAttribute("target", /.*/);
+  // Plain-text paste: HTML from clipboard never becomes markup.
+  await selectCaret(page, 0);
+  await ed.evaluate((el: HTMLElement) => {
+    const dt = new DataTransfer(); dt.setData("text/plain", "Go "); dt.setData("text/html", "<b onclick=x>BAD</b>");
+    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+  await expect(ed).toHaveText("Go Fill the orders header");
+  await expect(ed.locator("b")).toHaveCount(0);
+  await page.screenshot({ path: "screenshots/card-wysiwyg-editor.png" });
+  await page.getByTestId("tab-text-lang-he").click();
+  await expect(ed).toHaveText("שלום עולם");
+  await selectText(page, 0, 4);
+  await page.getByTestId("button-text-italic").click();
+  await page.getByTestId("button-save-draft").click();
+  await expect.poll(() => saved.length).toBe(1);
+  const tb = saved[0].layout.tabs[0].sections[0].blocks.find((b: any) => b.id === "blk_text");
+  expect(tb.text).toEqual({ ru: "Привет мир", en: "Go Fill the orders header", he: "שלום עולם" });
+  expect(tb.textRuns.en).toEqual([{ text: "Go Fill the " }, { text: "orders", bold: true }, { text: " " }, { text: "header", link: "#test" }]);
+  expect(tb.textRuns.he).toEqual([{ text: "שלום", italic: true }, { text: " עולם" }]);
+  expect(tb.textRuns.ru).toEqual([{ text: "Привет мир" }]);
+  await page.reload();
+  await page.getByTestId("editor-block-blk_text").click();
+  await expect(ed.locator("span", { hasText: /^orders$/ })).toHaveCSS("font-weight", "600");
+  await page.getByTestId("tab-text-lang-he").click();
+  await expect(ed.locator("span", { hasText: /^שלום$/ })).toHaveCSS("font-style", "italic");
+  expect(errors).toEqual([]);
+});
+
+async function selectCaret(page: Page, pos: number) {
+  await page.getByTestId("input-text-content").evaluate((el: HTMLElement, p) => {
+    el.focus();
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let n: Node | null; let i = 0;
+    while ((n = w.nextNode())) { const len = n.textContent!.length; if (p <= i + len) { const r = document.createRange(); r.setStart(n, p - i); r.collapse(true); const s = window.getSelection()!; s.removeAllRanges(); s.addRange(r); return; } i += len; }
+  }, pos);
+}
+
+test("builder: compact header — icon actions with tooltips, preview-mode filter lives in settings", async ({ page }) => {
+  await auth(page);
+  const draft: any = { id: 40, name: "Compact header card", entityId: A, pageId: null, state: "draft", revision: 1, layout: layout("Lines") };
+  await draftRoutes(page, draft, [], []);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/admin/card-templates/40");
+  const header = page.getByTestId("input-editor-name").locator("xpath=ancestor::div[contains(@class,'sticky')][1]");
+  await expect(header).toBeVisible();
+  await expect(header.getByTestId("button-preview-all")).toHaveCount(0);
+  await expect(header.getByRole("group")).toHaveCount(0);
+  const modes = page.getByTestId("group-preview-mode");
+  await expect(modes).toBeVisible();
+  await expect(modes.getByTestId("button-preview-view")).toBeVisible();
+  await expect(header.getByTestId("button-editor-publish")).toHaveText(/Publish|Опубликовать/);
+  await expect(page.getByTestId("button-card-preview")).toHaveAccessibleName(/Preview|Предпросмотр/);
+  await expect(page.getByTestId("button-save-draft")).toBeDisabled();
+  await page.getByTestId("button-card-preview").hover();
+  await expect(page.getByRole("tooltip")).toContainText(/Preview|Предпросмотр/);
+  await page.mouse.move(640, 600, { steps: 5 });
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("tooltip")).toHaveCount(0);
+  await page.getByTestId("wrap-save-draft").hover();
+  await expect(page.getByRole("tooltip")).toContainText(/Save draft|Сохранить черновик/);
+  await page.mouse.move(0, 0);
+  await page.getByTestId("input-editor-name").fill("Compact header card renamed");
+  await expect(page.getByTestId("text-dirty")).toBeVisible();
+  await modes.getByTestId("button-preview-create").click();
+  await expect(modes.getByTestId("button-preview-create")).toHaveAttribute("aria-pressed", "true");
+  await page.screenshot({ path: "screenshots/card-compact-header.png", clip: { x: 0, y: 0, width: 1280, height: 120 } });
+});

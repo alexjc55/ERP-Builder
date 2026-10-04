@@ -15,6 +15,7 @@
     "test:manual-refresh": "node --experimental-strip-types --test src/lib/manualDataRefresh.test.ts",
     "test:relation-edit": "node --experimental-strip-types --test src/components/EntityRecords.relation-edit.test.ts",
     "test:progressive-table": "node --experimental-strip-types --test src/components/inlineCommit.test.ts src/components/EntityRecords.progressive-loading.test.ts src/lib/pageValuesHydration.test.ts src/lib/aggregateSnapshot.test.ts",
+    "test:cards": "node --experimental-strip-types --test src/lib/cardLayout.test.ts src/lib/cardBlockStyle.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

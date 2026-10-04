@@ -1,6 +1,7 @@
 // Client mirror of the card-template layout contract defined server-side in
 // lib/db/src/schema/card-templates.ts (cardLayoutSchema). The client never
 // imports the db package; keep these shapes in sync with that zod schema.
+import { parseDividerStyle, parseTextRuns, parseTextStyle, type CardDividerStyle, type CardTextStyle, type TextRuns } from "./cardBlockStyle.ts";
 
 export type CardMode = "view" | "create" | "edit";
 export const CARD_MODES: readonly CardMode[] = ["view", "create", "edit"];
@@ -18,6 +19,12 @@ export interface CardBlock {
   span: number;
   modes: CardMode[];
   columns: string[];
+  /** Whole-block formatting for text blocks (additive, optional). */
+  textStyle?: CardTextStyle;
+  /** Line style for divider blocks (additive, optional). */
+  dividerStyle?: CardDividerStyle;
+  /** Inline formatted runs per language; concatenation equals text[lang]. */
+  textRuns?: TextRuns;
 }
 export type RowColumns = 1 | 2 | 3;
 /** Explicit row inside a section. Blocks stay canonical in `section.blocks`;
@@ -82,6 +89,9 @@ function parseBlock(v: unknown): CardBlock | null {
     span: clampInt(v.span, 1, 3, 1),
     modes: modes.length ? [...new Set(modes)] : [...CARD_MODES],
     columns: Array.isArray(v.columns) ? v.columns.filter((c): c is string => typeof c === "string").slice(0, LIMITS.columns) : [],
+    ...(() => { const ts = kind === "text" ? parseTextStyle(v.textStyle) : undefined; return ts ? { textStyle: ts } : {}; })(),
+    ...(() => { const tr = kind === "text" ? parseTextRuns(v.textRuns) : undefined; return tr ? { textRuns: tr } : {}; })(),
+    ...(() => { const ds = kind === "divider" ? parseDividerStyle(v.dividerStyle) : undefined; return ds ? { dividerStyle: ds } : {}; })(),
   };
 }
 
@@ -164,16 +174,17 @@ export function emptyLayout(): CardLayout {
 }
 
 export type LayoutPreset = "standard" | "compact" | "sectioned";
-/** Starting layout for a new template: every active field, in field order. The
- * "standard" preset reproduces the existing single-column ERP form exactly. */
+/** Starting layout for a new template: every active field, in field order. Each
+ * section starts as ONE explicit row holding all of its fields (the row grid
+ * wraps by its column count); the user adds further rows himself. */
 export function presetLayout(fields: LayoutFieldLike[], preset: LayoutPreset = "standard"): CardLayout {
   const active = fields.filter(f => f.isActive !== false).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   const block = (f: LayoutFieldLike): CardBlock => ({ id: newId("blk"), kind: "field", fieldKey: f.fieldKey, span: 1, modes: [...CARD_MODES], columns: [] });
   const layout = emptyLayout();
   layout.style = preset;
-  // New templates start on explicit rows, packed exactly like the preset grid.
   const withRows = (l: CardLayout): CardLayout => {
-    for (const tab of l.tabs) for (const s of tab.sections) s.rows = packRows(s);
+    for (const tab of l.tabs) for (const s of tab.sections)
+      s.rows = [{ id: newId("row"), columns: clampInt(s.columns, 1, 3, 1) as RowColumns, blockIds: s.blocks.map(b => b.id) }];
     return l;
   };
   const section = layout.tabs[0].sections[0];
@@ -203,7 +214,9 @@ export function cloneLayoutWithNewIds(layout: CardLayout): CardLayout {
           const id = newId("blk");
           map.set(b.id, id);
           return { ...b, id, modes: [...b.modes], columns: [...b.columns],
-            ...(b.label ? { label: { ...b.label } } : {}), ...(b.text ? { text: { ...b.text } } : {}) };
+            ...(b.label ? { label: { ...b.label } } : {}), ...(b.text ? { text: { ...b.text } } : {}),
+            ...(b.textStyle ? { textStyle: { ...b.textStyle } } : {}), ...(b.dividerStyle ? { dividerStyle: { ...b.dividerStyle } } : {}),
+            ...(b.textRuns ? { textRuns: Object.fromEntries(Object.entries(b.textRuns).map(([l, r]) => [l, (r ?? []).map(x => ({ ...x }))])) } : {}) };
         });
         const rows = s.rows?.map(r => ({ id: newId("row"), columns: r.columns, blockIds: r.blockIds.map(x => map.get(x)).filter((x): x is string => !!x) }));
         return { id: newId("sec"), title: { ...s.title }, columns: s.columns, blocks, ...(rows ? { rows } : {}) };
@@ -483,3 +496,17 @@ export function cardStyleVars(layout: CardLayout): Record<string, string> {
 export function layoutIsWide(layout: CardLayout | null | undefined): boolean {
   return !!layout?.tabs.some(t => t.sections.some(s => s.rows ? s.rows.some(r => r.columns > 1) : s.columns > 1));
 }
+
+/** Columns available to a block: its explicit row's columns, else the legacy
+ * section.columns, clamped 1..3. */
+export function blockColumnLimit(layout: CardLayout, blockId: string): number {
+  for (const tab of layout.tabs) for (const s of tab.sections) {
+    if (!s.blocks.some(b => b.id === blockId)) continue;
+    const row = s.rows?.find(r => r.blockIds.includes(blockId));
+    return Math.min(3, Math.max(1, row ? row.columns : s.columns));
+  }
+  return 1;
+}
+/** Span actually rendered (desktop); phones are always one column. */
+export const effectiveSpan = (span: number, columns: number) => Math.min(Math.min(3, Math.max(1, columns)), Math.max(1, Math.round(span)));
+export const spanChoices = (columns: number) => [1, 2, 3].map(n => ({ n, available: n <= Math.min(3, Math.max(1, columns)) }));

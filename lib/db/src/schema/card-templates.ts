@@ -5,15 +5,52 @@ import { entitiesTable } from "./entities";
 import { pagesTable } from "./pages";
 
 const ml = z.object({ ru: z.string().max(10000).optional(), en: z.string().max(10000).optional(), he: z.string().max(10000).optional() });
+const cardLink = z.string().max(2048).refine(value => {
+  if (value !== value.trim() || /[\u0000-\u0020\u007f]/.test(value)) return false;
+  if (value.startsWith("#")) return /^#[A-Za-z0-9][A-Za-z0-9\-_.:]{0,254}$/.test(value);
+  try {
+    const url = new URL(value);
+    return ((url.protocol === "https:" || url.protocol === "http:") && /^https?:\/\//i.test(value) && !!url.hostname)
+      || (url.protocol === "mailto:" && url.pathname.includes("@"));
+  } catch { return false; }
+}, "Use an HTTP(S), mailto or #anchor link");
+const textRun = z.object({
+  text: z.string().max(10000),
+  bold: z.boolean().optional(), italic: z.boolean().optional(), underline: z.boolean().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  link: cardLink.optional(),
+});
+const textRuns = z.array(textRun).max(500).refine(runs => runs.reduce((sum, run) => sum + run.text.length, 0) <= 10000, "Text is too long");
 const block = z.object({
   id: z.string().min(1).max(100),
   kind: z.enum(["field", "text", "divider", "relatedTable"]),
   fieldKey: z.string().max(200).nullable().optional(),
   label: ml.optional(),
   text: ml.optional(),
+  textRuns: z.object({ ru: textRuns.optional(), en: textRuns.optional(), he: textRuns.optional() }).optional(),
+  textStyle: z.object({
+    bold: z.boolean().optional(), italic: z.boolean().optional(), underline: z.boolean().optional(),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    direction: z.enum(["auto", "ltr", "rtl"]).optional(),
+    align: z.enum(["start", "center", "end", "left", "right", "justify"]).optional(),
+    link: cardLink.optional(),
+  }).optional(),
+  dividerStyle: z.object({
+    kind: z.enum(["space", "solid", "dashed", "dotted"]).optional(),
+    thickness: z.number().int().min(1).max(12).optional(),
+    height: z.number().int().min(0).max(400).optional(),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  }).optional(),
   span: z.number().int().min(1).max(3).default(1),
   modes: z.array(z.enum(["view", "create", "edit"])).min(1).default(["view", "create", "edit"]),
   columns: z.array(z.string().max(200)).max(30).default([]),
+}).superRefine((block, ctx) => {
+  for (const lang of ["ru", "en", "he"] as const) {
+    const runs = block.textRuns?.[lang];
+    if (runs && runs.map(run => run.text).join("") !== (block.text?.[lang] ?? "")) {
+      ctx.addIssue({ code: "custom", path: ["textRuns", lang], message: "Formatted text must match the plain text for this language" });
+    }
+  }
 });
 const section = z.object({
   id: z.string().min(1).max(100), title: ml,

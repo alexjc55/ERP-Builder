@@ -62,6 +62,61 @@ test("card registry: scope inheritance, draft validation, permission gates and a
     expect((await api("", { name: "Unsafe style", entityId: entity.id, layout: { ...layout, style: "custom", customStyle: { background: "url(https://example.invalid)" } } })).status()).toBe(400);
     const colored = await create("White text", null, { ...layout, style: "custom", customStyle: { textColor: "#ffffff" } });
     expect(colored.layout.customStyle.textColor).toBe("#ffffff");
+    const formattedLayout = {
+      ...layout, tabs: [{ ...layout.tabs[0], sections: [{
+        ...layout.tabs[0].sections[0],
+        blocks: [...layout.tabs[0].sections[0].blocks, {
+          id: "formatted", kind: "text", text: { ru: "Ссылка", he: "קישור" }, span: 2,
+          textStyle: { bold: true, italic: true, underline: true, color: "#123456", direction: "rtl", align: "center", link: "https://example.com/help" },
+        }, {
+          id: "divider", kind: "divider", dividerStyle: { kind: "dashed", thickness: 4, color: "#abcdef" },
+        }],
+      }] }],
+    };
+    const formatted = await create("Formatted blocks", null, formattedLayout);
+    expect(formatted.layout.tabs[0].sections[0].blocks[2].textStyle).toEqual(formattedLayout.tabs[0].sections[0].blocks[2].textStyle);
+    expect(formatted.layout.tabs[0].sections[0].blocks[3].dividerStyle).toEqual({ kind: "dashed", thickness: 4, color: "#abcdef" });
+    for (const link of ["javascript:alert(1)", "data:text/html,test", "//example.com", " https://example.com", "https://example.com\n", "https:example.com"]) {
+      const malformed = structuredClone(formatted.layout);
+      malformed.tabs[0].sections[0].blocks[2].textStyle.link = link;
+      expect((await api("", { name: "Bad link", entityId: entity.id, layout: malformed })).status()).toBe(400);
+    }
+    for (const thickness of [0, 13, 1.5]) {
+      const malformed = structuredClone(formatted.layout);
+      malformed.tabs[0].sections[0].blocks[3].dividerStyle.thickness = thickness;
+      expect((await api("", { name: "Bad divider", entityId: entity.id, layout: malformed })).status()).toBe(400);
+    }
+    const editedFormat = structuredClone(formatted.layout);
+    editedFormat.tabs[0].sections[0].blocks[2].textStyle.link = "mailto:help@example.com";
+    editedFormat.tabs[0].sections[0].blocks[3].dividerStyle.kind = "space";
+    const updatedFormat = await api(`/${formatted.id}`, { name: formatted.name, entityId: entity.id, layout: editedFormat, expectedRevision: formatted.revision }, "PUT");
+    expect(updatedFormat.status()).toBe(200);
+    const reloadedFormat = (await (await api("", undefined, "GET")).json()).find((c: { id: number }) => c.id === formatted.id);
+    expect(reloadedFormat.layout.tabs[0].sections[0].blocks[2].textStyle.link).toBe("mailto:help@example.com");
+    expect(reloadedFormat.layout.tabs[0].sections[0].blocks[3].dividerStyle.kind).toBe("space");
+    const inlineLayout = structuredClone(reloadedFormat.layout);
+    const inlineBlock = inlineLayout.tabs[0].sections[0].blocks[2];
+    inlineBlock.text = { ru: "Открыть ссылку", he: "קישור" };
+    inlineBlock.textRuns = { ru: [{ text: "Открыть " }, { text: "ссылку", bold: true, link: "https://example.com" }] };
+    inlineBlock.textStyle = { align: "center" };
+    inlineLayout.tabs[0].sections[0].blocks[3].dividerStyle.height = 64;
+    const inlineCard = await create("Inline text", null, inlineLayout);
+    expect(inlineCard.layout.tabs[0].sections[0].blocks[2].textRuns).toEqual(inlineBlock.textRuns);
+    expect(inlineCard.layout.tabs[0].sections[0].blocks[3].dividerStyle.height).toBe(64);
+    const anchoredLayout = structuredClone(inlineLayout);
+    anchoredLayout.tabs[0].sections[0].blocks[2].textRuns.ru[1].link = "#test";
+    const anchorCard = await create("Anchor text", null, anchoredLayout);
+    expect(anchorCard.layout.tabs[0].sections[0].blocks[2].textRuns.ru[1].link).toBe("#test");
+    for (const mutate of [
+      (l: any) => { l.tabs[0].sections[0].blocks[2].textRuns.ru[1].link = "javascript:alert(1)"; },
+      (l: any) => { l.tabs[0].sections[0].blocks[2].textRuns.ru[0].text = "Mismatch"; },
+      (l: any) => { l.tabs[0].sections[0].blocks[3].dividerStyle.height = -1; },
+      (l: any) => { l.tabs[0].sections[0].blocks[3].dividerStyle.height = 401; },
+    ]) {
+      const bad = structuredClone(inlineLayout);
+      mutate(bad);
+      expect((await api("", { name: "Bad inline style", entityId: entity.id, layout: bad })).status()).toBe(400);
+    }
     expect((await api("", { name: "Unsafe text color", entityId: entity.id, layout: { ...layout, style: "custom", customStyle: { textColor: "red;display:none" } } })).status()).toBe(400);
     const resolve = async (pageId?: number, headers = adminHeaders) => {
       const r = await api("/resolve", { entityId: entity.id, pageId, mode: "view" }, "POST", headers);
@@ -203,6 +258,22 @@ test("card registry: scope inheritance, draft validation, permission gates and a
     await expect(page.getByTestId("editor-row-0-0")).toHaveAttribute("data-row-columns", "3");
     await expect(page.getByTestId("editor-row-0-4")).toHaveAttribute("data-row-columns", "1");
     await page.screenshot({ path: "screenshots/card-mixed-rows-editor.png" });
+    await page.goto(`/admin/card-templates/${formatted.id}`);
+    await page.getByTestId("button-card-preview").click();
+    const previewDialog = page.getByTestId("dialog-card-preview");
+    await expect(previewDialog).toBeVisible();
+    await expect(previewDialog.getByTestId("preview-field-title")).toBeVisible();
+    await expect(previewDialog.getByTestId("card-text-formatted")).toHaveCSS("font-style", "italic");
+    await expect(previewDialog.locator('a[href="mailto:help@example.com"]')).toBeVisible();
+    await page.screenshot({ path: "screenshots/card-format-demo-preview.png" });
+    await page.keyboard.press("Escape");
+    await page.goto(`/admin/card-templates/${inlineCard.id}`);
+    await page.getByTestId("button-card-preview").click();
+    const inlinePreview = page.getByTestId("dialog-card-preview");
+    await expect(inlinePreview.locator('a[href="https://example.com"]')).toHaveText("ссылку");
+    await expect(inlinePreview.getByTestId("card-text-formatted")).toHaveText("Открыть ссылку");
+    await expect(inlinePreview.getByTestId("card-divider-divider")).toHaveCSS("min-height", "64px");
+    await page.screenshot({ path: "screenshots/card-inline-preview.png" });
     expect(errors).toEqual([]);
   } finally {
     if (entityIds.length) {

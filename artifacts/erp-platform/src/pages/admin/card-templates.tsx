@@ -23,7 +23,7 @@ import {
 } from "@workspace/api-client-react";
 import {
   ArrowDown, ArrowLeft, ArrowUp, Columns2, Rows3, Columns3, Copy, GripVertical, LayoutTemplate, Minus, Pencil, Plus,
-  Rocket, Save, Square, Table2, Trash2, Type, Undo2, AlertTriangle, Loader2, FileText,
+  Rocket, Save, Eye, Square, Table2, Trash2, Type, Undo2, AlertTriangle, Loader2, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -45,12 +46,15 @@ import { cn } from "@/lib/utils";
 import {
   CARD_MODES, boundFieldKeys, copyLayout, findBlock, insertBlock, layoutIssues, makeBlock, moveBlock, moveItem,
   newId, parseCardLayout, presetLayout, removeBlock, updateBlock, mlIsEmpty,
-  addRow, convertSectionToRows, findRowOf, insertBlockInRow, moveBlockAcrossRows, moveBlockToRow, moveRow, removeRow, setRowColumns,
+  addRow, blockColumnLimit, convertSectionToRows, effectiveSpan, spanChoices, findRowOf, insertBlockInRow, moveBlockAcrossRows, moveBlockToRow, moveRow, removeRow, setRowColumns,
   type CardBlock, type CardBlockKind, type CardLayout, type CardMode, type CardSection, type CardStyle, type LayoutPreset,
 } from "@/lib/cardLayout";
-import { SECTION_GRID, BLOCK_SPAN } from "@/components/CardLayoutView";
 import { cardAppearance } from "@/lib/cardAppearance";
 import { CardTemplateRow } from "@/components/CardTemplateRow";
+import { SECTION_GRID, BLOCK_SPAN, CardTextBlock, CardDividerBlock } from "@/components/CardLayoutView";
+import { TextStyleEditor, DividerStyleEditor } from "@/components/CardBlockStyleEditor";
+import { CardPreviewDialog } from "@/components/CardPreviewDialog";
+import { blockStyleIssues } from "@/lib/cardBlockStyle";
 
 const NO_PAGE = "__entity__";
 type ApiErr = { status?: number; data?: unknown; message?: string };
@@ -482,6 +486,7 @@ function TemplateEditor({ id }: { id: number }) {
   const [selection, setSelection] = useState<Selection>({ type: "style" });
   const [previewMode, setPreviewMode] = useState<CardMode | "all">("all");
   const [dropHint, setDropHint] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const initFor = useRef<string | null>(null);
 
   // Initialize local editing state once per template id+revision; never clobber
@@ -513,8 +518,21 @@ function TemplateEditor({ id }: { id: number }) {
     setDirty(true);
   };
 
+  const styleIssues = useMemo(() => layout ? blockStyleIssues(layout) : [], [layout]);
+  /** Blocks save/publish on invalid links/colors with a visible error. */
+  const checkStyles = (): boolean => {
+    if (!styleIssues.length) return true;
+    const first = styleIssues[0];
+    setSelection({ type: "block", id: first.blockId });
+    const loc = layout ? findBlock(layout, first.blockId) : null;
+    if (loc) setActiveTab(loc.tabId);
+    toast({ variant: "destructive", title: first.kind === "invalidLink" ? t("cards.linkInvalidTitle", "Недопустимая ссылка в текстовом блоке") : first.kind === "invalidColor" ? t("cards.colorInvalidTitle", "Недопустимый цвет в блоке") : t("cards.textLimitTitle", "Текстовый блок слишком большой"),
+      description: first.kind === "invalidLink" ? t("cards.linkInvalid", "Допустимы только полные адреса http://, https:// или mailto:. Исправьте ссылку перед сохранением.") : first.kind === "invalidColor" ? t("cards.colorInvalid", "Укажите цвет в формате #RRGGBB.") : t("cards.textLimit", "Не более 10000 символов и 500 фрагментов оформления на язык.") });
+    return false;
+  };
   const save = async (): Promise<CardTemplate | null> => {
     if (!template || !layout) return null;
+    if (!checkStyles()) return null;
     setSaving(true);
     try {
       const updated = await updateCardTemplate(template.id, { name: name.trim() || template.name, entityId: template.entityId, pageId, layout: asInput(layout), expectedRevision: template.revision });
@@ -530,6 +548,7 @@ function TemplateEditor({ id }: { id: number }) {
     } finally { setSaving(false); }
   };
   const saveThenPublish = async () => {
+    if (!checkStyles()) return;
     const current = dirty ? await save() : template ?? null;
     if (current) await flow.publish(current);
   };
@@ -641,22 +660,25 @@ function TemplateEditor({ id }: { id: number }) {
       <div className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-2.5 backdrop-blur">
         <Button asChild size="icon" variant="ghost" className="h-8 w-8"><Link href="/admin/card-templates" aria-label={t("cards.backToList", "К списку")}><ArrowLeft className="h-4 w-4 rtl:rotate-180" /></Link></Button>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <Input data-testid="input-editor-name" value={name} disabled={readOnly} onChange={e => { setName(e.target.value); setDirty(true); }}
-              className="h-8 max-w-sm border-transparent px-1.5 text-base font-semibold shadow-none hover:border-slate-200 focus-visible:border-slate-300" />
-            <StateBadge state={template.state} />
-            {dirty && <span className="text-xs text-amber-600" data-testid="text-dirty">{t("cards.unsaved", "Есть несохранённые изменения")}</span>}
+              style={{ width: `${Math.min(Math.max(name.length, 8), 40) + 3}ch` }}
+              className="h-8 min-w-0 max-w-full shrink border-transparent px-1.5 text-base font-semibold shadow-none hover:border-slate-200 focus-visible:border-slate-300" />
+            <span className="shrink-0"><StateBadge state={template.state} /></span>
           </div>
-          <div className="px-1.5 text-xs text-slate-500">{ml(entity?.nameJson)} · {t("cards.revision", "Ревизия")} {template.revision}</div>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 px-1.5 text-xs text-slate-500">
+            <span className="truncate">{ml(entity?.nameJson)} · {t("cards.revision", "Ревизия")} {template.revision}</span>
+            {dirty && <span className="text-amber-600" data-testid="text-dirty">· {t("cards.unsaved", "Есть несохранённые изменения")}</span>}
+          </div>
         </div>
-        <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label={t("cards.previewMode", "Режим предпросмотра")}>
-          {(["all", ...CARD_MODES] as const).map(m => (
-            <button key={m} type="button" data-testid={`button-preview-${m}`} onClick={() => setPreviewMode(m)}
-              className={cn("rounded px-2 py-1 text-xs font-medium", previewMode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
-              {m === "all" ? t("cards.modeAll", "Все") : m === "view" ? t("cards.modeView", "Просмотр") : m === "create" ? t("cards.modeCreate", "Создание") : t("cards.modeEdit", "Изменение")}
-            </button>
-          ))}
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button size="icon" variant="outline" className="h-8 w-8" data-testid="button-card-preview" aria-label={t("cards.preview", "Предпросмотр")} onClick={() => setPreviewOpen(true)}>
+              <Eye className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t("cards.preview", "Предпросмотр")}</TooltipContent>
+        </Tooltip>
         {readOnly ? (
           <>
             <Button size="sm" variant="outline" data-testid="button-copy-to-draft" onClick={() => void copyToDraft()}><Copy className="me-1.5 h-3.5 w-3.5" />{t("cards.copyToDraft", "Копировать в черновик")}</Button>
@@ -664,9 +686,16 @@ function TemplateEditor({ id }: { id: number }) {
           </>
         ) : (
           <>
-            <Button size="sm" variant="outline" data-testid="button-save-draft" disabled={saving || !dirty} onClick={() => void save()}>
-              {saving ? <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="me-1.5 h-3.5 w-3.5" />}{t("cards.saveDraft", "Сохранить черновик")}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span tabIndex={saving || !dirty ? 0 : -1} className="inline-flex" data-testid="wrap-save-draft">
+                  <Button size="icon" variant="outline" className="h-8 w-8" data-testid="button-save-draft" aria-label={t("cards.saveDraft", "Сохранить черновик")} disabled={saving || !dirty} onClick={() => void save()}>
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t("cards.saveDraft", "Сохранить черновик")}</TooltipContent>
+            </Tooltip>
             <Button size="sm" data-testid="button-editor-publish" className="bg-blue-600 hover:bg-blue-700" disabled={saving || flow.busy || staleConflict} onClick={() => void saveThenPublish()}>
               <Rocket className="me-1.5 h-3.5 w-3.5" />{t("cards.publish", "Опубликовать")}
             </Button>
@@ -796,7 +825,7 @@ function TemplateEditor({ id }: { id: number }) {
                           onClick={() => setSelection({ type: "block", id: b.id })}
                           className={cn(
                             "group relative flex min-h-[52px] cursor-pointer items-start gap-2 rounded-md border bg-white px-2.5 py-2 text-sm transition",
-                            BLOCK_SPAN[Math.min(tileCols, b.span)],
+                            BLOCK_SPAN[effectiveSpan(b.span, tileCols)],
                             isSel ? "border-blue-500 ring-1 ring-blue-500" : "border-slate-200 hover:border-slate-300",
                             empty && "border-dashed border-amber-300 bg-amber-50/40",
                             missing && "border-red-300 bg-red-50/40",
@@ -811,9 +840,11 @@ function TemplateEditor({ id }: { id: number }) {
                               {b.modes.length < 3 && <span className="normal-case text-slate-400">· {b.modes.join("/")}</span>}
                             </div>
                             <div style={layout.style === "custom" && (b.kind === "text" || b.kind === "divider") ? { color: layout.customStyle.textColor } : undefined} className={cn("truncate", empty ? "text-amber-700" : missing ? "text-red-700" : "text-slate-800", b.kind === "text" && "whitespace-pre-wrap line-clamp-2")}>
-                              {blockTitle(b)}
+                              {b.kind === "text" && !mlIsEmpty(b.text) ? <div className="line-clamp-3 whitespace-normal"><CardTextBlock block={b} /></div> : blockTitle(b)}
                               {b.fieldKey && fieldByKey.get(b.fieldKey)?.isRequired && <span className="ms-0.5 text-red-500">*</span>}
                             </div>
+                            {b.kind === "divider" && <div className="mt-1" aria-hidden><CardDividerBlock block={{ ...b, label: {} }} /></div>}
+                            {styleIssues.some(x => x.blockId === b.id) && <div className="mt-1 text-xs text-red-600" data-testid={`text-block-style-error-${b.id}`}>{t("cards.blockStyleInvalid", "Исправьте ссылку или цвет")}</div>}
                             {b.kind === "relatedTable" && b.columns.length > 0 && (
                               <div className="mt-1 truncate text-xs text-slate-400">{b.columns.length} {t("cards.columnsCount", "столбцов")}</div>
                             )}
@@ -895,8 +926,20 @@ function TemplateEditor({ id }: { id: number }) {
           <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4">
             {selection.type === "style" && (
               <StylePanel layout={layout} readOnly={readOnly} onChange={change}
-                scope={<EntityPageFields entityId={template.entityId} pageId={pageId} lockEntity onEntity={() => undefined}
-                  onPage={p => { if (!readOnly) { setPageId(p); setDirty(true); } }} entities={entities} pages={pages} />} />
+                scope={<><EntityPageFields entityId={template.entityId} pageId={pageId} lockEntity onEntity={() => undefined}
+                  onPage={p => { if (!readOnly) { setPageId(p); setDirty(true); } }} entities={entities} pages={pages} />
+                  <div className="space-y-1.5">
+                    <Label>{t("cards.previewMode", "Режим предпросмотра")}</Label>
+                    <div className="flex flex-wrap items-center gap-1 rounded-md border border-slate-200 bg-slate-50 p-0.5" role="group" aria-label={t("cards.previewMode", "Режим предпросмотра")} data-testid="group-preview-mode">
+                      {(["all", ...CARD_MODES] as const).map(m => (
+                        <button key={m} type="button" data-testid={`button-preview-${m}`} aria-pressed={previewMode === m} onClick={() => setPreviewMode(m)}
+                          className={cn("flex-1 rounded px-2 py-1 text-xs font-medium", previewMode === m ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700")}>
+                          {m === "all" ? t("cards.modeAll", "Все") : m === "view" ? t("cards.modeView", "Просмотр") : m === "create" ? t("cards.modeCreate", "Создание") : t("cards.modeEdit", "Изменение")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>} />
             )}
             {selectedTab && (
               <fieldset disabled={readOnly} className="space-y-3">
@@ -922,7 +965,7 @@ function TemplateEditor({ id }: { id: number }) {
               </fieldset>
             )}
             {selectedBlock && (
-              <BlockInspector block={selectedBlock} readOnly={readOnly} rowLoc={findRowOf(layout, selectedBlock.id)}
+              <BlockInspector block={selectedBlock} readOnly={readOnly} maxCols={blockColumnLimit(layout, selectedBlock.id)} rowLoc={findRowOf(layout, selectedBlock.id)}
                 onRowMove={d => change(l => moveBlockAcrossRows(l, selectedBlock.id, d))} fields={fields} relations={relations} entityId={template.entityId}
                 onPatch={patch => change(l => updateBlock(l, selectedBlock.id, patch))}
                 onRemove={() => { change(l => removeBlock(l, selectedBlock.id)); setSelection({ type: "style" }); }} />
@@ -931,6 +974,10 @@ function TemplateEditor({ id }: { id: number }) {
           </div>
         </aside>
       </div>
+      {previewOpen && (
+        <CardPreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} layout={layout} fields={fields} relations={relations}
+          entityId={template.entityId} entityName={ml(entity?.nameJson) || `#${template.entityId}`} />
+      )}
       {flow.dialog(entities)}
     </div>
   );
@@ -1029,7 +1076,8 @@ function StylePanel({ layout, readOnly, onChange, scope }: { layout: CardLayout;
   );
 }
 
-function BlockInspector({ block, readOnly, fields, relations, entityId, onPatch, onRemove, rowLoc, onRowMove }: {
+function BlockInspector({ block, readOnly, fields, relations, entityId, onPatch, onRemove, rowLoc, onRowMove, maxCols }: {
+  maxCols: number;
   rowLoc: { rowIndex: number; rowCount: number; index: number } | null; onRowMove: (d: -1 | 1) => void;
   block: CardBlock; readOnly: boolean; fields: Field[]; relations: { id: number; sourceEntityId: number; targetEntityId: number }[]; entityId: number;
   onPatch: (p: Partial<CardBlock>) => void; onRemove: () => void;
@@ -1062,19 +1110,28 @@ function BlockInspector({ block, readOnly, fields, relations, entityId, onPatch,
         </div>
       )}
       {block.kind === "text" ? (
-        <MultilingualInput label={t("cards.text", "Текст")} multiline value={block.text ?? {}} onChange={v => onPatch({ text: v })} />
+        <>
+          <TextStyleEditor key={block.id} block={block} readOnly={readOnly} onPatch={onPatch} />
+        </>
       ) : (
         <MultilingualInput label={block.kind === "divider" ? t("cards.dividerLabel", "Подпись разделителя (необязательно)") : t("cards.labelOverride", "Своя подпись (необязательно)")}
           value={block.label ?? {}} onChange={v => onPatch({ label: v })} />
       )}
+      {block.kind === "divider" && <DividerStyleEditor block={block} readOnly={readOnly} onPatch={onPatch} />}
       <div className="space-y-1.5">
-        <Label>{t("cards.span", "Ширина")}</Label>
-        <div className="flex gap-1">
-          {[1, 2, 3].map(n => (
-            <button key={n} type="button" data-testid={`button-span-${n}`} onClick={() => onPatch({ span: n })}
-              className={cn("flex-1 rounded border py-1 text-xs", block.span === n ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 text-slate-600")}>{n}</button>
+        <Label>{t("cards.spanColumns", "Колонок занимает")}</Label>
+        <div className="flex gap-1" role="group" aria-label={t("cards.spanColumns", "Колонок занимает")}>
+          {spanChoices(maxCols).map(({ n, available }) => (
+            <button key={n} type="button" data-testid={`button-span-${n}`} disabled={!available} aria-pressed={effectiveSpan(block.span, maxCols) === n}
+              title={available ? undefined : t("cards.spanUnavailable", "В этой строке меньше колонок")}
+              onClick={() => onPatch({ span: n })}
+              className={cn("flex-1 rounded border py-1 text-xs disabled:cursor-not-allowed disabled:border-dashed disabled:text-slate-300",
+                effectiveSpan(block.span, maxCols) === n ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 text-slate-600")}>{n}</button>
           ))}
         </div>
+        <p className="text-xs text-slate-500" data-testid="text-span-hint">
+          {t("cards.spanHint", "Доступно колонок в строке")}: {maxCols}. {t("cards.spanPhone", "На телефоне всегда одна колонка.")}
+        </p>
       </div>
       {rowLoc && (
         <div className="space-y-1.5" data-testid="block-row-controls">

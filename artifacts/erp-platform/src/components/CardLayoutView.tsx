@@ -3,8 +3,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLang, useML, useT } from "@/lib/i18n";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { mlIsEmpty, type CardBlock, type CardLayout, type CardMode } from "@/lib/cardLayout";
+import { effectiveSpan, mlIsEmpty, type CardBlock, type CardLayout, type CardMode } from "@/lib/cardLayout";
 import { cardAppearance } from "@/lib/cardAppearance";
+import { RUN_LANGS, dividerRenderProps, effectiveRuns, isWebLink, runStyle, sanitizeLink, textRenderProps, type RunLang, type TextRun } from "@/lib/cardBlockStyle";
 
 export const SECTION_GRID: Record<number, string> = {
   1: "grid-cols-1",
@@ -71,7 +72,7 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
               return (
                 <div key={row.id} data-testid={`card-row-${row.id}`} data-row-columns={rc} className={cn("grid min-w-0", SECTION_GRID[rc], gap)} style={appearance.grid}>
                   {rowBlocks.map(b => (
-                    <div key={b.id} className={cn("min-w-0", BLOCK_SPAN[Math.min(rc, b.span)])}>{renderBlock(b)}</div>
+                    <div key={b.id} data-block-span={effectiveSpan(b.span, rc)} className={cn("min-w-0", BLOCK_SPAN[effectiveSpan(b.span, rc)])}>{renderBlock(b)}</div>
                   ))}
                 </div>
               );
@@ -80,7 +81,7 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
         ) : (
           <div className={cn("grid min-w-0", SECTION_GRID[cols], gap)} style={appearance.grid}>
             {blocks.map(b => (
-              <div key={b.id} className={cn("min-w-0", BLOCK_SPAN[Math.min(cols, b.span)])}>
+              <div key={b.id} data-block-span={effectiveSpan(b.span, cols)} className={cn("min-w-0", BLOCK_SPAN[effectiveSpan(b.span, cols)])}>
                 {renderBlock(b)}
               </div>
             ))}
@@ -128,22 +129,84 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
   );
 }
 
-export function CardTextBlock({ block }: { block: CardBlock }) {
-  const ml = useML();
-  const text = ml(block.text);
-  if (!text) return null;
-  return <p data-testid={`card-text-${block.id}`} className="whitespace-pre-wrap break-words text-sm text-slate-600" style={{ textAlign: "start", color: "var(--card-text, #475569)" }}>{text}</p>;
+/** Escaped inline runs (React text nodes only, never HTML). Shared by the
+ * editor live preview, runtime card and preview dialog. */
+export function TextRunsView({ runs, blockId }: { runs: TextRun[]; blockId: string }) {
+  return (
+    <>
+      {runs.map((r, i) => {
+        const st = runStyle(r) as CSSProperties;
+        const href = r.link ? sanitizeLink(r.link) : null;
+        if (href) {
+          return (
+            <a key={i} href={href} data-testid={`link-card-text-${blockId}-${i}`} className="underline underline-offset-2" style={{ color: "inherit", ...st }}
+              {...(isWebLink(href) ? { target: "_blank", rel: "noopener noreferrer" } : {})}>{r.text}</a>
+          );
+        }
+        return Object.keys(st).length ? <span key={i} data-run={i} style={st}>{r.text}</span> : <span key={i}>{r.text}</span>;
+      })}
+    </>
+  );
 }
 
+/** Text block. Blocks with `textRuns` render inline runs; legacy blocks keep
+ * the original whole-block formatting byte-for-byte until edited. */
+export function CardTextBlock({ block }: { block: CardBlock }) {
+  const ml = useML();
+  const { lang } = useLang();
+  const text = ml(block.text);
+  if (!text) return null;
+  const r = textRenderProps(block.textStyle);
+  if (block.textRuns) {
+    const tx = (block.text ?? {}) as Partial<Record<RunLang, string>>;
+    const shown: RunLang = tx[lang as RunLang] === text ? (lang as RunLang) : (RUN_LANGS.find(l => tx[l] === text) ?? "ru");
+    const runs = effectiveRuns(tx, block.textRuns, shown);
+    const base: CSSProperties = { textAlign: (block.textStyle?.align ?? "start") as CSSProperties["textAlign"], color: "var(--card-text, #475569)" };
+    return (
+      <p data-testid={`card-text-${block.id}`} data-rich="runs" dir={r.dir} className="whitespace-pre-wrap break-words text-sm text-slate-600" style={base}>
+        <TextRunsView runs={runs} blockId={block.id} />
+      </p>
+    );
+  }
+  return (
+    <p data-testid={`card-text-${block.id}`} dir={r.dir} className="whitespace-pre-wrap break-words text-sm text-slate-600" style={r.style as CSSProperties}>
+      {r.href ? (
+        <a href={r.href} data-testid={`link-card-text-${block.id}`} className="underline-offset-2 hover:underline" style={{ color: "inherit" }}
+          {...(r.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>{text}</a>
+      ) : text}
+    </p>
+  );
+}
+
+/** Divider: legacy line (+ optional label) by default; `space` draws no line. */
 export function CardDividerBlock({ block }: { block: CardBlock }) {
   const ml = useML();
   const label = ml(block.label);
+  const d = dividerRenderProps(block.dividerStyle);
+  const legacy = !block.dividerStyle || (d.kind === "solid" && d.thickness === 1 && !block.dividerStyle.color);
+  if (d.kind === "space") {
+    return (
+      <div data-testid={`card-divider-${block.id}`} data-divider-kind="space" role="separator" aria-orientation="horizontal" data-divider-height={d.height} style={{ minHeight: d.height, height: label ? undefined : d.height }}
+        className="flex items-center">
+        {label && <span className="text-xs font-medium uppercase tracking-wide text-slate-400" style={{ color: "var(--card-text, #94a3b8)" }}>{label}</span>}
+      </div>
+    );
+  }
+  const line: CSSProperties = { borderTopWidth: d.thickness, borderTopStyle: d.kind, borderTopColor: d.color };
+  if (legacy) {
+    return label ? (
+      <div className="flex items-center gap-3 py-1" data-testid={`card-divider-${block.id}`} data-divider-kind="solid">
+        <span className="text-xs font-medium uppercase tracking-wide text-slate-400" style={{ color: "var(--card-text, #94a3b8)" }}>{label}</span>
+        <span className="h-px flex-1 bg-slate-200" />
+      </div>
+    ) : <hr className="my-1 border-slate-200" data-testid={`card-divider-${block.id}`} data-divider-kind="solid" />;
+  }
   return label ? (
-    <div className="flex items-center gap-3 py-1" data-testid={`card-divider-${block.id}`}>
+    <div className="flex items-center gap-3 py-1" data-testid={`card-divider-${block.id}`} data-divider-kind={d.kind} role="separator">
       <span className="text-xs font-medium uppercase tracking-wide text-slate-400" style={{ color: "var(--card-text, #94a3b8)" }}>{label}</span>
-      <span className="h-px flex-1 bg-slate-200" />
+      <span className="flex-1" data-testid={`card-divider-line-${block.id}`} style={line} />
     </div>
-  ) : <hr className="my-1 border-slate-200" data-testid={`card-divider-${block.id}`} />;
+  ) : <hr className="my-1" data-testid={`card-divider-${block.id}`} data-divider-kind={d.kind} style={{ border: 0, ...line }} />;
 }
 
 /** Gate shown while the card snapshot resolves: skeleton, explicit error with

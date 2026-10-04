@@ -194,18 +194,23 @@ test("copy keeps rows and slots with remapped ids", () => {
   }
 });
 
-test("new presets start with explicit rows packed like the preset grid", () => {
+test("new presets put all fields of each section into ONE explicit row", () => {
   const many = [1, 2, 3, 4, 5].map(i => ({ fieldKey: `f${i}`, fieldType: i === 5 ? "relation" : "text", isActive: true, sortOrder: i }));
   const std = sec(presetLayout(many, "standard"));
-  assert.deepEqual(std.rows!.map(r => [r.columns, r.blockIds.length]), [[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]]);
+  assert.deepEqual(std.rows!.map(r => [r.columns, r.blockIds.length]), [[1, 5]]);
   const cmp = sec(presetLayout(many, "compact"));
-  assert.deepEqual(cmp.rows!.map(r => [r.columns, r.blockIds.length]), [[2, 2], [2, 2], [2, 1]]);
+  assert.deepEqual(cmp.rows!.map(r => [r.columns, r.blockIds.length]), [[2, 5]]);
   const sl = presetLayout(many, "sectioned");
-  assert.deepEqual(sl.tabs[0].sections.map(s => s.rows!.map(r => r.blockIds.length)), [[2, 2], [1]]);
+  assert.deepEqual(sl.tabs[0].sections.map(s => s.rows!.map(r => r.blockIds.length)), [[4], [1]]);
   for (const l of [presetLayout(many, "standard"), presetLayout(many, "compact"), sl]) {
     for (const s of l.tabs[0].sections) assert.deepEqual(s.rows!.flatMap(r => r.blockIds), s.blocks.map(b => b.id));
     assert.ok(parseCardLayout(JSON.parse(JSON.stringify(l))), "round-trips through strict parse");
     assert.deepEqual(layoutIssues(l, many).filter(i => i.kind === "rowInvalid"), []);
   }
   assert.ok(sec(presetLayout([], "standard")).rows!.length === 1);
+});
+
+test("legacy sections without rows are not converted by parse", () => {
+  const raw = { version: 1, style: "standard", customStyle: {}, tabs: [{ id: "t", title: {}, sections: [{ id: "s", title: {}, columns: 2, blocks: [makeBlock("text"), makeBlock("text")] }] }] };
+  assert.equal(parseCardLayout(raw)!.tabs[0].sections[0].rows, undefined);
 });
