@@ -11160,7 +11160,7 @@ function RecordFormBody({
     const dep = depInfo(field);
     return (
       <div key={field.id} className="min-w-0 space-y-1.5" data-testid={`form-field-${field.fieldKey}`}>
-        <Label>
+        <Label style={cardLayout?.style === "custom" ? { color: cardLayout.customStyle.textColor } : undefined}>
           {opts.label || ml(field.nameJson)}
           {field.isRequired && <span className="text-red-500 ml-0.5">*</span>}
           {(readOnly || relLocked) && (

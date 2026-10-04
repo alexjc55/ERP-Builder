@@ -112,7 +112,7 @@ export function CardTextBlock({ block }: { block: CardBlock }) {
   const ml = useML();
   const text = ml(block.text);
   if (!text) return null;
-  return <p data-testid={`card-text-${block.id}`} className="whitespace-pre-wrap break-words text-sm text-slate-600" style={{ textAlign: "start" }}>{text}</p>;
+  return <p data-testid={`card-text-${block.id}`} className="whitespace-pre-wrap break-words text-sm text-slate-600" style={{ textAlign: "start", color: "var(--card-text, #475569)" }}>{text}</p>;
 }
 
 export function CardDividerBlock({ block }: { block: CardBlock }) {
@@ -120,7 +120,7 @@ export function CardDividerBlock({ block }: { block: CardBlock }) {
   const label = ml(block.label);
   return label ? (
     <div className="flex items-center gap-3 py-1" data-testid={`card-divider-${block.id}`}>
-      <span className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</span>
+      <span className="text-xs font-medium uppercase tracking-wide text-slate-400" style={{ color: "var(--card-text, #94a3b8)" }}>{label}</span>
       <span className="h-px flex-1 bg-slate-200" />
     </div>
   ) : <hr className="my-1 border-slate-200" data-testid={`card-divider-${block.id}`} />;

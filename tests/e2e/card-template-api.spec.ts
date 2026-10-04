@@ -60,6 +60,9 @@ test("card registry: scope inheritance, draft validation, permission gates and a
       expect(r.status()).toBe(201); return r.json();
     };
     expect((await api("", { name: "Unsafe style", entityId: entity.id, layout: { ...layout, style: "custom", customStyle: { background: "url(https://example.invalid)" } } })).status()).toBe(400);
+    const colored = await create("White text", null, { ...layout, style: "custom", customStyle: { textColor: "#ffffff" } });
+    expect(colored.layout.customStyle.textColor).toBe("#ffffff");
+    expect((await api("", { name: "Unsafe text color", entityId: entity.id, layout: { ...layout, style: "custom", customStyle: { textColor: "red;display:none" } } })).status()).toBe(400);
     const resolve = async (pageId?: number, headers = adminHeaders) => {
       const r = await api("/resolve", { entityId: entity.id, pageId, mode: "view" }, "POST", headers);
       expect(r.status()).toBe(200); return (await r.json()).template;

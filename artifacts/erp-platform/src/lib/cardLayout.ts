@@ -25,6 +25,7 @@ export interface CardCustomStyle {
   background?: string;
   sectionBackground?: string;
   accent?: string;
+  textColor?: string;
   spacing?: number;
   radius?: number;
   fontSize?: number;
@@ -83,7 +84,7 @@ function parseBlock(v: unknown): CardBlock | null {
 function parseCustomStyle(v: unknown): CardCustomStyle {
   if (!isObj(v)) return {};
   const out: CardCustomStyle = {};
-  for (const k of ["background", "sectionBackground", "accent"] as const) {
+  for (const k of ["background", "sectionBackground", "accent", "textColor"] as const) {
     const c = v[k];
     if (typeof c === "string" && HEX.test(c)) out[k] = c;
   }
@@ -279,6 +280,7 @@ export function cardStyleVars(layout: CardLayout): Record<string, string> {
   if (c.background) vars["--card-bg"] = c.background;
   if (c.sectionBackground) vars["--card-section-bg"] = c.sectionBackground;
   if (c.accent) vars["--card-accent"] = c.accent;
+  if (c.textColor) vars["--card-text"] = c.textColor;
   if (c.spacing != null) vars["--card-gap"] = `${c.spacing}px`;
   if (c.radius != null) vars["--card-radius"] = `${c.radius}px`;
   if (c.fontSize != null) vars["--card-font"] = `${c.fontSize}px`;

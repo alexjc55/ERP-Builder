@@ -1,4 +1,6 @@
 {
+  "cards.styleText": ["Card text color", "צבע טקסט הכרטיס"],
+  "cards.styleTextHint": ["Card labels and text. Values inside fields keep their own colors.", "תוויות וטקסט בכרטיס. צבעי הערכים בתוך השדות אינם משתנים."],
   "records.view": ["View", "צפייה"],
   "records.viewTitle": ["View record", "צפייה ברשומה"],
   "records.viewDesc": ["This record is open in read-only mode.", "הרשומה פתוחה לצפייה בלבד."],

@@ -118,10 +118,14 @@ test("builder: custom style uses the shared saved-color palette and clears overr
   await expect(page.getByTestId("editor-tab-1")).toBeVisible();
   await page.getByTestId("input-style-accent").getByRole("button").last().click();
   await expect(page.getByTestId("button-select-section-0")).not.toHaveCSS("color", "rgb(18, 52, 86)");
+  await page.getByTestId("input-style-textColor").getByRole("textbox").fill("#ffffff");
+  await page.getByTestId("input-style-textColor").getByRole("textbox").blur();
+  await expect(page.getByTestId("button-select-section-0")).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(page.getByTestId("editor-block-blk_text").getByText("Fill the order header")).toHaveCSS("color", "rgb(255, 255, 255)");
   await page.screenshot({ path: "screenshots/card-style-live-preview.png" });
   await page.getByTestId("button-save-draft").click();
   await expect.poll(() => saved.length).toBe(1);
-  expect(saved[0].layout.customStyle).toEqual({ background: "#123456", sectionBackground: "#123456" });
+  expect(saved[0].layout.customStyle).toEqual({ background: "#123456", sectionBackground: "#123456", textColor: "#FFFFFF" });
 });
 
 test("builder: copy across entities clears bindings; publish asks before replacing the active card", async ({ page }) => {
@@ -192,7 +196,7 @@ test("runtime: tabs/columns, snapshot survives a publication, view is read-only,
   const errors: string[] = [];
   page.on("pageerror", e => errors.push(e.message));
   await auth(page);
-  let currentLayout = layout("Lines");
+  let currentLayout = { ...layout("Lines"), style: "custom", customStyle: { background: "#123456", textColor: "#ffffff" } };
   const resolves: Record<string, any>[] = [];
   const writes: string[] = [];
   const record = { id: 50, entityId: A, statusId: null, valuesJson: { title: "Order 50", note: "Rush" }, version: 4, archivedAt: null, createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z" };
@@ -243,9 +247,12 @@ test("runtime: tabs/columns, snapshot survives a publication, view is read-only,
   await page.getByTestId("card-tab-tab_main").click();
   const title = page.getByTestId("form-field-title").locator("input");
   await expect(title).toBeEnabled();
+  await expect(page.getByTestId("form-field-title").locator("label")).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(page.getByTestId("card-text-blk_text")).toHaveCSS("color", "rgb(255, 255, 255)");
+  await expect(title).not.toHaveCSS("color", "rgb(255, 255, 255)");
   await title.fill("Order 50 edited");
   const resolvesBefore = resolves.length;
-  currentLayout = layout("Renamed after publish");
+  currentLayout = { ...currentLayout, tabs: layout("Renamed after publish").tabs };
   await page.getByTestId("card-tab-tab_lines").click();
   await page.getByTestId("card-tab-tab_main").click();
   await expect(page.getByTestId("card-tab-tab_lines")).toHaveText("Lines");

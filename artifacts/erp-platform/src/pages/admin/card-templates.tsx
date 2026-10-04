@@ -776,6 +776,7 @@ function TemplateEditor({ id }: { id: number }) {
                       const missing = !!b.fieldKey && !fieldByKey.has(b.fieldKey) && fields.length > 0;
                       return (
                         <div key={b.id} draggable={!readOnly} data-testid={`editor-block-${b.id}`}
+                          style={layout.style === "custom" && (b.kind === "text" || b.kind === "divider") ? { background: "transparent" } : undefined}
                           onDragStart={e => startDrag(e, { type: "block", blockId: b.id })}
                           onDragOver={e => allowDrop(e, b.id)} onDrop={e => dropAt(e, sec.id, bi, b)}
                           onClick={() => setSelection({ type: "block", id: b.id })}
@@ -795,7 +796,7 @@ function TemplateEditor({ id }: { id: number }) {
                               {b.kind === "field" ? t("cards.kindField", "Поле") : b.kind === "relatedTable" ? t("cards.kindTable", "Таблица") : b.kind === "text" ? t("cards.kindText", "Текст") : t("cards.kindDivider", "Разделитель")}
                               {b.modes.length < 3 && <span className="normal-case text-slate-400">· {b.modes.join("/")}</span>}
                             </div>
-                            <div className={cn("truncate", empty ? "text-amber-700" : missing ? "text-red-700" : "text-slate-800", b.kind === "text" && "whitespace-pre-wrap line-clamp-2")}>
+                            <div style={layout.style === "custom" && (b.kind === "text" || b.kind === "divider") ? { color: layout.customStyle.textColor } : undefined} className={cn("truncate", empty ? "text-amber-700" : missing ? "text-red-700" : "text-slate-800", b.kind === "text" && "whitespace-pre-wrap line-clamp-2")}>
                               {blockTitle(b)}
                               {b.fieldKey && fieldByKey.get(b.fieldKey)?.isRequired && <span className="ms-0.5 text-red-500">*</span>}
                             </div>
@@ -938,7 +939,7 @@ function StylePanel({ layout, readOnly, onChange, scope }: { layout: CardLayout;
   ];
   const c = layout.customStyle;
   const setC = (patch: Partial<CardLayout["customStyle"]>) => onChange(l => ({ ...l, customStyle: { ...l.customStyle, ...patch } }));
-  const color = (key: "background" | "sectionBackground" | "accent", label: string) => (
+  const color = (key: "background" | "sectionBackground" | "accent" | "textColor", label: string) => (
     <div data-testid={`input-style-${key}`}>
       <ColorPickerControl label={label} value={c[key] ?? ""} onChange={value => setC({ [key]: value || undefined })} />
     </div>
@@ -969,6 +970,8 @@ function StylePanel({ layout, readOnly, onChange, scope }: { layout: CardLayout;
           {color("background", t("cards.styleBg", "Фон карточки"))}
           {color("sectionBackground", t("cards.styleSectionBg", "Фон разделов"))}
           {color("accent", t("cards.styleAccent", "Акцент заголовков"))}
+          {color("textColor", t("cards.styleText", "Цвет текста карточки"))}
+          <p className="text-xs text-slate-500">{t("cards.styleTextHint", "Подписи и текст карточки. Цвет значений внутри полей не меняется.")}</p>
           {range("spacing", t("cards.styleSpacing", "Отступы"), 4, 32)}
           {range("radius", t("cards.styleRadius", "Скругление"), 0, 24)}
           {range("fontSize", t("cards.styleFont", "Размер шрифта"), 12, 20)}

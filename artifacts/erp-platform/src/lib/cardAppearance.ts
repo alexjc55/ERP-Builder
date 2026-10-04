@@ -24,7 +24,7 @@ export function cardAppearance(layout: CardLayout): Record<"root" | "section" | 
       padding: custom.sectionBackground || custom.border || custom.shadow ? custom.spacing ?? 16 : undefined,
     } : {},
     heading: {
-      color: custom.accent,
+      color: custom.accent ?? custom.textColor,
       ...(compact ? { fontSize: 12, textTransform: "uppercase", letterSpacing: "0.025em" } : {}),
     },
     grid: { columnGap: custom.spacing ?? (compact ? 12 : 16), rowGap: custom.spacing ?? (compact ? 8 : 16) },

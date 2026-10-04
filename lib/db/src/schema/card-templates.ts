@@ -27,6 +27,7 @@ export const cardLayoutSchema = z.object({
     background: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
     sectionBackground: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
     accent: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    textColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
     spacing: z.number().int().min(4).max(32).optional(),
     radius: z.number().int().min(0).max(24).optional(),
     fontSize: z.number().int().min(12).max(20).optional(),
