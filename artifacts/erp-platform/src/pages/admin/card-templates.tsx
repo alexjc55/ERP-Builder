@@ -22,7 +22,7 @@ import {
   type Page,
 } from "@workspace/api-client-react";
 import {
-  ArrowDown, ArrowLeft, ArrowUp, Columns2, Columns3, Copy, GripVertical, LayoutTemplate, Minus, Pencil, Plus,
+  ArrowDown, ArrowLeft, ArrowUp, Columns2, Rows3, Columns3, Copy, GripVertical, LayoutTemplate, Minus, Pencil, Plus,
   Rocket, Save, Square, Table2, Trash2, Type, Undo2, AlertTriangle, Loader2, FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,10 +45,12 @@ import { cn } from "@/lib/utils";
 import {
   CARD_MODES, boundFieldKeys, copyLayout, findBlock, insertBlock, layoutIssues, makeBlock, moveBlock, moveItem,
   newId, parseCardLayout, presetLayout, removeBlock, updateBlock, mlIsEmpty,
+  addRow, convertSectionToRows, findRowOf, insertBlockInRow, moveBlockAcrossRows, moveBlockToRow, moveRow, removeRow, setRowColumns,
   type CardBlock, type CardBlockKind, type CardLayout, type CardMode, type CardSection, type CardStyle, type LayoutPreset,
 } from "@/lib/cardLayout";
 import { SECTION_GRID, BLOCK_SPAN } from "@/components/CardLayoutView";
 import { cardAppearance } from "@/lib/cardAppearance";
+import { CardTemplateRow } from "@/components/CardTemplateRow";
 
 const NO_PAGE = "__entity__";
 type ApiErr = { status?: number; data?: unknown; message?: string };
@@ -556,13 +558,13 @@ function TemplateEditor({ id }: { id: number }) {
     e.dataTransfer.setData(DND_MIME, JSON.stringify(p));
     e.dataTransfer.effectAllowed = "move";
   };
-  const dropAt = (e: DragEvent, sectionId: string, index: number, targetBlock?: CardBlock) => {
+  const dropAt = (e: DragEvent, sectionId: string, index: number, targetBlock?: CardBlock, rowId?: string) => {
     e.preventDefault();
     e.stopPropagation();
     setDropHint(null);
     const p = readPayload(e);
     if (!p || readOnly) return;
-    if (p.type === "block") { change(l => moveBlock(l, p.blockId, sectionId, index)); setSelection({ type: "block", id: p.blockId }); return; }
+    if (p.type === "block") { change(l => rowId ? moveBlockToRow(l, p.blockId, sectionId, rowId, index) : moveBlock(l, p.blockId, sectionId, index)); setSelection({ type: "block", id: p.blockId }); return; }
     if (p.type === "field" && targetBlock && (targetBlock.kind === "field" || targetBlock.kind === "relatedTable") && !targetBlock.fieldKey) {
       // Fill an empty slot in place (keeps the slot's span, modes and label).
       change(l => updateBlock(l, targetBlock.id, { fieldKey: p.fieldKey, kind: p.kind, columns: [] }));
@@ -570,7 +572,7 @@ function TemplateEditor({ id }: { id: number }) {
       return;
     }
     const block = p.type === "field" ? makeBlock(p.kind, p.fieldKey) : makeBlock(p.kind);
-    change(l => insertBlock(l, sectionId, index, block));
+    change(l => rowId ? insertBlockInRow(l, sectionId, rowId, index, block) : insertBlock(l, sectionId, index, block));
     setSelection({ type: "block", id: block.id });
   };
   const allowDrop = (e: DragEvent, hint: string) => { if (readOnly) return; e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dropHint !== hint) setDropHint(hint); };
@@ -620,6 +622,7 @@ function TemplateEditor({ id }: { id: number }) {
       case "emptySlot": return t("cards.issueEmptySlot", "Пустая ячейка без поля");
       case "unknownField": return `${t("cards.issueUnknown", "Поле не найдено в сущности")}: ${fname}`;
       case "duplicate": return `${t("cards.issueDuplicate", "Поле размещено несколько раз")}: ${fname}`;
+      case "rowInvalid": return t("cards.issueRows", "Строки раздела ссылаются на поля некорректно");
       case "requiredMissing": return `${t("cards.issueRequired", "Обязательное поле отсутствует в режиме создания")}: ${fname}`;
     }
   };
@@ -729,7 +732,7 @@ function TemplateEditor({ id }: { id: number }) {
             {!readOnly && layout.tabs.length < 20 && (
               <button type="button" data-testid="button-add-tab" className="ms-1 flex items-center gap-1 rounded px-2 py-1 text-xs text-slate-500 hover:bg-white hover:text-slate-800"
                 onClick={() => {
-                  const nt = { id: newId("tab"), title: { ru: "Новая вкладка", en: "New tab", he: "לשונית חדשה" }, sections: [{ id: newId("sec"), title: {}, columns: 1, blocks: [] }] };
+                  const nt = { id: newId("tab"), title: { ru: "Новая вкладка", en: "New tab", he: "לשונית חדשה" }, sections: [{ id: newId("sec"), title: {}, columns: 1, blocks: [], rows: [{ id: newId("row"), columns: 1 as const, blockIds: [] }] }] };
                   change(l => ({ ...l, tabs: [...l.tabs, nt] }));
                   setActiveTab(nt.id); setSelection({ type: "tab", id: nt.id });
                 }}>
@@ -755,7 +758,20 @@ function TemplateEditor({ id }: { id: number }) {
                     </button>
                     {!readOnly && (
                       <div className="flex items-center gap-0.5">
-                        {[1, 2, 3].map(n => (
+                        {sec.rows ? (
+                          <button type="button" data-testid={`button-add-row-${si}`} disabled={sec.rows.length >= 100}
+                            onClick={() => change(l => addRow(l, sec.id, sec.rows?.[sec.rows.length - 1]?.columns ?? 2))}
+                            className="me-1 flex h-6 items-center gap-1 rounded px-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-30">
+                            <Plus className="h-3 w-3" />{t("cards.addRow", "Строка")}
+                          </button>
+                        ) : (
+                          <button type="button" data-testid={`button-section-to-rows-${si}`} title={t("cards.toRowsHint", "Разбить на строки с независимым числом колонок; текущая раскладка сохранится")}
+                            onClick={() => change(l => convertSectionToRows(l, sec.id))}
+                            className="me-1 flex h-6 items-center gap-1 rounded px-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                            <Rows3 className="h-3 w-3" />{t("cards.toRows", "По строкам")}
+                          </button>
+                        )}
+                        {!sec.rows && [1, 2, 3].map(n => (
                           <button key={n} type="button" data-testid={`button-section-cols-${si}-${n}`} title={`${n}`}
                             onClick={() => change(l => ({ ...l, tabs: l.tabs.map(x => ({ ...x, sections: x.sections.map(s => s.id === sec.id ? { ...s, columns: n } : s) })) }))}
                             className={cn("h-6 w-6 rounded text-xs font-medium", cols === n ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100")}>{n}</button>
@@ -766,10 +782,8 @@ function TemplateEditor({ id }: { id: number }) {
                       </div>
                     )}
                   </div>
-                  <div data-testid={`editor-section-grid-${si}`} className={cn("grid", SECTION_GRID[cols])} style={appearance.grid}
-                    onDragOver={e => allowDrop(e, `${sec.id}:end`)} onDragLeave={() => setDropHint(null)}
-                    onDrop={e => dropAt(e, sec.id, sec.blocks.length)}>
-                    {sec.blocks.map((b, bi) => {
+                  {(() => {
+                    const tile = (b: CardBlock, bi: number, tileCols: number, rowId?: string) => {
                       const dim = previewMode !== "all" && !b.modes.includes(previewMode);
                       const isSel = selection.type === "block" && selection.id === b.id;
                       const empty = (b.kind === "field" || b.kind === "relatedTable") && !b.fieldKey;
@@ -778,11 +792,11 @@ function TemplateEditor({ id }: { id: number }) {
                         <div key={b.id} draggable={!readOnly} data-testid={`editor-block-${b.id}`}
                           style={layout.style === "custom" && (b.kind === "text" || b.kind === "divider") ? { background: "transparent" } : undefined}
                           onDragStart={e => startDrag(e, { type: "block", blockId: b.id })}
-                          onDragOver={e => allowDrop(e, b.id)} onDrop={e => dropAt(e, sec.id, bi, b)}
+                          onDragOver={e => allowDrop(e, b.id)} onDrop={e => dropAt(e, sec.id, bi, b, rowId)}
                           onClick={() => setSelection({ type: "block", id: b.id })}
                           className={cn(
                             "group relative flex min-h-[52px] cursor-pointer items-start gap-2 rounded-md border bg-white px-2.5 py-2 text-sm transition",
-                            BLOCK_SPAN[Math.min(cols, b.span)],
+                            BLOCK_SPAN[Math.min(tileCols, b.span)],
                             isSel ? "border-blue-500 ring-1 ring-blue-500" : "border-slate-200 hover:border-slate-300",
                             empty && "border-dashed border-amber-300 bg-amber-50/40",
                             missing && "border-red-300 bg-red-50/40",
@@ -806,18 +820,48 @@ function TemplateEditor({ id }: { id: number }) {
                           </div>
                         </div>
                       );
-                    })}
+                    };
+                    if (sec.rows) {
+                      const byId = new Map(sec.blocks.map(b => [b.id, b]));
+                      return (
+                        <div data-testid={`editor-section-grid-${si}`} className="flex min-w-0 flex-col" style={{ gap: appearance.grid.rowGap }}>
+                          {sec.rows.length === 0 && <p className="py-3 text-center text-xs text-slate-400">{t("cards.noRows", "Нет строк — добавьте строку")}</p>}
+                          {sec.rows.map((row, ri) => {
+                            const rowBlocks = row.blockIds.map(x => byId.get(x)).filter((b): b is CardBlock => !!b);
+                            const hint = `${row.id}:end`;
+                            return (
+                              <CardTemplateRow key={row.id} row={row} sectionIndex={si} rowIndex={ri} rowCount={sec.rows!.length} readOnly={readOnly}
+                                gridStyle={appearance.grid} dropActive={dropHint === hint}
+                                onColumns={n => change(l => setRowColumns(l, sec.id, row.id, n))}
+                                onMove={d => change(l => moveRow(l, sec.id, row.id, d))}
+                                onDelete={() => change(l => removeRow(l, sec.id, row.id))}
+                                onDragOverEnd={e => allowDrop(e, hint)} onDragLeave={() => setDropHint(null)}
+                                onDropEnd={e => dropAt(e, sec.id, rowBlocks.length, undefined, row.id)}>
+                                {rowBlocks.map((b, bi) => tile(b, bi, row.columns, row.id))}
+                              </CardTemplateRow>
+                            );
+                          })}
+                        </div>
+                      );
+                    }
+                    return (
+                  <div data-testid={`editor-section-grid-${si}`} className={cn("grid", SECTION_GRID[cols])} style={appearance.grid}
+                    onDragOver={e => allowDrop(e, `${sec.id}:end`)} onDragLeave={() => setDropHint(null)}
+                    onDrop={e => dropAt(e, sec.id, sec.blocks.length)}>
+                    {sec.blocks.map((b, bi) => tile(b, bi, cols))}
                     <div className={cn("flex min-h-[40px] items-center justify-center rounded-md border border-dashed text-xs text-slate-400", BLOCK_SPAN[cols], dropHint === `${sec.id}:end` ? "border-blue-400 bg-blue-50 text-blue-600" : "border-slate-200")}>
                       {readOnly ? "" : t("cards.dropHere", "Перетащите поле или элемент сюда")}
                     </div>
                   </div>
+                    );
+                  })()}
                 </div>
               );
             })}
             {!readOnly && tab.sections.length < 30 && (
               <Button variant="outline" size="sm" data-testid="button-add-section" className="w-full border-dashed"
                 onClick={() => {
-                  const ns: CardSection = { id: newId("sec"), title: {}, columns: 2, blocks: [] };
+                  const ns: CardSection = { id: newId("sec"), title: {}, columns: 2, blocks: [], rows: [{ id: newId("row"), columns: 2, blockIds: [] }] };
                   change(l => ({ ...l, tabs: l.tabs.map(x => x.id === tab.id ? { ...x, sections: [...x.sections, ns] } : x) }));
                   setSelection({ type: "section", id: ns.id });
                 }}>
@@ -874,11 +918,12 @@ function TemplateEditor({ id }: { id: number }) {
               <fieldset disabled={readOnly} className="space-y-3">
                 <MultilingualInput label={t("cards.sectionTitle", "Заголовок раздела")} value={selectedSection.title}
                   onChange={v => change(l => ({ ...l, tabs: l.tabs.map(x => ({ ...x, sections: x.sections.map(s => s.id === selectedSection.id ? { ...s, title: v } : s) })) }))} />
-                <p className="text-xs text-slate-500">{t("cards.sectionColsHint", "Количество колонок задаётся кнопками 1/2/3 в заголовке раздела. На телефоне всегда одна колонка.")}</p>
+                <p className="text-xs text-slate-500">{selectedSection.rows ? t("cards.sectionRowsHint", "Каждая строка имеет своё число колонок (1/2/3). Удаление строки переносит её поля в соседнюю строку. На телефоне всегда одна колонка.") : t("cards.sectionColsHint", "Количество колонок задаётся кнопками 1/2/3 в заголовке раздела. На телефоне всегда одна колонка.")}</p>
               </fieldset>
             )}
             {selectedBlock && (
-              <BlockInspector block={selectedBlock} readOnly={readOnly} fields={fields} relations={relations} entityId={template.entityId}
+              <BlockInspector block={selectedBlock} readOnly={readOnly} rowLoc={findRowOf(layout, selectedBlock.id)}
+                onRowMove={d => change(l => moveBlockAcrossRows(l, selectedBlock.id, d))} fields={fields} relations={relations} entityId={template.entityId}
                 onPatch={patch => change(l => updateBlock(l, selectedBlock.id, patch))}
                 onRemove={() => { change(l => removeBlock(l, selectedBlock.id)); setSelection({ type: "style" }); }} />
             )}
@@ -984,7 +1029,8 @@ function StylePanel({ layout, readOnly, onChange, scope }: { layout: CardLayout;
   );
 }
 
-function BlockInspector({ block, readOnly, fields, relations, entityId, onPatch, onRemove }: {
+function BlockInspector({ block, readOnly, fields, relations, entityId, onPatch, onRemove, rowLoc, onRowMove }: {
+  rowLoc: { rowIndex: number; rowCount: number; index: number } | null; onRowMove: (d: -1 | 1) => void;
   block: CardBlock; readOnly: boolean; fields: Field[]; relations: { id: number; sourceEntityId: number; targetEntityId: number }[]; entityId: number;
   onPatch: (p: Partial<CardBlock>) => void; onRemove: () => void;
 }) {
@@ -1030,6 +1076,20 @@ function BlockInspector({ block, readOnly, fields, relations, entityId, onPatch,
           ))}
         </div>
       </div>
+      {rowLoc && (
+        <div className="space-y-1.5" data-testid="block-row-controls">
+          <Label>{t("cards.blockRow", "Строка")}: <span data-testid="text-block-row">{rowLoc.rowIndex + 1}</span> / {rowLoc.rowCount}</Label>
+          <div className="flex gap-1">
+            <Button size="sm" variant="outline" className="flex-1" data-testid="button-block-row-up" onClick={() => onRowMove(-1)}>
+              <ArrowUp className="me-1 h-3.5 w-3.5" />{t("cards.toPrevRow", "В строку выше")}
+            </Button>
+            <Button size="sm" variant="outline" className="flex-1" data-testid="button-block-row-down" onClick={() => onRowMove(1)}>
+              <ArrowDown className="me-1 h-3.5 w-3.5" />{t("cards.toNextRow", "В строку ниже")}
+            </Button>
+          </div>
+          <p className="text-xs text-slate-500">{t("cards.blockRowHint", "У крайней строки создаётся новая строка.")}</p>
+        </div>
+      )}
       <div className="space-y-1.5">
         <Label>{t("cards.modes", "Показывать в режимах")}</Label>
         <div className="flex flex-wrap gap-3">

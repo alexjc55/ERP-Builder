@@ -19,6 +19,30 @@ const section = z.object({
   id: z.string().min(1).max(100), title: ml,
   columns: z.number().int().min(1).max(3),
   blocks: z.array(block).max(100),
+  // Additive: absence retains the legacy auto-flow grid without rewriting it.
+  rows: z.array(z.object({
+    id: z.string().min(1).max(100),
+    columns: z.number().int().min(1).max(3),
+    blockIds: z.array(z.string().min(1).max(100)).max(100),
+  })).max(100).optional(),
+}).superRefine((section, ctx) => {
+  if (!section.rows) return;
+  const known = new Set(section.blocks.map(b => b.id));
+  const used = new Set<string>();
+  if (known.size !== section.blocks.length) {
+    ctx.addIssue({ code: "custom", path: ["blocks"], message: "Block IDs must be unique within a section" });
+  }
+  for (const [rowIndex, row] of section.rows.entries()) {
+    for (const [blockIndex, id] of row.blockIds.entries()) {
+      if (!known.has(id) || used.has(id)) {
+        ctx.addIssue({ code: "custom", path: ["rows", rowIndex, "blockIds", blockIndex], message: "Each row must reference distinct blocks from its section" });
+      }
+      used.add(id);
+    }
+  }
+  if (section.blocks.some(b => !used.has(b.id))) {
+    ctx.addIssue({ code: "custom", path: ["rows"], message: "Every section block must belong to exactly one row" });
+  }
 });
 export const cardLayoutSchema = z.object({
   version: z.literal(1),

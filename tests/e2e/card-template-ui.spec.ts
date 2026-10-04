@@ -284,3 +284,180 @@ test("runtime: a failed resolve shows an explicit error with retry instead of si
   await expect(page.getByTestId("form-field-title")).toBeVisible();
   await expect(page.getByTestId("card-layout")).toHaveCount(0);
 });
+
+// ---- explicit rows ------------------------------------------------------------
+const rowBlock = (id: string, fieldKey: string | null, span = 1) => ({ id, kind: "field", fieldKey, span, modes: ["view", "create", "edit"], columns: [] });
+const rowsLayout = () => ({
+  version: 1, style: "standard", customStyle: {},
+  tabs: [{ id: "tab_rows", title: ml("Main"), sections: [{ id: "sec_rows", title: ml("Rows"), columns: 1,
+    blocks: [rowBlock("b1", "title"), rowBlock("b2", "note"), rowBlock("b3", null), rowBlock("b4", null), rowBlock("b5", null), rowBlock("b6", null, 3), rowBlock("b7", null), rowBlock("b8", null), rowBlock("b9", null)],
+    rows: [
+      { id: "row_a", columns: 2, blockIds: ["b1", "b2"] }, { id: "row_b", columns: 1, blockIds: ["b3"] },
+      { id: "row_c", columns: 3, blockIds: ["b4", "b5", "b6"] }, { id: "row_d", columns: 2, blockIds: ["b7", "b8"] },
+      { id: "row_e", columns: 1, blockIds: ["b9"] },
+    ] }] }],
+});
+
+test("builder: rows 2,1,3,2,1 edit, move, delete without loss, save/reload and cross-entity copy keeps rows", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", e => errors.push(e.message));
+  await auth(page);
+  let draft: any = { id: 20, name: "Rows card", entityId: A, pageId: null, state: "draft", revision: 1, layout: rowsLayout() };
+  const saved: any[] = [];
+  const creates: any[] = [];
+  await page.route("**/api/**", async route => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname;
+    if (await common(route, path)) return;
+    const reply = (body: unknown) => route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    if (path === "/api/card-templates" && req.method() === "GET") return reply([draft]);
+    if (path === "/api/card-templates" && req.method() === "POST") { const body = req.postDataJSON(); creates.push(body); return reply({ id: 21, state: "draft", revision: 1, ...body }); }
+    if (path === "/api/card-templates/20" && req.method() === "PUT") {
+      const body = req.postDataJSON(); saved.push(body);
+      draft = { ...draft, ...body, revision: draft.revision + 1 };
+      return reply(draft);
+    }
+    return reply([]);
+  });
+  await page.goto("/admin/card-templates/20");
+  for (const [i, n] of [2, 1, 3, 2, 1].entries()) await expect(page.getByTestId(`editor-row-0-${i}`)).toHaveAttribute("data-row-columns", String(n));
+  // Explicit and wrapped rows share one gap: the stack gap equals the in-row row gap.
+  await expect(page.getByTestId("editor-section-grid-0")).toHaveCSS("row-gap", "16px");
+
+  // Accessible move: b3 joins the end of the previous row; its old row stays (empty rows allowed).
+  await page.getByTestId("editor-block-b3").click();
+  await page.getByTestId("button-block-row-up").click();
+  await expect(page.getByTestId("editor-row-0-0").getByTestId("editor-block-b3")).toBeVisible();
+  await expect(page.getByTestId("text-block-row")).toHaveText("1");
+    await page.getByTestId("button-row-cols-0-2-1").click();
+  await page.getByTestId("button-row-delete-0-3").click(); // row_d -> fields join row_c above
+  await expect(page.getByTestId("editor-row-0-2").getByTestId("editor-block-b8")).toBeVisible();
+  await expect(page.getByTestId("editor-row-0-4")).toHaveCount(0);
+  await page.getByTestId("button-row-up-0-3").click();
+  await page.getByTestId("button-save-draft").click();
+  await expect.poll(() => saved.length).toBe(1);
+  const s = saved[0].layout.tabs[0].sections[0];
+  expect(s.blocks).toHaveLength(9);
+  expect(s.rows.flatMap((r: any) => r.blockIds).sort()).toEqual(s.blocks.map((b: any) => b.id).sort());
+  expect(new Set(s.rows.flatMap((r: any) => r.blockIds)).size).toBe(9);
+  expect(s.rows.map((r: any) => r.columns)).toEqual([2, 1, 1, 1]);
+  expect(s.blocks.map((b: any) => b.id)).toEqual(s.rows.flatMap((r: any) => r.blockIds));
+
+  // Reload: state comes back from the server copy.
+  await page.reload();
+  await expect(page.getByTestId("editor-row-0-0").getByTestId("editor-block-b3")).toBeVisible();
+  await expect(page.getByTestId("editor-row-0-3")).toHaveAttribute("data-row-columns", "1");
+
+  // Cross-entity copy keeps rows and slots, remaps ids.
+  await page.goto("/admin/card-templates");
+  await page.getByTestId("button-copy-20").click();
+  const dlg = page.getByTestId("dialog-duplicate");
+  await dlg.getByTestId("select-entity").click();
+  await page.getByRole("option", { name: "Items" }).click();
+  await dlg.getByTestId("button-confirm-copy").click();
+  await expect.poll(() => creates.length).toBe(1);
+  const cs = creates[0].layout.tabs[0].sections[0];
+  expect(cs.rows.map((r: any) => r.columns)).toEqual([2, 1, 1, 1]);
+  expect(cs.rows.map((r: any) => r.blockIds.length)).toEqual(s.rows.map((r: any) => r.blockIds.length));
+  expect(cs.rows.flatMap((r: any) => r.blockIds)).toEqual(cs.blocks.map((b: any) => b.id));
+  expect(cs.rows.map((r: any) => r.id)).not.toContain("row_a");
+  expect(cs.blocks.every((b: any) => b.fieldKey === null)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test("runtime: explicit rows render 2,1,3,2,1 with equal gaps; empty/hidden rows leave no gap; legacy grid unchanged", async ({ page }) => {
+  await auth(page);
+  const l: any = rowsLayout();
+  const sec = l.tabs[0].sections[0];
+  sec.blocks = sec.blocks.map((b: any, i: number) => ({ ...b, kind: i < 2 ? "field" : "text", fieldKey: i < 2 ? b.fieldKey : null, text: ml(`Text ${b.id}`) }));
+  sec.blocks[8].modes = ["view"]; // row_e hidden in create
+  sec.rows.splice(2, 0, { id: "row_empty", columns: 3, blockIds: [] });
+  l.tabs.push({ id: "tab_legacy", title: ml("Legacy"), sections: [{ id: "sec_legacy", title: {}, columns: 2, blocks: [
+    { id: "lg1", kind: "text", text: ml("L1"), span: 1, modes: ["view", "create", "edit"], columns: [] },
+    { id: "lg2", kind: "text", text: ml("L2"), span: 1, modes: ["view", "create", "edit"], columns: [] },
+  ] }] });
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (await common(route, path)) return;
+    const reply = (body: unknown) => route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    if (path === "/api/card-templates/resolve") return reply({ template: { id: 1, name: "Rows", entityId: A, pageId: null, state: "published", revision: 1, layout: l } });
+    if (path === `/api/entities/${A}/records/query`) return reply({ data: [], total: 0, numericTotals: {} });
+    return reply([]);
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/card-orders");
+  await page.getByRole("button", { name: /Add record|Добавить запись/ }).first().click();
+  const rows = page.getByTestId("card-rows-sec_rows");
+  await expect(rows).toBeVisible();
+  await expect(rows).toHaveCSS("row-gap", "16px");
+  await expect(page.getByTestId("card-row-row_empty")).toHaveCount(0);
+  await expect(page.getByTestId("card-row-row_e")).toHaveCount(0);
+  await expect(rows.locator(":scope > div")).toHaveCount(4);
+  for (const [id, n] of [["row_a", 2], ["row_b", 1], ["row_c", 3], ["row_d", 2]] as const) {
+    await expect(page.getByTestId(`card-row-${id}`)).toHaveAttribute("data-row-columns", String(n));
+    await expect(page.getByTestId(`card-row-${id}`)).toHaveCSS("row-gap", "16px");
+  }
+  // Spacing between explicit rows equals the gap.
+  // Poll: the dialog open animation scales the content briefly.
+  await expect.poll(async () => {
+    const ba = await page.getByTestId("card-row-row_a").boundingBox();
+    const bb = await page.getByTestId("card-row-row_b").boundingBox();
+    return Math.round(bb!.y - (ba!.y + ba!.height));
+  }).toBe(16);
+  await page.getByTestId("card-tab-tab_legacy").click();
+  await expect(page.getByTestId("card-text-lg2")).toBeVisible();
+  await expect(page.getByTestId("card-rows-sec_legacy")).toHaveCount(0);
+  // Mobile: one column.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByTestId("card-tab-tab_rows").click();
+  await expect(page.getByTestId("card-row-row_c")).toHaveCSS("grid-template-columns", /^\S+$/);
+});
+
+test("builder: drag a field between rows updates row refs and saves a valid partition", async ({ page }) => {
+  await auth(page);
+  const draft: any = { id: 30, name: "DnD rows", entityId: A, pageId: null, state: "draft", revision: 1, layout: rowsLayout() };
+  const saved: any[] = [];
+  await page.route("**/api/**", async route => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname;
+    if (await common(route, path)) return;
+    const reply = (body: unknown) => route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    if (path === "/api/card-templates" && req.method() === "GET") return reply([draft]);
+    if (path === "/api/card-templates/30" && req.method() === "PUT") { const body = req.postDataJSON(); saved.push(body); return reply({ ...draft, ...body, revision: 2 }); }
+    return reply([]);
+  });
+  await page.goto("/admin/card-templates/30");
+  // Row 0 -> end of row 2 (row_c), then row 4's b9 before b7 in row 3 (row_d).
+  await page.getByTestId("editor-block-b1").dragTo(page.getByTestId("editor-row-drop-0-2"));
+  await expect(page.getByTestId("editor-row-0-2").getByTestId("editor-block-b1")).toBeVisible();
+  await page.getByTestId("editor-block-b9").dragTo(page.getByTestId("editor-block-b7"));
+  await expect(page.getByTestId("editor-row-0-3").getByTestId("editor-block-b9")).toBeVisible();
+  await page.getByTestId("button-save-draft").click();
+  await expect.poll(() => saved.length).toBe(1);
+  const s = saved[0].layout.tabs[0].sections[0];
+  expect(s.rows.map((r: any) => [r.id, r.columns, r.blockIds])).toEqual([
+    ["row_a", 2, ["b2"]], ["row_b", 1, ["b3"]], ["row_c", 3, ["b4", "b5", "b6", "b1"]], ["row_d", 2, ["b9", "b7", "b8"]], ["row_e", 1, []],
+  ]);
+  expect(s.blocks.map((b: any) => b.id)).toEqual(s.rows.flatMap((r: any) => r.blockIds));
+  expect(s.blocks.find((b: any) => b.id === "b1")).toMatchObject({ fieldKey: "title", span: 1 });
+});
+
+test("runtime: malformed explicit rows surface the snapshot error with retry", async ({ page }) => {
+  await auth(page);
+  const bad: any = rowsLayout();
+  bad.tabs[0].sections[0].rows[4].blockIds = []; // b9 orphaned -> not a partition
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (await common(route, path)) return;
+    const reply = (body: unknown) => route.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+    if (path === "/api/card-templates/resolve") return reply({ template: { id: 1, name: "Bad", entityId: A, pageId: null, state: "published", revision: 1, layout: bad } });
+    if (path === `/api/entities/${A}/records/query`) return reply({ data: [], total: 0, numericTotals: {} });
+    return reply([]);
+  });
+  await page.goto("/card-orders");
+  await page.getByRole("button", { name: /Add record|Добавить запись/ }).first().click();
+  await expect(page.getByTestId("card-resolve-error")).toBeVisible();
+  await expect(page.getByTestId("button-card-resolve-retry")).toBeVisible();
+  await expect(page.getByTestId("record-dialog-save")).toBeDisabled();
+  await expect(page.getByTestId("card-layout")).toHaveCount(0);
+});

@@ -108,6 +108,47 @@ test("card registry: scope inheritance, draft validation, permission gates and a
     const currentOverride = await resolve(mirror.id);
     expect((await api(`/${override.id}/unpublish`, { expectedRevision: currentOverride.revision })).status()).toBe(200);
     expect((await resolve(mirror.id)).id).toBe((await resolve()).id);
+    // Explicit rows coexist with legacy sections and survive persistence and
+    // permission projection without revealing hidden field references.
+    expect(first.layout.tabs[0].sections[0].rows).toBeUndefined();
+    const mixedBlocks = [
+      ...layout.tabs[0].sections[0].blocks,
+      ...Array.from({ length: 7 }, (_, i) => ({
+        id: `text-${i}`, kind: "text", text: { en: `Row text ${i}` },
+        span: 1, modes: ["view", "create", "edit"], columns: [],
+      })),
+    ];
+    const rowGroups = [["title", "secret"], ["text-0"], ["text-1", "text-2", "text-3"], ["text-4", "text-5"], ["text-6"]];
+    const mixed = {
+      ...layout,
+      tabs: [{ ...layout.tabs[0], sections: [{
+        ...layout.tabs[0].sections[0], blocks: mixedBlocks,
+        rows: rowGroups.map((blockIds, i) => ({ id: `row-${i}`, columns: blockIds.length, blockIds })),
+      }] }],
+    };
+    const mixedCard = await create("Mixed rows", mirror.id, mixed);
+    const fetchedMixed = (await (await api("", undefined, "GET")).json()).find((c: { id: number }) => c.id === mixedCard.id);
+    expect(fetchedMixed.layout.tabs[0].sections[0].rows.map((r: { columns: number }) => r.columns)).toEqual([2, 1, 3, 2, 1]);
+    expect((await api(`/${mixedCard.id}/publish`, { expectedRevision: mixedCard.revision })).status()).toBe(200);
+    const restrictedMixed = await resolve(mirror.id, readerHeaders);
+    expect(restrictedMixed.layout.tabs[0].sections[0].rows[0].blockIds).toEqual(["title"]);
+    expect(restrictedMixed.layout.tabs[0].sections[0].rows.map((r: { columns: number }) => r.columns)).toEqual([2, 1, 3, 2, 1]);
+    expect(JSON.stringify(restrictedMixed.layout)).not.toContain('"secret"');
+    expect((await api(`/${mixedCard.id}/unpublish`, { expectedRevision: restrictedMixed.revision })).status()).toBe(200);
+    for (const badRows of [
+      [{ id: "bad", columns: 2, blockIds: mixedBlocks.map(b => b.id).concat("title") }],
+      [{ id: "bad", columns: 2, blockIds: ["unknown"] }],
+      [{ id: "bad", columns: 4, blockIds: mixedBlocks.map(b => b.id) }],
+      [],
+    ]) {
+      const malformed = structuredClone(mixed);
+      malformed.tabs[0].sections[0].rows = badRows;
+      expect((await api("", { name: "Malformed rows", entityId: entity.id, layout: malformed })).status()).toBe(400);
+    }
+    const colliding = structuredClone(mixed);
+    colliding.tabs[0].sections[0].rows[0].id = "tab";
+    const duplicateIdCard = await create("Duplicate row ID", null, colliding);
+    expect((await api(`/${duplicateIdCard.id}/publish`, { expectedRevision: duplicateIdCard.revision })).status()).toBe(400);
     // Real browser, real API, isolated records: confirms generated clients,
     // admin capability and record-form renderer agree with the live contracts.
     const errors: string[] = [];
@@ -136,6 +177,32 @@ test("card registry: scope inheritance, draft validation, permission gates and a
     await expect(dialog.getByTestId("record-dialog-save")).toBeEnabled();
     await page.setViewportSize({ width: 402, height: 874 });
     await page.screenshot({ path: "screenshots/card-runtime-mobile.png" });
+    // Exercise the persisted mixed rows through the actual page override.
+    const publishedRows = await api(`/${mixedCard.id}/publish`, { expectedRevision: restrictedMixed.revision + 1 });
+    expect(publishedRows.status()).toBe(200);
+    const publishedRowsBody = await publishedRows.json();
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(`/__cards-mirror-${tag}`);
+    await page.locator(`[data-testid="record-view-button"][data-record-id="${record.id}"]`).click();
+    for (const [index, count] of [2, 1, 3, 2, 1].entries()) {
+      const row = page.getByTestId(`card-row-row-${index}`);
+      await expect(row).toHaveAttribute("data-row-columns", String(count));
+      await expect(row).toHaveCSS("row-gap", "16px");
+    }
+    await page.screenshot({ path: "screenshots/card-mixed-rows-runtime.png" });
+    expect((await api(`/${mixedCard.id}/unpublish`, { expectedRevision: publishedRowsBody.revision })).status()).toBe(200);
+    await page.goto(`/admin/card-templates/${mixedCard.id}`);
+    await page.getByTestId("button-row-cols-0-0-3").click();
+    const rowSave = page.waitForResponse(r => r.url().endsWith(`/api/card-templates/${mixedCard.id}`) && r.request().method() === "PUT");
+    await page.getByTestId("button-save-draft").click();
+    const savedRowsResponse = await rowSave;
+    expect(savedRowsResponse.status()).toBe(200);
+    const savedRows = await savedRowsResponse.json();
+    expect(savedRows.layout.tabs[0].sections[0].rows.map((r: { columns: number }) => r.columns)).toEqual([3, 1, 3, 2, 1]);
+    await page.reload();
+    await expect(page.getByTestId("editor-row-0-0")).toHaveAttribute("data-row-columns", "3");
+    await expect(page.getByTestId("editor-row-0-4")).toHaveAttribute("data-row-columns", "1");
+    await page.screenshot({ path: "screenshots/card-mixed-rows-editor.png" });
     expect(errors).toEqual([]);
   } finally {
     if (entityIds.length) {

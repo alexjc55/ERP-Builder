@@ -34,6 +34,7 @@ async function publicationErrors(reader: Reader, entityId: number, layout: CardL
     register(tab.id);
     for (const section of tab.sections) {
       register(section.id);
+      for (const row of section.rows ?? []) register(row.id);
       for (const block of section.blocks) {
         register(block.id);
         if (block.kind !== "field" && block.kind !== "relatedTable") continue;
@@ -91,6 +92,10 @@ router.post("/card-templates/resolve", requireAuth, async (req, res) => {
   const layout = structuredClone(template.layout);
   for (const tab of layout.tabs) for (const section of tab.sections) {
     section.blocks = section.blocks.filter(b => b.kind === "text" || b.kind === "divider" || (b.fieldKey != null && visible.has(b.fieldKey)));
+    if (section.rows) {
+      const visibleIds = new Set(section.blocks.map(b => b.id));
+      section.rows = section.rows.map(row => ({ ...row, blockIds: row.blockIds.filter(id => visibleIds.has(id)) }));
+    }
   }
   res.json({ template: { ...template, layout } });
 });

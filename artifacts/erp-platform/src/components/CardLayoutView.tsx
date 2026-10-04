@@ -59,13 +59,33 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
             {title}
           </h3>
         )}
-        <div className={cn("grid min-w-0", SECTION_GRID[cols], gap)} style={appearance.grid}>
-          {blocks.map(b => (
-            <div key={b.id} className={cn("min-w-0", BLOCK_SPAN[Math.min(cols, b.span)])}>
-              {renderBlock(b)}
-            </div>
-          ))}
-        </div>
+        {section.rows ? (
+          // Explicit rows: the stack gap equals the in-row row gap, so wrapped
+          // and explicit rows are spaced identically. Rows carry no padding/border.
+          <div className="flex min-w-0 flex-col" data-testid={`card-rows-${section.id}`} style={{ gap: appearance.grid.rowGap }}>
+            {section.rows.map(row => {
+              const byId = new Map(blocks.map(b => [b.id, b]));
+              const rowBlocks = row.blockIds.map(id => byId.get(id)).filter((b): b is CardBlock => !!b);
+              if (rowBlocks.length === 0) return null;
+              const rc = Math.min(3, Math.max(1, row.columns));
+              return (
+                <div key={row.id} data-testid={`card-row-${row.id}`} data-row-columns={rc} className={cn("grid min-w-0", SECTION_GRID[rc], gap)} style={appearance.grid}>
+                  {rowBlocks.map(b => (
+                    <div key={b.id} className={cn("min-w-0", BLOCK_SPAN[Math.min(rc, b.span)])}>{renderBlock(b)}</div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className={cn("grid min-w-0", SECTION_GRID[cols], gap)} style={appearance.grid}>
+            {blocks.map(b => (
+              <div key={b.id} className={cn("min-w-0", BLOCK_SPAN[Math.min(cols, b.span)])}>
+                {renderBlock(b)}
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     );
   };
