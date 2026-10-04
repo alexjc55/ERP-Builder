@@ -6579,6 +6579,9 @@ components:
           type: ["integer", "null"]
         menuDefaultExpanded:
           type: boolean
+        isSystem:
+          type: boolean
+          readOnly: true
         mirrorEntityId:
           type: ["integer", "null"]
         mirrorFieldKeysJson:

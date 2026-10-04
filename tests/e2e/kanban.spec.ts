@@ -142,6 +142,7 @@ async function installFixture(page: Page, options: { adminPages?: boolean; statu
         return reply(record);
       }
     }
+    if (path === "/api/card-templates/resolve") return reply({ template: null });
     if (path.endsWith("/record-values/query")) return reply([]);
     if (path.endsWith("/related-values")) return reply({ columns: [], values: [] });
     if (path.includes("/collaboration/")) {
@@ -592,23 +593,20 @@ for (const editable of [false, true]) {
     await selectBoard(page);
     await expect(page.getByTestId("button-edit-kanban-1000")).toHaveCount(editable ? 1 : 0);
     await page.getByTestId("button-view-kanban-1000").click();
-    const detail = page.getByTestId("dialog-kanban-detail");
+    const detail = page.getByTestId("record-dialog");
     await expect(detail).toBeVisible();
-    await expect(detail.getByTestId("text-detail-title")).toHaveText("Item 1000");
-    await expect(detail.getByTestId("text-detail-summary")).toHaveText("Summary 1000");
-    await expect(detail.getByTestId("text-detail-detail")).toHaveText("Full detail 1000");
-    await expect(detail.getByTestId("text-detail-empty")).toHaveText("—");
-    expect(fixture.detailReads).toContain(1000);
-    await expect(detail.locator("input, textarea, [contenteditable=true]")).toHaveCount(0);
+    await expect(detail).not.toContainText("#1000");
+    await expect(detail.locator('input[value="Item 1000"]')).toBeDisabled();
+    await expect(detail.locator('input[value="Summary 1000"]')).toBeDisabled();
+    await expect(detail.locator('input[value="Full detail 1000"]')).toBeDisabled();
     if (editable) {
       await page.keyboard.press("Escape");
       await page.getByTestId("button-edit-kanban-1000").click();
-      await expect(detail).toHaveCount(0);
       const edit = page.getByRole("dialog");
       await expect(edit.getByRole("heading", { name: /^(Edit record|Редактировать запись)$/ })).toBeVisible();
       await expect(edit.locator('input[value="Full detail 1000"]')).toBeVisible();
     } else {
-      await expect(detail.getByTestId("button-kanban-detail-edit")).toHaveCount(0);
+      await expect(detail.getByTestId("record-dialog-to-edit")).toHaveCount(0);
       await page.keyboard.press("Escape");
       await page.getByTestId("button-actions-kanban-1000").click();
       await expect(page.getByRole("menuitem", { name: /^(Edit|Редактировать)$/ })).toHaveCount(0);

@@ -1,4 +1,5 @@
 - [ERP platform core](erp-platform-core.md) — key foundational decisions for the metadata-driven Production ERP Builder (contract-first, metadata-driven, multilingual JSONB, custom JWT).
+- [System administrative pages](system-admin-pages.md) — preserve admin reachability while allowing menu appearance changes; new admin seeds must carry system identity.
 - [Admin-cap stage pattern](admin-cap-stage-pattern.md) — repeatable recipe for a new admin area: RBAC cap + OpenAPI CRUD + gated route + DB-backed i18n screen.
 - [RBAC permissions](rbac-permissions.md) — how role `permissionsJson` is structured, enforced server-side, mirrored cosmetically in the UI; incl. per-entity status visibility (hiddenStatusIds picker/write + hiddenRowStatusIds row read boundary).
 - [Field & row permissions](erp-field-row-permissions.md) — per-field hidden/view/edit + per-row all/own scope; the boundary decisions that must stay consistent across server and client.

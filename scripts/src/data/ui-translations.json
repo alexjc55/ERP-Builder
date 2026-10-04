@@ -1,4 +1,19 @@
 [
+  { "key": "pages.mainTab", "ru": "Основные", "en": "Main", "he": "ראשיים" },
+  { "key": "pages.systemTab", "ru": "Системные", "en": "System", "he": "מערכת" },
+  { "key": "pages.pageCategories", "ru": "Категории страниц", "en": "Page categories", "he": "קטגוריות עמודים" },
+  {
+    "key": "pages.system",
+    "ru": "Системная",
+    "en": "System",
+    "he": "מערכת"
+  },
+  {
+    "key": "pages.systemHint",
+    "ru": "Системная страница: удаление, отключение, перенос и изменение типа недоступны. Доступ регулируется правами ролей.",
+    "en": "System page: deletion, deactivation, moving and changing its type are unavailable. Access is controlled by role permissions.",
+    "he": "עמוד מערכת: לא ניתן למחוק, להשבית, להעביר או לשנות את הסוג. הגישה נקבעת לפי הרשאות התפקידים."
+  },
   {
     "key": "pages.menuDefaultState",
     "ru": "Состояние группы в меню по умолчанию",

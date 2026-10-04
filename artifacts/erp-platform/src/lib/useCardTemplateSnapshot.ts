@@ -19,17 +19,21 @@ export function useCardTemplateSnapshot(opts: {
 }): CardSnapshot & { retry: () => void } {
   const { open, entityId, pageId, mode } = opts;
   const [snap, setSnap] = useState<CardSnapshot>({ status: "idle", layout: null });
+  const [snapshotKey, setSnapshotKey] = useState<string | null>(null);
+  const requestedKey = open && entityId != null ? `${entityId}:${pageId ?? ""}:${mode}` : null;
   const keyRef = useRef<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!open || entityId == null) {
       keyRef.current = null;
+      setSnapshotKey(null);
       setSnap({ status: "idle", layout: null });
       return;
     }
     const key = `${entityId}:${pageId ?? ""}:${mode}`;
     if (keyRef.current === key) return;
     keyRef.current = key;
+    setSnapshotKey(key);
     let cancelled = false;
     setSnap({ status: "loading", layout: null });
     resolveCardTemplate({ entityId, ...(pageId != null ? { pageId } : {}), mode })
@@ -58,5 +62,9 @@ export function useCardTemplateSnapshot(opts: {
       if (keyRef.current === key) keyRef.current = null;
     };
   }, [open, entityId, pageId, mode, attempt]);
-  return { ...snap, retry: () => { keyRef.current = null; setAttempt(a => a + 1); } };
+  // Effects run after render: never expose the preceding scope's ready layout
+  // for one frame when a new opening or mode is requested.
+  const current: CardSnapshot = requestedKey == null ? { status: "idle", layout: null }
+    : snapshotKey !== requestedKey ? { status: "loading", layout: null } : snap;
+  return { ...current, retry: () => { keyRef.current = null; setSnap({ status: "loading", layout: null }); setAttempt(a => a + 1); } };
 }

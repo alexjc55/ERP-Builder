@@ -106,6 +106,51 @@ const box = async (page: Page, testId: string) => {
 const near = (a: number, b: number, tol = 2) => expect(Math.abs(a - b)).toBeLessThanOrEqual(tol);
 
 test.describe("card presentation", () => {
+  test("kanban view and edit wait for the template without flashing a legacy window", async ({ page }) => {
+    await setup(page, { presentation: "side" });
+    await page.route("**/api/entities/*/main-views", route => route.fulfill({json: [{
+      id: 99, entityId: A, nameJson: ml("Board"), isDefault: true, sortOrder: 0,
+      configJson: { viewType: "kanban", kanban: { titleField: "title", fields: [] } },
+    }]}));
+    let release!: () => void;
+    let wait = new Promise<void>(r => { release = r; });
+    await page.route("**/api/card-templates/resolve", async route => {
+      await wait;
+      await route.fulfill({json: {template: {id: 1, layout: layout("side")}}});
+    });
+    await page.goto("/pres-orders");
+    await page.locator('[data-testid^="button-view-kanban-"]').first().click();
+    const dlg = page.getByTestId("record-dialog");
+    await expect(page.getByTestId("card-opening")).toBeVisible();
+    await expect(dlg).toHaveCSS("opacity", "0");
+    release();
+    await expect(dlg).toHaveAttribute("data-card-presentation", "side");
+    await expect(dlg).toHaveCSS("opacity", "1");
+    await expect(page.getByTestId("dialog-kanban-detail")).toHaveCount(0);
+    wait = new Promise<void>(r => { release = r; });
+    await dlg.getByTestId("record-dialog-to-edit").click();
+    await expect(page.getByTestId("card-opening")).toBeVisible();
+    await expect(dlg).toHaveCSS("opacity", "0");
+    release();
+    await expect(dlg).toHaveCSS("opacity", "1");
+    await expect(dlg).toHaveAttribute("data-card-presentation", "side");
+    await page.keyboard.press("Escape");
+    wait = new Promise<void>(r => { release = r; });
+    await page.locator('[data-testid^="button-open-kanban-"]').first().click();
+    await expect(page.getByTestId("card-opening")).toBeVisible();
+    await expect(dlg).toHaveCSS("opacity", "0");
+    release();
+    await expect(dlg).toHaveAttribute("data-card-presentation", "side");
+    await expect(dlg).toHaveCSS("opacity", "1");
+    await page.keyboard.press("Escape");
+    wait = new Promise<void>(r => { release = r; });
+    await page.getByRole("button", { name: /^(Добавить запись|Add record)$/ }).click();
+    await expect(page.getByTestId("card-opening")).toBeVisible();
+    await expect(dlg).toHaveCSS("opacity", "0");
+    release();
+    await expect(dlg).toHaveAttribute("data-card-presentation", "side");
+    await expect(dlg).toHaveCSS("opacity", "1");
+  });
   test.use({ viewport: { width: 1280, height: 800 } });
 
   test("legacy layout without presentation opens as a centered 85dvh modal", async ({ page }) => {

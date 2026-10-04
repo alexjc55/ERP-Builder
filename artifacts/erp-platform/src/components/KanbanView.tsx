@@ -90,6 +90,7 @@ export type KanbanViewProps = {
     ml?: MlFn,
   ) => React.ReactNode;
   onEdit: (record: EntityRecord) => void;
+  onView?: (record: EntityRecord) => void;
   canEdit: boolean;
   canMove: (record: EntityRecord) => boolean;
   allowedStatuses: (record: EntityRecord) => Status[];
@@ -177,7 +178,7 @@ type DisplayItem = { key: string; label: string; field: Field; value: unknown; d
 export function KanbanView(props: KanbanViewProps) {
   const {
     entityId, config, baseQuery, fields, pageFields = [], statuses, userNames, renderCellValue,
-    onEdit, canEdit, canMove, allowedStatuses, allowNoStatus, canArchive, onDataChanged,
+    onEdit, onView, canEdit, canMove, allowedStatuses, allowNoStatus, canArchive, onDataChanged,
     refreshTick = 0, ml, pageTextDirection, appTextDirection, statusScope,
   } = props;
   const t = useT();
@@ -722,7 +723,7 @@ export function KanbanView(props: KanbanViewProps) {
           <button
             type="button"
             onClick={() => {
-              if (!suppressClick.current) setDetail(rec);
+              if (!suppressClick.current) (onView ?? setDetail)(rec);
             }}
             className="min-w-0 flex-1 cursor-pointer text-start text-sm font-medium leading-snug text-slate-800 hover:text-[var(--kanban-title-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 rounded"
             data-testid={`button-open-kanban-${rec.id}`}
@@ -743,7 +744,7 @@ export function KanbanView(props: KanbanViewProps) {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onSelect={() => setDetail(rec)}>
+              <DropdownMenuItem onSelect={() => (onView ?? setDetail)(rec)}>
                 <Eye className="me-2 h-4 w-4" />
                 {t("kanban.view", "Просмотр")}
               </DropdownMenuItem>
@@ -824,7 +825,7 @@ export function KanbanView(props: KanbanViewProps) {
             <button type="button" title={t("kanban.view", "Просмотр")} aria-label={t("kanban.view", "Просмотр")}
               data-testid={`button-view-kanban-${rec.id}`}
               className="cursor-pointer rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-[var(--kanban-title-hover)] focus-visible:ring-2 focus-visible:ring-blue-400"
-              onClick={() => { if (!suppressClick.current) setDetail(rec); }}>
+              onClick={() => { if (!suppressClick.current) (onView ?? setDetail)(rec); }}>
               <Eye className="h-4 w-4" />
             </button>
             {canEdit && (
@@ -1053,7 +1054,6 @@ function KanbanDetailDialog({
         <DialogHeader>
           <DialogTitle dir={title?.dir} className="pe-6 [overflow-wrap:anywhere]">{title?.text}</DialogTitle>
           <DialogDescription className="flex flex-wrap items-center gap-2 text-xs">
-            <span>#{rec?.id}</span>
             {status ? (
               <span className="inline-flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: status.color }} />

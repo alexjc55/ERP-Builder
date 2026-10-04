@@ -13,6 +13,8 @@ export const pagesTable = pgTable("pages", {
   path: text("path"),
   parentPageId: integer("parent_page_id"),
   menuDefaultExpanded: boolean("menu_default_expanded").notNull().default(true),
+  // Server-owned identity: never exposed as a writable page setting.
+  isSystem: boolean("is_system").notNull().default(false),
   // Mirror page: when set, this page displays the live records of an existing
   // entity (a second, read-through window onto another entity's data). Stored as
   // a plain integer (not a hard FK) to avoid a circular pages<->entities import;

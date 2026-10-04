@@ -2487,6 +2487,7 @@ export const ListPagesResponseItem = zod.object({
   "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
   "menuDefaultExpanded": zod.boolean().optional(),
+  "isSystem": zod.boolean().optional(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({
@@ -2759,6 +2760,7 @@ export const GetPageResponse = zod.object({
   "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
   "menuDefaultExpanded": zod.boolean().optional(),
+  "isSystem": zod.boolean().optional(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({
@@ -3021,6 +3023,7 @@ export const UpdatePageResponse = zod.object({
   "path": zod.string().nullish(),
   "parentPageId": zod.number().nullish(),
   "menuDefaultExpanded": zod.boolean().optional(),
+  "isSystem": zod.boolean().optional(),
   "mirrorEntityId": zod.number().nullish(),
   "mirrorFieldKeysJson": zod.array(zod.string()).nullish(),
   "mirrorFieldLabelsJson": zod.record(zod.string(), zod.object({

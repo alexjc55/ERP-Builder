@@ -153,7 +153,7 @@ export default function EntitiesPage() {
   // A page that mirrors an entity cannot also have a bound entity (either/or),
   // so such pages are not offered as binding targets here.
   const navPages = [...pages]
-    .filter((p: Page) => p.mirrorEntityId == null)
+    .filter((p: Page) => p.mirrorEntityId == null && !p.isSystem)
     .sort((a: Page, b: Page) => a.sortOrder - b.sortOrder);
 
   useEffect(() => {

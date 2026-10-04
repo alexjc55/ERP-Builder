@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { changesSystemPage, isAdminPath } from "../lib/system-pages";
 import {
   db,
   pagesTable,
@@ -141,6 +142,10 @@ router.post("/pages", requireAuth, requireAdmin("pages"), async (req, res): Prom
   const parsed = CreatePageBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (isAdminPath(parsed.data.path)) {
+    res.status(403).json({ error: "Administrative routes are reserved for system pages" });
     return;
   }
 
@@ -411,6 +416,16 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
 
   const updateData: Record<string, unknown> = {};
   const body = parsed.data;
+  const [protectedPage] = await db.select().from(pagesTable).where(eq(pagesTable.id, params.data.id));
+  if (!protectedPage) { res.status(404).json({ error: "Page not found" }); return; }
+  if (protectedPage.isSystem && changesSystemPage(protectedPage, body)) {
+    res.status(403).json({ error: "System pages only allow changes to names, descriptions, icons, order and default menu expansion" });
+    return;
+  }
+  if (!protectedPage.isSystem && isAdminPath(body.path)) {
+    res.status(403).json({ error: "Administrative routes are reserved for system pages" });
+    return;
+  }
   if (body.nameJson != null) updateData.nameJson = body.nameJson;
   if (body.descriptionJson != null) updateData.descriptionJson = body.descriptionJson;
   if (body.icon != null) updateData.icon = body.icon;
@@ -584,6 +599,11 @@ router.delete("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res)
     return;
   }
 
+  const [target] = await db.select({ isSystem: pagesTable.isSystem }).from(pagesTable).where(eq(pagesTable.id, params.data.id));
+  if (target?.isSystem) {
+    res.status(403).json({ error: "System pages cannot be deleted" });
+    return;
+  }
   const children = await db
     .select({ id: pagesTable.id })
     .from(pagesTable)

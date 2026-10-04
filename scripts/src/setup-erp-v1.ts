@@ -207,6 +207,7 @@ async function main() {
       .insert(pagesTable)
       .values({
         nameJson: ml("Администрирование", "Administration", "ניהול"),
+        isSystem: true,
         icon: "settings",
         path: null,
         sortOrder: 100,
@@ -232,6 +233,7 @@ async function main() {
         icon: p.icon,
         path: p.path,
         parentPageId: adminGroup.id,
+        isSystem: true,
         sortOrder: 101 + i,
       })),
     );

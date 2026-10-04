@@ -8508,6 +8508,7 @@ export function EntityRecords({
             userNames={userNames}
             renderCellValue={renderCellValue}
             onEdit={openEdit}
+            onView={openView}
             canEdit={canUpdate}
             canArchive={record => canUpdate && !record.archivedAt}
             onDataChanged={invalidate}
@@ -9537,6 +9538,7 @@ export function EntityRecords({
         }}
         presentation={cardSnapshot.layout ? layoutPresentation(cardSnapshot.layout) : null}
         wide={layoutIsWide(cardSnapshot.layout)} testId="record-dialog"
+        pending={cardSnapshot.status === "idle" || cardSnapshot.status === "loading"}
         header={<>
             <DialogTitle>{viewing ? t("records.viewTitle", "Просмотр записи") : editing ? t("records.editTitle", "Редактировать запись") : t("records.newTitle", "Новая запись")}</DialogTitle>
             <DialogDescription>
@@ -11536,6 +11538,7 @@ function RecordEditModal({
     <CardDialogShell open={open} onOpenChange={onOpenChange}
         presentation={cardSnapshot.layout ? layoutPresentation(cardSnapshot.layout) : null}
         wide={layoutIsWide(cardSnapshot.layout)} testId="record-edit-modal"
+        pending={cardSnapshot.status === "idle" || cardSnapshot.status === "loading"}
         header={<>
           <DialogTitle>{t("records.editLinkedTitle", "Редактировать связанную запись")}</DialogTitle>
           <DialogDescription>
@@ -11823,6 +11826,7 @@ function QuickCreateRelatedRecordDialog({
     <CardDialogShell open={open} onOpenChange={onOpenChange}
         presentation={cardSnapshot.layout ? layoutPresentation(cardSnapshot.layout) : null}
         wide={layoutIsWide(cardSnapshot.layout)} testId="quick-create-related-dialog"
+        pending={cardSnapshot.status === "idle" || cardSnapshot.status === "loading"}
         header={<>
           <DialogTitle>{t("records.relatedCreateTitle", "Новая связанная запись")}</DialogTitle>
           <DialogDescription>

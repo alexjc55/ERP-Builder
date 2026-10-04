@@ -28,6 +28,7 @@ export interface Page {
   /** @nullable */
   parentPageId?: number | null;
   menuDefaultExpanded?: boolean;
+  readonly isSystem?: boolean;
   /** @nullable */
   mirrorEntityId?: number | null;
   /** @nullable */

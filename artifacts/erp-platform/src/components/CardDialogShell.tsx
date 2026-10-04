@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Maximize2, Minimize2, X } from "lucide-react";
+import { Loader2, Maximize2, Minimize2, X } from "lucide-react";
 import { Dialog, DialogOverlay, DialogPortal } from "@/components/ui/dialog";
 import { useLang, useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -27,8 +27,9 @@ export function presentationClasses(p: CardPresentation, rtl: boolean, wide: boo
  * active: the legacy centered form look is kept (same tree, legacy classes).
  * Outside clicks never close (same policy as the shared DialogContent).
  */
-export function CardDialogShell({ open, onOpenChange, presentation, wide, header, footer, children, testId, bodyTestId, bodyClassName }: {
+export function CardDialogShell({ open, onOpenChange, presentation, wide, header, footer, children, testId, bodyTestId, bodyClassName, pending = false }: {
   open: boolean;
+  pending?: boolean;
   onOpenChange: (open: boolean) => void;
   presentation: CardPresentation | null;
   wide?: boolean;
@@ -53,7 +54,13 @@ export function CardDialogShell({ open, onOpenChange, presentation, wide, header
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
         <DialogOverlay className={cn(custom && current === "side" && "bg-slate-900/40")} />
+        {pending && <div role="status" data-testid="card-opening" className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center text-white">
+          <Loader2 aria-hidden className="h-7 w-7 animate-spin" /><span className="sr-only">{t("common.loading", "Загрузка...")}</span>
+        </div>}
         <DialogPrimitive.Content
+          style={pending ? { opacity: 0, pointerEvents: "none" } : undefined}
+          aria-busy={pending}
+          inert={pending || undefined}
           dir={rtl ? "rtl" : "ltr"}
           data-testid={testId}
           data-card-presentation={custom ? current : "legacy"}

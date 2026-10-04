@@ -169,6 +169,13 @@
       "when": 1791096896765,
       "tag": "0023_fat_bill_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791108274297,
+      "tag": "0024_flawless_wither",
+      "breakpoints": true
     }
   ]
 }

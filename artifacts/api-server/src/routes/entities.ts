@@ -43,12 +43,13 @@ async function validatePageBinding(
   excludeEntityId: number | null,
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const [page] = await db
-    .select({ id: pagesTable.id, mirrorEntityId: pagesTable.mirrorEntityId, isDashboard: pagesTable.isDashboard })
+    .select({ id: pagesTable.id, mirrorEntityId: pagesTable.mirrorEntityId, isDashboard: pagesTable.isDashboard, isSystem: pagesTable.isSystem })
     .from(pagesTable)
     .where(eq(pagesTable.id, pageId));
   if (!page) {
     return { ok: false, status: 400, error: "Selected page does not exist" };
   }
+  if (page.isSystem) return { ok: false, status: 403, error: "An entity cannot be bound to a system page" };
 
   if (page.mirrorEntityId != null) {
     return {

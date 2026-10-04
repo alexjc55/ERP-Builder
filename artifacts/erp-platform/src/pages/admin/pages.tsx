@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -72,6 +73,7 @@ export default function PagesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPage, setEditingPage] = useState<Page | null>(null);
   const [deletePage, setDeletePage] = useState<Page | null>(null);
+  const [pageTab, setPageTab] = useState("main");
 
   const [nameJson, setNameJson] = useState<MLValue>({});
   const [descJson, setDescJson] = useState<MLValue>({});
@@ -252,7 +254,9 @@ export default function PagesPage() {
       textDirection,
     };
     if (editingPage) {
-      updateMutation.mutate({ id: editingPage.id, data: payload });
+      updateMutation.mutate({ id: editingPage.id, data: editingPage.isSystem
+        ? { nameJson: payload.nameJson, descriptionJson: payload.descriptionJson, icon: payload.icon, sortOrder, menuDefaultExpanded }
+        : payload });
     } else {
       createMutation.mutate({ data: payload });
     }
@@ -260,8 +264,12 @@ export default function PagesPage() {
 
   const isPending = createMutation.isPending || updateMutation.isPending;
   const topPages = pages.filter((p: Page) => !p.parentPageId);
-  const sortedTop = [...topPages].sort((a: Page, b: Page) => a.sortOrder - b.sortOrder);
-  const subPages = (parentId: number) => pages.filter((p: Page) => p.parentPageId === parentId);
+  const visiblePages = pages.filter((p: Page) => !!p.isSystem === (pageTab === "system"));
+  const visibleIds = new Set(visiblePages.map((p: Page) => p.id));
+  // A user page under a system group still belongs in Main.
+  const sortedTop = visiblePages.filter((p: Page) => !p.parentPageId || !visibleIds.has(p.parentPageId))
+    .sort((a: Page, b: Page) => a.sortOrder - b.sortOrder);
+  const subPages = (parentId: number) => visiblePages.filter((p: Page) => p.parentPageId === parentId);
 
   return (
     <div className="p-6 space-y-6">
@@ -276,6 +284,12 @@ export default function PagesPage() {
         </Button>
       </div>
 
+      <Tabs value={pageTab} onValueChange={setPageTab}>
+        <TabsList aria-label={t("pages.pageCategories", "Категории страниц")}>
+          <TabsTrigger value="main">{t("pages.mainTab", "Основные")}</TabsTrigger>
+          <TabsTrigger value="system">{t("pages.systemTab", "Системные")}</TabsTrigger>
+        </TabsList>
+        <TabsContent value={pageTab}>
       <Card className="border-slate-200 shadow-sm">
         <CardContent className="p-0">
           {isLoading ? (
@@ -306,6 +320,7 @@ export default function PagesPage() {
                         <div className="flex items-center gap-2">
                           <Layout className="w-4 h-4 text-slate-400" />
                           <span className="font-medium text-slate-700">{ml(page.nameJson)}</span>
+                          {page.isSystem && <Badge variant="secondary">{t("pages.system", "Системная")}</Badge>}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-slate-500 font-mono text-xs">{page.icon || "—"}</td>
@@ -325,7 +340,7 @@ export default function PagesPage() {
                           <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={pi === sortedTop.length - 1 || reorderMutation.isPending} onClick={() => move(sortedTop, pi, 1)}>
                             <ChevronDown className="w-3.5 h-3.5" />
                           </Button>
-                          {entityForPage(page.id) ? (
+                          {!page.isSystem && (entityForPage(page.id) ? (
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" title={t("pages.editEntity", "Редактировать сущность")} onClick={() => navigate(`/admin/entities?edit=${entityForPage(page.id)!.id}`)}>
                               <Link2 className="w-3.5 h-3.5" />
                             </Button>
@@ -333,13 +348,13 @@ export default function PagesPage() {
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" title={t("pages.bindEntity", "Привязать сущность")} onClick={() => navigate(`/admin/entities?createForPage=${page.id}`)}>
                               <Unlink className="w-3.5 h-3.5" />
                             </Button>
-                          )}
+                          ))}
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(page)}>
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setDeletePage(page)}>
+                          {!page.isSystem && <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setDeletePage(page)}>
                             <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
+                          </Button>}
                         </div>
                       </td>
                     </tr>,
@@ -349,6 +364,7 @@ export default function PagesPage() {
                           <div className="flex items-center gap-2 pl-6">
                             <ChevronRight className="w-3.5 h-3.5 text-slate-300" />
                             <span className="text-slate-600">{ml(child.nameJson)}</span>
+                            {child.isSystem && <Badge variant="secondary">{t("pages.system", "Системная")}</Badge>}
                           </div>
                         </td>
                         <td className="px-4 py-3 text-slate-500 font-mono text-xs">{child.icon || "—"}</td>
@@ -368,7 +384,7 @@ export default function PagesPage() {
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" disabled={ci === children.length - 1 || reorderMutation.isPending} onClick={() => move(children, ci, 1)}>
                               <ChevronDown className="w-3.5 h-3.5" />
                             </Button>
-                            {entityForPage(child.id) ? (
+                            {!child.isSystem && (entityForPage(child.id) ? (
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-600" title={t("pages.editEntity", "Редактировать сущность")} onClick={() => navigate(`/admin/entities?edit=${entityForPage(child.id)!.id}`)}>
                                 <Link2 className="w-3.5 h-3.5" />
                               </Button>
@@ -376,13 +392,13 @@ export default function PagesPage() {
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" title={t("pages.bindEntity", "Привязать сущность")} onClick={() => navigate(`/admin/entities?createForPage=${child.id}`)}>
                                 <Unlink className="w-3.5 h-3.5" />
                               </Button>
-                            )}
+                            ))}
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(child)}>
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setDeletePage(child)}>
+                            {!child.isSystem && <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setDeletePage(child)}>
                               <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
+                            </Button>}
                           </div>
                         </td>
                       </tr>
@@ -394,6 +410,8 @@ export default function PagesPage() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
@@ -403,7 +421,8 @@ export default function PagesPage() {
           <div className="space-y-4 py-2">
             <MultilingualInput label={t("pages.colName", "Название")} value={nameJson} onChange={setNameJson} required />
             <MultilingualInput label={t("pages.description", "Описание")} value={descJson} onChange={setDescJson} multiline />
-            <TextDirectionSelect id="page-text-direction" value={textDirection} onChange={setTextDirection} />
+            {editingPage?.isSystem && <p className="text-sm text-slate-500">{t("pages.systemHint", "Системная страница: удаление, отключение, перенос и изменение типа недоступны. Доступ регулируется правами ролей.")}</p>}
+            {!editingPage?.isSystem && <TextDirectionSelect id="page-text-direction" value={textDirection} onChange={setTextDirection} />}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>{t("pages.colIcon", "Иконка")}</Label>
@@ -414,6 +433,7 @@ export default function PagesPage() {
                 <Input type="number" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
               </div>
             </div>
+            {!editingPage?.isSystem && <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>
                 {t("pages.path", "Путь (маршрут)")}
@@ -600,6 +620,7 @@ export default function PagesPage() {
               <Switch checked={isActive} onCheckedChange={setIsActive} id="page-active" />
               <Label htmlFor="page-active">{t("pages.activeInMenu", "Активна (видна в меню)")}</Label>
             </div>
+            </div>}
             <div className="space-y-2">
               <Label>{t("pages.menuDefaultState", "Состояние группы в меню по умолчанию")}</Label>
               <Select value={menuDefaultExpanded ? "expanded" : "collapsed"} onValueChange={v => setMenuDefaultExpanded(v === "expanded")}>
