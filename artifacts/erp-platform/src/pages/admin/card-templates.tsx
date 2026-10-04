@@ -48,6 +48,7 @@ import {
   type CardBlock, type CardBlockKind, type CardLayout, type CardMode, type CardSection, type CardStyle, type LayoutPreset,
 } from "@/lib/cardLayout";
 import { SECTION_GRID, BLOCK_SPAN } from "@/components/CardLayoutView";
+import { cardAppearance } from "@/lib/cardAppearance";
 
 const NO_PAGE = "__entity__";
 type ApiErr = { status?: number; data?: unknown; message?: string };
@@ -607,6 +608,7 @@ function TemplateEditor({ id }: { id: number }) {
   );
 
   const tab = layout.tabs.find(x => x.id === activeTab) ?? layout.tabs[0];
+  const appearance = cardAppearance(layout);
   const entity = entities.find(e => e.id === template.entityId);
   const relationFields = fields.filter(f => f.fieldType === "relation" && f.isActive);
   const selectedBlock = selection.type === "block" ? findBlock(layout, selection.id)?.block : undefined;
@@ -736,16 +738,19 @@ function TemplateEditor({ id }: { id: number }) {
             )}
           </div>
 
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div data-testid="editor-card-preview" data-card-style={layout.style}
+            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+            style={{ ...appearance.root, ...appearance.sections }}>
             {tab.sections.length === 0 && <p className="py-8 text-center text-sm text-slate-400">{t("cards.noSections", "На вкладке нет разделов")}</p>}
             {tab.sections.map((sec, si) => {
               const cols = sec.columns;
               const selected = selection.type === "section" && selection.id === sec.id;
               return (
                 <div key={sec.id} data-testid={`editor-section-${si}`}
+                  style={appearance.section}
                   className={cn("rounded-lg border p-3 transition-colors", selected ? "border-blue-400 bg-blue-50/30" : "border-dashed border-slate-300")}>
                   <div className="mb-2 flex items-center gap-2">
-                    <button type="button" className="min-w-0 flex-1 truncate text-start text-sm font-semibold text-slate-700" onClick={() => setSelection({ type: "section", id: sec.id })} data-testid={`button-select-section-${si}`}>
+                    <button type="button" style={appearance.heading} className="min-w-0 flex-1 truncate text-start text-sm font-semibold text-slate-700" onClick={() => setSelection({ type: "section", id: sec.id })} data-testid={`button-select-section-${si}`}>
                       {ml(sec.title) || <span className="font-normal italic text-slate-400">{t("cards.untitledSection", "Раздел без заголовка")}</span>}
                     </button>
                     {!readOnly && (
@@ -761,7 +766,7 @@ function TemplateEditor({ id }: { id: number }) {
                       </div>
                     )}
                   </div>
-                  <div className={cn("grid gap-2", SECTION_GRID[cols])}
+                  <div data-testid={`editor-section-grid-${si}`} className={cn("grid", SECTION_GRID[cols])} style={appearance.grid}
                     onDragOver={e => allowDrop(e, `${sec.id}:end`)} onDragLeave={() => setDropHint(null)}
                     onDrop={e => dropAt(e, sec.id, sec.blocks.length)}>
                     {sec.blocks.map((b, bi) => {

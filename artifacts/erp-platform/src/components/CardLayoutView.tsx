@@ -3,7 +3,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLang, useML, useT } from "@/lib/i18n";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { cardStyleVars, mlIsEmpty, type CardBlock, type CardLayout, type CardMode } from "@/lib/cardLayout";
+import { mlIsEmpty, type CardBlock, type CardLayout, type CardMode } from "@/lib/cardLayout";
+import { cardAppearance } from "@/lib/cardAppearance";
 
 export const SECTION_GRID: Record<number, string> = {
   1: "grid-cols-1",
@@ -27,7 +28,7 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
   const style = layout.style;
   const custom = style === "custom" ? layout.customStyle : {};
   const visibleBlocks = (blocks: CardBlock[]) => blocks.filter(b => b.modes.includes(mode));
-  const rootStyle = { ...cardStyleVars(layout) } as CSSProperties;
+  const appearance = cardAppearance(layout);
   const gap = style === "compact" ? "gap-x-3 gap-y-2" : "gap-4";
 
   const sectionNode = (section: CardLayout["tabs"][number]["sections"][number]) => {
@@ -44,13 +45,7 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
           style === "sectioned" && "rounded-lg border border-slate-200 bg-slate-50/60 p-4",
           style === "custom" && "card-custom-section",
         )}
-        style={style === "custom" ? {
-          background: custom.sectionBackground ?? undefined,
-          borderRadius: "var(--card-radius, 0.5rem)",
-          border: custom.border ? "1px solid rgb(226 232 240)" : undefined,
-          boxShadow: custom.shadow ? "0 1px 3px rgb(15 23 42 / 0.08), 0 1px 2px rgb(15 23 42 / 0.04)" : undefined,
-          padding: custom.sectionBackground || custom.border || custom.shadow ? "var(--card-gap, 1rem)" : undefined,
-        } : undefined}
+        style={appearance.section}
       >
         {title && (
           <h3
@@ -59,12 +54,12 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
               style === "compact" ? "text-xs uppercase tracking-wide text-slate-500 mb-2" : "text-sm",
               style === "sectioned" && "border-b border-slate-200 pb-2",
             )}
-            style={style === "custom" && custom.accent ? { color: custom.accent } : undefined}
+            style={appearance.heading}
           >
             {title}
           </h3>
         )}
-        <div className={cn("grid min-w-0", SECTION_GRID[cols], gap)} style={style === "custom" && custom.spacing != null ? { gap: "var(--card-gap)" } : undefined}>
+        <div className={cn("grid min-w-0", SECTION_GRID[cols], gap)} style={appearance.grid}>
           {blocks.map(b => (
             <div key={b.id} className={cn("min-w-0", BLOCK_SPAN[Math.min(cols, b.span)])}>
               {renderBlock(b)}
@@ -76,8 +71,7 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
   };
 
   const tabBody = (tab: CardLayout["tabs"][number]) => (
-    <div className={cn("min-w-0", style === "compact" ? "space-y-3" : "space-y-5")}
-      style={style === "custom" && custom.spacing != null ? { display: "flex", flexDirection: "column", gap: "var(--card-gap)" } : undefined}>
+    <div className="min-w-0" style={appearance.sections}>
       {tab.sections.map(sectionNode)}
     </div>
   );
@@ -107,15 +101,7 @@ export function CardLayoutView({ layout, mode, renderBlock }: {
       data-testid="card-layout"
       data-card-style={style}
       className="min-w-0"
-      style={{
-        ...rootStyle,
-        ...(style === "custom" ? {
-          background: custom.background ?? undefined,
-          fontSize: custom.fontSize != null ? "var(--card-font)" : undefined,
-          padding: custom.background ? "var(--card-gap, 1rem)" : undefined,
-          borderRadius: custom.background ? "var(--card-radius, 0.5rem)" : undefined,
-        } : {}),
-      }}
+      style={appearance.root}
     >
       {body}
     </div>

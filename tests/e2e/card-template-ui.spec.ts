@@ -85,6 +85,18 @@ test("builder: custom style uses the shared saved-color palette and clears overr
     return reply([]);
   });
   await page.goto("/admin/card-templates/8");
+  const preview = page.getByTestId("editor-card-preview");
+  const grid = page.getByTestId("editor-section-grid-0");
+  const section = page.getByTestId("editor-section-0");
+  await expect(grid).toHaveCSS("row-gap", "16px");
+  await page.getByTestId("button-style-compact").click();
+  await expect(preview).toHaveAttribute("data-card-style", "compact");
+  await expect(grid).toHaveCSS("row-gap", "8px");
+  await page.getByTestId("button-style-sectioned").click();
+  await expect(section).toHaveCSS("background-color", "rgba(248, 250, 252, 0.6)");
+  await page.getByTestId("button-style-standard").click();
+  await expect(section).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(grid).toHaveCSS("row-gap", "16px");
   await page.getByTestId("button-style-custom").click();
   await expect(page.locator('input[type="color"]')).toHaveCount(0);
   for (const key of ["background", "sectionBackground", "accent"]) {
@@ -95,8 +107,18 @@ test("builder: custom style uses the shared saved-color palette and clears overr
     await page.keyboard.press("Escape");
     await expect(page.locator(".react-colorful")).toHaveCount(0);
     await expect(control.getByRole("textbox")).toHaveValue("#123456");
+    const target = key === "background" ? preview : key === "sectionBackground" ? section : page.getByTestId("button-select-section-0");
+    await expect(target).toHaveCSS(key === "accent" ? "color" : "background-color", "rgb(18, 52, 86)");
   }
+  await page.getByTestId("button-style-standard").click();
+  await expect(preview).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await page.getByTestId("button-style-custom").click();
+  await expect(preview).toHaveCSS("background-color", "rgb(18, 52, 86)");
+  await expect(page.getByTestId("editor-block-blk_title")).toBeVisible();
+  await expect(page.getByTestId("editor-tab-1")).toBeVisible();
   await page.getByTestId("input-style-accent").getByRole("button").last().click();
+  await expect(page.getByTestId("button-select-section-0")).not.toHaveCSS("color", "rgb(18, 52, 86)");
+  await page.screenshot({ path: "screenshots/card-style-live-preview.png" });
   await page.getByTestId("button-save-draft").click();
   await expect.poll(() => saved.length).toBe(1);
   expect(saved[0].layout.customStyle).toEqual({ background: "#123456", sectionBackground: "#123456" });
