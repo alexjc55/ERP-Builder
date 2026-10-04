@@ -2467,9 +2467,12 @@ test("page-local select mappings synchronize entity status atomically", async (t
     });
     await mkdir(UPLOADS_ROOT, { recursive: true });
     for (const action of ["delete", "archive", "unarchive"] as const) {
-      for (const bulk of [false, true]) for (const initiallyScoped of [false, true]) for (const revoke of ["status", "cap", "page", "roles", "status-cas", "visible-cas"] as const) {
-        await t.test(`${action}, bulk=${bulk}, scoped=${initiallyScoped}, revoke=${revoke}`, async () => {
-          const concurrentEdit = revoke === "status-cas" || revoke === "visible-cas";
+      for (const bulk of [false, true]) for (const initiallyScoped of [false, true]) for (const revoke of ["status", "cap", "page", "roles", "status-cas", "visible-cas", "post-cas", "post-cas-visible"] as const) {
+        if (bulk && revoke.startsWith("post-")) continue;
+        await t.test(`${action}, bulk=${bulk}, scoped=${initiallyScoped}, revoke=${revoke}`, async (t) => {
+          const postCas = revoke === "post-cas" || revoke === "post-cas-visible";
+          const visibleConflict = revoke === "visible-cas" || revoke === "post-cas-visible";
+          const concurrentEdit = revoke === "status-cas" || visibleConflict || postCas;
           const rows = await db.insert(entityRecordsTable).values([
             { entityId: ids.entity, statusId: ids.done, valuesJson: { name: "Denied", owner: ids.user },
               archivedAt: action === "unarchive" ? new Date() : null },
@@ -2483,6 +2486,20 @@ test("page-local select mappings synchronize entity status atomically", async (t
           const acquired = new Promise<number>(resolve => { ready = resolve; });
           let holder: Promise<unknown> | undefined;
           let pending: ReturnType<typeof request> | undefined;
+          let completedCasBarrier = false;
+          const transaction = db.transaction.bind(db);
+          // Pause at the actual transaction-return boundary. The real callback,
+          // SQL locks and commit still execute; no query/result is fabricated.
+          const transactionMock = postCas ? t.mock.method(db, "transaction", async (...args: Parameters<typeof db.transaction>) => {
+            const result = await transaction(...args);
+            if (!completedCasBarrier && (result === null || result === undefined)) {
+              completedCasBarrier = true;
+              if (revoke === "post-cas") await db.update(pagesTable).set({ statusScopeJson: {
+                statusIds: [ids.base], includeNoStatus: false, allowAllChanges: true,
+              } }).where(eq(pagesTable.id, ids.targetPage));
+            }
+            return result;
+          }) : undefined;
           const fileDirectory = await mkdtemp(path.join(UPLOADS_ROOT, "policy-guard-"));
           try {
             const fileValue = (name: string) => ({
@@ -2526,6 +2543,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
                   valuesJson: { ...before.denied.valuesJson as Record<string, unknown>, name: "Holder edit" },
                 }).where(eq(entityRecordsTable.id, denied!.id)).returning();
               }
+              return "holder";
             });
             const pid = await Promise.race([acquired, holder.then(() => { throw new Error("holder ended early"); })]);
             pending = request(bulk ? "/records/bulk" : `/records/${denied!.id}${action === "delete" ? "" : `/${action}`}`, {
@@ -2554,7 +2572,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
               ids.revokedRole = role!.id;
               await db.delete(userRolesTable).where(eq(userRolesTable.userId, ids.user));
               await db.update(usersTable).set({ roleId: role!.id }).where(eq(usersTable.id, ids.user));
-            } else if (revoke !== "visible-cas") {
+            } else if (!visibleConflict && !postCas) {
               const next = permissions(revoke === "page" ? [] : [ids.targetPage, ids.sourcePage]);
               if (revoke === "cap") next.records[String(ids.entity)]![action === "delete" ? "delete" : "update"] = false;
               await db.update(rolesTable).set({ permissionsJson: next }).where(eq(rolesTable.id, ids.role));
@@ -2570,9 +2588,10 @@ test("page-local select mappings synchronize entity status atomically", async (t
               before.effects.version = holderRow.version;
             }
             const response = await pending;
-            assert.equal(response.status, bulk ? 200 : revoke === "visible-cas" ? 409 : 404, JSON.stringify(response.body));
+            if (postCas) assert.ok(completedCasBarrier, "must revoke only after the CAS transaction completed");
+            assert.equal(response.status, bulk ? 200 : visibleConflict ? 409 : 404, JSON.stringify(response.body));
             if (!bulk) {
-              assert.deepEqual(response.body, revoke === "visible-cas"
+              assert.deepEqual(response.body, visibleConflict
                 ? { error: "Stale record version", recordId: denied!.id, currentVersion: holderRow.version }
                 : { error: "Record not found" });
             }
@@ -2598,6 +2617,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
             release?.();
             await holder?.catch(() => undefined);
             await pending?.catch(() => undefined);
+            transactionMock?.mock.restore();
             await db.update(rolesTable).set({ permissionsJson: permissions([ids.targetPage, ids.sourcePage]) }).where(eq(rolesTable.id, ids.role));
             await db.update(usersTable).set({ roleId: ids.role }).where(eq(usersTable.id, ids.user));
             await db.insert(userRolesTable).values({ userId: ids.user, roleId: ids.role }).onConflictDoNothing();

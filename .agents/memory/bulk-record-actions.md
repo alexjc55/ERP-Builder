@@ -15,6 +15,9 @@ description: Multi-select record actions — partial archive/delete behavior and
 - Visibility denial takes precedence over a stale destructive-operation version.
   **Why:** A conflict response containing the latest version leaks metadata after a record becomes hidden during the lock wait.
   **How to apply:** Test a holder-authored version increment together with access loss and a visible control. Include only the holder's returned row changes in the expected snapshot, never recapture the baseline after the rejected operation.
+- A destructive conflict response is a protected read, not just an error message.
+  **Why:** Authorization under the mutation lock does not authorize a later standalone version lookup after the transaction ends.
+  **How to apply:** Recheck current grants and row visibility when reading conflict metadata; missing or newly hidden records return a redacted 404. Exercise the transaction-return boundary without replacing real SQL or commits.
 - UI gating has two intentional paths: destructive bulk actions require the visible actions column plus their normal update/delete gate, while atomic **Edit fields** requires only record-update permission plus at least one field the role may edit. **Why:** hiding per-row actions must not remove a safe accountant-style bulk correction. Keep archive/delete/merge out of the edit-only menu.
 - Table layout: the checkbox column is sticky via `insetInlineStart: 0` (works LTR+RTL); existing pinned columns use physical `left`, so the pinned-offset measurement adds the checkbox width in LTR ONLY (in RTL checkbox sticks physically right, pinned stick left — no overlap). Every `<tr>` variant (totals, header, add-row link, adding row, record rows, group headers, empty/loading colSpans) must gain the extra cell/colSpan when bulk mode is on.
 - Selection is pruned to the currently loaded result set on records change, so a bulk action never hits rows the user no longer sees.

@@ -14,6 +14,8 @@ import { bulkErrorLabel } from "@/lib/bulkErrorLabel";
 import {
   useListEntityRecords,
   useGetRecord,
+  getRecord,
+  getEntityRelatedValues,
   getGetRecordQueryKey,
   useCreateEntityRecord,
   useUpdateRecord,
@@ -205,7 +207,7 @@ import { operatorLabel, filterValueToText } from "@/components/ViewConfigEditors
 import { computeRowFormatting, orderedFormatRules, resolveFormattingValue, ruleMatches, type FormatField, type FormatValueField } from "@/lib/formatRules";
 import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput } from "@workspace/api-client-react";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCollaboration, type CollaborationPresence } from "@/lib/useCollaboration";
 import { CollaborationNotice } from "@/components/CollaborationNotice";
 import { useManualDataRefresh } from "@/lib/manualDataRefresh";
@@ -1183,7 +1185,20 @@ function LookupCreatePreview({
       queryKey: getGetRecordQueryKey(linkedRecordId),
     },
   });
-  const value = record
+  const { data: projected } = useQuery({
+    queryKey: ["create-preview-projection", record?.entityId, linkedRecordId],
+    enabled: record != null,
+    queryFn: () => getEntityRelatedValues(record!.entityId, { recordIds: [linkedRecordId] }),
+  });
+  // Read schema only to format an already permission-filtered record value.
+  // Do not infer a user field from a numeric value (ordinary numbers are valid).
+  const { data: sourceFields = [] } = useListEntityFields(record?.entityId ?? 0, {
+    query: { enabled: record != null, queryKey: getListEntityFieldsQueryKey(record?.entityId ?? 0) },
+  });
+  const projection = projected?.values.find(v => v.fieldKey === relatedFieldKey);
+  const projectionMeta = projected?.columns.find(c => c.fieldKey === relatedFieldKey);
+  const sourceField = sourceFields.find(f => f.fieldKey === relatedFieldKey);
+  const value = projection ? projection.value : record
     ? ((record.valuesJson ?? {}) as Record<string, unknown>)[relatedFieldKey]
     : undefined;
   // A create row has no related-values endpoint result yet. Report only the
@@ -1196,17 +1211,15 @@ function LookupCreatePreview({
     return () => onProjectedValueChange({ fieldKey: projectionFieldKey, clear: true });
   }, [linkedRecordId, relatedFieldKey, projectionFieldKey, onProjectedValueChange, value]);
   if (!record) return <span className="text-slate-300 text-xs">—</span>;
-  // `fallbackField` carries the correct related field type from
-  // entityRelatedColMeta, but that map is empty until the page has ≥1 saved row,
-  // so on a first-record create it falls back to "text". The only field type
-  // that stores an OBJECT value is `file` — under the text fallback it would
-  // render as "[object Object]". Detect a file value by shape and render it
-  // properly; every other type is a primitive and renders fine as text. We do
-  // NOT fetch the related entity's field schema here (that endpoint isn't view-
-  // scoped); the value itself already passed the GET /records/:id boundary.
+  // A new record has no column projection metadata yet. Use the source schema
+  // for direct scalars and permission-filtered terminal metadata for chained
+  // lookups. Schema supplies formatting only, never values or authorization.
+  if (!projection && !sourceField) return <span className="text-slate-300 text-xs">—</span>;
   const relField = isFileValue(value)
     ? ({ ...fallbackField, fieldType: "file" } as Field)
-    : fallbackField;
+    : projectionMeta?.relatedFieldType
+      ? { ...fallbackField, fieldType: projectionMeta.relatedFieldType as Field["fieldType"], optionsJson: projectionMeta.optionsJson ?? [] }
+      : sourceField ?? fallbackField;
   return renderCellValue(relField, value, t, userNames, undefined, ml);
 }
 
@@ -11534,10 +11547,9 @@ function QuickCreateRelatedRecordDialog({
   );
   const lockedField = lockedFieldKey ? relFields.find((f: Field) => f.fieldKey === lockedFieldKey) : undefined;
   const lockedIsRelation = lockedField?.fieldType === "relation";
-  const lockedFieldKeys = useMemo(
-    () => new Set<string>(lockedFieldKey ? [lockedFieldKey] : []),
-    [lockedFieldKey],
-  );
+  const [lockedFieldKeys, setLockedFieldKeys] = useState<Set<string>>(new Set());
+  const [contextLoading, setContextLoading] = useState(false);
+  const [contextError, setContextError] = useState("");
 
   // The form's field set is computed EXACTLY like the main record form's
   // visibleFormFields (isActive + sortOrder above, field perms + per-role
@@ -11576,6 +11588,7 @@ function QuickCreateRelatedRecordDialog({
 
   useEffect(() => {
     if (!open) return;
+    let cancelled = false;
     // Same seeding as the main form's openCreate (incl. defaultToToday), plus the
     // locked dependency-filter prefill. A locked RELATION field keeps its linked
     // record id in the form so dependent children can resolve their parent; the
@@ -11590,13 +11603,45 @@ function QuickCreateRelatedRecordDialog({
         : valueToForm(lockedField, lockedValue);
     }
     setForm(initial);
+    setLockedFieldKeys(new Set(lockedFieldKey ? [lockedFieldKey] : []));
+    setContextError("");
+    setContextLoading(true);
+    void (async () => {
+      const locked = new Set<string>(lockedFieldKey ? [lockedFieldKey] : []);
+      let child = lockedField;
+      // Follow authored dependency mappings, never entity names or field labels.
+      while (child?.dependencyConfigJson?.dependsOnFieldKey) {
+        const parentKey = child.dependencyConfigJson.dependsOnFieldKey;
+        const sourceKey = child.dependencyConfigJson.relatedFilterFieldKey;
+        if (locked.has(parentKey)) throw new Error("Циклическая зависимость полей");
+        const parent = relFields.find(f => f.fieldKey === parentKey);
+        const childValue = initial[child.fieldKey];
+        if (!parent || !sourceKey || child.fieldType !== "relation" || !Number(childValue)) {
+          throw new Error("Не удалось определить родительские поля связанной записи");
+        }
+        const source = await getRecord(Number(childValue));
+        const relations = await getEntityRelatedValues(source.entityId, { recordIds: [source.id] });
+        const related = relations.values.find(v => v.fieldKey === sourceKey);
+        const value = parent.fieldType === "relation"
+          ? related?.linkedRecordId
+          : (source.valuesJson as Record<string, unknown>)[sourceKey] ?? related?.value;
+        if (value == null || value === "") throw new Error("Родительская запись недоступна или не заполнена");
+        initial[parentKey] = parent.fieldType === "relation" ? Number(value) : valueToForm(parent, value);
+        locked.add(parentKey);
+        child = parent;
+      }
+      if (!cancelled) { setForm(initial); setLockedFieldKeys(locked); }
+    })().catch(e => { if (!cancelled) setContextError(extractError(e) || "Не удалось загрузить зависимости"); })
+      .finally(() => { if (!cancelled) setContextLoading(false); });
     const def = relStatuses.find((s: Status) => s.isDefault);
     setStatusId(def && !hiddenStatusIds.has(def.id) ? String(def.id) : NO_STATUS);
     setStatusDirty(false);
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, relatedEntityId, relFieldsRaw.length, relStatuses.length]);
+  }, [open, relatedEntityId, relFieldsRaw.length, relStatuses.length, lockedFieldKey, lockedValue]);
 
   const submit = async () => {
+    if (contextLoading || contextError) return;
     setSubmitting(true);
     // Step 1 — create. A failure here means nothing was written.
     let newId: number;
@@ -11612,7 +11657,7 @@ function QuickCreateRelatedRecordDialog({
       const created = await createMutation.mutateAsync({
         entityId: relatedEntityId,
         data: { valuesJson, ...statusPart, ...(pageId != null ? { pageId } : {}),
-          relationSelections: draftRelationSelections(formFields.filter(f => quickFieldAccess(f, relatedEntityId) === "edit" || f.fieldKey === lockedFieldKey), form) },
+          relationSelections: draftRelationSelections(formFields.filter(f => quickFieldAccess(f, relatedEntityId) === "edit" || lockedFieldKeys.has(f.fieldKey)), form) },
       });
       newId = created.id;
       await maybeRenameDriveFiles({ recordId: newId, fields: formFields, values: valuesJson, uploaderEmail: quickUser?.email, pageId });
@@ -11658,7 +11703,7 @@ function QuickCreateRelatedRecordDialog({
             {t("records.dialogDesc", "Заполните поля записи. Обязательные поля помечены звёздочкой.")}
           </DialogDescription>
         </DialogHeader>
-        {fieldsLoading ? (
+        {fieldsLoading || contextLoading ? (
           <div className="py-8 text-center text-sm text-slate-400">{t("common.loading", "Загрузка...")}</div>
         ) : (
           <div className="space-y-4 py-2 min-w-0">
@@ -11712,7 +11757,8 @@ function QuickCreateRelatedRecordDialog({
           <Button data-testid="quick-create-related-cancel" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             {t("common.cancel", "Отмена")}
           </Button>
-          <Button onClick={submit} disabled={submitting || fieldsLoading}>
+          {contextError && <p role="alert" className="text-sm text-red-600">{contextError}</p>}
+          <Button onClick={submit} disabled={submitting || fieldsLoading || contextLoading || !!contextError}>
             {t("common.create", "Создать")}
           </Button>
         </DialogFooter>

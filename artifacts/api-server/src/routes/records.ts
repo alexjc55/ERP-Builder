@@ -5030,8 +5030,7 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
     });
   if (res.headersSent) return;
   if (!deleted) {
-    const [current] = await db.select({ version: entityRecordsTable.version }).from(entityRecordsTable).where(eq(entityRecordsTable.id, params.data.id)).limit(1);
-    res.status(409).json({ error: "Stale record version", recordId: params.data.id, currentVersion: current?.version });
+    await sendDestructiveConflict(req, res, params.data.id, body.data.pageId, "delete");
     return;
   }
 
@@ -5045,6 +5044,23 @@ router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
  * rechecks row visibility after locking, before any dependent/link mutation.
  */
 class DestructiveAccessLostError extends Error {}
+
+/** Reauthorize the conflict read, rather than exposing an unguarded post-CAS version. */
+async function sendDestructiveConflict(
+  req: Request, res: import("express").Response, recordId: number,
+  pageId: number | undefined, action: "delete" | "update",
+): Promise<void> {
+  await db.transaction(async tx => {
+    const [current] = await tx.select().from(entityRecordsTable)
+      .where(eq(entityRecordsTable.id, recordId)).for("share");
+    if (!current) throw new DestructiveAccessLostError();
+    await assertDestructiveVisibility(req, current, pageId, tx, action);
+    res.status(409).json({ error: "Stale record version", recordId, currentVersion: current.version });
+  }).catch(error => {
+    if (!(error instanceof DestructiveAccessLostError)) throw error;
+    res.status(404).json({ error: "Record not found" });
+  });
+}
 
 export async function assertDestructiveVisibility(
   req: import("express").Request,
@@ -5207,7 +5223,7 @@ async function setArchived(
   }
 
   if (expectedVersion != null && existing.version !== expectedVersion) {
-    res.status(409).json({ error: "Stale record version", recordId, currentVersion: existing.version });
+    await sendDestructiveConflict(req, res, recordId, pageId, "update");
     return;
   }
   const record = await applyArchiveFlag(req, existing.entityId, existing.id, archived, expectedVersion, pageId)
@@ -5218,8 +5234,7 @@ async function setArchived(
     });
   if (res.headersSent) return;
   if (!record) {
-    const [current] = await db.select({ version: entityRecordsTable.version }).from(entityRecordsTable).where(eq(entityRecordsTable.id, recordId)).limit(1);
-    res.status(409).json({ error: "Stale record version", recordId, currentVersion: current?.version });
+    await sendDestructiveConflict(req, res, recordId, pageId, "update");
     return;
   }
 
