@@ -594,6 +594,12 @@ async function cleanup() {
 after(async () => { await cleanup(); });
 
 test("page-local select mappings synchronize entity status atomically", async (t) => {
+  // Fixture writes are local-development only, including direct test invocation.
+  const databaseUrl = new URL(process.env.DATABASE_URL!);
+  assert.equal(databaseUrl.hostname, "helium");
+  assert.equal(databaseUrl.pathname, "/heliumdb");
+  assert.notEqual(process.env.NODE_ENV, "production");
+  assert.notEqual(process.env.REPLIT_ENVIRONMENT, "production");
   await setup();
   await t.test("locked destructive visibility needs only one pool connection with uncached mirror context", async (t) => {
     // An isolated pool borrows the same connection configuration without
@@ -2461,8 +2467,9 @@ test("page-local select mappings synchronize entity status atomically", async (t
     });
     await mkdir(UPLOADS_ROOT, { recursive: true });
     for (const action of ["delete", "archive", "unarchive"] as const) {
-      for (const bulk of [false, true]) for (const initiallyScoped of [false, true]) for (const revoke of ["status", "cap", "page", "roles"] as const) {
+      for (const bulk of [false, true]) for (const initiallyScoped of [false, true]) for (const revoke of ["status", "cap", "page", "roles", "status-cas", "visible-cas"] as const) {
         await t.test(`${action}, bulk=${bulk}, scoped=${initiallyScoped}, revoke=${revoke}`, async () => {
+          const concurrentEdit = revoke === "status-cas" || revoke === "visible-cas";
           const rows = await db.insert(entityRecordsTable).values([
             { entityId: ids.entity, statusId: ids.done, valuesJson: { name: "Denied", owner: ids.user },
               archivedAt: action === "unarchive" ? new Date() : null },
@@ -2508,17 +2515,24 @@ test("page-local select mappings synchronize entity status atomically", async (t
               pageFile: await readFile(path.join(fileDirectory, "page.txt"), "utf8"),
             });
             const before = await snapshot();
+            let holderRow = before.denied;
             holder = db.transaction(async tx => {
               await tx.select().from(entityRecordsTable).where(eq(entityRecordsTable.id, denied!.id)).for("update");
               const result = await tx.execute(sql`SELECT pg_backend_pid() AS pid`);
               ready(Number(result.rows[0].pid));
               await gate;
+              if (concurrentEdit) {
+                [holderRow] = await tx.update(entityRecordsTable).set({
+                  valuesJson: { ...before.denied.valuesJson as Record<string, unknown>, name: "Holder edit" },
+                }).where(eq(entityRecordsTable.id, denied!.id)).returning();
+              }
             });
             const pid = await Promise.race([acquired, holder.then(() => { throw new Error("holder ended early"); })]);
             pending = request(bulk ? "/records/bulk" : `/records/${denied!.id}${action === "delete" ? "" : `/${action}`}`, {
               pageId: ids.targetPage,
               ...(bulk ? { entityId: ids.entity, action, recordIds: initiallyScoped
-                ? [allowed!.id, denied!.id] : [denied!.id, allowed!.id] }
+                ? [allowed!.id, denied!.id] : [denied!.id, allowed!.id],
+                expectedVersions: { [denied!.id]: before.denied.version, [allowed!.id]: allowed!.version } }
                 : { expectedVersion: before.denied.version }),
             }, !bulk && action === "delete" ? "DELETE" : "POST");
             let waiting = false;
@@ -2530,7 +2544,7 @@ test("page-local select mappings synchronize entity status atomically", async (t
               await new Promise(resolve => setTimeout(resolve, 10));
             }
             assert.ok(waiting, "mutation must wait on the real record lock");
-            if (revoke === "status") await db.update(pagesTable).set({ statusScopeJson: {
+            if (revoke === "status" || revoke === "status-cas") await db.update(pagesTable).set({ statusScopeJson: {
               statusIds: [ids.base], includeNoStatus: false, allowAllChanges: true,
             } }).where(eq(pagesTable.id, ids.targetPage));
             else if (revoke === "roles") {
@@ -2540,17 +2554,31 @@ test("page-local select mappings synchronize entity status atomically", async (t
               ids.revokedRole = role!.id;
               await db.delete(userRolesTable).where(eq(userRolesTable.userId, ids.user));
               await db.update(usersTable).set({ roleId: role!.id }).where(eq(usersTable.id, ids.user));
-            } else {
+            } else if (revoke !== "visible-cas") {
               const next = permissions(revoke === "page" ? [] : [ids.targetPage, ids.sourcePage]);
               if (revoke === "cap") next.records[String(ids.entity)]![action === "delete" ? "delete" : "update"] = false;
               await db.update(rolesTable).set({ permissionsJson: next }).where(eq(rolesTable.id, ids.role));
             }
             release();
             await holder;
+            if (concurrentEdit) {
+              assert.equal(holderRow.version, before.denied.version + 1, "holder must advance the preflight version");
+              // Only the intentional holder edit belongs in the expected baseline.
+              // Audit/events/files/links remain the pre-request snapshot.
+              before.denied = holderRow;
+              before.effects.valuesJson = holderRow.valuesJson;
+              before.effects.version = holderRow.version;
+            }
             const response = await pending;
-            assert.equal(response.status, bulk ? 200 : 404, JSON.stringify(response.body));
+            assert.equal(response.status, bulk ? 200 : revoke === "visible-cas" ? 409 : 404, JSON.stringify(response.body));
+            if (!bulk) {
+              assert.deepEqual(response.body, revoke === "visible-cas"
+                ? { error: "Stale record version", recordId: denied!.id, currentVersion: holderRow.version }
+                : { error: "Record not found" });
+            }
             if (bulk) {
-              const allowedSucceeds = revoke === "status" || initiallyScoped;
+              assert.equal((response.body.versions as Record<string, number> | undefined)?.[String(denied!.id)], undefined);
+              const allowedSucceeds = revoke === "status" || concurrentEdit || initiallyScoped;
               assert.deepEqual(response.body.failedIds, allowedSucceeds ? [denied!.id] : [denied!.id, allowed!.id]);
               assert.deepEqual(response.body.successIds, allowedSucceeds ? [allowed!.id] : []);
               const [survivor] = await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.id, allowed!.id));
