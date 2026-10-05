@@ -137,6 +137,8 @@ the outbound clear marker, and keep create-time omission separate from updates.
 Include inactive metadata in the same fixture: explicit nulls exposed an older
 linked-editor filtering gap and caused unknown-field rejection. Test metadata
 must not assume that all returned definitions are writable or active.
+The user confirmed that saving works after inactive fields were excluded while
+explicit clearing of active fields was preserved; keep these two rules together.
 
 When one mounted records component changes page/RBAC scope, prior rows and
 related-value projections must be withheld before paint, then refetched under
