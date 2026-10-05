@@ -2623,6 +2623,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /entities/{entityId}/webhook-test:
+    post:
+      operationId: testEntityWebhook
+      tags: [Automations]
+      parameters:
+        - in: path
+          name: entityId
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookTestInput" }
+      responses:
+        "200":
+          description: Delivery outcome; no records or automation runs are created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookTestResult" }
+        "400":
+          description: Invalid URL or input
+        "403":
+          description: Automation administration required
+        "404":
+          description: Entity not found
   /entities/{entityId}/automations:
     get:
       operationId: listEntityAutomations
@@ -9640,6 +9666,20 @@ components:
               sortOrder:
                 type: integer
 
+    WebhookTestInput:
+      type: object
+      required: [url, includeRecord]
+      properties:
+        url: { type: string, format: uri }
+        includeRecord: { type: boolean }
+        language: { type: string, enum: [ru, en, he] }
+    WebhookTestResult:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        statusCode: { type: integer }
+        error: { type: string }
     AutomationRun:
       type: object
       required: [id, automationId, entityId, recordId, status, triggerName, detailJson, createdAt]

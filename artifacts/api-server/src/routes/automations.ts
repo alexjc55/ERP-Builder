@@ -26,6 +26,8 @@ import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import { validateDocumentOutput } from "../lib/document-generation";
 import { relatedStatusTarget } from "../lib/automation-related-status";
+import { buildWebhookTestPayload } from "../lib/webhook-test-payload";
+import { deliverWebhook, validWebhookUrl } from "../lib/webhook-delivery";
 import {
   ListEntityAutomationsParams,
   CreateEntityAutomationParams,
@@ -44,9 +46,27 @@ import {
   UpdateAutomationFolderParams,
   UpdateAutomationFolderBody,
   DeleteAutomationFolderParams,
+  TestEntityWebhookParams,
+  TestEntityWebhookBody,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+router.post("/entities/:entityId/webhook-test", requireAuth, requireAdmin("automations"), async (req, res): Promise<void> => {
+  const params = TestEntityWebhookParams.safeParse(req.params);
+  const input = TestEntityWebhookBody.safeParse(req.body);
+  if (!params.success || !input.success || !validWebhookUrl(input.data.url)) {
+    res.status(400).json({ error: "Invalid webhook URL. Use an HTTP(S) address without credentials." });
+    return;
+  }
+  if (!await entityExists(params.data.entityId)) { res.status(404).json({ error: "Entity not found" }); return; }
+  try {
+    const payload = await buildWebhookTestPayload(params.data.entityId, input.data);
+    res.json(await deliverWebhook(input.data.url, payload));
+  } catch {
+    res.json({ ok: false, error: "payload_error" });
+  }
+});
 
 async function entityExists(entityId: number): Promise<boolean> {
   const [entity] = await db.select({ id: entitiesTable.id }).from(entitiesTable).where(eq(entitiesTable.id, entityId)).limit(1);

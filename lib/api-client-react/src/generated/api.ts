@@ -216,7 +216,9 @@ import type {
   View,
   ViewInput,
   ViewUpdate,
-  ViewsReorderInput
+  ViewsReorderInput,
+  WebhookTestInput,
+  WebhookTestResult
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -9448,6 +9450,72 @@ export const useReorderAutomations = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getReorderAutomationsMutationOptions(options));
+    }
+
+export const getTestEntityWebhookUrl = (entityId: number,) => {
+
+
+
+
+  return `/api/entities/${entityId}/webhook-test`
+}
+
+export const testEntityWebhook = async (entityId: number,
+    webhookTestInput: WebhookTestInput, options?: RequestInit): Promise<WebhookTestResult> => {
+
+  return customFetch<WebhookTestResult>(getTestEntityWebhookUrl(entityId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      webhookTestInput,)
+  }
+);}
+
+
+
+
+export const getTestEntityWebhookMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testEntityWebhook>>, TError,{entityId: number;data: BodyType<WebhookTestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof testEntityWebhook>>, TError,{entityId: number;data: BodyType<WebhookTestInput>}, TContext> => {
+
+const mutationKey = ['testEntityWebhook'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof testEntityWebhook>>, {entityId: number;data: BodyType<WebhookTestInput>}> = (props) => {
+          const {entityId,data} = props ?? {};
+
+          return  testEntityWebhook(entityId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TestEntityWebhookMutationResult = NonNullable<Awaited<ReturnType<typeof testEntityWebhook>>>
+    export type TestEntityWebhookMutationBody = BodyType<WebhookTestInput>
+    export type TestEntityWebhookMutationError = ErrorType<void>
+
+    export const useTestEntityWebhook = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof testEntityWebhook>>, TError,{entityId: number;data: BodyType<WebhookTestInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof testEntityWebhook>>,
+        TError,
+        {entityId: number;data: BodyType<WebhookTestInput>},
+        TContext
+      > => {
+      return useMutation(getTestEntityWebhookMutationOptions(options));
     }
 
 export const getListEntityAutomationsUrl = (entityId: number,) => {

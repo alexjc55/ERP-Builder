@@ -8,12 +8,16 @@ import {
   db,
   entitiesTable,
   entityAutomationsTable,
+  entityFieldsTable,
+  entityRecordsTable,
+  entityAutomationRunsTable,
   pool,
   rolesTable,
   usersTable,
 } from "@workspace/db";
 import { signToken } from "../lib/jwt";
 import automationsRouter from "./automations";
+import { buildWebhookTestPayload } from "../lib/webhook-test-payload";
 
 const runId = `automation-folders-${randomUUID()}`;
 const ids: {
@@ -218,6 +222,31 @@ test("automation folders API and database contract", async (t) => {
       .where(eq(entityAutomationsTable.id, automation.id));
     assert.ok(preserved);
     assert.equal(preserved.folderId, null);
+  });
+
+  await t.test("webhook test is admin-gated, uses schema examples and never creates a record/run", async () => {
+    const path = `/entities/${ids.entityA}/webhook-test`;
+    assert.equal((await request(path, { method: "POST", userId: ids.deniedUser, roleId: ids.deniedRole,
+      body: { url: "http://127.0.0.1", includeRecord: true } })).status, 403);
+    assert.equal((await request(path, { method: "POST",
+      body: { url: "https://secret@example.test", includeRecord: true } })).status, 400);
+    await db.insert(entityFieldsTable).values([
+      { entityId: ids.entityA!, fieldKey: "test_number", fieldType: "number", nameJson: { en: "Number" } },
+      { entityId: ids.entityA!, fieldKey: "test_user", fieldType: "user", nameJson: { en: "User" } },
+    ]);
+    const before = await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.entityId, ids.entityA!));
+    const beforeRuns = await db.select().from(entityAutomationRunsTable).where(eq(entityAutomationRunsTable.entityId, ids.entityA!));
+    const payload = await buildWebhookTestPayload(ids.entityA!, { includeRecord: true, language: "en" });
+    assert.equal(payload.test, true);
+    assert.equal(payload.recordId, 0);
+    assert.equal("values" in payload && payload.values?.test_number, 123.45);
+    assert.deepEqual("fields" in payload && payload.fields?.find(f => f.fieldKey === "test_user")?.resolvedValue, { id: 0, name: "TEST User" });
+    assert.deepEqual(await buildWebhookTestPayload(ids.entityA!, { includeRecord: false }), { test: true, entityId: ids.entityA, recordId: 0 });
+    const result = await request(path, { method: "POST", body: { url: "http://127.0.0.1", includeRecord: true } });
+    assert.equal(result.status, 200);
+    assert.deepEqual(await result.json(), { ok: false, error: "blocked_address" });
+    assert.deepEqual(await db.select().from(entityRecordsTable).where(eq(entityRecordsTable.entityId, ids.entityA!)), before);
+    assert.deepEqual(await db.select().from(entityAutomationRunsTable).where(eq(entityAutomationRunsTable.entityId, ids.entityA!)), beforeRuns);
   });
 
   await t.test("entity deletion cascades its folders", async () => {

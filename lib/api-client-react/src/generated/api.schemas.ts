@@ -4558,6 +4558,27 @@ export interface CustomFiltersReorderInput {
   items: CustomFiltersReorderInputItemsItem[];
 }
 
+export type WebhookTestInputLanguage = typeof WebhookTestInputLanguage[keyof typeof WebhookTestInputLanguage];
+
+
+export const WebhookTestInputLanguage = {
+  ru: 'ru',
+  en: 'en',
+  he: 'he',
+} as const;
+
+export interface WebhookTestInput {
+  url: string;
+  includeRecord: boolean;
+  language?: WebhookTestInputLanguage;
+}
+
+export interface WebhookTestResult {
+  ok: boolean;
+  statusCode?: number;
+  error?: string;
+}
+
 export type AutomationRunDetailJson = { [key: string]: unknown };
 
 export interface AutomationRun {

@@ -7448,6 +7448,23 @@ export const ReorderAutomationsResponse = zod.object({
 })
 
 
+export const TestEntityWebhookParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const TestEntityWebhookBody = zod.object({
+  "url": zod.string().url(),
+  "includeRecord": zod.boolean(),
+  "language": zod.enum(['ru', 'en', 'he']).optional()
+})
+
+export const TestEntityWebhookResponse = zod.object({
+  "ok": zod.boolean(),
+  "statusCode": zod.number().optional(),
+  "error": zod.string().optional()
+})
+
+
 /**
  * @summary List automations for an entity
  */

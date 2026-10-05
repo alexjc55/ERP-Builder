@@ -5,6 +5,12 @@ description: Where automation trigger/condition/action/mapping types live, and h
 
 ## Outgoing webhook display boundary
 
+Webhook test buttons send synthetic schema examples, not an existing production record, and do not save the automation or create an ERP record/run.
+
+**Why:** The user requested test data matching the entity structure directly beside the URL. Testing destination wiring must not disclose real client records or run unrelated automation actions.
+
+**How to apply:** Use the current unsaved URL/settings, mark the payload `test: true`, preserve the outgoing payload's types/namespaces, warn that the receiver may execute its scenario, and never automatically retry ambiguous delivery failures.
+
 Keep legacy raw values separate from versioned typed/display projections.
 **Why:** downstream receivers need names, labels and nonnumeric formula results without breaking integrations that rely on stored IDs. Automation exports are system-authoritative, not a snapshot of one viewer's filtered table.
 **How to apply:** use shared typed formula materializers, preserve page namespaces, reload at the webhook action after prior mutations, and never make private files public. Capture the current browser origin when saving webhook settings; do not ask administrators to enter it manually. The user chose automatic capture to avoid confusing duplicate configuration; scheduled delivery must use the saved origin rather than guessing a deployment URL.

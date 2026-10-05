@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, type ReactElement } from "react";
 import { useParams, useLocation } from "wouter";
+import { WebhookTestButton } from "@/components/WebhookTestButton";
 import {
   useListEntityAutomationFolders,
   getListEntityAutomationFoldersQueryKey,
@@ -1931,6 +1932,8 @@ function ActionCard({
       {draft.type === "webhook" && (
         <div className="space-y-2 pl-7">
           <Input value={draft.url} onChange={(e) => onChange({ url: e.target.value })} placeholder="https://example.com/hook" />
+          <WebhookTestButton entityId={currentEntityId} url={draft.url}
+            includeRecord={draft.includeRecord} language={draft.webhookLanguage} />
           <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
             <Checkbox checked={draft.includeRecord} onCheckedChange={(v) => onChange({ includeRecord: v === true })} />
             {t("auto.includeRecord", "Передавать данные записи")}
