@@ -5,6 +5,12 @@ description: Where automation trigger/condition/action/mapping types live, and h
 
 ## Outgoing webhook display boundary
 
+Keep a homogeneous file-link section alongside polymorphic field projections for schema-inference consumers such as Make; test and real sends must use the same projection-to-file conversion.
+
+**Why:** The user's Make screenshot showed a linked file's nested `resolvedValue` inferred as a scalar because other elements in `fields[]` contained scalar values. Re-detecting the same heterogeneous schema is not a reliable remedy.
+
+**How to apply:** Preserve legacy fields, expose stable per-field file arrays, isolate page-local names to avoid collisions, and retain download-authentication requirements. Never make protected files public just to simplify mapping.
+
 Webhook test buttons send synthetic schema examples, not an existing production record, and do not save the automation or create an ERP record/run.
 
 **Why:** The user requested test data matching the entity structure directly beside the URL. Testing destination wiring must not disclose real client records or run unrelated automation actions.

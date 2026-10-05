@@ -8,6 +8,7 @@ import {
   automationActionSchema,
 } from "@workspace/db";
 import { buildAutomationWebhookPayload } from "./automation-webhook-payload";
+import { buildWebhookTestPayload } from "./webhook-test-payload";
 
 // Explicit opt-in: this suite inserts and removes isolated fixtures, never migrates.
 test("versioned webhook latest values, projections and backward compatibility", {
@@ -36,6 +37,8 @@ test("versioned webhook latest values, projections and backward compatibility", 
       { entityId: a!.id, fieldKey: "name", fieldType: "text", nameJson: { en: "Name" } },
       { entityId: a!.id, fieldKey: "missing", fieldType: "text" },
       { entityId: a!.id, fieldKey: "attachment", fieldType: "file" },
+      { entityId: a!.id, fieldKey: "order_file", fieldType: "lookup", relationConfigJson: { relationId: relation!.id, relatedFieldKey: "order_file" } },
+      { entityId: b!.id, fieldKey: "order_file", fieldType: "file" },
       { entityId: a!.id, fieldKey: "flag", fieldType: "boolean" },
       { entityId: a!.id, fieldKey: "choice", fieldType: "select", optionsJson: [{ value: "stable", labelJson: { en: "Current label", ru: "Метка" } }] },
       { entityId: a!.id, fieldKey: "person", fieldType: "user" },
@@ -62,7 +65,9 @@ test("versioned webhook latest values, projections and backward compatibility", 
       { pageId: pageB!.id, fieldKey: "computed", fieldType: "function", formulaConfigJson: { expression: '"page text"' } },
     ]);
     const [record] = await db.insert(entityRecordsTable).values({ entityId: a!.id, valuesJson: { name: "Before", flag: false, choice: "stable", person: userId } }).returning();
-    const [linked] = await db.insert(entityRecordsTable).values({ entityId: b!.id, valuesJson: { person: userId } }).returning();
+    const [linked] = await db.insert(entityRecordsTable).values({ entityId: b!.id, valuesJson: {
+      person: userId, order_file: { kind: "link", name: "Order.pdf", url: "https://example.test/order.pdf" },
+    } }).returning();
     await db.insert(recordLinksTable).values({ relationId: relation!.id, relationType: "many_to_many", sourceRecordId: record!.id, targetRecordId: linked!.id });
     await db.insert(pageRecordValuesTable).values({ pageId: page!.id, recordId: record!.id, valuesJson: { name: "Page name" } });
     await db.insert(pageRecordValuesTable).values({ pageId: secondPage!.id, recordId: record!.id, valuesJson: { name: "Second page name" } });
@@ -72,6 +77,14 @@ test("versioned webhook latest values, projections and backward compatibility", 
     const payload = await buildAutomationWebhookPayload(a!.id, record!.id, { includeRecord: true, language: "en" });
     assert.ok("fields" in payload && payload.fields);
     assert.equal(payload.schemaVersion, 2);
+    assert.deepEqual(payload.files!.order_file, [{
+      kind: "link", name: "Order.pdf", url: "https://example.test/order.pdf", requiresAuthentication: false, fileId: "",
+    }]);
+    assert.deepEqual(payload.files!.attachment, []);
+    const example = await buildWebhookTestPayload(a!.id, { includeRecord: true });
+    assert.ok("files" in example && example.files?.order_file?.[0]);
+    assert.deepEqual(Object.keys(example.files.order_file[0]).sort(), Object.keys(payload.files!.order_file![0]!).sort());
+    assert.equal(example.files.order_file[0].url, "https://example.invalid/test.txt");
     const field = (key: string) => payload.fields!.find((f) => f.key === key)!;
     const entity = (key: string) => field(`entity:${a!.id}.${key}`);
     assert.equal(payload.values!.name, "After");
@@ -138,6 +151,7 @@ test("versioned webhook latest values, projections and backward compatibility", 
       kind: "server", name: "PDF", url: "https://configured-origin.example.test/api/storage/local/files/test.pdf",
       requiresAuthentication: true,
     });
+    assert.deepEqual(configuredPayload.files!.attachment, [{ ...file!.resolvedValue as object, fileId: "" }]);
   } finally {
     if (pageIds.length) await db.delete(pagesTable).where(inArray(pagesTable.id, pageIds));
     if (entityIds.length) await db.delete(entitiesTable).where(inArray(entitiesTable.id, entityIds));

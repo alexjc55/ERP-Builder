@@ -8,6 +8,7 @@ import { loadFormulaOptions, materializeVisibleEntityFormulas, materializeVisibl
 import { webhookDisplay, webhookFile, webhookLabel, type WebhookLanguage } from "./automation-webhook-display";
 import { applyFormulaGroupResults, formulaGroupResultWinners, secureFormulaGroupConfigs } from "./formula-group-result";
 import { aggregateLinkedValues } from "./linked-formula-resolver";
+import { webhookFileAliases } from "./automation-webhook-files";
 
 type Field = EntityField | PageField;
 type RecordRow = typeof entityRecordsTable.$inferSelect;
@@ -292,8 +293,9 @@ export async function buildAutomationWebhookPayload(
       .filter((v) => v != null && v !== "")
       .map((v) => typeof v === "object" ? JSON.stringify(v) : String(v));
   }
+  const allFields = [...entityFields, ...contextualEntityFormulas, ...localFields];
   const payload = { entityId, recordId, values: legacyValues, statusId: current.statusId, schemaVersion: 2,
-    language, pageId: null, fields: [...entityFields, ...contextualEntityFormulas, ...localFields] };
+    language, pageId: null, fields: allFields, ...webhookFileAliases(allFields) };
   if (Buffer.byteLength(JSON.stringify(payload)) > 2_000_000) throw new Error("Webhook payload exceeds 2 MB");
   return payload;
 }
