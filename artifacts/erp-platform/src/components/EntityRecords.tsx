@@ -10561,7 +10561,7 @@ function EntityRelationLinkPicker({
           type="button"
           data-testid={`entity-relation-picker-${fieldKey}`}
           disabled={triggerDisabled || disabled}
-          className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-start hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+          className="flex w-full items-center justify-between gap-2 -mx-1 rounded px-1 text-start hover:bg-blue-50/60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
           title={
             gated
               ? t("records.relatedPickParentFirst", "Сначала заполните родительское поле")
