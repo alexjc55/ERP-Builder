@@ -1066,8 +1066,8 @@ function formatTotalValue(
   return <AffixedNumericValue config={field.formulaConfigJson}>{s}</AffixedNumericValue>;
 }
 
-/** Build the payload values object from form state, dropping empty optional values. */
-function formToValues(fields: Field[], form: FormState): Record<string, unknown> {
+/** Creates omit blanks; updates must explicitly clear blanks (omission preserves stored values). */
+function formToValues(fields: Field[], form: FormState, clearEmpty = false): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const field of fields) {
     // Derived/read-only field types never carry a stored value in valuesJson:
@@ -1087,7 +1087,11 @@ function formToValues(fields: Field[], form: FormState): Record<string, unknown>
       out[field.fieldKey] = Boolean(raw);
       continue;
     }
-    if (raw === "" || raw === undefined || raw === null) continue;
+    if (raw === undefined) continue;
+    if (raw === "" || raw === null) {
+      if (clearEmpty) out[field.fieldKey] = null;
+      continue;
+    }
     if (field.fieldType === "number" || field.fieldType === "percent") {
       out[field.fieldKey] = Number(raw);
     } else {
@@ -5911,7 +5915,11 @@ export function EntityRecords({
   const handleSubmit = ({ dialogRelationEditing, form, statusId, editing, statusDirty }: RecordDialogState) => {
     if (dialogRelationEditing) return;
     // Only send fields the user can see; hidden/view-only are preserved server-side.
-    const valuesJson = formToValues(visibleFormFields, form);
+    const valuesJson = formToValues(
+      visibleFormFields.filter((f: Field) => effFieldAccess(f) === "edit"),
+      form,
+      !!editing,
+    );
     const statusValue = statusId === NO_STATUS ? null : Number(statusId);
     if (editing) {
       void (async () => {
@@ -11530,6 +11538,7 @@ function RecordEditModal({
     const valuesJson = formToValues(
       visibleFields.filter((f: Field) => fieldAccess(f, entityId) === "edit"),
       form,
+      true,
     );
     const statusValue = statusId === NO_STATUS ? null : Number(statusId);
     try {

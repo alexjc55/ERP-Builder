@@ -124,6 +124,17 @@ Changing the version alone would hide conflicts and risk overwriting newer data.
 **How to apply:** Block editing until the opening read succeeds, reject late
 responses after close/record switches, and keep genuine CAS conflicts explicit.
 
+Editor regression tests must use the real form serializer and model server
+merge semantics: omitted fields preserve their stored values, explicit blanks
+clear them. Do not substitute a pass-through serializer or full replacement.
+
+**Why:** A linked-editor browser test passed deletion with both shortcuts, while
+the actual serializer dropped the cleared comment and the server kept old text.
+The user reproduced the failure immediately after the claimed fix.
+
+**How to apply:** Cover clear/save/reopen as well as populated updates, assert
+the outbound clear marker, and keep create-time omission separate from updates.
+
 When one mounted records component changes page/RBAC scope, prior rows and
 related-value projections must be withheld before paint, then refetched under
 the new scope.

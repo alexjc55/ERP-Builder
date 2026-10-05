@@ -5,12 +5,33 @@ import { execFileSync } from "node:child_process";
 import { transformWithEsbuild } from "vite";
 import { chromium } from "@playwright/test";
 
+test("real form serializer distinguishes clearing from omission and creation", async () => {
+  const source = readFileSync(new URL("./EntityRecords.tsx", import.meta.url), "utf8");
+  const converter = source.slice(source.indexOf("function formToValues("), source.indexOf("\nfunction renderCellValue("));
+  const { code } = await transformWithEsbuild(converter, "formToValues.ts");
+  const convert = new Function(code + "\nreturn formToValues;")();
+  const fields = [
+    { fieldKey: "comment", fieldType: "text" },
+    { fieldKey: "amount", fieldType: "number" },
+    { fieldKey: "percent", fieldType: "percent" },
+    { fieldKey: "missing", fieldType: "text" },
+    { fieldKey: "computed", fieldType: "function" },
+    { fieldKey: "flag", fieldType: "boolean" },
+  ];
+  const empty = { comment: "", amount: "", percent: null, computed: "", flag: false };
+  assert.deepEqual(convert(fields, empty, true), { comment: null, amount: null, percent: null, flag: false });
+  assert.deepEqual(convert(fields, empty), { flag: false });
+  assert.deepEqual(convert(fields, { comment: "8551\nhttps://example.test/doc", amount: 0, percent: "0", flag: false }, true),
+    { comment: "8551\nhttps://example.test/doc", amount: 0, percent: 0, flag: false });
+});
+
 // Exercise the actual component with controlled network and form dependencies.
 // No database reads/writes or automation deliveries.
 test("linked editor reopens with fresh values/version, clears comments, and preserves conflicts", async () => {
   const source = readFileSync(new URL("./EntityRecords.tsx", import.meta.url), "utf8");
   const component = source.slice(source.indexOf("function RecordEditModal("), source.indexOf("\n/**", source.indexOf("function RecordEditModal(")));
-  const { code } = await transformWithEsbuild(component, "RecordEditModal.tsx", { jsx: "transform" });
+  const converter = source.slice(source.indexOf("function formToValues("), source.indexOf("\nfunction renderCellValue("));
+  const { code } = await transformWithEsbuild(converter + "\n" + component, "RecordEditModal.tsx", { jsx: "transform" });
   const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM_PATH ?? execFileSync("which", ["chromium"], { encoding: "utf8" }).trim() });
   try {
     const page = await browser.newPage();
@@ -40,12 +61,12 @@ test("linked editor reopens with fresh values/version, clears comments, and pres
         useListEntities: () => ({ data: [] }), useListUserOptions: () => ({ data: [] }),
         canManuallyEditStatus: () => true,
         valueToForm: (_field, value) => value ?? "",
-        formToValues: (_fields, form) => form,
         maybeRenameDriveFiles: async () => {},
         useUpdateRecord: () => ({ mutateAsync: async ({ data }) => {
           window.fixture.writes.push(structuredClone(data));
           if (data.expectedVersion !== window.fixture.record.version) throw Object.assign(new Error("conflict"), { status: 409 });
-          window.fixture.record.valuesJson = structuredClone(data.valuesJson);
+          // Match PUT semantics: an omitted key leaves the stored value intact.
+          window.fixture.record.valuesJson = { ...window.fixture.record.valuesJson, ...structuredClone(data.valuesJson) };
           window.fixture.record.version++;
         } }),
         CardTemplateSnapshot: ({ children }) => children({ status: "ready", layout: null }),
@@ -82,9 +103,11 @@ test("linked editor reopens with fresh values/version, clears comments, and pres
     await save.click();
     await input.waitFor({ state: "hidden" });
     assert.deepEqual(await page.evaluate(() => window.fixture.writes.map(w => w.expectedVersion)), [1, 2]);
-    assert.equal(await page.evaluate(() => window.fixture.record.valuesJson.comment), "");
+    assert.equal(await page.evaluate(() => window.fixture.writes[1].valuesJson.comment), null);
+    assert.equal(await page.evaluate(() => window.fixture.record.valuesJson.comment), null);
     await page.evaluate(() => window.openEditor());
     await input.waitFor();
+    assert.equal(await input.inputValue(), "");
     await input.fill("keep my draft");
     await page.evaluate(() => window.fixture.record.version++);
     await save.click();
