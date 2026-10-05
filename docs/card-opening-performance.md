@@ -196,6 +196,42 @@ CARD_PROFILE=1 corepack pnpm exec playwright test tests/e2e/card-presentation.sp
 ```
 
 This change is frontend-only; no API rebuild or SQL migration is required for it.
-The owner still needs to update/rebuild the remote frontend before repeating the
-browser diagnostic there. The recorded remote 1118–1176 ms pre-request interval
-belongs to the previous frontend, not this optimization.
+The recorded remote 1118–1176 ms pre-request interval belongs to the previous
+frontend, not this optimization. The subsequent remote check is recorded below.
+
+## Remote Firefox verification — 2026-10-05 (Asia/Jerusalem)
+
+Read-only inspection of the public HTML and its referenced assets confirmed the
+updated frontend: JS `index-DTsZxJYH.js` contains `erp-table-scroll`, and CSS
+`index-BRftCpHS.css` includes the scoped scrollbar variable. The CSS also contains
+the corrected disabled-cursor selectors. No remote server or data was modified.
+
+The user repeated the same browser diagnostic on the working table in Firefox:
+
+| Opening | Before request | Request | After response | Total | Server auth | Server data |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 890 | 159 | 74 | 1123 | 5 | 4 |
+| 2 | 863 | 152 | 34 | 1049 | 4 | 3 |
+| 3 | 864 | 153 | 56 | 1073 | 5 | 4 |
+
+All values are milliseconds. Firefox reported `longTasks` and `blockedMs` as
+`unsupported`; this is not evidence of zero main-thread blocking.
+
+Median total improved from 1345 to 1073 ms (20.2%). Median pre-request time
+improved from 1152 to 864 ms (25%). The first measured opening improved from
+1365 to 1123 ms (17.7%); it is not a guaranteed cold-cache measurement.
+The two repeat openings improved from 1345/1311 to 1049/1073 ms.
+
+The optimization is confirmed on the user's remote table, but opening still
+takes about 1.05–1.12 seconds. Around 80% of elapsed time precedes the request.
+Request duration includes more than backend processing: the reported server
+phases total only 7–9 ms. Three samples are a directional comparison, not a
+statistical performance guarantee. Local Chromium improvements must not be
+substituted for these Firefox results.
+
+Remaining work: collect a privacy-safe Firefox profile on a representative
+fixture, distinguishing React work, style recalculation, layout and native focus.
+These phase timings alone cannot identify which browser operation dominates.
+Preserve fresh resolution, permissions, modal pointer/scroll/focus protections,
+draft values and conflict behavior. No further runtime changes were made as
+part of this verification.
