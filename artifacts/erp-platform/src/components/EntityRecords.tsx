@@ -11452,9 +11452,24 @@ function RecordEditModal({
   const ml = useML();
   const { toast } = useToast();
   const { fieldAccess, user } = useAuth();
-  const { data: record, isLoading: recordLoading } = useGetRecord(recordId, {
-    query: { enabled: open, queryKey: getGetRecordQueryKey(recordId) },
-  });
+  // An editor needs one fresh, consistent values/version snapshot per opening.
+  // Cached data followed by a background refetch must not seed a stale draft.
+  const [record, setRecord] = useState<Awaited<ReturnType<typeof getRecord>>>();
+  const [recordError, setRecordError] = useState<string>();
+  useLayoutEffect(() => {
+    setRecord(undefined);
+    setRecordError(undefined);
+    if (!open) return;
+    const controller = new AbortController();
+    void getRecord(recordId, { signal: controller.signal }).then(
+      (fresh) => { if (!controller.signal.aborted) setRecord(fresh); },
+      (error: unknown) => {
+        if (!controller.signal.aborted) setRecordError(error instanceof Error ? error.message : String(error));
+      },
+    );
+    return () => controller.abort();
+  }, [open, entityId, recordId]);
+  const recordLoading = open && !record && !recordError;
   const { data: fields = [], isLoading: fieldsLoading } = useListEntityFields(entityId);
   const { data: statuses = [] } = useListEntityStatuses(entityId);
   const { data: entities = [] } = useListEntities();
@@ -11496,7 +11511,7 @@ function RecordEditModal({
   );
 
   useEffect(() => {
-    if (!open || !record) return;
+    if (!open || !record || fieldsLoading) return;
     const values = (record.valuesJson ?? {}) as Record<string, unknown>;
     const initial: FormState = {};
     for (const f of fields) initial[f.fieldKey] = valueToForm(f, values[f.fieldKey]);
@@ -11507,10 +11522,10 @@ function RecordEditModal({
     draftVersionRef.current = record.version;
     setRelationEditing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, record?.id, fields.length]);
+  }, [open, record, fieldsLoading, fields.length]);
 
   const submit = async () => {
-    if (relationEditing) return;
+    if (relationEditing || !record || recordError || fieldsLoading || submitting) return;
     setSubmitting(true);
     const valuesJson = formToValues(
       visibleFields.filter((f: Field) => fieldAccess(f, entityId) === "edit"),
@@ -11562,11 +11577,13 @@ function RecordEditModal({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             {t("records.cancel", "Отмена")}
           </Button>
-          <Button onClick={submit} disabled={submitting || loading || relationEditing || cardSnapshot.status !== "ready"} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={submit} disabled={submitting || loading || !record || !!recordError || relationEditing || cardSnapshot.status !== "ready"} className="bg-blue-600 hover:bg-blue-700">
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : t("records.save", "Сохранить")}
           </Button>
         </>}>
-        {loading ? (
+        {recordError ? (
+          <div role="alert" className="py-8 text-sm text-red-600">{recordError}</div>
+        ) : loading ? (
           <div className="py-8 text-center text-sm text-slate-400">{t("common.loading", "Загрузка...")}</div>
         ) : (
           <div className="space-y-4 py-2 min-w-0">

@@ -113,6 +113,17 @@ even though the relation had already changed.
 store the latest token in a ref (state may mirror it for rendering), and read the
 ref at submit time. Release nested-edit blocking on success, failure, and cancel.
 
+Initialize a linked-record editor from a fresh values/version pair on every
+opening, not from cached detail data while a background refetch is pending.
+After initialization, background reads must not overwrite the user's draft.
+
+**Why:** Cached values made a saved comment appear lost when reopening the same
+record, and the cached version could cause a false 409 on the following save.
+Changing the version alone would hide conflicts and risk overwriting newer data.
+
+**How to apply:** Block editing until the opening read succeeds, reject late
+responses after close/record switches, and keep genuine CAS conflicts explicit.
+
 When one mounted records component changes page/RBAC scope, prior rows and
 related-value projections must be withheld before paint, then refetched under
 the new scope.
