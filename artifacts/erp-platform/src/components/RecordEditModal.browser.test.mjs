@@ -17,10 +17,16 @@ test("real form serializer distinguishes clearing from omission and creation", a
     { fieldKey: "missing", fieldType: "text" },
     { fieldKey: "computed", fieldType: "function" },
     { fieldKey: "flag", fieldType: "boolean" },
-  ];
+  ].map(field => ({ ...field, isActive: true }));
+  fields.push({ fieldKey: "crm_deal_id", fieldType: "text", isActive: false });
+  fields.push({ fieldKey: "inactive_flag", fieldType: "boolean", isActive: false });
   const empty = { comment: "", amount: "", percent: null, computed: "", flag: false };
   assert.deepEqual(convert(fields, empty, true), { comment: null, amount: null, percent: null, flag: false });
   assert.deepEqual(convert(fields, empty), { flag: false });
+  for (const value of ["", null, "legacy-value"]) {
+    assert.deepEqual(convert(fields, { ...empty, crm_deal_id: value, inactive_flag: true }, true),
+      { comment: null, amount: null, percent: null, flag: false });
+  }
   assert.deepEqual(convert(fields, { comment: "8551\nhttps://example.test/doc", amount: 0, percent: "0", flag: false }, true),
     { comment: "8551\nhttps://example.test/doc", amount: 0, percent: 0, flag: false });
 });
@@ -42,7 +48,10 @@ test("linked editor reopens with fresh values/version, clears comments, and pres
       const { default: { createRoot } } = await import("/node_modules/.vite/deps/react-dom_client.js");
       document.body.innerHTML = '<div id="test-root"></div>';
       const h = React.createElement;
-      const fields = [{ fieldKey: "comment", fieldType: "text", isActive: true, showInTable: false }];
+      const fields = [
+        { fieldKey: "comment", fieldType: "text", isActive: true, showInTable: false },
+        { fieldKey: "crm_deal_id", fieldType: "text", isActive: false },
+      ];
       window.fixture = { record: { id: 3715, entityId: 72, version: 1, valuesJson: { comment: "" } }, writes: [], reads: 0, toasts: [], failRead: false };
       const deps = {
         React, useState: React.useState, useEffect: React.useEffect,
@@ -64,6 +73,11 @@ test("linked editor reopens with fresh values/version, clears comments, and pres
         maybeRenameDriveFiles: async () => {},
         useUpdateRecord: () => ({ mutateAsync: async ({ data }) => {
           window.fixture.writes.push(structuredClone(data));
+          for (const key of Object.keys(data.valuesJson)) {
+            if (!fields.some(field => field.isActive && field.fieldKey === key)) {
+              throw new Error(`Unknown field: ${key}`);
+            }
+          }
           if (data.expectedVersion !== window.fixture.record.version) throw Object.assign(new Error("conflict"), { status: 409 });
           // Match PUT semantics: an omitted key leaves the stored value intact.
           window.fixture.record.valuesJson = { ...window.fixture.record.valuesJson, ...structuredClone(data.valuesJson) };

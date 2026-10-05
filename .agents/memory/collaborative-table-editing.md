@@ -134,6 +134,9 @@ The user reproduced the failure immediately after the claimed fix.
 
 **How to apply:** Cover clear/save/reopen as well as populated updates, assert
 the outbound clear marker, and keep create-time omission separate from updates.
+Include inactive metadata in the same fixture: explicit nulls exposed an older
+linked-editor filtering gap and caused unknown-field rejection. Test metadata
+must not assume that all returned definitions are writable or active.
 
 When one mounted records component changes page/RBAC scope, prior rows and
 related-value projections must be withheld before paint, then refetched under

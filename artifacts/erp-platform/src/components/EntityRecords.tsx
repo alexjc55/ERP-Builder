@@ -1070,6 +1070,9 @@ function formatTotalValue(
 function formToValues(fields: Field[], form: FormState, clearEmpty = false): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const field of fields) {
+    // Field metadata includes inactive definitions, but record writes accept
+    // active keys only. Never send even a null/false for inactive fields.
+    if (!field.isActive) continue;
     // Derived/read-only field types never carry a stored value in valuesJson:
     // function (computed), relation (linked record) and lookup (projected from a
     // linked record). The server drops them anyway, but we must not let the UI
@@ -11499,7 +11502,7 @@ function RecordEditModal({
   // RecordFormBody (the shared editor body), not here.
   const { data: userOptions = [] } = useListUserOptions();
 
-  const visibleFields = fields.filter((f: Field) => fieldAccess(f, entityId) !== "hidden");
+  const visibleFields = fields.filter((f: Field) => f.isActive && fieldAccess(f, entityId) !== "hidden");
 
   // Cosmetic mirror of the related entity's per-role status visibility (same rule
   // as the main editor). superAdmin sees everything; the record's CURRENT status is
