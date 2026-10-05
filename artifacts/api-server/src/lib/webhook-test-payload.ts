@@ -2,6 +2,7 @@ import { db, entityFieldsTable, pageFieldsTable, pagesTable, relationsTable } fr
 import { and, eq, inArray } from "drizzle-orm";
 import { webhookDisplay, webhookFile, webhookLabel, type WebhookLanguage } from "./automation-webhook-display";
 import { webhookFileAliases } from "./automation-webhook-files";
+import { webhookDisplayValues } from "./automation-webhook-values";
 
 type Field = typeof entityFieldsTable.$inferSelect | typeof pageFieldsTable.$inferSelect;
 type Options = { includeRecord: boolean; language?: WebhookLanguage };
@@ -89,5 +90,5 @@ export async function buildWebhookTestPayload(entityId: number, options: Options
   }
   return { test: true, entityId, recordId: 0,
     values: Object.fromEntries(defs.map(f => [f.fieldKey, ["relation", "lookup"].includes(f.fieldType) ? ["TEST"] : syntheticFieldValue(f)])),
-    statusId: null, schemaVersion: 2, language, pageId: null, fields, ...webhookFileAliases(fields) };
+    statusId: null, schemaVersion: 2, language, pageId: null, fields, ...webhookFileAliases(fields), ...webhookDisplayValues(fields) };
 }

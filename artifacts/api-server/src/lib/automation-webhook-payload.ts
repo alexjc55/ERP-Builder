@@ -9,6 +9,7 @@ import { webhookDisplay, webhookFile, webhookLabel, type WebhookLanguage } from 
 import { applyFormulaGroupResults, formulaGroupResultWinners, secureFormulaGroupConfigs } from "./formula-group-result";
 import { aggregateLinkedValues } from "./linked-formula-resolver";
 import { webhookFileAliases } from "./automation-webhook-files";
+import { webhookDisplayValues } from "./automation-webhook-values";
 
 type Field = EntityField | PageField;
 type RecordRow = typeof entityRecordsTable.$inferSelect;
@@ -295,7 +296,7 @@ export async function buildAutomationWebhookPayload(
   }
   const allFields = [...entityFields, ...contextualEntityFormulas, ...localFields];
   const payload = { entityId, recordId, values: legacyValues, statusId: current.statusId, schemaVersion: 2,
-    language, pageId: null, fields: allFields, ...webhookFileAliases(allFields) };
+    language, pageId: null, fields: allFields, ...webhookFileAliases(allFields), ...webhookDisplayValues(allFields) };
   if (Buffer.byteLength(JSON.stringify(payload)) > 2_000_000) throw new Error("Webhook payload exceeds 2 MB");
   return payload;
 }

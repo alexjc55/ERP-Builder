@@ -5,6 +5,12 @@ description: Where automation trigger/condition/action/mapping types live, and h
 
 ## Outgoing webhook display boundary
 
+Expose a simple keyed surface-data section for Make, separately from IDs and detailed projections. Preserve numeric amounts as numbers; names, option labels and file URLs must be directly selectable without iterators.
+
+**Why:** The user confirmed: "поверхностные было легко забрать даже в мейк ... имена, названия, ссылки, имена пользователей, значения списков, значение числовое или сумма". Extra Make modules solely for extracting everyday values are not acceptable.
+
+**How to apply:** Keep detailed/legacy data intact, use the same surface conversion in test and real sends, isolate mirror-page contexts, and do not invent sums for multiple linked values.
+
 Keep a homogeneous file-link section alongside polymorphic field projections for schema-inference consumers such as Make; test and real sends must use the same projection-to-file conversion.
 
 **Why:** The user's Make screenshot showed a linked file's nested `resolvedValue` inferred as a scalar because other elements in `fields[]` contained scalar values. Re-detecting the same heterogeneous schema is not a reliable remedy.

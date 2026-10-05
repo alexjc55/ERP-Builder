@@ -85,6 +85,16 @@ test("versioned webhook latest values, projections and backward compatibility", 
     assert.ok("files" in example && example.files?.order_file?.[0]);
     assert.deepEqual(Object.keys(example.files.order_file[0]).sort(), Object.keys(payload.files!.order_file![0]!).sort());
     assert.equal(example.files.order_file[0].url, "https://example.invalid/test.txt");
+    assert.equal(example.displayValues.person, "TEST User");
+    assert.equal(example.displayValues.related_user, "TEST User");
+    assert.equal(example.displayValues.order_file, "https://example.invalid/test.txt");
+    assert.equal(payload.displayValues!.person, "Ada Lovelace");
+    assert.equal(payload.displayValues!.related_user, "Ada Lovelace");
+    assert.equal(payload.displayValues!.choice, "Current label");
+    assert.equal(payload.displayValues!.boolean_result, false);
+    assert.equal(payload.displayValues!.chain, "After");
+    assert.equal(payload.displayValues!.order_file, "https://example.test/order.pdf");
+    assert.equal(payload.pageDisplayValues![String(page!.id)]!.name, "Page name");
     const field = (key: string) => payload.fields!.find((f) => f.key === key)!;
     const entity = (key: string) => field(`entity:${a!.id}.${key}`);
     assert.equal(payload.values!.name, "After");
@@ -152,6 +162,7 @@ test("versioned webhook latest values, projections and backward compatibility", 
       requiresAuthentication: true,
     });
     assert.deepEqual(configuredPayload.files!.attachment, [{ ...file!.resolvedValue as object, fileId: "" }]);
+    assert.equal(configuredPayload.displayValues!.attachment, "https://configured-origin.example.test/api/storage/local/files/test.pdf");
   } finally {
     if (pageIds.length) await db.delete(pagesTable).where(inArray(pagesTable.id, pageIds));
     if (entityIds.length) await db.delete(entitiesTable).where(inArray(entitiesTable.id, entityIds));
