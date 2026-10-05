@@ -5,6 +5,12 @@ description: Where automation trigger/condition/action/mapping types live, and h
 
 ## Outgoing webhook display boundary
 
+Передавать только итог вычисления, не сами формулы.
+
+**Why:** пользователь явно уточнил: "он должен передавать только итог, сами формулы нет".
+
+**How to apply:** expressions and formula configuration must stay inside ERP in both real and test webhook payloads; any discussion of formula type refers to the result, not exporting the expression.
+
 Expose a simple keyed surface-data section for Make, separately from IDs and detailed projections. Preserve numeric amounts as numbers; names, option labels and file URLs must be directly selectable without iterators.
 
 **Why:** The user confirmed: "поверхностные было легко забрать даже в мейк ... имена, названия, ссылки, имена пользователей, значения списков, значение числовое или сумма". Extra Make modules solely for extracting everyday values are not acceptable.
