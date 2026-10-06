@@ -18,3 +18,11 @@ not erase evidence. Explain that HTTP evidence does not cover direct SQL/SSH or
 recover unlogged past activity. An incomplete request is not proof of rollback.
 Administrator MFA and step-up protections need an enrollment/recovery path
 before enforcement; do not silently lock the owner out.
+
+Ограничение входа в ERP списком разрешённых IP пользователю не подходит.
+
+**Why:** Пользователь прямо указал это при обсуждении установки журнала безопасности.
+
+**How to apply:** Не вводить ограничение входа по IP без отдельного согласования.
+Объяснять, что доверенные прокси определяют источник адреса для журнала,
+а не список пользователей или сетей, которым разрешён вход.
