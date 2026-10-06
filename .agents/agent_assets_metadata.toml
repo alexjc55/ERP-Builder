@@ -6,138 +6,161 @@ id = "HcHGOzqn_NRd-KEQF4ufk"
 uri = "file://docs/PLATFORM_TECHNICAL_GUIDE.md"
 type = "text"
 title = "Production ERP Builder — техническое описание и инструкция"
+logical_id = "90d0376d-a819-4230-b3dd-6c43f297ae11"
 
 [[outputs]]
 id = "I5n35O0VIpU87RPszMCWA"
 uri = "file://import-crm-projects.sql.txt"
 type = "text"
 title = "SQL-скрипт импорта (для запуска на вашем сервере)"
+logical_id = "4e2fa27f-fc0c-49d2-8ea1-410cd5205dae"
 
 [[outputs]]
 id = "Dtq8Kc1fRiG08BMkyv08W"
 uri = "file://crm-guests-list.txt"
 type = "text"
 title = "Список гостей (клиентов)"
+logical_id = "6b82ffca-5cbd-40b4-812d-70ed67a8e35a"
 
 [[outputs]]
 id = "dOPt5iIm6ccH5XDI8o8JC"
 uri = "file://crm-issues.txt"
 type = "text"
 title = "Отчёт по проблемным данным (обновлён, раздел 5)"
+logical_id = "1d36825e-e7fc-42e5-a043-c869cfb4d193"
 
 [[outputs]]
 id = "1n_p2qTJFoBq0YVJ5Ldyu"
 uri = "file://crm-new-users.txt"
 type = "text"
 title = "Новые пользователи — логины и пароли"
+logical_id = "1e8a593d-d445-4e30-a77c-ecf4a73dbb1f"
 
 [[outputs]]
 id = "TDyQVgWF96rdLYa4ISjCk"
 uri = "file://import-crm-items.sql.txt"
 type = "text"
 title = "SQL-импорт изделий (обновлён: берётся последнее вхождение)"
+logical_id = "c3a3957f-9400-463e-9863-ad32ee5ff854"
 
 [[outputs]]
 id = "zMgGdbW1GM2vKynTCVqp3"
 uri = "file://crm-items-issues.txt"
 type = "text"
 title = "Отчёт по проблемным данным (обновлён)"
+logical_id = "a8a9874e-4bdc-44ab-afe3-0bcd0cba37a5"
 
 [[outputs]]
 id = "G1WFHQS_9HxBOfZrE-FEJ"
 uri = "file://fix-import-order.txt"
 type = "text"
 title = "Исправление порядка импортированных записей (скрипт SQL в .txt)"
+logical_id = "2c178649-4094-473e-b5c9-817470e58641"
 
 [[outputs]]
 id = "TlfoQl4YC3RGhKS7LDmxG"
 uri = "file://page-size-translation.txt"
 type = "text"
 title = "SQL: перевод для выбора размера страницы"
+logical_id = "8ab32657-9d2a-454b-9a4a-83a8ed1d71b1"
 
 [[outputs]]
 id = "dDvaK1sf_pXk82BuCkydb"
 uri = "file://page-size-view-settings.txt"
 type = "text"
 title = "SQL для удалённой базы — размер страницы в настройках вида"
+logical_id = "b7cb44fb-98c1-4ed0-8d29-c55d3b8bf3bf"
 
 [[outputs]]
 id = "j69PhgbAsx1sO-nYoMw1T"
 uri = "file://filter-bar-collapse.txt"
 type = "text"
 title = "SQL для удалённой базы — панель фильтров по умолчанию"
+logical_id = "17a4c877-9209-46c2-8d86-9ec50578b2eb"
 
 [[outputs]]
 id = "FXKqWwKm-VPzuIayrL_rA"
 uri = "file://import-item-statuses.txt"
 type = "text"
 title = "SQL: импорт статусов изделий (копия для скачивания)"
+logical_id = "d74db5db-1224-482a-b7df-224c869224cc"
 
 [[outputs]]
 id = "kKt4N33spv5GU_wabl8oo"
 uri = "file://import-deliveries.txt"
 type = "text"
 title = "SQL: импорт доставок (копия для скачивания)"
+logical_id = "67b917d0-cfef-4198-9863-3e4f891d4ce8"
 
 [[outputs]]
 id = "aOCF19ObZs4LgsrLlXE-j"
 uri = "file://fix-deliveries.txt"
 type = "text"
 title = "SQL: исправление дублей доставок (копия для скачивания)"
+logical_id = "43c8a1ff-f4de-422f-82fc-9150c689e87a"
 
 [[outputs]]
 id = "iY9T0HCRZLV1G0tXE47tm"
 uri = "file://docs/erp-import-template.xlsx"
 type = "table"
 title = "Шаблон импорта данных (Excel)"
+logical_id = "cf53c180-a1ea-4b13-8f01-9c9db1886dc4"
 
 [[outputs]]
 id = "dR_QUDOAv3keoPcJhflR6"
 uri = "file://docs/orders-rework.xlsx"
 type = "table"
 title = "Заказы, требующие доработки (клиент/проект)"
+logical_id = "108ae31f-665c-4292-8640-f898b265a764"
 
 [[outputs]]
 id = "XgAZu9MyjfZAlhpA8kYLn"
 uri = "file://docs/prod-data-update.sql"
 type = "unspecified"
 title = "SQL для обновления данных на проде"
+logical_id = "280a1607-033c-4569-84a6-a43224b88a2e"
 
 [[outputs]]
 id = "iWAxJAxoFegW75Cp0Dnrg"
 uri = "file://exports/dostupy-proizvoditeli.xlsx"
 type = "table"
 title = "Доступы — Производители"
+logical_id = "c205572f-e28e-499a-a456-dd2a17b3cbb0"
 
 [[outputs]]
 id = "GQHCVxCEmZmiY1COmkNLn"
 uri = "file://exports/erp-dump.sql"
 type = "unspecified"
 title = "Дамп БД ERP от 30.07 (с удалением старых таблиц)"
+logical_id = "08e2c643-e70f-4d89-87b5-4c9dcb048f32"
 
 [[outputs]]
 id = "rg3EC9F3iH-mDbbwJa7TO"
 uri = "file://exports/merge-yanush-client.sql"
 type = "unspecified"
 title = "SQL: объединение клиента ינושבסקי (для удалённого сервера)"
+logical_id = "57ed6127-24a7-4c5f-a5c4-408af826865c"
 
 [[outputs]]
 id = "ICxL3NkrhcLYxc_RGrTFh"
 uri = "file://exports/merge-narkisim-project.sql"
 type = "unspecified"
 title = "SQL: объединение проекта בית ספר נרקיסים (для удалённого сервера)"
+logical_id = "ef1c4c8d-031c-4064-ae8b-fbc69eb74133"
 
 [[outputs]]
 id = "jrDaKx-JeB_qBvpTBD3dz"
 uri = "file://exports/format-inherit-migration.sql"
 type = "unspecified"
 title = "SQL: наследование форматирования (обновлён — вкл. переводы для полей страниц)"
+logical_id = "3780e05a-d902-449f-92eb-27cdfcdda33f"
 
 [[outputs]]
 id = "OiWyYXUwBzRLJMFOhML3c"
 uri = "file://exports/format-inherit-config.sql"
 type = "unspecified"
 title = "SQL: настроить источники наследования на сервере"
+logical_id = "193bc749-93ca-4d81-8300-8e0d643fd213"
 
 [[outputs]]
 id = "ZEMwQafWvmF6YtNAapqA_"
@@ -145,6 +168,7 @@ uri = "file://exports/usr_dump_1788190250616.xlsx"
 type = "table"
 title = "База данных в Excel"
 description = "Excel-книга из PostgreSQL-дампа: лист «Сводка» и лист «users» (90 строк, 12 столбцов), с фильтрами и закреплённой шапкой."
+logical_id = "b01b21de-e67f-43bf-affe-a5b685274533"
 
 [[outputs]]
 id = "CMASR6nTRjH07q88LDMkN"
@@ -152,3 +176,18 @@ uri = "file://exports/projects_dump_1788201286521.xlsx"
 type = "table"
 title = "Проекты — Excel"
 description = "113 проектов. Листы: «Проекты» с раскрытыми полями JSON, «Исходные данные» и «Сводка»."
+logical_id = "336bbd05-5de8-45de-8ef4-935bb5e7f22b"
+
+[[outputs]]
+id = "BorJW9EVXbxQaAaHyceKQ"
+uri = "file://attached_assets/restore-passwords-2026-10-05-except-admin-1.sql"
+type = "unspecified"
+title = "Восстановление паролей из бэкапа — без администратора №1"
+description = "SQL для 96 пользователей. Восстанавливает только пароли и отзывает старые сессии, сохраняя роли и блокировки. Содержит чувствительные хеши — не публикуйте файл."
+logical_id = "87d8aebb-f5e1-4ff9-abc9-1820dcaaee8e"
+content_hash = "sha256:d1cfd14b22e99529c769440db82ea495b2c986430b34584a0e3ba680289d4617"
+size = 11039
+mtime_ms = 1791326039928
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:cb04eea0-49cb-4266-943a-bbf163babf78/87d8aebb-f5e1-4ff9-abc9-1820dcaaee8e/564cb0b0-bdd6-4a98-80d3-6494edc2623d"
+storage_version_token = "1791326068318097"
+content_type = "application/octet-stream"
