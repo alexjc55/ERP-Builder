@@ -1,0 +1,296 @@
+[
+ {
+  "key": "securityRetention.loadError",
+  "ru": "Не удалось загрузить настройки хранения журнала",
+  "en": "Failed to load log retention settings",
+  "he": "טעינת הגדרות שמירת היומן נכשלה"
+ },
+ {
+  "key": "securityRetention.retry",
+  "ru": "Повторить",
+  "en": "Retry",
+  "he": "נסה שוב"
+ },
+ {
+  "key": "securityRetention.stat.size",
+  "ru": "Физический объём",
+  "en": "Physical storage",
+  "he": "נפח אחסון פיזי"
+ },
+ {
+  "key": "securityRetention.stat.rows",
+  "ru": "Строк в журнале",
+  "en": "Log rows",
+  "he": "שורות ביומן"
+ },
+ {
+  "key": "securityRetention.stat.occurrences",
+  "ru": "Учтённых повторений",
+  "en": "Counted occurrences",
+  "he": "מופעים שנספרו"
+ },
+ {
+  "key": "securityRetention.stat.expired",
+  "ru": "Просрочено к удалению",
+  "en": "Expired, pending deletion",
+  "he": "פג תוקף, ממתין למחיקה"
+ },
+ {
+  "key": "securityRetention.title",
+  "ru": "Хранение журнала безопасности",
+  "en": "Security log retention",
+  "he": "שמירת יומן אבטחה"
+ },
+ {
+  "key": "securityRetention.sizeWarning",
+  "ru": "Объём журнала превысил порог предупреждения",
+  "en": "Log size exceeded the warning threshold",
+  "he": "נפח היומן חרג מסף האזהרה"
+ },
+ {
+  "key": "securityRetention.lastCleanupAt",
+  "ru": "Последняя очистка (UTC)",
+  "en": "Last cleanup (UTC)",
+  "he": "ניקוי אחרון (UTC)"
+ },
+ {
+  "key": "securityRetention.lastDeleted",
+  "ru": "Удалено в последний раз",
+  "en": "Deleted last time",
+  "he": "נמחקו בפעם האחרונה"
+ },
+ {
+  "key": "securityRetention.lastError",
+  "ru": "Ошибка последней очистки",
+  "en": "Last cleanup error",
+  "he": "שגיאת ניקוי אחרונה"
+ },
+ {
+  "key": "securityRetention.formTitle",
+  "ru": "Правила хранения",
+  "en": "Retention rules",
+  "he": "כללי שמירה"
+ },
+ {
+  "key": "securityRetention.ordinaryDays",
+  "ru": "Обычные события, дней",
+  "en": "Ordinary events, days",
+  "he": "אירועים רגילים, ימים"
+ },
+ {
+  "key": "securityRetention.importantDays",
+  "ru": "Важные события и тревоги, дней",
+  "en": "Important events and alerts, days",
+  "he": "אירועים חשובים והתראות, ימים"
+ },
+ {
+  "key": "securityRetention.importantHint",
+  "ru": "не меньше срока обычных",
+  "en": "not less than ordinary",
+  "he": "לא פחות מהרגילים"
+ },
+ {
+  "key": "securityRetention.warningSizeMb",
+  "ru": "Порог предупреждения, MB",
+  "en": "Warning threshold, MB",
+  "he": "סף אזהרה, MB"
+ },
+ {
+  "key": "securityRetention.note.threshold",
+  "ru": "Порог — только предупреждение. Это не жёсткий лимит и не триггер удаления: записи удаляются лишь по сроку хранения.",
+  "en": "The threshold is a warning only. It is not a hard cap and does not trigger deletion: records are deleted only by retention period.",
+  "he": "הסף הוא אזהרה בלבד. אין זו מגבלה קשיחה והוא אינו מפעיל מחיקה: רשומות נמחקות רק לפי תקופת השמירה."
+ },
+ {
+  "key": "securityRetention.note.postgres",
+  "ru": "После удаления PostgreSQL повторно использует освободившееся место, но файл на диске может не уменьшиться.",
+  "en": "After deletion PostgreSQL reuses the freed space, but the file on disk may not shrink.",
+  "he": "לאחר מחיקה PostgreSQL משתמש מחדש בשטח שהתפנה, אך הקובץ בדיסק עשוי לא לקטון."
+ },
+ {
+  "key": "securityRetention.note.aggregation",
+  "ru": "Повторяющиеся события агрегируются: хранится только первый образец запроса/сессии и счётчик повторений, а не каждое повторение.",
+  "en": "Repeated events are aggregated: only the first request/session sample and an occurrence counter are kept, not every occurrence.",
+  "he": "אירועים חוזרים מקובצים: נשמרים רק דגימת הבקשה/הסשן הראשונה ומונה מופעים, לא כל מופע."
+ },
+ {
+  "key": "securityRetention.cleanupEnabled",
+  "ru": "Плановая очистка включена",
+  "en": "Scheduled cleanup enabled",
+  "he": "ניקוי מתוזמן מופעל"
+ },
+ {
+  "key": "securityRetention.pausedNote",
+  "ru": "Пауза отключает только плановую очистку: журнал будет расти. Ручной запуск очистки остаётся разрешён.",
+  "en": "Pausing disables scheduled cleanup only: the log will grow. Manual cleanup remains permitted.",
+  "he": "השהיה מבטלת רק את הניקוי המתוזמן: היומן יגדל. ניקוי ידני נשאר מותר."
+ },
+ {
+  "key": "securityRetention.confirm",
+  "ru": "Я понимаю, что события старше срока хранения будут безвозвратно удалены и не подлежат восстановлению.",
+  "en": "I understand that events older than the retention period will be permanently deleted and cannot be recovered.",
+  "he": "אני מבין/ה שאירועים ישנים מתקופת השמירה יימחקו לצמיתות ולא ניתן יהיה לשחזרם."
+ },
+ {
+  "key": "securityRetention.conflict",
+  "ru": "Настройки уже изменил другой администратор. Ваши правки не сохранены — загрузите актуальные настройки и повторите.",
+  "en": "Another administrator already changed the settings. Your edits were not saved — reload the latest settings and try again.",
+  "he": "מנהל אחר כבר שינה את ההגדרות. השינויים שלך לא נשמרו — טען את ההגדרות העדכניות ונסה שוב."
+ },
+ {
+  "key": "securityRetention.reload",
+  "ru": "Загрузить актуальные",
+  "en": "Reload latest",
+  "he": "טען עדכניות"
+ },
+ {
+  "key": "securityRetention.saveError",
+  "ru": "Не удалось сохранить настройки",
+  "en": "Failed to save settings",
+  "he": "שמירת ההגדרות נכשלה"
+ },
+ {
+  "key": "securityRetention.saved",
+  "ru": "Настройки сохранены",
+  "en": "Settings saved",
+  "he": "ההגדרות נשמרו"
+ },
+ {
+  "key": "securityRetention.cleanupDone",
+  "ru": "Пакет очистки выполнен, удалено",
+  "en": "Cleanup batch completed, deleted",
+  "he": "אצוות הניקוי הושלמה, נמחקו"
+ },
+ {
+  "key": "securityRetention.cleanupError",
+  "ru": "Очистка завершилась ошибкой",
+  "en": "Cleanup failed",
+  "he": "הניקוי נכשל"
+ },
+ {
+  "key": "securityRetention.runCleanup",
+  "ru": "Очистить один пакет",
+  "en": "Clean up one batch",
+  "he": "נקה אצווה אחת"
+ },
+ {
+  "key": "securityRetention.discard",
+  "ru": "Отменить правки",
+  "en": "Discard edits",
+  "he": "בטל שינויים"
+ },
+ {
+  "key": "securityRetention.saving",
+  "ru": "Сохранение…",
+  "en": "Saving…",
+  "he": "שומר…"
+ },
+ {
+  "key": "securityRetention.save",
+  "ru": "Сохранить",
+  "en": "Save",
+  "he": "שמור"
+ },
+ {
+  "key": "securityRetention.dirty",
+  "ru": "Есть несохранённые правки; фоновое обновление их не перезапишет.",
+  "en": "You have unsaved edits; background refresh will not overwrite them.",
+  "he": "יש שינויים שלא נשמרו; רענון ברקע לא ידרוס אותם."
+ },
+ {
+  "key": "securityRetention.cleanupTitle",
+  "ru": "Удалить один пакет просроченных событий?",
+  "en": "Delete one batch of expired events?",
+  "he": "למחוק אצווה אחת של אירועים שפג תוקפם?"
+ },
+ {
+  "key": "securityRetention.cleanupBody",
+  "ru": "Будет безвозвратно удалено до 1000 событий, срок хранения которых уже истёк по сохранённым правилам. Свежие события не затрагиваются.",
+  "en": "Up to 1000 events whose retention has already expired under the saved rules will be permanently deleted. Fresh events are not affected.",
+  "he": "יימחקו לצמיתות עד 1000 אירועים שתקופת השמירה שלהם כבר פגה לפי הכללים השמורים. אירועים טריים לא יושפעו."
+ },
+ {
+  "key": "securityRetention.cleanupExpired",
+  "ru": "Сейчас просрочено",
+  "en": "Currently expired",
+  "he": "פג תוקף כעת"
+ },
+ {
+  "key": "securityRetention.cleanupUsesSaved",
+  "ru": "Применяются сохранённые правила, а не несохранённые правки формы.",
+  "en": "Saved rules apply, not unsaved form edits.",
+  "he": "חלים הכללים השמורים, לא שינויי הטופס שלא נשמרו."
+ },
+ {
+  "key": "securityRetention.cancel",
+  "ru": "Отмена",
+  "en": "Cancel",
+  "he": "ביטול"
+ },
+ {
+  "key": "securityRetention.cleaning",
+  "ru": "Удаление…",
+  "en": "Deleting…",
+  "he": "מוחק…"
+ },
+ {
+  "key": "securityRetention.cleanupConfirm",
+  "ru": "Удалить пакет",
+  "en": "Delete batch",
+  "he": "מחק אצווה"
+ },
+ {
+  "key": "securityRetention.occurrenceHint",
+  "ru": "Агрегированная запись: хранится только первый образец запроса/сессии",
+  "en": "Aggregated record: only the first request/session sample is kept",
+  "he": "רשומה מקובצת: נשמרת רק דגימת הבקשה/הסשן הראשונה"
+ },
+ {
+  "key": "securityRetention.lastSeen",
+  "ru": "Последнее",
+  "en": "Last seen",
+  "he": "נראה לאחרונה"
+ },
+ {
+  "key": "securityRetention.aggregatedNote",
+  "ru": "Агрегированная запись: доказательства (запрос, сессия) сохранены только для первого случая, а не для каждого повторения.",
+  "en": "Aggregated record: evidence (request, session) is retained only for the first occurrence, not for every repetition.",
+  "he": "רשומה מקובצת: הראיות (בקשה, סשן) נשמרות רק עבור המופע הראשון, לא עבור כל חזרה."
+ },
+ {
+  "key": "securityRetention.truncatedNote",
+  "ru": "Несколько источников: детали по каждому источнику не сохранены (sourceDetailsTruncated).",
+  "en": "Multiple sources: per-source details were not retained (sourceDetailsTruncated).",
+  "he": "מקורות מרובים: פרטים לכל מקור לא נשמרו (sourceDetailsTruncated)."
+ },
+ {
+  "key": "securityRetention.detail.occurrenceCount",
+  "ru": "Число повторений",
+  "en": "Occurrence count",
+  "he": "מספר מופעים"
+ },
+ {
+  "key": "securityRetention.detail.lastSeenAt",
+  "ru": "Последнее появление (UTC)",
+  "en": "Last seen (UTC)",
+  "he": "נראה לאחרונה (UTC)"
+ },
+ {
+  "key": "securityRetention.banner.error",
+  "ru": "Очистка журнала безопасности завершилась ошибкой",
+  "en": "Security log cleanup failed",
+  "he": "ניקוי יומן האבטחה נכשל"
+ },
+ {
+  "key": "securityRetention.banner.size",
+  "ru": "Журнал безопасности превысил порог объёма (это предупреждение, не лимит)",
+  "en": "Security log exceeded the size threshold (a warning, not a cap)",
+  "he": "יומן האבטחה חרג מסף הנפח (אזהרה, לא מגבלה)"
+ },
+ {
+  "key": "securityRetention.banner.link",
+  "ru": "Настройки хранения",
+  "en": "Retention settings",
+  "he": "הגדרות שמירה"
+ }
+]

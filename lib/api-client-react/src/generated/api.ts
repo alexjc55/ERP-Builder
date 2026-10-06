@@ -187,6 +187,8 @@ import type {
   RoleUpdate,
   SecurityEventPage,
   SecurityEventQuery,
+  SecurityRetention,
+  SecurityRetentionInput,
   SecuritySummary,
   Status,
   StatusInput,
@@ -16577,6 +16579,206 @@ export const useQuerySecurityEvents = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getQuerySecurityEventsMutationOptions(options));
+    }
+
+export const getGetSecurityRetentionUrl = () => {
+
+
+
+
+  return `/api/security/retention`
+}
+
+export const getSecurityRetention = async ( options?: RequestInit): Promise<SecurityRetention> => {
+
+  return customFetch<SecurityRetention>(getGetSecurityRetentionUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSecurityRetentionQueryKey = () => {
+    return [
+    `/api/security/retention`
+    ] as const;
+    }
+
+
+export const getGetSecurityRetentionQueryOptions = <TData = Awaited<ReturnType<typeof getSecurityRetention>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSecurityRetention>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSecurityRetentionQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSecurityRetention>>> = ({ signal }) => getSecurityRetention({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSecurityRetention>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSecurityRetentionQueryResult = NonNullable<Awaited<ReturnType<typeof getSecurityRetention>>>
+export type GetSecurityRetentionQueryError = ErrorType<unknown>
+
+
+
+export function useGetSecurityRetention<TData = Awaited<ReturnType<typeof getSecurityRetention>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSecurityRetention>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSecurityRetentionQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateSecurityRetentionUrl = () => {
+
+
+
+
+  return `/api/security/retention`
+}
+
+export const updateSecurityRetention = async (securityRetentionInput: SecurityRetentionInput, options?: RequestInit): Promise<SecurityRetention> => {
+
+  return customFetch<SecurityRetention>(getUpdateSecurityRetentionUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      securityRetentionInput,)
+  }
+);}
+
+
+
+
+export const getUpdateSecurityRetentionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSecurityRetention>>, TError,{data: BodyType<SecurityRetentionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSecurityRetention>>, TError,{data: BodyType<SecurityRetentionInput>}, TContext> => {
+
+const mutationKey = ['updateSecurityRetention'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSecurityRetention>>, {data: BodyType<SecurityRetentionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateSecurityRetention(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSecurityRetentionMutationResult = NonNullable<Awaited<ReturnType<typeof updateSecurityRetention>>>
+    export type UpdateSecurityRetentionMutationBody = BodyType<SecurityRetentionInput>
+    export type UpdateSecurityRetentionMutationError = ErrorType<unknown>
+
+    export const useUpdateSecurityRetention = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSecurityRetention>>, TError,{data: BodyType<SecurityRetentionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateSecurityRetention>>,
+        TError,
+        {data: BodyType<SecurityRetentionInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateSecurityRetentionMutationOptions(options));
+    }
+
+export const getCleanupSecurityRetentionUrl = () => {
+
+
+
+
+  return `/api/security/retention/cleanup`
+}
+
+export const cleanupSecurityRetention = async ( options?: RequestInit): Promise<SecurityRetention> => {
+
+  return customFetch<SecurityRetention>(getCleanupSecurityRetentionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCleanupSecurityRetentionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cleanupSecurityRetention>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cleanupSecurityRetention>>, TError,void, TContext> => {
+
+const mutationKey = ['cleanupSecurityRetention'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cleanupSecurityRetention>>, void> = () => {
+
+
+          return  cleanupSecurityRetention(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CleanupSecurityRetentionMutationResult = NonNullable<Awaited<ReturnType<typeof cleanupSecurityRetention>>>
+
+    export type CleanupSecurityRetentionMutationError = ErrorType<unknown>
+
+    export const useCleanupSecurityRetention = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cleanupSecurityRetention>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cleanupSecurityRetention>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCleanupSecurityRetentionMutationOptions(options));
     }
 
 export const getGetSecuritySummaryUrl = () => {

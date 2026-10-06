@@ -10,6 +10,8 @@ import { securityAuditContext, securityAuditStart, flushSecurityAudit, securityT
 import { createSecurityIpResolver } from "../lib/security-ip";
 import { requireAuth } from "../middlewares/auth";
 import { requireSuperAdmin } from "../middlewares/permissions";
+import { storeSecurityEvidence } from "../lib/security-aggregation";
+import { cleanupSecurityEvents } from "../lib/security-retention";
 
 test("IP attribution rejects spoofed chains and trusts only configured hops", () => {
   const resolve = createSecurityIpResolver("127.0.0.1/32").resolve;
@@ -58,9 +60,9 @@ test("security evidence HTTP and database boundaries", { timeout: 120000 }, asyn
     await new Promise<void>((resolve) => server!.once("listening", resolve));
     const addr = server.address(); assert.ok(addr && typeof addr !== "string");
     const base = `http://127.0.0.1:${addr.port}`;
-    const request = async (path: string, token?: string, body?: unknown) => {
+    const request = async (path: string, token?: string, body?: unknown, method?: string) => {
       const response = await fetch(base + path, {
-        method: body === undefined ? "GET" : "POST",
+        method: method ?? (body === undefined ? "GET" : "POST"),
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
@@ -115,10 +117,61 @@ test("security evidence HTTP and database boundaries", { timeout: 120000 }, asyn
       assert.ok(rows.some((r) => r.outcome === "success" && r.isAlert));
       assert.notEqual(signToken({ userId: 1, roleId: 1 }), signToken({ userId: 1, roleId: 1 }));
     });
+    await t.test("retention settings reject unauthorized writes, require confirmation and prevent stale edits", async () => {
+      const input = { revision: 1, ordinaryDays: 30, importantDays: 180, warningSizeMb: 10, cleanupEnabled: false, confirmed: true };
+      assert.equal((await request("/security/retention", signToken({ userId: 1002, roleId: 1002 }), input, "PUT")).status, 403);
+      assert.equal((await request("/security/retention", token, { ...input, confirmed: false }, "PUT")).status, 400);
+      assert.equal((await request("/security/retention", token, { ...input, importantDays: 5 }, "PUT")).status, 400);
+      const saved = await request("/security/retention", token, input, "PUT");
+      assert.equal(saved.status, 200); assert.equal(saved.data.cleanupEnabled, false);
+      assert.equal((await request("/security/retention", token, input, "PUT")).status, 409);
+      const read = await request("/security/retention", token);
+      assert.equal(read.data.ordinaryDays, 30); assert.equal(read.data.revision, 2);
+      assert.ok(read.data.sizeBytes > 0);
+    });
+    await t.test("cleanup is bounded, paused automatically, preserves fresh/important events and removes review orphans", async () => {
+      const base = {
+        requestId: "retention-fixture", action: "access.denied", outcome: "failure",
+        peerIp: "test", clientIp: "test", ipSource: "socket", method: "GET", route: "/probe",
+      };
+      const ago = (days: number) => new Date(Date.now() - days * 86400000);
+      await db.insert(securityEventsTable).values(Array.from({ length: 1005 }, (_, n) => ({
+        ...base, id: 90000 + n, createdAt: ago(40), lastSeenAt: ago(40),
+      })));
+      await db.insert(securityEventsTable).values([
+        { ...base, id: 92001, action: "user.create", severity: "critical", isAlert: true, lastSeenAt: ago(100) },
+        { ...base, id: 92002, action: "user.create", severity: "critical", isAlert: true, lastSeenAt: ago(200) },
+        { ...base, id: 92003, createdAt: ago(200), lastSeenAt: ago(1), occurrenceCount: 10 },
+      ]);
+      await db.insert(securityEventReviewsTable).values({ eventId: 92002, reviewedBy: 1001 });
+      assert.equal(await cleanupSecurityEvents(), 0);
+      assert.equal(await cleanupSecurityEvents(true), 1000);
+      assert.equal(await cleanupSecurityEvents(true), 6);
+      assert.equal((await db.select().from(securityEventReviewsTable).where(eq(securityEventReviewsTable.eventId, 92002))).length, 0);
+      assert.equal((await db.select().from(securityEventsTable).where(eq(securityEventsTable.id, 92001))).length, 1);
+      assert.equal((await db.select().from(securityEventsTable).where(eq(securityEventsTable.id, 92003))).length, 1);
+      assert.equal((await request("/security/retention", token)).data.expiredCount, 0);
+    });
+    await t.test("repeat counters are atomic, successful actions stay separate and anonymous group growth is bounded", async () => {
+      const base = { requestId: "aggregation-fixture", action: "access.denied", outcome: "denied",
+        peerIp: "127.0.0.1", clientIp: "198.51.100.1", ipSource: "socket", method: "GET", route: "/probe", isAlert: true };
+      await Promise.all(Array.from({ length: 10 }, () => storeSecurityEvidence(base)));
+      let rows = await db.select().from(securityEventsTable);
+      assert.equal(rows.find((r) => r.requestId === base.requestId)!.occurrenceCount, 10);
+      await storeSecurityEvidence({ ...base, requestId: "success-one", action: "user.create", outcome: "success", actorUserId: 1001 });
+      await storeSecurityEvidence({ ...base, requestId: "success-two", action: "user.create", outcome: "success", actorUserId: 1001 });
+      for (let i = 0; i < 110; i++) await storeSecurityEvidence({ ...base, clientIp: `198.51.100.${i + 2}` });
+      rows = await db.select().from(securityEventsTable);
+      const groups = rows.filter((r) => r.aggregationKey);
+      assert.ok(groups.length <= 101);
+      assert.ok(groups.some((r) => r.detailsJson.sourceDetailsTruncated === true));
+      assert.equal(rows.filter((r) => ["success-one", "success-two"].includes(r.requestId)).length, 2);
+    });
     await t.test("key rotation retains the target, not the key; missing audit storage prevents the operation", async () => {
       assert.equal((await request("/ai-agents/91/regenerate-key", token, {})).status, 200);
       const page = await request("/security/events/query", token, { agentId: 91 });
-      assert.equal(page.data.total, 2);
+      assert.ok(page.data.total >= 1);
+      assert.ok(page.data.data.some((r: { outcome: string }) => r.outcome === "success"));
       assert.ok(page.data.data.every((r: { detailsJson: Record<string, unknown> }) => r.detailsJson.targetAgentId === 91));
       assert.ok(!JSON.stringify(page.data).includes("NEVER-STORE-AGENT-KEY"));
       assert.equal(rotations, 1);

@@ -8,6 +8,8 @@
 import type { SecurityEventDetailsJson } from './securityEventDetailsJson';
 
 export interface SecurityEvent {
+  occurrenceCount?: number;
+  lastSeenAt?: Date;
   id: number;
   createdAt: Date;
   requestId: string;

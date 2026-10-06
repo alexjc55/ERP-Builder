@@ -433,6 +433,8 @@ export * from './securityEventDetailsJson';
 export * from './securityEventPage';
 export * from './securityEventQuery';
 export * from './securityEventQueryOutcome';
+export * from './securityRetention';
+export * from './securityRetentionInput';
 export * from './securitySummary';
 export * from './securitySummaryProxyAttribution';
 export * from './selectOption';

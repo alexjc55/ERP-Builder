@@ -5,6 +5,7 @@ import { db, securityEventsTable } from "@workspace/db";
 import { APP_SECRET } from "./secret";
 import { logger } from "./logger";
 import { securityRequestIp } from "./security-ip";
+import { storeSecurityEvidence } from "./security-aggregation";
 
 type Evidence = {
   requestId: string; action: string; route: string; critical: boolean;
@@ -26,6 +27,9 @@ const object = (value: unknown): Record<string, unknown> =>
 export function classifySecurityRequest(path: string, method: string) {
   const route = path.replace(/^\/api(?=\/)/, "");
   const write = !["GET", "HEAD", "OPTIONS"].includes(method);
+  if (write && ["/security/retention", "/security/retention/cleanup"].includes(route)) {
+    return { action: route.endsWith("/cleanup") ? "audit.cleanup" : "audit.retention-update", route, critical: true };
+  }
   if (/^\/auth\/(login|change-password|revoke-sessions|revoke-all-sessions|impersonate|stop-impersonation)$/.test(route) && write) {
     return { action: `auth.${route.split("/").pop()}`, route, critical: true };
   }
@@ -82,6 +86,12 @@ function requestDetails(req: Request) {
     "permissionsJson", "userId", "accountUserId", "mask", "keyMode", "ownClientId", "ownClientSecret", "folderAction",
     "isEnabled", "mappingJson", "name", "firstName", "lastName", "sourceIds", "targetId"];
   details.requestedChanges = keys.filter((key) => Object.hasOwn(body, key));
+  if (req.securityEvidence?.action === "audit.retention-update") {
+    for (const key of ["ordinaryDays", "importantDays", "warningSizeMb"]) {
+      if (int(body[key])) details[key] = body[key];
+    }
+    if (typeof body.cleanupEnabled === "boolean") details.cleanupEnabled = body.cleanupEnabled;
+  }
   if (int(body.roleId)) details.requestedRoleId = body.roleId;
   if (Array.isArray(body.roleIds)) details.requestedRoleIds = body.roleIds.filter((v) => int(v)).slice(0, 100);
   if (typeof body.isActive === "boolean") details.requestedActive = body.isActive;
@@ -150,7 +160,7 @@ async function append(req: Request, outcome: string, statusCode?: number) {
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail) ? rawEmail.toLowerCase() : null;
   let repeatedLoginFailure = false;
   if (login && (isFailure || outcome === "success") && loginEmail) {
-    const [recent] = await db.select({ count: sql<number>`count(*)::int` }).from(securityEventsTable).where(and(
+    const [recent] = await db.select({ count: sql<number>`coalesce(sum(${securityEventsTable.occurrenceCount}),0)::float8` }).from(securityEventsTable).where(and(
       eq(securityEventsTable.action, "auth.login"), eq(securityEventsTable.loginEmail, loginEmail),
       eq(securityEventsTable.outcome, "denied"), gte(securityEventsTable.createdAt, new Date(Date.now() - 10 * 60_000)),
     )).catch(() => {
@@ -179,7 +189,7 @@ async function append(req: Request, outcome: string, statusCode?: number) {
     detailsJson: { ...requestDetails(req), ...e.details },
   };
   try {
-    await db.insert(securityEventsTable).values(row);
+    await storeSecurityEvidence(row);
   } catch {
     // Independent structured evidence survives a database failure if server logs are retained.
     logger.error({ securityEvent: row }, "Security audit persistence failed");

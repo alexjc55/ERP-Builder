@@ -11,6 +11,7 @@ import {
   type SecurityEventQuery,
 } from "@workspace/api-client-react";
 import { useT } from "@/lib/i18n";
+import SecurityRetentionPanel from "./SecurityRetentionPanel";
 import { useManualDataRefresh } from "@/lib/manualDataRefresh";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -274,6 +275,8 @@ export default function SecurityAuditPanel() {
         </ul>
       </div>
 
+      <SecurityRetentionPanel onChanged={() => { void load(false); void summary.refetch(); }} />
+
       <form onSubmit={onSubmit} className="rounded-lg border border-slate-200 bg-white p-4 space-y-3" data-testid="form-security-filters" aria-label={t("securityAudit.filter.title", "Фильтры")}>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="space-y-1"><Label htmlFor="sa-from">{t("securityAudit.filter.from", "С (местное время)")}</Label><Input type="datetime-local" {...field("from")} /></div>
@@ -357,7 +360,17 @@ export default function SecurityAuditPanel() {
                         <div className="flex items-center gap-1.5">
                           {ev.isAlert && <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" aria-label={t("securityAudit.alert", "Тревога")} />}
                           <code dir="ltr" className="text-xs font-mono text-slate-700">{ev.action}</code>
+                          {(ev.occurrenceCount ?? 1) > 1 && (
+                            <Badge variant="outline" className="h-5 px-1.5 text-[11px] tabular-nums border-slate-300 text-slate-600" title={t("securityRetention.occurrenceHint", "Агрегированная запись: хранится только первый образец запроса/сессии")} data-testid={`text-security-occurrences-${ev.id}`}>
+                              ×{ev.occurrenceCount}
+                            </Badge>
+                          )}
                         </div>
+                        {(ev.occurrenceCount ?? 1) > 1 && ev.lastSeenAt && (
+                          <div className="text-[11px] text-slate-500 mt-0.5" data-testid={`text-security-lastseen-${ev.id}`}>
+                            {t("securityRetention.lastSeen", "Последнее")}: <span dir="ltr" className="font-mono">{fmtUtc(ev.lastSeenAt)}</span>
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3"><Badge variant="secondary" className={OUTCOME_STYLE[ev.outcome] ?? "bg-slate-100 text-slate-700"} data-testid={`status-security-outcome-${ev.id}`}>{outcomeLabel(ev.outcome)}</Badge></td>
                       <td className="px-4 py-3 text-slate-600 max-w-[200px] truncate">{who(ev)}</td>
@@ -418,9 +431,21 @@ export default function SecurityAuditPanel() {
               {selected.outcome === "attempt" && (
                 <p className="text-sm rounded-md border border-dashed border-amber-400 bg-amber-50 text-amber-900 p-3">{t("securityAudit.attemptNote", "«Попытка» означает, что итог не был записан: запрос мог завершиться, упасть или оборваться. Это не подтверждение успеха.")}</p>
               )}
+              {(selected.occurrenceCount ?? 1) > 1 && (
+                <p className="text-sm rounded-md border border-slate-200 bg-slate-50 text-slate-700 p-3" data-testid="text-security-detail-aggregated">
+                  {t("securityRetention.aggregatedNote", "Агрегированная запись: доказательства (запрос, сессия) сохранены только для первого случая, а не для каждого повторения.")}
+                </p>
+              )}
+              {selected.detailsJson?.sourceDetailsTruncated === true && (
+                <p className="text-sm rounded-md border border-amber-300 bg-amber-50 text-amber-900 p-3" role="note" data-testid="text-security-detail-truncated">
+                  {t("securityRetention.truncatedNote", "Несколько источников: детали по каждому источнику не сохранены (sourceDetailsTruncated).")}
+                </p>
+              )}
               <dl className="grid grid-cols-1 sm:grid-cols-[minmax(0,12rem)_1fr] gap-x-4 gap-y-2 text-sm">
                 {([
                   ["createdAt", fmtUtc(selected.createdAt), true],
+                  ["occurrenceCount", selected.occurrenceCount != null ? String(selected.occurrenceCount) : null, true],
+                  ["lastSeenAt", selected.lastSeenAt ? fmtUtc(selected.lastSeenAt) : null, true],
                   ["severity", selected.severity, true],
                   ["actor", selected.actorUserId != null ? `#${selected.actorUserId}` : null, true],
                   ["impersonator", selected.impersonatorUserId != null ? `#${selected.impersonatorUserId}` : null, true],
@@ -440,7 +465,7 @@ export default function SecurityAuditPanel() {
                   ["reviewedBy", selected.reviewedBy != null ? `#${selected.reviewedBy}` : null, true],
                 ] as [string, string | null | undefined, boolean][]).map(([k, v, ltr]) => (
                   <div key={k} className="contents">
-                    <dt className="text-slate-500">{t(`securityAudit.detail.${k}`, k)}</dt>
+                    <dt className="text-slate-500">{k === "occurrenceCount" || k === "lastSeenAt" ? t(`securityRetention.detail.${k}`, k) : t(`securityAudit.detail.${k}`, k)}</dt>
                     <dd className={cn("text-slate-800 break-all", ltr && "font-mono text-xs")} dir={ltr ? "ltr" : undefined} data-testid={`text-security-detail-${k}`}>{v || "—"}</dd>
                   </div>
                 ))}

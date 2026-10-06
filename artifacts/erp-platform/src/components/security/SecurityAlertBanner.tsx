@@ -1,6 +1,6 @@
 import { Link } from "wouter";
-import { ShieldAlert } from "lucide-react";
-import { useGetSecuritySummary, getGetSecuritySummaryQueryKey } from "@workspace/api-client-react";
+import { ShieldAlert, HardDrive } from "lucide-react";
+import { useGetSecuritySummary, getGetSecuritySummaryQueryKey, useGetSecurityRetention, getGetSecurityRetentionQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { useT } from "@/lib/i18n";
 
@@ -22,8 +22,21 @@ export default function SecurityAlertBanner() {
       retry: false,
     },
   });
-  if (!authorized || !data || data.unreviewedAlerts <= 0) return null;
+  const { data: retention } = useGetSecurityRetention({
+    query: {
+      queryKey: getGetSecurityRetentionQueryKey(),
+      enabled: authorized,
+      refetchInterval: authorized ? 60_000 : false,
+      retry: false,
+    },
+  });
+  if (!authorized) return null;
+  const alerts = !!data && data.unreviewedAlerts > 0;
+  const storage = !!retention && (retention.sizeWarning || !!retention.lastCleanupError);
+  if (!alerts && !storage) return null;
   return (
+    <>
+      {alerts && data && (
     <div
       role="alert"
       data-testid="security-alert-banner"
@@ -42,5 +55,24 @@ export default function SecurityAlertBanner() {
         {t("securityAudit.banner.link", "Открыть журнал аудита")}
       </Link>
     </div>
+      )}
+      {storage && retention && (
+        <div
+          role="status"
+          data-testid="security-retention-banner"
+          className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 bg-amber-50 border-b border-amber-200 text-sm text-amber-900"
+        >
+          <span className="flex items-center gap-2 font-medium">
+            <HardDrive className="w-4 h-4 shrink-0" aria-hidden="true" />
+            {retention.lastCleanupError
+              ? <span data-testid="text-security-retention-banner-error">{t("securityRetention.banner.error", "Очистка журнала безопасности завершилась ошибкой")}</span>
+              : <span data-testid="text-security-retention-banner-size">{t("securityRetention.banner.size", "Журнал безопасности превысил порог объёма (это предупреждение, не лимит)")}</span>}
+          </span>
+          <Link href="/admin/events?tab=security" data-testid="link-security-retention" className="underline underline-offset-2 hover:text-amber-700">
+            {t("securityRetention.banner.link", "Настройки хранения")}
+          </Link>
+        </div>
+      )}
+    </>
   );
 }

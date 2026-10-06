@@ -5,6 +5,44 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+export interface SecurityRetentionInput {
+  /** @minimum 1 */
+  revision: number;
+  /**
+     * @minimum 1
+     * @maximum 365
+     */
+  ordinaryDays: number;
+  /**
+     * @minimum 1
+     * @maximum 3650
+     */
+  importantDays: number;
+  /**
+     * @minimum 10
+     * @maximum 1000000
+     */
+  warningSizeMb: number;
+  cleanupEnabled: boolean;
+  confirmed: boolean;
+}
+
+export interface SecurityRetention {
+  revision: number;
+  ordinaryDays: number;
+  importantDays: number;
+  warningSizeMb: number;
+  cleanupEnabled: boolean;
+  sizeBytes: number;
+  rowCount: number;
+  occurrenceCount: number;
+  expiredCount: number;
+  sizeWarning: boolean;
+  lastCleanupAt?: string | null;
+  lastDeletedCount: number;
+  lastCleanupError?: string | null;
+}
+
 export type SecurityEventQueryOutcome = typeof SecurityEventQueryOutcome[keyof typeof SecurityEventQueryOutcome];
 
 
@@ -54,6 +92,8 @@ export interface SecurityEventQuery {
 export type SecurityEventDetailsJson = { [key: string]: unknown };
 
 export interface SecurityEvent {
+  occurrenceCount?: number;
+  lastSeenAt?: string;
   id: number;
   createdAt: string;
   requestId: string;

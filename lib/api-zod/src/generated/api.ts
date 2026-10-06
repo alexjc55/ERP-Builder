@@ -11787,6 +11787,8 @@ export const QuerySecurityEventsBody = zod.object({
 
 export const QuerySecurityEventsResponse = zod.object({
   "data": zod.array(zod.object({
+  "occurrenceCount": zod.number().optional(),
+  "lastSeenAt": zod.coerce.date().optional(),
   "id": zod.number(),
   "createdAt": zod.coerce.date(),
   "requestId": zod.string(),
@@ -11815,6 +11817,76 @@ export const QuerySecurityEventsResponse = zod.object({
   "reviewedBy": zod.number().nullish()
 })),
   "total": zod.number()
+})
+
+
+export const GetSecurityRetentionResponse = zod.object({
+  "revision": zod.number(),
+  "ordinaryDays": zod.number(),
+  "importantDays": zod.number(),
+  "warningSizeMb": zod.number(),
+  "cleanupEnabled": zod.boolean(),
+  "sizeBytes": zod.number(),
+  "rowCount": zod.number(),
+  "occurrenceCount": zod.number(),
+  "expiredCount": zod.number(),
+  "sizeWarning": zod.boolean(),
+  "lastCleanupAt": zod.coerce.date().nullish(),
+  "lastDeletedCount": zod.number(),
+  "lastCleanupError": zod.string().nullish()
+})
+
+
+
+export const updateSecurityRetentionBodyOrdinaryDaysMax = 365;
+
+export const updateSecurityRetentionBodyImportantDaysMax = 3650;
+
+export const updateSecurityRetentionBodyWarningSizeMbMin = 10;
+export const updateSecurityRetentionBodyWarningSizeMbMax = 1000000;
+
+
+
+export const UpdateSecurityRetentionBody = zod.object({
+  "revision": zod.number().min(1),
+  "ordinaryDays": zod.number().min(1).max(updateSecurityRetentionBodyOrdinaryDaysMax),
+  "importantDays": zod.number().min(1).max(updateSecurityRetentionBodyImportantDaysMax),
+  "warningSizeMb": zod.number().min(updateSecurityRetentionBodyWarningSizeMbMin).max(updateSecurityRetentionBodyWarningSizeMbMax),
+  "cleanupEnabled": zod.boolean(),
+  "confirmed": zod.boolean()
+})
+
+export const UpdateSecurityRetentionResponse = zod.object({
+  "revision": zod.number(),
+  "ordinaryDays": zod.number(),
+  "importantDays": zod.number(),
+  "warningSizeMb": zod.number(),
+  "cleanupEnabled": zod.boolean(),
+  "sizeBytes": zod.number(),
+  "rowCount": zod.number(),
+  "occurrenceCount": zod.number(),
+  "expiredCount": zod.number(),
+  "sizeWarning": zod.boolean(),
+  "lastCleanupAt": zod.coerce.date().nullish(),
+  "lastDeletedCount": zod.number(),
+  "lastCleanupError": zod.string().nullish()
+})
+
+
+export const CleanupSecurityRetentionResponse = zod.object({
+  "revision": zod.number(),
+  "ordinaryDays": zod.number(),
+  "importantDays": zod.number(),
+  "warningSizeMb": zod.number(),
+  "cleanupEnabled": zod.boolean(),
+  "sizeBytes": zod.number(),
+  "rowCount": zod.number(),
+  "occurrenceCount": zod.number(),
+  "expiredCount": zod.number(),
+  "sizeWarning": zod.boolean(),
+  "lastCleanupAt": zod.coerce.date().nullish(),
+  "lastDeletedCount": zod.number(),
+  "lastCleanupError": zod.string().nullish()
 })
 
 

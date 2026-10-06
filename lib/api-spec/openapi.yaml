@@ -4718,6 +4718,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SecurityEventPage"
+  /security/retention:
+    get:
+      operationId: getSecurityRetention
+      tags: [security]
+      responses:
+        "200":
+          description: Retention settings and storage usage, super-admin only
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecurityRetention" }
+    put:
+      operationId: updateSecurityRetention
+      tags: [security]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecurityRetentionInput" }
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecurityRetention" }
+  /security/retention/cleanup:
+    post:
+      operationId: cleanupSecurityRetention
+      tags: [security]
+      responses:
+        "200":
+          description: At most one batch of expired events removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecurityRetention" }
   /security/summary:
     get:
       operationId: getSecuritySummary
@@ -4755,6 +4789,33 @@ components:
       scheme: bearer
       description: Opaque one-time-disclosed inbound integration secret
   schemas:
+    SecurityRetentionInput:
+      type: object
+      required: [revision, ordinaryDays, importantDays, warningSizeMb, cleanupEnabled, confirmed]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        ordinaryDays: { type: integer, minimum: 1, maximum: 365 }
+        importantDays: { type: integer, minimum: 1, maximum: 3650 }
+        warningSizeMb: { type: integer, minimum: 10, maximum: 1000000 }
+        cleanupEnabled: { type: boolean }
+        confirmed: { type: boolean }
+    SecurityRetention:
+      type: object
+      required: [revision, ordinaryDays, importantDays, warningSizeMb, cleanupEnabled, sizeBytes, rowCount, occurrenceCount, expiredCount, sizeWarning, lastDeletedCount]
+      properties:
+        revision: { type: integer }
+        ordinaryDays: { type: integer }
+        importantDays: { type: integer }
+        warningSizeMb: { type: integer }
+        cleanupEnabled: { type: boolean }
+        sizeBytes: { type: number }
+        rowCount: { type: number }
+        occurrenceCount: { type: number }
+        expiredCount: { type: number }
+        sizeWarning: { type: boolean }
+        lastCleanupAt: { type: string, format: date-time, nullable: true }
+        lastDeletedCount: { type: integer }
+        lastCleanupError: { type: string, nullable: true }
     SecurityEventQuery:
       type: object
       properties:
@@ -4777,6 +4838,8 @@ components:
       type: object
       required: [id, createdAt, requestId, action, outcome, severity, isAlert, authSource, peerIp, clientIp, ipSource, method, route, detailsJson]
       properties:
+        occurrenceCount: { type: integer }
+        lastSeenAt: { type: string, format: date-time }
         id: { type: integer }
         createdAt: { type: string, format: date-time }
         requestId: { type: string }

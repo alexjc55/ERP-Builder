@@ -2,6 +2,11 @@ import { test, expect } from "@playwright/test";
 
 async function setup(page: import("@playwright/test").Page, superAdmin = true) {
   let reviewed = false;
+  let retention = {
+    revision: 1, ordinaryDays: 30, importantDays: 180, warningSizeMb: 256, cleanupEnabled: true,
+    sizeBytes: 1048576, rowCount: 100, occurrenceCount: 200, expiredCount: 3,
+    sizeWarning: false, lastDeletedCount: 0, lastCleanupAt: null as string | null, lastCleanupError: null,
+  };
   const queries: Record<string, unknown>[] = [];
   const item = {
     id: 41, createdAt: "2026-10-06T10:00:00Z", requestId: "request-fixture",
@@ -13,6 +18,14 @@ async function setup(page: import("@playwright/test").Page, superAdmin = true) {
   await page.addInitScript(() => localStorage.setItem("erp_token", "ui-test-only"));
   await page.route("**/api/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/security/retention/cleanup")) {
+      retention = { ...retention, expiredCount: 0, rowCount: 97, lastDeletedCount: 3, lastCleanupAt: new Date().toISOString() };
+      return route.fulfill({ json: retention });
+    }
+    if (path.endsWith("/security/retention")) {
+      if (route.request().method() === "PUT") retention = { ...retention, ...route.request().postDataJSON(), revision: retention.revision + 1 };
+      return route.fulfill({ json: retention });
+    }
     if (path.endsWith("/auth/me")) return route.fulfill({ json: {
       id: 1, roleId: 1, roleIds: [1], firstName: "Test", lastName: "Admin", language: "ru",
       permissions: { superAdmin, admin: { events: true }, records: {}, pageIds: [] },
@@ -68,4 +81,22 @@ test("mobile filters are usable and invalid IDs do not reach the API", async ({ 
   await expect(page.getByTestId("status-security-filter-invalid")).toBeVisible();
   expect(queries).toHaveLength(count);
   await page.screenshot({ path: "/tmp/security-audit-mobile.png", fullPage: true });
+});
+
+test("retention save requires confirmation and cleanup requires a separate confirmation", async ({ page }) => {
+  await setup(page);
+  await expect(page.getByTestId("section-security-retention")).toBeVisible();
+  await page.getByTestId("input-security-retention-ordinary").fill("45");
+  await expect(page.getByTestId("button-security-retention-save")).toBeDisabled();
+  await page.getByTestId("checkbox-security-retention-confirm").click();
+  const sent = page.waitForRequest((req) => req.url().endsWith("/security/retention") && req.method() === "PUT");
+  await page.getByTestId("button-security-retention-save").click();
+  expect((await sent).postDataJSON()).toMatchObject({ ordinaryDays: 45, importantDays: 180, revision: 1, confirmed: true });
+  await expect(page.getByTestId("status-security-retention-saved")).toBeVisible();
+  await page.getByTestId("button-security-retention-cleanup").click();
+  await expect(page.getByTestId("dialog-security-retention-cleanup")).toBeVisible();
+  await page.getByTestId("button-security-retention-cleanup-confirm").click();
+  await expect(page.getByTestId("stat-security-retention-expired")).toContainText("0");
+  await expect(page.getByTestId("text-security-retention-last-deleted")).toContainText("3");
+  await page.screenshot({ path: "/tmp/security-retention-ui.png" });
 });

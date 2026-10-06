@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { startSecurityRetention } from "./lib/security-retention";
 import { migrateLegacyUploads, UPLOADS_ROOT } from "./lib/localStorage";
 import { ensureAiAgentsModule } from "./routes/ai-agents";
 import { ensureInboundIntegrationsModule, recoverInboundDeliveries } from "./routes/inbound-integrations";
@@ -41,6 +42,7 @@ async function start(): Promise<void> {
   recoverInboundDeliveries().catch((err) => logger.error({ err }, "Failed to recover inbound deliveries"));
   const recoveryTimer = setInterval(() => void recoverInboundDeliveries().catch((err) => logger.error({ err }, "Failed to poll inbound deliveries")), 15_000);
   recoveryTimer.unref();
+  const stopSecurityRetention = startSecurityRetention();
 
   httpServer = app.listen(port, (err) => {
     if (err) {
@@ -57,7 +59,7 @@ async function start(): Promise<void> {
       server: httpServer!,
       stopMemoryDiagnostics,
       disposeCollaboration,
-      disposeBackgroundWork: () => clearInterval(recoveryTimer),
+      disposeBackgroundWork: () => { clearInterval(recoveryTimer); stopSecurityRetention(); },
       logger,
       exit: (code) => process.exit(code),
     });
