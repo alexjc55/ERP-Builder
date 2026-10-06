@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import { randomUUID } from "node:crypto";
 import { APP_SECRET } from "./secret";
 
 const SECRET = APP_SECRET;
@@ -17,7 +18,7 @@ export interface JwtPayload {
 }
 
 export function signToken(payload: JwtPayload): string {
-  return jwt.sign({ sessionVersion: 0, ...payload }, SECRET, { expiresIn: "7d", algorithm: "HS256" });
+  return jwt.sign({ sessionVersion: 0, ...payload }, SECRET, { expiresIn: "7d", algorithm: "HS256", jwtid: randomUUID() });
 }
 
 export function verifyToken(token: string): JwtPayload | null {

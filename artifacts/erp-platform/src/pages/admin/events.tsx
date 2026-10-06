@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { useLocation, useSearch } from "wouter";
+import SecurityAuditPanel from "@/components/security/SecurityAuditPanel";
+import { useCanSeeSecurityAudit } from "@/components/security/SecurityAlertBanner";
+import { cn } from "@/lib/utils";
 import {
   useListEvents,
   useListEntities,
@@ -38,6 +42,40 @@ const EVENT_BADGE: Record<string, string> = {
 };
 
 export default function EventsPage() {
+  const t = useT();
+  const canSecurity = useCanSeeSecurityAudit();
+  const search = useSearch();
+  const [, navigate] = useLocation();
+  const tab = canSecurity && new URLSearchParams(search).get("tab") === "security" ? "security" : "system";
+  const setTab = (next: "system" | "security") =>
+    navigate(next === "security" ? "/admin/events?tab=security" : "/admin/events", { replace: true });
+  if (!canSecurity) return <SystemEventsView />;
+  return (
+    <div>
+      <div role="tablist" aria-label={t("events.title", "События")} className="flex gap-1 px-6 pt-4 border-b border-slate-200 overflow-x-auto">
+        {(["system", "security"] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            aria-selected={tab === k}
+            onClick={() => setTab(k)}
+            data-testid={`tab-events-${k}`}
+            className={cn(
+              "px-4 py-2 -mb-px text-sm font-medium border-b-2 whitespace-nowrap transition-colors",
+              tab === k ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-800"
+            )}
+          >
+            {k === "system" ? t("securityAudit.tab.system", "Системные события") : t("securityAudit.tab.security", "Аудит безопасности")}
+          </button>
+        ))}
+      </div>
+      {tab === "security" ? <div className="p-4 sm:p-6" role="tabpanel"><SecurityAuditPanel /></div> : <SystemEventsView />}
+    </div>
+  );
+}
+
+function SystemEventsView() {
   const ml = useML();
   const t = useT();
   const [eventName, setEventName] = useState<string>("all");

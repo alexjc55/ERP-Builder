@@ -11741,3 +11741,105 @@ export const DeleteDeletedFileResponse = zod.object({
 })
 
 
+/**
+ * @summary Query security evidence (non-impersonated super-admin only)
+ */
+export const querySecurityEventsBodyLimitDefault = 50;
+export const querySecurityEventsBodyLimitMax = 100;
+
+export const querySecurityEventsBodyOffsetDefault = 0;
+export const querySecurityEventsBodyOffsetMin = 0;
+export const querySecurityEventsBodyOffsetMax = 100000;
+
+export const querySecurityEventsBodyActionMax = 100;
+
+
+
+
+
+export const querySecurityEventsBodySessionRefMax = 64;
+
+export const querySecurityEventsBodyRequestIdMax = 64;
+
+export const querySecurityEventsBodyClientIpMax = 64;
+
+export const querySecurityEventsBodyLoginEmailMax = 254;
+
+export const querySecurityEventsBodyOnlyUnreviewedDefault = false;
+
+export const QuerySecurityEventsBody = zod.object({
+  "limit": zod.number().min(1).max(querySecurityEventsBodyLimitMax).default(querySecurityEventsBodyLimitDefault),
+  "offset": zod.number().min(querySecurityEventsBodyOffsetMin).max(querySecurityEventsBodyOffsetMax).default(querySecurityEventsBodyOffsetDefault),
+  "from": zod.coerce.date().optional(),
+  "to": zod.coerce.date().optional(),
+  "action": zod.string().max(querySecurityEventsBodyActionMax).optional(),
+  "outcome": zod.enum(['attempt', 'success', 'denied', 'failure', 'interrupted']).optional(),
+  "actorUserId": zod.number().min(1).optional(),
+  "targetUserId": zod.number().min(1).optional(),
+  "agentId": zod.number().min(1).optional(),
+  "integrationId": zod.number().min(1).optional(),
+  "sessionRef": zod.string().max(querySecurityEventsBodySessionRefMax).optional(),
+  "requestId": zod.string().max(querySecurityEventsBodyRequestIdMax).optional(),
+  "clientIp": zod.string().max(querySecurityEventsBodyClientIpMax).optional(),
+  "loginEmail": zod.string().max(querySecurityEventsBodyLoginEmailMax).optional(),
+  "onlyUnreviewed": zod.boolean().default(querySecurityEventsBodyOnlyUnreviewedDefault)
+})
+
+export const QuerySecurityEventsResponse = zod.object({
+  "data": zod.array(zod.object({
+  "id": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "requestId": zod.string(),
+  "action": zod.string(),
+  "outcome": zod.string(),
+  "severity": zod.string(),
+  "isAlert": zod.boolean(),
+  "actorUserId": zod.number().nullish(),
+  "impersonatorUserId": zod.number().nullish(),
+  "targetUserId": zod.number().nullish(),
+  "agentId": zod.number().nullish(),
+  "integrationId": zod.number().nullish(),
+  "authSource": zod.string(),
+  "sessionRef": zod.string().nullish(),
+  "loginEmail": zod.string().nullish(),
+  "peerIp": zod.string(),
+  "clientIp": zod.string(),
+  "ipSource": zod.string(),
+  "userAgent": zod.string().nullish(),
+  "method": zod.string(),
+  "route": zod.string(),
+  "statusCode": zod.number().nullish(),
+  "reason": zod.string().nullish(),
+  "detailsJson": zod.record(zod.string(), zod.unknown()),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "reviewedBy": zod.number().nullish()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Security alert counts (non-impersonated super-admin only)
+ */
+export const GetSecuritySummaryResponse = zod.object({
+  "unreviewedAlerts": zod.number(),
+  "failedLogins24h": zod.number(),
+  "deniedRequests24h": zod.number(),
+  "criticalChanges24h": zod.number(),
+  "proxyAttribution": zod.enum(['socket-only', 'trusted-proxy'])
+})
+
+
+/**
+ * @summary Acknowledge one alert without modifying its evidence
+ */
+export const ReviewSecurityEventParams = zod.object({
+  "eventId": zod.coerce.number()
+})
+
+export const ReviewSecurityEventResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+

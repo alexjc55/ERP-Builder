@@ -19,6 +19,7 @@ import {
 } from "@workspace/db";
 import { UpdateGoogleDriveConnectionBody, CreateGoogleDriveFolderBody, UpdateGoogleDriveFolderBody, RenameGoogleDriveFileBody, DisconnectGoogleDriveBody } from "@workspace/api-zod";
 import { disconnectDrive, driveDisconnectPreview, driveConnectionVersion } from "../lib/drive-disconnect";
+import { securityVerifiedIdentity, securityTokenRef } from "../lib/security-audit";
 import { requireAuth } from "../middlewares/auth";
 import {
   requireAdmin,
@@ -243,10 +244,14 @@ router.get("/google-drive/oauth/callback", async (req: Request, res: Response): 
     }
     let connectionVersion: string;
     try {
-      const decoded = jwt.verify(state, SECRET, { algorithms: ["HS256"] }) as { purpose?: string; connectionVersion?: string };
+      const decoded = jwt.verify(state, SECRET, { algorithms: ["HS256"] }) as { purpose?: string; connectionVersion?: string; uid?: number };
       if (decoded.purpose !== OAUTH_STATE_PURPOSE) throw new Error("bad state");
       if (!decoded.connectionVersion) throw new Error("missing version");
       connectionVersion = decoded.connectionVersion;
+      if (Number.isSafeInteger(decoded.uid) && decoded.uid! > 0) {
+        securityVerifiedIdentity(req, { userId: decoded.uid! }, "oauth-state");
+        if (req.securityEvidence) req.securityEvidence.sessionRef = securityTokenRef(state);
+      }
     } catch {
       redirectBack("error");
       return;

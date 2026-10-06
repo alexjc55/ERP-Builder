@@ -5,6 +5,104 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+export type SecurityEventQueryOutcome = typeof SecurityEventQueryOutcome[keyof typeof SecurityEventQueryOutcome];
+
+
+export const SecurityEventQueryOutcome = {
+  attempt: 'attempt',
+  success: 'success',
+  denied: 'denied',
+  failure: 'failure',
+  interrupted: 'interrupted',
+} as const;
+
+export interface SecurityEventQuery {
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  limit?: number;
+  /**
+     * @minimum 0
+     * @maximum 100000
+     */
+  offset?: number;
+  from?: string;
+  to?: string;
+  /** @maxLength 100 */
+  action?: string;
+  outcome?: SecurityEventQueryOutcome;
+  /** @minimum 1 */
+  actorUserId?: number;
+  /** @minimum 1 */
+  targetUserId?: number;
+  /** @minimum 1 */
+  agentId?: number;
+  /** @minimum 1 */
+  integrationId?: number;
+  /** @maxLength 64 */
+  sessionRef?: string;
+  /** @maxLength 64 */
+  requestId?: string;
+  /** @maxLength 64 */
+  clientIp?: string;
+  /** @maxLength 254 */
+  loginEmail?: string;
+  onlyUnreviewed?: boolean;
+}
+
+export type SecurityEventDetailsJson = { [key: string]: unknown };
+
+export interface SecurityEvent {
+  id: number;
+  createdAt: string;
+  requestId: string;
+  action: string;
+  outcome: string;
+  severity: string;
+  isAlert: boolean;
+  actorUserId?: number | null;
+  impersonatorUserId?: number | null;
+  targetUserId?: number | null;
+  agentId?: number | null;
+  integrationId?: number | null;
+  authSource: string;
+  sessionRef?: string | null;
+  loginEmail?: string | null;
+  peerIp: string;
+  clientIp: string;
+  ipSource: string;
+  userAgent?: string | null;
+  method: string;
+  route: string;
+  statusCode?: number | null;
+  reason?: string | null;
+  detailsJson: SecurityEventDetailsJson;
+  reviewedAt?: string | null;
+  reviewedBy?: number | null;
+}
+
+export interface SecurityEventPage {
+  data: SecurityEvent[];
+  total: number;
+}
+
+export type SecuritySummaryProxyAttribution = typeof SecuritySummaryProxyAttribution[keyof typeof SecuritySummaryProxyAttribution];
+
+
+export const SecuritySummaryProxyAttribution = {
+  'socket-only': 'socket-only',
+  'trusted-proxy': 'trusted-proxy',
+} as const;
+
+export interface SecuritySummary {
+  unreviewedAlerts: number;
+  failedLogins24h: number;
+  deniedRequests24h: number;
+  criticalChanges24h: number;
+  proxyAttribution: SecuritySummaryProxyAttribution;
+}
+
 export type CardTemplateState = typeof CardTemplateState[keyof typeof CardTemplateState];
 
 

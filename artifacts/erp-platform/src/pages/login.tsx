@@ -39,10 +39,13 @@ export default function LoginPage() {
         login(data.token, data.user);
         setLocation("/");
       },
-      onError: () => {
+      onError: (error) => {
+        const status = (error as { status?: number }).status;
         toast({
           title: t("login.error", "Ошибка входа"),
-          description: t("login.errorDesc", "Неверный email или пароль"),
+          description: status === 401
+            ? t("login.errorDesc", "Неверный email или пароль")
+            : t("securityAudit.loginUnavailable", "Не удалось выполнить вход: ошибка сервера или соединения. Это не подтверждает неверный пароль."),
           variant: "destructive",
         });
       },

@@ -4,6 +4,8 @@ import { db, usersTable, rolesTable, loginHistoryTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { signToken } from "../lib/jwt";
 import { requireAuth } from "../middlewares/auth";
+import { securityReason, securityVerifiedIdentity } from "../lib/security-audit";
+import { securityRequestIp } from "../lib/security-ip";
 import { loadRoleContext, getPermissions, requireSuperAdmin } from "../middlewares/permissions";
 import {
   LoginBody,
@@ -36,6 +38,7 @@ async function resolveImpersonator(
 router.post("/auth/login", async (req, res): Promise<void> => {
   const parsed = LoginBody.safeParse(req.body);
   if (!parsed.success) {
+    securityReason(req, "invalid_login_input");
     res.status(400).json({ error: parsed.error.message });
     return;
   }
@@ -60,18 +63,24 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     .where(eq(usersTable.email, email.toLowerCase()));
 
   if (!user || !user.isActive || !user.passwordHash) {
+    securityReason(req, !user ? "unknown_account" : !user.isActive ? "inactive_account" : "password_not_set");
+    if (req.securityEvidence && user) req.securityEvidence.targetUserId = user.id;
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
+    securityReason(req, "password_mismatch");
+    if (req.securityEvidence) req.securityEvidence.targetUserId = user.id;
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
 
-  // Log login
-  const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? "";
+  securityVerifiedIdentity(req, { userId: user.id }, "password");
+  securityReason(req, "authenticated");
+  // Keep successful-login history consistent with the verified proxy boundary.
+  const ip = securityRequestIp(req).clientIp;
   await db.insert(loginHistoryTable).values({
     userId: user.id,
     ipAddress: ip,

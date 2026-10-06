@@ -49,6 +49,10 @@ async function main() {
   const curated = loadCurated();
   const curatedMap = new Map<string, Entry>();
   for (const e of curated) curatedMap.set(e.key, e);
+  const securityTranslations = JSON.parse(
+    readFileSync(join(__dirname, "data", "security-audit-translations.json"), "utf8"),
+  ) as Entry[];
+  for (const e of securityTranslations) curatedMap.set(e.key, e);
 
   const sourceKeys = extractSourceKeys();
   // Card-builder translations are kept together; Russian source fallbacks are

@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { verifyToken, type JwtPayload } from "../lib/jwt";
 import { AI_AGENT_KEY_PREFIX, resolveAgentKey, isAllowedByMask, invalidateAgentCache } from "../lib/aiAgentAuth";
 import { isUserSessionCurrent } from "../lib/user-sessions";
+import { securityReason, securityVerifiedIdentity } from "../lib/security-audit";
 /** Compatibility hook for account mutations: JWT state is now read live.
  * Machine identities still have a bounded cache, which must be cleared. */
 export function invalidateUserAliveCache(_userId: number): void {
@@ -19,6 +20,7 @@ declare global {
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    securityReason(req, "missing_credentials");
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
@@ -32,10 +34,13 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     resolveAgentKey(token)
       .then((agent) => {
         if (!agent) {
+          securityReason(req, "invalid_agent_key");
           res.status(401).json({ error: "Invalid or revoked agent key" });
           return;
         }
+        securityVerifiedIdentity(req, agent.payload, "agent");
         if (!isAllowedByMask(req, agent.mask)) {
+          securityReason(req, "agent_mask_denied");
           res.status(403).json({ error: "Agent key does not permit this operation" });
           return;
         }
@@ -49,6 +54,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   const payload = verifyToken(token);
 
   if (!payload) {
+    securityReason(req, "invalid_or_expired_token");
     res.status(401).json({ error: "Invalid or expired token" });
     return;
   }
@@ -58,6 +64,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   // cannot reach any mutating endpoint. Reads are GET, plus the records query
   // endpoint which is a POST by design.
   if (payload.guest && !isGuestReadSafe(req)) {
+    securityVerifiedIdentity(req, payload, "guest");
+    securityReason(req, "guest_read_only");
     res.status(403).json({ error: "Guest access is read-only" });
     return;
   }
@@ -65,10 +73,13 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   isUserSessionCurrent(payload)
     .then((alive) => {
       if (!alive) {
+        securityVerifiedIdentity(req, payload, "revoked-session");
+        securityReason(req, "session_revoked_or_account_inactive");
         res.status(401).json({ error: "Session revoked or account inactive" });
         return;
       }
       req.user = payload;
+      securityVerifiedIdentity(req, payload);
       next();
     })
     .catch(next);

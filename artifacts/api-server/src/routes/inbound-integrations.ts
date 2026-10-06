@@ -323,6 +323,11 @@ inboundWebhookRouter.post("/api/webhooks/inbound/:integrationId", async (req, re
     .innerJoin(usersTable, eq(usersTable.id, inboundIntegrationsTable.userId))
     .where(and(eq(inboundIntegrationsTable.id, integrationId), eq(inboundIntegrationsTable.tokenHash, hashInboundSecret(secret))));
   if (!integration || !integration.inbound_integrations.isActive || !integration.users.isActive) { res.status(401).json({ error: "Invalid webhook credentials" }); return; }
+  if (req.securityEvidence) {
+    req.securityEvidence.actorUserId = integration.users.id;
+    req.securityEvidence.integrationId = integrationId;
+    req.securityEvidence.authSource = "integration";
+  }
   if (!req.is("application/json")) { res.status(415).json({ error: "Content-Type must be application/json" }); return; }
   const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
   if (raw.length > integration.inbound_integrations.maxBodyBytes) { res.status(413).json({ error: "Webhook body is too large" }); return; }

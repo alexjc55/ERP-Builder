@@ -30,6 +30,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { refreshManualDataPaths } from "@/lib/manualDataRefresh";
+import SecurityAlertBanner from "@/components/security/SecurityAlertBanner";
 
 function SidebarItem({
   name,
@@ -407,6 +408,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             )}
           </div>
         )}
+        <SecurityAlertBanner />
         {isGuest && (
           <div className="flex items-center gap-2 px-4 py-2 bg-sky-100 border-b border-sky-300 text-sm text-sky-900">
             <Eye className="w-4 h-4 shrink-0" />

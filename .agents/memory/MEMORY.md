@@ -87,3 +87,4 @@
 - [ERP interaction feedback](interaction-affordances.md) — pointer cursors identify clickable controls across ERP; preserve text, drag, resize, and disabled affordances.
 - [Session revocation](session-revocation.md) — preserve the encryption secret; reject legacy tokens; browser sessions and integration keys have separate revocation lifecycles.
 - [Google Drive retention](google-drive-retention.md) — disconnect asks keep/forget with usage counts; shared folder identity must survive authorization loss.
+- [Security audit policy](security-audit-policy.md) — reconstruct the access chain; do not conflate account/IP with identity or HTTP evidence with database auditing.

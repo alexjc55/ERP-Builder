@@ -1,8 +1,10 @@
 import express, { type Express } from "express";
+import { randomUUID } from "node:crypto";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { securityAuditContext, securityAuditStart } from "./lib/security-audit";
 import { initAutomations } from "./lib/automations-engine";
 import { inboundWebhookRouter } from "./routes/inbound-integrations";
 import {
@@ -22,6 +24,7 @@ if (isMemoryDiagnosticsEnabled()) {
 app.use(
   pinoHttp({
     logger,
+    genReqId: () => randomUUID(),
     serializers: {
       req(req) {
         return {
@@ -39,11 +42,13 @@ app.use(
   }),
 );
 app.use(cors());
+app.use("/api", securityAuditContext);
 app.use("/api/webhooks/inbound", express.raw({ type: "application/json", limit: "5mb" }));
+app.use("/api/webhooks/inbound", securityAuditStart);
 app.use(inboundWebhookRouter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use("/api", router);
+app.use("/api", securityAuditStart, router);
 
 export default app;

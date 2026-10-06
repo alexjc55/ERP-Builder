@@ -185,6 +185,9 @@ import type {
   Role,
   RoleInput,
   RoleUpdate,
+  SecurityEventPage,
+  SecurityEventQuery,
+  SecuritySummary,
   Status,
   StatusInput,
   StatusUpdate,
@@ -16503,5 +16506,223 @@ export const useDeleteDeletedFile = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getDeleteDeletedFileMutationOptions(options));
+    }
+
+export const getQuerySecurityEventsUrl = () => {
+
+
+
+
+  return `/api/security/events/query`
+}
+
+/**
+ * @summary Query security evidence (non-impersonated super-admin only)
+ */
+export const querySecurityEvents = async (securityEventQuery: SecurityEventQuery, options?: RequestInit): Promise<SecurityEventPage> => {
+
+  return customFetch<SecurityEventPage>(getQuerySecurityEventsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      securityEventQuery,)
+  }
+);}
+
+
+
+
+export const getQuerySecurityEventsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof querySecurityEvents>>, TError,{data: BodyType<SecurityEventQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof querySecurityEvents>>, TError,{data: BodyType<SecurityEventQuery>}, TContext> => {
+
+const mutationKey = ['querySecurityEvents'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof querySecurityEvents>>, {data: BodyType<SecurityEventQuery>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  querySecurityEvents(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type QuerySecurityEventsMutationResult = NonNullable<Awaited<ReturnType<typeof querySecurityEvents>>>
+    export type QuerySecurityEventsMutationBody = BodyType<SecurityEventQuery>
+    export type QuerySecurityEventsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Query security evidence (non-impersonated super-admin only)
+ */
+export const useQuerySecurityEvents = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof querySecurityEvents>>, TError,{data: BodyType<SecurityEventQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof querySecurityEvents>>,
+        TError,
+        {data: BodyType<SecurityEventQuery>},
+        TContext
+      > => {
+      return useMutation(getQuerySecurityEventsMutationOptions(options));
+    }
+
+export const getGetSecuritySummaryUrl = () => {
+
+
+
+
+  return `/api/security/summary`
+}
+
+/**
+ * @summary Security alert counts (non-impersonated super-admin only)
+ */
+export const getSecuritySummary = async ( options?: RequestInit): Promise<SecuritySummary> => {
+
+  return customFetch<SecuritySummary>(getGetSecuritySummaryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSecuritySummaryQueryKey = () => {
+    return [
+    `/api/security/summary`
+    ] as const;
+    }
+
+
+export const getGetSecuritySummaryQueryOptions = <TData = Awaited<ReturnType<typeof getSecuritySummary>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSecuritySummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSecuritySummaryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSecuritySummary>>> = ({ signal }) => getSecuritySummary({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSecuritySummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSecuritySummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getSecuritySummary>>>
+export type GetSecuritySummaryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Security alert counts (non-impersonated super-admin only)
+ */
+
+export function useGetSecuritySummary<TData = Awaited<ReturnType<typeof getSecuritySummary>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSecuritySummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSecuritySummaryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getReviewSecurityEventUrl = (eventId: number,) => {
+
+
+
+
+  return `/api/security/events/${eventId}/review`
+}
+
+/**
+ * @summary Acknowledge one alert without modifying its evidence
+ */
+export const reviewSecurityEvent = async (eventId: number, options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getReviewSecurityEventUrl(eventId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getReviewSecurityEventMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewSecurityEvent>>, TError,{eventId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewSecurityEvent>>, TError,{eventId: number}, TContext> => {
+
+const mutationKey = ['reviewSecurityEvent'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewSecurityEvent>>, {eventId: number}> = (props) => {
+          const {eventId} = props ?? {};
+
+          return  reviewSecurityEvent(eventId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewSecurityEventMutationResult = NonNullable<Awaited<ReturnType<typeof reviewSecurityEvent>>>
+
+    export type ReviewSecurityEventMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Acknowledge one alert without modifying its evidence
+ */
+export const useReviewSecurityEvent = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewSecurityEvent>>, TError,{eventId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewSecurityEvent>>,
+        TError,
+        {eventId: number},
+        TContext
+      > => {
+      return useMutation(getReviewSecurityEventMutationOptions(options));
     }
 
