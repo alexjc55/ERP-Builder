@@ -1,77 +1,99 @@
-# Security audit deployment and limits
+# Журнал безопасности: установка и ограничения
 
-Apply `lib/db/drizzle/0026_bouncy_forge.sql` before starting this API version.
-This is a NEW migration in addition to session-version migration 0025.
-Use the established external-server migration procedure, checking the migration
-ledger first. Do not blindly replay all historical Drizzle migrations on the
-FastPanel database, whose earlier schema changes were applied manually.
+**До запуска обновлённого API** примените к базе данных миграцию
+`lib/db/drizzle/0026_bouncy_forge.sql`.
+Это **новая миграция**, дополнительная к миграции 0025 для отзыва сессий.
+Используйте принятый порядок обновления базы на удалённом сервере, предварительно
+проверив историю применённых миграций. Не запускайте повторно все старые миграции
+Drizzle без проверки: предыдущие изменения структуры базы на сервере с FastPanel
+применялись вручную.
 
-Update API and frontend together. Seed new translations:
+Обновите серверную часть (API) и интерфейс совместно. Загрузите новые переводы,
+выполнив следующую команду **в SSH-терминале из корня проекта, не в SQL-редакторе**:
 
 ```sh
 corepack pnpm --dir scripts run seed-translations --prefix=securityAudit.
 ```
 
-No encryption secret or existing machine key needs to change. Existing user JWTs
-remain valid if their session version remains current; new JWTs have a random
-identifier so two logins in the same second no longer share an evidence reference.
+Менять секрет шифрования или существующие ключи агентов и интеграций не требуется.
+Действующие пользовательские токены JWT остаются действительными, пока актуальна
+их версия сессии. Новые JWT получают случайный идентификатор: два входа в одну
+секунду больше не будут иметь одинаковый идентификатор для сопоставления в журнале.
 
-## What is recorded
+## Что записывается
 
-HTTP authentication successes/failures, 401/403 and API 404 responses; critical
-user/role/agent/integration/Google configuration changes; guest-link actions,
-impersonation and session revocation. Logs are available at Events → Security to
-non-impersonated, non-guest human super-admins only. Acknowledging an alert does
-not delete or rewrite its evidence. There is no application delete endpoint.
+- Успешные и неудачные попытки авторизации через HTTP.
+- Ответы 401/403 и ответы 404 от API.
+- Критичные изменения пользователей, ролей, агентов, интеграций и настроек Google.
+- Действия с гостевыми ссылками, вход от имени другого пользователя и отзыв сессий.
 
-Request bodies, passwords, secrets, Bearer tokens, OAuth codes, query strings and
-arbitrary unmatched paths are NOT retained. Session references are keyed hashes,
-not usable credentials. Details label **requested** changes, not a transactional
-before/after database diff. Browser data is a coarse browser-family label.
+Журнал доступен в разделе **«События → Безопасность»** только супер-администраторам,
+вошедшим в собственную учётную запись: не гостям, не агентам и не в режиме входа
+от имени другого пользователя. Отметка «Просмотрено» не удаляет и не переписывает
+исходное событие. В приложении нет API для удаления этих событий.
 
-A critical request must persist an attempt before its handler runs. Completion
-is a separate append. An attempt without completion is explicitly inconclusive:
-it may have failed or committed before a process crash. Completion persistence
-failures emit sanitized structured server-log evidence. This is not an atomic
-database change journal and not a tamper-proof log against a DB/server owner.
+Полные тела запросов, пароли, секреты, токены Bearer, коды OAuth, параметры URL
+и произвольные пути, не соответствующие маршрутам API, **не сохраняются**.
+Ссылки на сессии — это хеши с секретным ключом, а не данные, позволяющие войти
+в систему. В подробностях указаны **запрошенные изменения**, а не полный
+транзакционный снимок базы «до и после». Для браузера сохраняется только
+обобщённое название семейства браузеров.
 
-Inbound HTTP 202 means intake/queue acceptance, NOT successful business-data
-creation. Follow the saved deliveryId into the inbound-delivery history for
-processing results. Identity is only attributed after credential validation.
+Перед выполнением критичного запроса система должна сохранить запись о попытке.
+Результат записывается отдельно. **Попытка без результата не доказывает ни успех,
+ни откат:** операция могла завершиться ошибкой или успеть сохраниться перед
+аварийной остановкой процесса. Если сохранить результат не удалось, в серверный
+лог записываются структурированные сведения без секретов. Это не атомарный журнал
+изменений базы и не защита от подмены данных владельцем базы или сервера.
 
-Warnings include successful critical configuration/account changes, denied
-access, repeated failed login (at least five within ten minutes for the same
-submitted login), and a successful login after such failures. No automatic
-blocking is implemented. In-app warnings poll every 30 seconds and require the
-app to be open; external notifications are not configured.
+Для входящей интеграции HTTP 202 означает приём запроса в очередь,
+**а не успешное создание рабочих данных**. Результат обработки нужно смотреть
+в истории входящих доставок по сохранённому `deliveryId`.
+Учётная запись связывается с запросом только после проверки данных авторизации.
 
-## IP provenance — configure on the external server
+Предупреждения формируются при успешных критичных изменениях настроек и учётных
+записей, отказах в доступе, повторных неудачных входах — не менее пяти за десять
+минут для одного введённого логина — и успешном входе после таких отказов.
+**Автоматическая блокировка не реализована.** Предупреждения в интерфейсе
+обновляются каждые 30 секунд и видны только при открытом приложении.
+Внешние уведомления не настроены.
 
-By default, only the socket peer address is trusted. Behind nginx that may be
-nginx's address, not the visitor's. No existing deployment is silently switched
-to trusting forwarded headers.
+## Определение IP — настройка на удалённом сервере
 
-After verifying the nginx upstream, firewall, and forwarding configuration, set
-`SECURITY_TRUSTED_PROXY_CIDRS` to the exact proxy IPs/CIDRs, comma-separated.
-For example, loopback addresses may be appropriate ONLY if nginx connects over
-loopback and that topology has been verified. Never configure `0.0.0.0/0` or
-`::/0`. Restart the API after this environment change.
+По умолчанию система доверяет только адресу непосредственного сетевого соединения.
+Если API работает за nginx, это может быть адрес nginx, а не посетителя.
+Обновление не включает доверие к пересланным заголовкам автоматически.
 
-The resolver starts at the socket and walks X-Forwarded-For from right to left,
-only through trusted proxy hops. It ignores untrusted or malformed forwarded
-chains. Peer address, selected client address and provenance are stored separately.
-An IP is not a person's identity. Ensure API and PostgreSQL ports are not directly
-Internet-accessible; this change does not configure the external firewall.
+После проверки подключения nginx к API, правил межсетевого экрана и настроек
+передачи заголовков задайте переменную `SECURITY_TRUSTED_PROXY_CIDRS`:
+точные IP-адреса или подсети доверенных прокси в формате CIDR, через запятую.
+Например, локальные адреса loopback подходят **только если** nginx действительно
+подключается через них и схема подключения проверена.
+**Никогда не указывайте `0.0.0.0/0` или `::/0`.**
+После изменения переменной перезапустите API.
 
-## What remains outside this feature
+Определение адреса начинается с непосредственного соединения. Затем система
+проходит заголовок `X-Forwarded-For` справа налево, только через доверенные прокси.
+Недоверенные или некорректные цепочки адресов игнорируются.
+Адрес соединения, выбранный адрес клиента и способ его определения сохраняются
+отдельно.
 
-Events before deployment cannot be recovered from these tables. Direct SQL,
-SSH, PM2 and server-file changes bypass HTTP auditing (including a manual password
-recovery command). Configure separate protected OS/PostgreSQL auditing and ship
-sanitized evidence off-server if needed. Avoid logging SQL parameters, passwords,
-tokens or raw OAuth/webhook payloads.
+**IP не устанавливает личность человека.** Проверьте, что порты API и PostgreSQL
+не доступны напрямую из интернета. Это обновление не настраивает межсетевой экран
+удалённого сервера.
 
-There is no automatic retention deletion. Capacity and a retention/export policy
-must be monitored; an attack can generate substantial audit volume. Separate
-rate limiting, administrator MFA, step-up authorization for privileged changes,
-off-server alerts and external-server hardening remain additional protections.
+## Что не охватывается этим функционалом
+
+Из этих таблиц нельзя восстановить события, произошедшие до установки журнала.
+Прямые SQL-запросы, действия через SSH, PM2 и изменения серверных файлов обходят
+HTTP-аудит. Это относится и к ручной команде восстановления пароля.
+При необходимости отдельно настройте защищённый аудит операционной системы
+и PostgreSQL, а также отправку очищенных от секретов событий за пределы сервера.
+Не записывайте в логи параметры SQL с чувствительными данными, пароли, токены
+или исходные тела OAuth-запросов и вебхуков.
+
+Автоматического удаления старых событий нет. Нужно контролировать объём данных
+и определить правила хранения и выгрузки: при атаке журнал может быстро расти.
+Ограничение частоты запросов, двухфакторный вход администраторов, повторное
+подтверждение привилегированных действий, внешние уведомления и усиление защиты
+удалённого сервера остаются отдельными мерами безопасности.
