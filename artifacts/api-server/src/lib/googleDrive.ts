@@ -271,6 +271,7 @@ export async function ensureFolder(
       const data = (await resp.json()) as { id: string; name: string; trashed?: boolean };
       if (!data.trashed) return { id: data.id, name: data.name };
     }
+    throw new Error("Saved Drive folder is unavailable; retained configuration was not replaced");
   }
   const create = await fetch("https://www.googleapis.com/drive/v3/files?fields=id,name", {
     method: "POST",

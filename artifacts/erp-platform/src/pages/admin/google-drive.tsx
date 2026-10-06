@@ -4,7 +4,6 @@ import {
   useGetGoogleDriveConnection,
   useUpdateGoogleDriveConnection,
   useStartGoogleDriveOauth,
-  useDisconnectGoogleDrive,
   useCheckGoogleDriveConnection,
   useListGoogleDriveFolders,
   useCreateGoogleDriveFolder,
@@ -17,6 +16,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useT } from "@/lib/i18n";
 import { type DriveNameSection } from "@/lib/driveNaming";
 import { DriveNameTemplateEditor } from "@/components/DriveNameTemplateEditor";
+import { DriveDisconnectDialog } from "@/components/DriveDisconnectDialog";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -113,6 +113,10 @@ export default function GoogleDrivePage() {
       toast({ title: t("gdrive.connectedToast", "Google Drive подключён") });
     } else if (drive === "error") {
       toast({ title: t("gdrive.connectError", "Не удалось подключить Google Drive"), variant: "destructive" });
+    } else if (drive === "account-mismatch") {
+      toast({ title: t("gdrive.disconnectFlow.accountMismatch", "Выберите прежний Google-аккаунт. Сохранённые папки принадлежат другому подключению."), variant: "destructive" });
+    } else if (drive === "folders-unavailable") {
+      toast({ title: t("gdrive.disconnectFlow.unavailable", "Нет доступа к сохранённым папкам. Проверьте аккаунт и разрешения Google. Настройки сохранены; новая папка не создана."), variant: "destructive" });
     }
     params.delete("drive");
     const qs = params.toString();
@@ -139,12 +143,6 @@ export default function GoogleDrivePage() {
         if (url) window.location.href = url;
       },
       onError: () => toast({ title: t("gdrive.startError", "Не удалось начать подключение"), variant: "destructive" }),
-    },
-  });
-  const disconnectMutation = useDisconnectGoogleDrive({
-    mutation: {
-      onSuccess: () => { toast({ title: t("gdrive.disconnected", "Google Drive отключён") }); setDisconnecting(false); invalidate(); },
-      onError: () => { toast({ title: t("gdrive.disconnectError", "Ошибка отключения"), variant: "destructive" }); setDisconnecting(false); },
     },
   });
   const checkMutation = useCheckGoogleDriveConnection({
@@ -283,6 +281,11 @@ export default function GoogleDrivePage() {
                     {startMutation.isPending ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <HardDrive className="w-4 h-4 mr-1.5" />}
                     {t("gdrive.connect", "Подключить Google Drive")}
                   </Button>
+                  {conn?.folderConfigured && (
+                    <Button variant="outline" size="sm" className="ms-2" onClick={() => setDisconnecting(true)}>
+                      {t("gdrive.disconnectFlow.manageRetained", "Сохранённые папки: сохранить или удалить")}
+                    </Button>
+                  )}
                   {!credsReady && (
                     <p className="text-xs text-slate-400 mt-1.5">
                       {keyMode === "own"
@@ -350,25 +353,7 @@ export default function GoogleDrivePage() {
         </>
       )}
 
-      <AlertDialog open={disconnecting} onOpenChange={(o) => !o && setDisconnecting(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("gdrive.disconnectConfirmTitle", "Отключить Google Drive?")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("gdrive.disconnectConfirm", "Токен доступа будет удалён. Уже загруженные файлы останутся в Google Drive, но новые загрузки станут недоступны до повторного подключения.")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("common.cancel", "Отмена")}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700"
-              onClick={() => { setDisconnecting(true); disconnectMutation.mutate(); }}
-            >
-              {t("gdrive.disconnect", "Отключить")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DriveDisconnectDialog open={disconnecting} onOpenChange={setDisconnecting} />
     </div>
   );
 }

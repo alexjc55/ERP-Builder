@@ -84,6 +84,8 @@ import type {
   DocumentTemplateRevision,
   DocumentTemplateRevisionUpload,
   DocumentTemplateUpdate,
+  DriveDisconnectInput,
+  DriveDisconnectPreview,
   DriveFolder,
   DriveNameTemplate,
   DryRunInboundMappingBody,
@@ -15484,16 +15486,17 @@ export const getDisconnectGoogleDriveUrl = () => {
 }
 
 /**
- * @summary Disconnect Drive, clearing stored tokens and folder (admin)
+ * @summary Disconnect Drive with an explicit folder retention choice (admin)
  */
-export const disconnectGoogleDrive = async ( options?: RequestInit): Promise<GoogleDriveConnectionInfo> => {
+export const disconnectGoogleDrive = async (driveDisconnectInput: DriveDisconnectInput, options?: RequestInit): Promise<GoogleDriveConnectionInfo> => {
 
   return customFetch<GoogleDriveConnectionInfo>(getDisconnectGoogleDriveUrl(),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      driveDisconnectInput,)
   }
 );}
 
@@ -15501,8 +15504,8 @@ export const disconnectGoogleDrive = async ( options?: RequestInit): Promise<Goo
 
 
 export const getDisconnectGoogleDriveMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectGoogleDrive>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof disconnectGoogleDrive>>, TError,void, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectGoogleDrive>>, TError,{data: BodyType<DriveDisconnectInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof disconnectGoogleDrive>>, TError,{data: BodyType<DriveDisconnectInput>}, TContext> => {
 
 const mutationKey = ['disconnectGoogleDrive'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -15514,10 +15517,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disconnectGoogleDrive>>, void> = () => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof disconnectGoogleDrive>>, {data: BodyType<DriveDisconnectInput>}> = (props) => {
+          const {data} = props ?? {};
 
-
-          return  disconnectGoogleDrive(requestOptions)
+          return  disconnectGoogleDrive(data,requestOptions)
         }
 
 
@@ -15528,22 +15531,99 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type DisconnectGoogleDriveMutationResult = NonNullable<Awaited<ReturnType<typeof disconnectGoogleDrive>>>
-
+    export type DisconnectGoogleDriveMutationBody = BodyType<DriveDisconnectInput>
     export type DisconnectGoogleDriveMutationError = ErrorType<unknown>
 
     /**
- * @summary Disconnect Drive, clearing stored tokens and folder (admin)
+ * @summary Disconnect Drive with an explicit folder retention choice (admin)
  */
 export const useDisconnectGoogleDrive = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectGoogleDrive>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof disconnectGoogleDrive>>, TError,{data: BodyType<DriveDisconnectInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof disconnectGoogleDrive>>,
         TError,
-        void,
+        {data: BodyType<DriveDisconnectInput>},
         TContext
       > => {
       return useMutation(getDisconnectGoogleDriveMutationOptions(options));
     }
+
+export const getGetGoogleDriveDisconnectPreviewUrl = () => {
+
+
+
+
+  return `/api/google-drive/disconnect-preview`
+}
+
+/**
+ * @summary Folder bindings and aggregate usage before disconnect (Drive admin only)
+ */
+export const getGoogleDriveDisconnectPreview = async ( options?: RequestInit): Promise<DriveDisconnectPreview> => {
+
+  return customFetch<DriveDisconnectPreview>(getGetGoogleDriveDisconnectPreviewUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetGoogleDriveDisconnectPreviewQueryKey = () => {
+    return [
+    `/api/google-drive/disconnect-preview`
+    ] as const;
+    }
+
+
+export const getGetGoogleDriveDisconnectPreviewQueryOptions = <TData = Awaited<ReturnType<typeof getGoogleDriveDisconnectPreview>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGoogleDriveDisconnectPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGoogleDriveDisconnectPreviewQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGoogleDriveDisconnectPreview>>> = ({ signal }) => getGoogleDriveDisconnectPreview({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGoogleDriveDisconnectPreview>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetGoogleDriveDisconnectPreviewQueryResult = NonNullable<Awaited<ReturnType<typeof getGoogleDriveDisconnectPreview>>>
+export type GetGoogleDriveDisconnectPreviewQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Folder bindings and aggregate usage before disconnect (Drive admin only)
+ */
+
+export function useGetGoogleDriveDisconnectPreview<TData = Awaited<ReturnType<typeof getGoogleDriveDisconnectPreview>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getGoogleDriveDisconnectPreview>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetGoogleDriveDisconnectPreviewQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getListGoogleDriveFoldersUrl = () => {
 

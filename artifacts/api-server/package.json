@@ -27,6 +27,7 @@
     "test:relation-selection-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/lib/relation-selection.db.test.ts",
     "test:inbound-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/inbound-integrations.db.test.ts",
     "test:user-sessions-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/user-sessions.db.test.ts",
+    "test:drive-disconnect-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/drive-disconnect.db.test.ts",
     "test:document-orphan-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/document-generation-orphan.db.test.ts",
     "test:import-status-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/import-status-permissions.db.test.ts",
     "test:page-select-status-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/page-select-status-sync.db.test.ts",

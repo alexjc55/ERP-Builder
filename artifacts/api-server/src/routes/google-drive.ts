@@ -17,7 +17,8 @@ import {
   type DriveNameSection,
   type EntityField,
 } from "@workspace/db";
-import { UpdateGoogleDriveConnectionBody, CreateGoogleDriveFolderBody, UpdateGoogleDriveFolderBody, RenameGoogleDriveFileBody } from "@workspace/api-zod";
+import { UpdateGoogleDriveConnectionBody, CreateGoogleDriveFolderBody, UpdateGoogleDriveFolderBody, RenameGoogleDriveFileBody, DisconnectGoogleDriveBody } from "@workspace/api-zod";
+import { disconnectDrive, driveDisconnectPreview, driveConnectionVersion } from "../lib/drive-disconnect";
 import { requireAuth } from "../middlewares/auth";
 import {
   requireAdmin,
@@ -47,7 +48,6 @@ import {
   downloadDriveFile,
   renameDriveFile,
   fetchDriveThumbnail,
-  saveConnectionTokens,
   isGoogleDriveModuleEnabled,
   checkDriveConnection,
   classifyDriveFailure,
@@ -222,7 +222,7 @@ router.post("/google-drive/oauth/start", requireAuth, requireAdmin("googleDrive"
     });
     return;
   }
-  const state = jwt.sign({ purpose: OAUTH_STATE_PURPOSE, uid: req.user!.userId }, SECRET, { expiresIn: "10m" });
+  const state = jwt.sign({ purpose: OAUTH_STATE_PURPOSE, uid: req.user!.userId, connectionVersion: driveConnectionVersion(conn) }, SECRET, { expiresIn: "10m" });
   res.json({ authUrl: buildAuthUrl(creds, state, driveRedirectUri(req)) });
 });
 
@@ -232,7 +232,7 @@ router.post("/google-drive/oauth/start", requireAuth, requireAdmin("googleDrive"
  * redirects back to the settings page. Not part of the generated client.
  */
 router.get("/google-drive/oauth/callback", async (req: Request, res: Response): Promise<void> => {
-  const redirectBack = (status: "connected" | "error") =>
+  const redirectBack = (status: "connected" | "error" | "folders-unavailable" | "account-mismatch") =>
     res.redirect(`${SETTINGS_PATH}?drive=${status}`);
   try {
     const code = typeof req.query.code === "string" ? req.query.code : "";
@@ -241,40 +241,60 @@ router.get("/google-drive/oauth/callback", async (req: Request, res: Response): 
       redirectBack("error");
       return;
     }
+    let connectionVersion: string;
     try {
-      const decoded = jwt.verify(state, SECRET) as { purpose?: string };
+      const decoded = jwt.verify(state, SECRET, { algorithms: ["HS256"] }) as { purpose?: string; connectionVersion?: string };
       if (decoded.purpose !== OAUTH_STATE_PURPOSE) throw new Error("bad state");
+      if (!decoded.connectionVersion) throw new Error("missing version");
+      connectionVersion = decoded.connectionVersion;
     } catch {
       redirectBack("error");
       return;
     }
     const conn = await ensureConnectionRow();
+    if (driveConnectionVersion(conn) !== connectionVersion) {
+      redirectBack("error");
+      return;
+    }
     const creds = resolveCreds(conn);
     if (!creds) {
       redirectBack("error");
       return;
     }
     const { refreshToken, accessToken, email } = await exchangeCode(creds, code, driveRedirectUri(req));
-    await saveConnectionTokens(refreshToken, email);
-    const folder = await ensureFolder(accessToken, conn.folderId);
-    await db
-      .update(googleDriveConnectionTable)
-      .set({ folderId: folder.id, folderName: folder.name })
-      .where(eq(googleDriveConnectionTable.id, DRIVE_CONNECTION_ID));
-    // Register the default upload folder in the managed-folders list (idempotent).
-    // Demote any stale default first so exactly one row stays isDefault=true even
-    // if the underlying Drive folder rotated between connects.
-    await db
-      .update(googleDriveFoldersTable)
-      .set({ isDefault: false })
-      .where(eq(googleDriveFoldersTable.isDefault, true));
-    await db
-      .insert(googleDriveFoldersTable)
-      .values({ driveFolderId: folder.id, name: folder.name, isDefault: true, sortOrder: 0 })
-      .onConflictDoUpdate({
-        target: googleDriveFoldersTable.driveFolderId,
-        set: { name: folder.name, isDefault: true },
-      });
+    if (conn.folderId && conn.accountEmail &&
+        (!email || conn.accountEmail.toLowerCase() !== email.toLowerCase())) {
+      redirectBack("account-mismatch");
+      return;
+    }
+    const outcome = await db.transaction(async (tx) => {
+      await tx.execute(sql`LOCK TABLE google_drive_connection, google_drive_folders IN SHARE ROW EXCLUSIVE MODE`);
+      const [current] = await tx.select().from(googleDriveConnectionTable)
+        .where(eq(googleDriveConnectionTable.id, DRIVE_CONNECTION_ID));
+      if (!current || driveConnectionVersion(current) !== connectionVersion) return "error" as const;
+      let folder: { id: string; name: string };
+      try {
+        // Every retained managed folder must still be accessible; never substitute a new one.
+        const retained = await tx.select().from(googleDriveFoldersTable);
+        if (retained.length > 0 && !current.folderId) return "folders-unavailable" as const;
+        for (const item of retained) await ensureFolder(accessToken, item.driveFolderId);
+        folder = await ensureFolder(accessToken, current.folderId);
+      } catch {
+        return "folders-unavailable" as const;
+      }
+      await tx.update(googleDriveConnectionTable).set({
+        refreshTokenEnc: encryptSecret(refreshToken), accountEmail: email,
+        folderId: folder.id, folderName: folder.name, healthState: "healthy",
+        healthReason: null, healthLastCheckedAt: new Date(), healthLastSuccessAt: new Date(),
+      }).where(eq(googleDriveConnectionTable.id, DRIVE_CONNECTION_ID));
+      await tx.update(googleDriveFoldersTable).set({ isDefault: false })
+        .where(eq(googleDriveFoldersTable.isDefault, true));
+      await tx.insert(googleDriveFoldersTable)
+        .values({ driveFolderId: folder.id, name: folder.name, isDefault: true, sortOrder: 0 })
+        .onConflictDoUpdate({ target: googleDriveFoldersTable.driveFolderId, set: { name: folder.name, isDefault: true } });
+      return "connected" as const;
+    });
+    if (outcome !== "connected") { redirectBack(outcome); return; }
     redirectBack("connected");
   } catch (err) {
     // OAuth errors may carry authorization codes, tokens, or raw provider
@@ -284,26 +304,18 @@ router.get("/google-drive/oauth/callback", async (req: Request, res: Response): 
   }
 });
 
-/** POST /google-drive/disconnect — clear tokens, creds secret, folder (admin). */
+router.get("/google-drive/disconnect-preview", requireAuth, requireAdmin("googleDrive"), async (_req, res) => {
+  await ensureConnectionRow();
+  res.json(await driveDisconnectPreview());
+});
+
+/** Explicit choice; legacy/no-body clients must not silently destroy bindings. */
 router.post("/google-drive/disconnect", requireAuth, requireAdmin("googleDrive"), async (req, res): Promise<void> => {
   await ensureConnectionRow();
-  const [row] = await db
-    .update(googleDriveConnectionTable)
-    .set({
-      refreshTokenEnc: null,
-      accountEmail: null,
-      folderId: null,
-      folderName: null,
-      healthState: "unknown",
-      healthReason: null,
-      healthLastCheckedAt: null,
-      healthLastSuccessAt: null,
-    })
-    .where(eq(googleDriveConnectionTable.id, DRIVE_CONNECTION_ID))
-    .returning();
-  // Drop the managed-folder list too; the Drive folders themselves are left
-  // untouched (the platform never deletes Drive content).
-  await db.delete(googleDriveFoldersTable);
+  const parsed = DisconnectGoogleDriveBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Choose whether to keep or forget folders" }); return; }
+  const row = await disconnectDrive(parsed.data.folderAction, parsed.data.revision);
+  if (!row) { res.status(409).json({ error: "Drive usage changed; refresh the confirmation" }); return; }
   res.json(connectionInfo(row, req));
 });
 
@@ -441,6 +453,10 @@ router.get("/google-drive/name-template", requireAuth, async (req, res): Promise
   let row: GoogleDriveFolder | undefined;
   if (driveFolderId) {
     [row] = await db.select().from(googleDriveFoldersTable).where(eq(googleDriveFoldersTable.driveFolderId, driveFolderId));
+    if (!row) {
+      res.status(409).json({ error: "Configured Drive folder is not registered" });
+      return;
+    }
   }
   if (!row) {
     [row] = await db.select().from(googleDriveFoldersTable).where(eq(googleDriveFoldersTable.isDefault, true));
@@ -607,7 +623,11 @@ router.post(
           .select({ driveFolderId: googleDriveFoldersTable.driveFolderId })
           .from(googleDriveFoldersTable)
           .where(eq(googleDriveFoldersTable.driveFolderId, requestedFolderId));
-        if (managed) targetFolderId = managed.driveFolderId;
+        if (!managed) {
+          res.status(409).json({ error: "Configured Drive folder is not registered; choose an available folder" });
+          return;
+        }
+        targetFolderId = managed.driveFolderId;
       }
       const accessToken = await getAccessToken(conn);
       const file = await uploadToFolder(accessToken, targetFolderId, name, contentType, body);

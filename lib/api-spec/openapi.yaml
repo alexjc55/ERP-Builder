@@ -4329,7 +4329,13 @@ paths:
     post:
       operationId: disconnectGoogleDrive
       tags: [googleDrive]
-      summary: Disconnect Drive, clearing stored tokens and folder (admin)
+      summary: Disconnect Drive with an explicit folder retention choice (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DriveDisconnectInput"
       responses:
         "200":
           description: Updated connection info
@@ -4337,6 +4343,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/GoogleDriveConnectionInfo"
+
+  /google-drive/disconnect-preview:
+    get:
+      operationId: getGoogleDriveDisconnectPreview
+      tags: [googleDrive]
+      summary: Folder bindings and aggregate usage before disconnect (Drive admin only)
+      responses:
+        "200":
+          description: Snapshot of configured folder usage, not a scan of physical Drive contents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriveDisconnectPreview"
 
   /google-drive/folders:
     get:
@@ -5067,6 +5086,35 @@ components:
         lastCheckedAt: { type: string, format: date-time }
         lastSuccessAt: { type: string, format: date-time }
 
+    DriveDisconnectInput:
+      type: object
+      required: [folderAction, revision]
+      properties:
+        folderAction:
+          type: string
+          enum: [keep, forget]
+        revision:
+          type: string
+          minLength: 1
+    DriveFolderUsage:
+      type: object
+      required: [folderId, name, fields, entities, pages, records]
+      properties:
+        folderId: { type: string }
+        name: { type: string }
+        fields: { type: integer }
+        entities: { type: integer }
+        pages: { type: integer }
+        records: { type: integer }
+    DriveDisconnectPreview:
+      type: object
+      required: [revision, folders]
+      properties:
+        revision: { type: string }
+        folders:
+          type: array
+          items:
+            $ref: "#/components/schemas/DriveFolderUsage"
     GoogleDriveConnectionInfo:
       type: object
       required: [keyMode, connected, configured, folderConfigured, builtinAvailable, hasOwnCreds, redirectUri, health]

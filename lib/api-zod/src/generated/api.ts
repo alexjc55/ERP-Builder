@@ -11463,8 +11463,16 @@ export const StartGoogleDriveOauthResponse = zod.object({
 
 
 /**
- * @summary Disconnect Drive, clearing stored tokens and folder (admin)
+ * @summary Disconnect Drive with an explicit folder retention choice (admin)
  */
+
+
+
+export const DisconnectGoogleDriveBody = zod.object({
+  "folderAction": zod.enum(['keep', 'forget']),
+  "revision": zod.string().min(1)
+})
+
 export const DisconnectGoogleDriveResponse = zod.object({
   "keyMode": zod.enum(['builtin', 'own']),
   "connected": zod.boolean().describe('True only when the most recent real provider operation succeeded.'),
@@ -11483,6 +11491,22 @@ export const DisconnectGoogleDriveResponse = zod.object({
   "lastCheckedAt": zod.coerce.date().optional(),
   "lastSuccessAt": zod.coerce.date().optional()
 })
+})
+
+
+/**
+ * @summary Folder bindings and aggregate usage before disconnect (Drive admin only)
+ */
+export const GetGoogleDriveDisconnectPreviewResponse = zod.object({
+  "revision": zod.string(),
+  "folders": zod.array(zod.object({
+  "folderId": zod.string(),
+  "name": zod.string(),
+  "fields": zod.number(),
+  "entities": zod.number(),
+  "pages": zod.number(),
+  "records": zod.number()
+}))
 })
 
 

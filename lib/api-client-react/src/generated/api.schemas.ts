@@ -554,6 +554,34 @@ export interface GoogleDriveHealth {
   lastSuccessAt?: string;
 }
 
+export type DriveDisconnectInputFolderAction = typeof DriveDisconnectInputFolderAction[keyof typeof DriveDisconnectInputFolderAction];
+
+
+export const DriveDisconnectInputFolderAction = {
+  keep: 'keep',
+  forget: 'forget',
+} as const;
+
+export interface DriveDisconnectInput {
+  folderAction: DriveDisconnectInputFolderAction;
+  /** @minLength 1 */
+  revision: string;
+}
+
+export interface DriveFolderUsage {
+  folderId: string;
+  name: string;
+  fields: number;
+  entities: number;
+  pages: number;
+  records: number;
+}
+
+export interface DriveDisconnectPreview {
+  revision: string;
+  folders: DriveFolderUsage[];
+}
+
 export type GoogleDriveConnectionInfoKeyMode = typeof GoogleDriveConnectionInfoKeyMode[keyof typeof GoogleDriveConnectionInfoKeyMode];
 
 
