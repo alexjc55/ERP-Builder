@@ -984,10 +984,11 @@ router.post("/users/:id/reset-password", requireAuth, requireAdmin("users"), asy
   const newHash = await bcrypt.hash(parsed.data.newPassword, 10);
   await db
     .update(usersTable)
-    .set({ passwordHash: newHash })
+    .set({ passwordHash: newHash, sessionVersion: sql`${usersTable.sessionVersion} + 1` })
     .where(eq(usersTable.id, params.data.id));
 
-  res.json({ success: true, message: "Password reset" });
+  req.log?.info({ actorUserId: req.user!.userId, targetUserId: params.data.id, action: "password_reset_sessions_revoked" }, "User sessions revoked");
+  res.json({ success: true, message: "Password reset; all sessions revoked" });
 });
 
 router.get("/users/:id/login-history", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {

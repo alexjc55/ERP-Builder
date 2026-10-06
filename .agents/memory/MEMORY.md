@@ -85,3 +85,4 @@
 - [Kanban requirements](kanban-requirements.md) — CRM-first use, universal entity view; terminal-column hiding, archiving, responsive dragging, viewport scrolling, configurable cards.
 - [Конструктор карточек](card-builder-requirements.md) — черновики, копирование между сущностями, приоритет страницы и сохранение открытой формы при публикации.
 - [ERP interaction feedback](interaction-affordances.md) — pointer cursors identify clickable controls across ERP; preserve text, drag, resize, and disabled affordances.
+- [Session revocation](session-revocation.md) — preserve the encryption secret; reject legacy tokens; browser sessions and integration keys have separate revocation lifecycles.

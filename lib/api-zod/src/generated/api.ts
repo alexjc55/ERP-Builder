@@ -1828,6 +1828,24 @@ export const ChangePasswordResponse = zod.object({
 
 
 /**
+ * @summary Revoke all current user sessions, including this session
+ */
+export const RevokeOwnSessionsResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
+ * @summary Super-admin only — revoke every user session, including this session
+ */
+export const RevokeAllSessionsResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string().optional()
+})
+
+
+/**
  * @summary List all users
  */
 export const listUsersQueryLimitDefault = 50;

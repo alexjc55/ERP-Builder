@@ -11481,5 +11481,14 @@
   {"key":"kanban.refresh","ru":"Обновить","en":"Refresh","he":"רענון"},
   {"key":"kanban.retry","ru":"Повторить","en":"Retry","he":"נסה שוב"},
   {"key":"kanban.view","ru":"Просмотр","en":"View","he":"צפייה"},
-  {"key":"kanban.showBoard","ru":"Показать доску целиком","en":"Show full board","he":"הצג את כל הלוח"}
+  {"key":"kanban.showBoard","ru":"Показать доску целиком","en":"Show full board","he":"הצג את כל הלוח"},
+  {"key":"sessions.title","ru":"Безопасность сессий","en":"Session security","he":"אבטחת התחברויות"},
+  {"key":"sessions.hint","ru":"Завершение сессий требует повторного входа. Ключи ИИ-агентов, интеграций и гостевые ссылки не отзываются.","en":"Ending sessions requires signing in again. AI agent keys, integration keys and guest links are not revoked.","he":"סיום התחברויות דורש כניסה מחדש. מפתחות סוכני AI, אינטגרציות וקישורי אורחים אינם מבוטלים."},
+  {"key":"sessions.own","ru":"Завершить все мои сессии","en":"End all my sessions","he":"סיום כל ההתחברויות שלי"},
+  {"key":"sessions.all","ru":"Завершить сессии всех пользователей","en":"End all users’ sessions","he":"סיום ההתחברויות של כל המשתמשים"},
+  {"key":"sessions.confirmOwn","ru":"Все ваши сессии, включая текущую, будут завершены. Потребуется повторный вход. Продолжить?","en":"All your sessions, including this one, will end. You will need to sign in again. Continue?","he":"כל ההתחברויות שלך, כולל הנוכחית, יסתיימו. תידרש כניסה מחדש. להמשיך?"},
+  {"key":"sessions.confirmAll","ru":"Все пользователи, включая вас, потеряют текущие сессии и должны будут войти заново. Несохранённые изменения могут быть потеряны. Продолжить?","en":"All users, including you, must sign in again. Unsaved changes may be lost. Continue?","he":"כל המשתמשים, כולל אותך, יצטרכו להיכנס מחדש. שינויים שלא נשמרו עלולים ללכת לאיבוד. להמשיך?"},
+  {"key":"sessions.confirm","ru":"Завершить сессии","en":"End sessions","he":"סיום התחברויות"},
+  {"key":"sessions.error","ru":"Не удалось отозвать сессии","en":"Could not revoke sessions","he":"לא ניתן לבטל התחברויות"},
+  {"key":"sessions.passwordChanged","ru":"Пароль изменён. Войдите заново.","en":"Password changed. Sign in again.","he":"הסיסמה שונתה. יש להיכנס מחדש."}
 ]

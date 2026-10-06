@@ -176,6 +176,13 @@
       "when": 1791108274297,
       "tag": "0024_flawless_wither",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791282814259,
+      "tag": "0025_bizarre_xorn",
+      "breakpoints": true
     }
   ]
 }

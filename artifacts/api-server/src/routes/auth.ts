@@ -1,10 +1,10 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
 import { db, usersTable, rolesTable, loginHistoryTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { signToken } from "../lib/jwt";
 import { requireAuth } from "../middlewares/auth";
-import { loadRoleContext, getPermissions } from "../middlewares/permissions";
+import { loadRoleContext, getPermissions, requireSuperAdmin } from "../middlewares/permissions";
 import {
   LoginBody,
   ChangePasswordBody,
@@ -47,6 +47,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       id: usersTable.id,
       email: usersTable.email,
       passwordHash: usersTable.passwordHash,
+      sessionVersion: usersTable.sessionVersion,
       firstName: usersTable.firstName,
       lastName: usersTable.lastName,
       roleId: usersTable.roleId,
@@ -77,7 +78,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     userAgent: req.headers["user-agent"] ?? null,
   });
 
-  const token = signToken({ userId: user.id, roleId: user.roleId });
+  const token = signToken({ userId: user.id, roleId: user.roleId, sessionVersion: user.sessionVersion });
 
   // Get role name
   const [role] = await db
@@ -250,12 +251,39 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
   }
 
   const newHash = await bcrypt.hash(newPassword, 10);
-  await db
+  const changed = await db
     .update(usersTable)
-    .set({ passwordHash: newHash })
-    .where(eq(usersTable.id, req.user!.userId));
+    .set({ passwordHash: newHash, sessionVersion: sql`${usersTable.sessionVersion} + 1` })
+    .where(and(eq(usersTable.id, req.user!.userId), eq(usersTable.passwordHash, user.passwordHash)))
+    .returning({ id: usersTable.id });
+  if (!changed.length) {
+    res.status(409).json({ error: "Password changed concurrently; sign in again" });
+    return;
+  }
 
-  res.json({ success: true, message: "Password changed" });
+  req.log?.info({ actorUserId: req.user!.userId, action: "password_changed_sessions_revoked" }, "User sessions revoked");
+  res.json({ success: true, message: "Password changed; all sessions revoked" });
+});
+
+router.post("/auth/revoke-sessions", requireAuth, async (req, res): Promise<void> => {
+  if (req.user!.impersonatorId) {
+    res.status(403).json({ error: "Return to your own account first" });
+    return;
+  }
+  await db.update(usersTable).set({ sessionVersion: sql`${usersTable.sessionVersion} + 1` })
+    .where(eq(usersTable.id, req.user!.userId));
+  req.log?.info({ actorUserId: req.user!.userId, action: "sessions_revoked" }, "User sessions revoked");
+  res.json({ success: true, message: "All your sessions revoked" });
+});
+
+router.post("/auth/revoke-all-sessions", requireAuth, requireSuperAdmin(), async (req, res): Promise<void> => {
+  if (req.user!.impersonatorId) {
+    res.status(403).json({ error: "Return to your own account first" });
+    return;
+  }
+  await db.update(usersTable).set({ sessionVersion: sql`${usersTable.sessionVersion} + 1` });
+  req.log?.warn({ actorUserId: req.user!.userId, action: "all_sessions_revoked" }, "All user sessions revoked");
+  res.json({ success: true, message: "All user sessions revoked" });
 });
 
 router.post("/auth/impersonate", requireAuth, async (req, res): Promise<void> => {
@@ -276,6 +304,7 @@ router.post("/auth/impersonate", requireAuth, async (req, res): Promise<void> =>
 
   const [target] = await db
     .select({
+      sessionVersion: usersTable.sessionVersion,
       id: usersTable.id,
       email: usersTable.email,
       firstName: usersTable.firstName,
@@ -289,7 +318,7 @@ router.post("/auth/impersonate", requireAuth, async (req, res): Promise<void> =>
     .from(usersTable)
     .where(eq(usersTable.id, targetId));
 
-  if (!target) {
+  if (!target || !target.isActive) {
     res.status(404).json({ error: "User not found" });
     return;
   }
@@ -309,6 +338,9 @@ router.post("/auth/impersonate", requireAuth, async (req, res): Promise<void> =>
     userId: target.id,
     roleId: target.roleId,
     impersonatorId: originalAdminId,
+    sessionVersion: target.sessionVersion,
+    impersonatorSessionVersion: req.user!.impersonatorId
+      ? req.user!.impersonatorSessionVersion : req.user!.sessionVersion,
   });
 
   const [role] = await db
@@ -365,7 +397,9 @@ router.post("/auth/stop-impersonation", requireAuth, async (req, res): Promise<v
     return;
   }
 
-  const token = signToken({ userId: admin.id, roleId: admin.roleId });
+  const token = signToken({
+    userId: admin.id, roleId: admin.roleId, sessionVersion: req.user!.impersonatorSessionVersion,
+  });
 
   const [role] = await db
     .select({ nameJson: rolesTable.nameJson })

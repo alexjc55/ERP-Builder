@@ -15,6 +15,7 @@ import {
   type LocalFolder,
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
+import { SessionSecurity } from "@/components/SessionSecurity";
 import { useT, LANGS, type Lang } from "@/lib/i18n";
 import { uploadBrandingLogo } from "@/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,7 +65,7 @@ const WEEKDAYS = [
 ] as const;
 
 export default function SettingsPage() {
-  const { user, isSuperAdmin, canAdmin } = useAuth();
+  const { user, isSuperAdmin, canAdmin, logout } = useAuth();
   const t = useT();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -117,7 +118,8 @@ export default function SettingsPage() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      toast({ title: t("settings.passwordChanged", "Пароль изменён") });
+      toast({ title: t("sessions.passwordChanged", "Пароль изменён. Войдите заново.") });
+      logout();
     } catch {
       toast({ title: t("settings.passwordError", "Не удалось изменить пароль. Проверьте текущий пароль."), variant: "destructive" });
     }
@@ -314,6 +316,8 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <SessionSecurity />
 
       {/* Branding (admin only) */}
       {canBranding && (

@@ -953,6 +953,38 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   # USERS
+  /auth/revoke-sessions:
+    post:
+      operationId: revokeOwnSessions
+      tags: [Auth]
+      summary: Revoke all current user sessions, including this session
+      responses:
+        "200":
+          description: Sessions revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Invalid session
+        "403":
+          description: Guests, agents and impersonated sessions are forbidden
+  /auth/revoke-all-sessions:
+    post:
+      operationId: revokeAllSessions
+      tags: [Auth]
+      summary: Super-admin only — revoke every user session, including this session
+      responses:
+        "200":
+          description: All user sessions revoked; machine keys and guest links are not revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Invalid session
+        "403":
+          description: Requires a non-impersonated super-admin
   /users:
     get:
       operationId: listUsers

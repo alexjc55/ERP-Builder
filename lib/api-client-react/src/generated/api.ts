@@ -3731,6 +3731,146 @@ export const useChangePassword = <TError = ErrorType<ErrorResponse>,
       return useMutation(getChangePasswordMutationOptions(options));
     }
 
+export const getRevokeOwnSessionsUrl = () => {
+
+
+
+
+  return `/api/auth/revoke-sessions`
+}
+
+/**
+ * @summary Revoke all current user sessions, including this session
+ */
+export const revokeOwnSessions = async ( options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getRevokeOwnSessionsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRevokeOwnSessionsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeOwnSessions>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeOwnSessions>>, TError,void, TContext> => {
+
+const mutationKey = ['revokeOwnSessions'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeOwnSessions>>, void> = () => {
+
+
+          return  revokeOwnSessions(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeOwnSessionsMutationResult = NonNullable<Awaited<ReturnType<typeof revokeOwnSessions>>>
+
+    export type RevokeOwnSessionsMutationError = ErrorType<void>
+
+    /**
+ * @summary Revoke all current user sessions, including this session
+ */
+export const useRevokeOwnSessions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeOwnSessions>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeOwnSessions>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRevokeOwnSessionsMutationOptions(options));
+    }
+
+export const getRevokeAllSessionsUrl = () => {
+
+
+
+
+  return `/api/auth/revoke-all-sessions`
+}
+
+/**
+ * @summary Super-admin only — revoke every user session, including this session
+ */
+export const revokeAllSessions = async ( options?: RequestInit): Promise<SuccessResponse> => {
+
+  return customFetch<SuccessResponse>(getRevokeAllSessionsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getRevokeAllSessionsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeAllSessions>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeAllSessions>>, TError,void, TContext> => {
+
+const mutationKey = ['revokeAllSessions'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeAllSessions>>, void> = () => {
+
+
+          return  revokeAllSessions(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeAllSessionsMutationResult = NonNullable<Awaited<ReturnType<typeof revokeAllSessions>>>
+
+    export type RevokeAllSessionsMutationError = ErrorType<void>
+
+    /**
+ * @summary Super-admin only — revoke every user session, including this session
+ */
+export const useRevokeAllSessions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeAllSessions>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeAllSessions>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getRevokeAllSessionsMutationOptions(options));
+    }
+
 export const getListUsersUrl = (params?: ListUsersParams,) => {
   const normalizedParams = new URLSearchParams();
 

@@ -1,41 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import { verifyToken, type JwtPayload } from "../lib/jwt";
-import { AI_AGENT_KEY_PREFIX, resolveAgentKey, isAllowedByMask } from "../lib/aiAgentAuth";
-import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import { BoundedTtlCache } from "../lib/bounded-ttl-cache";
-
-/**
- * A JWT stays valid for days, but the account behind it can be deleted (e.g.
- * merged away as a duplicate) or blocked meanwhile. Verify the account still
- * exists and is active, with a short in-memory cache so the check costs one
- * DB read per user per minute, not per request.
- */
-const USER_ALIVE_TTL_MS = 60_000;
-// A high cap contains a token-spray workload without shortening the one-minute
-// authorization freshness window for entries that remain cached.
-const userAliveCache = new BoundedTtlCache<number, boolean>({
-  ttlMs: USER_ALIVE_TTL_MS,
-  maxEntries: 10_000,
-});
-
-async function isUserAlive(userId: number): Promise<boolean> {
-  const cached = userAliveCache.get(userId);
-  if (cached !== undefined) return cached;
-  const generation = userAliveCache.generation;
-  const [row] = await db
-    .select({ isActive: usersTable.isActive })
-    .from(usersTable)
-    .where(eq(usersTable.id, userId))
-    .limit(1);
-  const ok = row?.isActive === true;
-  userAliveCache.setIfCurrent(generation, userId, ok);
-  return ok;
-}
-
-/** Drop the cached "alive" verdict for a user (call after delete/block/merge). */
-export function invalidateUserAliveCache(userId: number): void {
-  userAliveCache.invalidate(userId);
+import { AI_AGENT_KEY_PREFIX, resolveAgentKey, isAllowedByMask, invalidateAgentCache } from "../lib/aiAgentAuth";
+import { isUserSessionCurrent } from "../lib/user-sessions";
+/** Compatibility hook for account mutations: JWT state is now read live.
+ * Machine identities still have a bounded cache, which must be cleared. */
+export function invalidateUserAliveCache(_userId: number): void {
+  invalidateAgentCache();
 }
 
 declare global {
@@ -92,10 +62,10 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
 
-  isUserAlive(payload.userId)
+  isUserSessionCurrent(payload)
     .then((alive) => {
       if (!alive) {
-        res.status(401).json({ error: "Account no longer active" });
+        res.status(401).json({ error: "Session revoked or account inactive" });
         return;
       }
       req.user = payload;

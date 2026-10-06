@@ -77,6 +77,7 @@ router.post("/guest/redeem", async (req, res): Promise<void> => {
       startPageId: usersTable.startPageId,
       isActive: usersTable.isActive,
       passwordHash: usersTable.passwordHash,
+      sessionVersion: usersTable.sessionVersion,
     })
     .from(usersTable)
     .where(eq(usersTable.id, link.userId));
@@ -101,7 +102,7 @@ router.post("/guest/redeem", async (req, res): Promise<void> => {
     userAgent: req.headers["user-agent"] ?? null,
   });
 
-  const token = signToken({ userId: user.id, roleId: user.roleId, guest: true });
+  const token = signToken({ userId: user.id, roleId: user.roleId, guest: true, sessionVersion: user.sessionVersion });
 
   const [role] = await db
     .select({ nameJson: rolesTable.nameJson })

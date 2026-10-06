@@ -136,8 +136,8 @@ router.get("/collaboration/pages/:pageId/stream", requireAuth, async (req, res):
       requireAuth(fresh, authResponse, (error) => error ? reject(error) : resolve(true));
     });
     if (!authenticated || !fresh.user || fresh.user.guest) return null;
-    // requireAuth deliberately caches liveness for short HTTP requests; the
-    // long-lived stream must not inherit that stale allow verdict either.
+    // JWT sessions are checked live by requireAuth. Also recheck the account
+    // for machine identities, whose key resolver can still use a short cache.
     const [account] = await db.select({ isActive: usersTable.isActive }).from(usersTable)
       .where(eq(usersTable.id, fresh.user.userId)).limit(1);
     if (!account?.isActive) return null;
