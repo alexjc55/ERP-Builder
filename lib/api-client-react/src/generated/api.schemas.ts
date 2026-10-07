@@ -1542,6 +1542,17 @@ export const AiAgentMask = {
   read_edit_create_delete: 'read_edit_create_delete',
 } as const;
 
+export type AiAgentAccessIssuesItem = typeof AiAgentAccessIssuesItem[keyof typeof AiAgentAccessIssuesItem];
+
+
+export const AiAgentAccessIssuesItem = {
+  module_disabled: 'module_disabled',
+  agent_disabled: 'agent_disabled',
+  account_disabled: 'account_disabled',
+  linked_user_unavailable: 'linked_user_unavailable',
+  linked_user_privileged: 'linked_user_privileged',
+} as const;
+
 export interface AiAgent {
   id: number;
   name: string;
@@ -1550,6 +1561,10 @@ export interface AiAgent {
   capabilityMask: AiAgentMask;
   /** When set, the agent acts under this user's identity (roles, own-scope, audit) instead of its backing account. */
   actsAsUserId?: number | null;
+  /** Current configuration blockers, computed by the admin list endpoint. Empty means no configuration blocker, not a live key test. */
+  accessIssues?: AiAgentAccessIssuesItem[];
+  /** Primary or additional roles preventing access on behalf of the linked user. */
+  accessBlockingRoleIds?: number[];
   tokenPrefix: string;
   isActive: boolean;
   lastUsedAt?: string | null;

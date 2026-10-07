@@ -4,6 +4,7 @@ import { db, aiAgentsTable, usersTable, userRolesTable, rolesTable, modulesTable
 import { eq, inArray } from "drizzle-orm";
 import type { JwtPayload } from "./jwt";
 import { BoundedTtlCache } from "./bounded-ttl-cache";
+import { hasAgentAdministrativePermissions } from "./ai-agent-access-status";
 
 /** AI-agent API keys are opaque bearer tokens with this prefix (never JWTs). */
 export const AI_AGENT_KEY_PREFIX = "agk_";
@@ -137,10 +138,7 @@ async function hasPrivilegedRole(userId: number, primaryRoleId: number): Promise
     .select({ permissionsJson: rolesTable.permissionsJson })
     .from(rolesTable)
     .where(inArray(rolesTable.id, roleIds));
-  return roles.some((r) => {
-    const p = r.permissionsJson as RolePermissions;
-    return p.superAdmin === true || Object.values(p.admin ?? {}).some(Boolean);
-  });
+  return roles.some((r) => hasAgentAdministrativePermissions(r.permissionsJson as RolePermissions));
 }
 
 /** Any GET, or an explicitly read-only POST query (same shape as the guest guard). */

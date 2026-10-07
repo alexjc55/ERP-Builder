@@ -5,6 +5,7 @@ import { randomBytes } from "crypto";
 import { requireAuth, invalidateUserAliveCache } from "../middlewares/auth";
 import { requireAdmin, isPrivilegedRole } from "../middlewares/permissions";
 import { generateAgentKey, invalidateAgentCache, AI_AGENTS_MODULE_KEY } from "../lib/aiAgentAuth";
+import { getAiAgentAccessStatuses } from "../lib/ai-agent-access-status";
 import {
   CreateAiAgentBody,
   UpdateAiAgentBody,
@@ -107,7 +108,19 @@ router.get("/ai-agents/acts-as-candidates", requireAuth, requireAdmin("modules")
 
 router.get("/ai-agents", requireAuth, requireAdmin("modules"), async (_req, res): Promise<void> => {
   const agents = await db.select().from(aiAgentsTable).orderBy(aiAgentsTable.createdAt);
-  res.json(agents);
+  if (!agents.length) { res.json([]); return; }
+  const userIds = [...new Set(agents.flatMap(a => a.actsAsUserId == null ? [a.userId] : [a.userId, a.actsAsUserId]))];
+  const [accounts, memberships, roles, modules] = await Promise.all([
+    db.select({ id: usersTable.id, roleId: usersTable.roleId, isActive: usersTable.isActive })
+      .from(usersTable).where(inArray(usersTable.id, userIds)),
+    db.select({ userId: userRolesTable.userId, roleId: userRolesTable.roleId })
+      .from(userRolesTable).where(inArray(userRolesTable.userId, userIds)),
+    db.select({ id: rolesTable.id, permissionsJson: rolesTable.permissionsJson }).from(rolesTable),
+    db.select({ isEnabled: modulesTable.isEnabled }).from(modulesTable)
+      .where(eq(modulesTable.moduleKey, AI_AGENTS_MODULE_KEY)).limit(1),
+  ]);
+  const statuses = getAiAgentAccessStatuses(agents, accounts, roles, memberships, modules[0]?.isEnabled === true);
+  res.json(agents.map(({ tokenHash: _tokenHash, ...agent }) => ({ ...agent, ...statuses.get(agent.id) })));
 });
 
 router.post("/ai-agents", requireAuth, requireAdmin("modules"), async (req, res): Promise<void> => {

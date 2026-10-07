@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import {
   useListAiAgents,
+  getListAiAgentsQueryKey,
   useCreateAiAgent,
   useUpdateAiAgent,
   useDeleteAiAgent,
@@ -47,6 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { AiAgentAccessWarning, AiAgentAccessPolicyNotice } from "@/components/AiAgentAccessWarning";
 import {
   Bot,
   ArrowLeft,
@@ -79,8 +81,14 @@ export default function AiAgentsPage() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
-  const { data: agents = [], isLoading } = useListAiAgents();
+  const { data: agents = [], isLoading, isError } = useListAiAgents({
+    query: { queryKey: getListAiAgentsQueryKey(), refetchInterval: 15_000, staleTime: 0, refetchOnMount: "always", refetchOnWindowFocus: "always" },
+  });
   const { data: roles = [] } = useListRoles();
+  const roleName = (id: number) => {
+    const role = roles.find(r => r.id === id);
+    return role ? ml(role.nameJson) : `#${id}`;
+  };
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AiAgent | null>(null);
@@ -108,13 +116,13 @@ export default function AiAgentsPage() {
         setIssuedKey(res.plainKey);
         invalidate();
       },
-      onError: () => toast({ title: t("aiAgents.createError", "Не удалось создать агента"), variant: "destructive" }),
+      onError: (error) => toast({ title: t("aiAgents.createError", "Не удалось создать агента"), description: error.message, variant: "destructive" }),
     },
   });
   const updateMutation = useUpdateAiAgent({
     mutation: {
       onSuccess: () => { toast({ title: t("aiAgents.updated", "Агент обновлён") }); setDialogOpen(false); invalidate(); },
-      onError: () => toast({ title: t("aiAgents.updateError", "Не удалось обновить агента"), variant: "destructive" }),
+      onError: (error) => toast({ title: t("aiAgents.updateError", "Не удалось обновить агента"), description: error.message, variant: "destructive" }),
     },
   });
   const deleteMutation = useDeleteAiAgent({
@@ -212,6 +220,11 @@ export default function AiAgentsPage() {
         </CardContent>
       </Card>
 
+      <AiAgentAccessPolicyNotice />
+      {isError && <p role="alert" className="text-sm text-red-700">
+        {t("aiAgents.accessCheckFailed", "Не удалось обновить состояние доступа. Показанные данные могут быть устаревшими.")}
+      </p>}
+
       {/* Agents list */}
       {isLoading ? (
         <Card className="border-slate-200 shadow-sm"><CardContent className="p-6 space-y-3">
@@ -231,7 +244,7 @@ export default function AiAgentsPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-slate-800">{a.name}</span>
-                      <Badge variant="secondary" className={a.isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}>
+                      <Badge variant="secondary" className={a.accessIssues?.length ? "bg-amber-100 text-amber-900" : a.isActive ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}>
                         {a.isActive ? t("aiAgents.active", "Активен") : t("aiAgents.inactive", "Отключён")}
                       </Badge>
                       <Badge variant="secondary" className="bg-blue-50 text-blue-700">
@@ -252,6 +265,7 @@ export default function AiAgentsPage() {
                         <> · {t("aiAgents.lastUsed", "Последнее обращение")}: {new Date(a.lastUsedAt).toLocaleString()}</>
                       )}
                     </p>
+                    <AiAgentAccessWarning agent={a} roleName={roleName} />
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <Switch
@@ -285,6 +299,10 @@ export default function AiAgentsPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <AiAgentAccessPolicyNotice />
+            {editing && actsAsUserId === String(editing.actsAsUserId ?? "none") && (
+              <AiAgentAccessWarning agent={agents.find(a => a.id === editing.id) ?? editing} roleName={roleName} />
+            )}
             <div className="space-y-1.5">
               <Label>{t("aiAgents.name", "Название")}</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("aiAgents.namePlaceholder", "Например: Эва")} />
@@ -306,6 +324,11 @@ export default function AiAgentsPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">{t("aiAgents.actsAsNone", "Не выбран (от собственного имени)")}</SelectItem>
+                  {actsAsUserId !== "none" && !actsAsCandidates.some(u => String(u.id) === actsAsUserId) && (
+                    <SelectItem value={actsAsUserId} disabled>
+                      {t("aiAgents.linkedUserId", "Связанный пользователь")} #{actsAsUserId}
+                    </SelectItem>
+                  )}
                   {actsAsCandidates.map((u) => (
                     <SelectItem key={u.id} value={String(u.id)}>{u.firstName} {u.lastName}</SelectItem>
                   ))}
@@ -375,6 +398,7 @@ export default function AiAgentsPage() {
               {t("aiAgents.regenConfirm", "Старый ключ немедленно перестанет работать. Новый ключ будет показан один раз.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {regenTarget && <AiAgentAccessWarning agent={agents.find(a => a.id === regenTarget.id) ?? regenTarget} roleName={roleName} />}
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common.cancel", "Отмена")}</AlertDialogCancel>
             <AlertDialogAction onClick={() => regenTarget && regenMutation.mutate({ id: regenTarget.id })}>

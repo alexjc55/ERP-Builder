@@ -25,3 +25,11 @@ Agent may optionally act under a real user's identity (`acts_as_user_id`): paylo
 - Linked user missing/blocked ⇒ key DENIED (no silent fallback to backing account — that would quietly change visible data).
 - users.ts invalidates the agent cache on PUT/block/unblock/delete/merge so identity changes apply immediately, not after the 60s TTL.
 - Candidates endpoint (/ai-agents/acts-as-candidates?roleId=) lists active, non-agent, non-privileged users having the role in their full set.
+
+## Explain access failures to administrators
+
+Keep unauthenticated key errors generic, but explain configuration blockers to authorized administrators, including privilege changes after an agent was created. Do not weaken act-as restrictions to fix usability.
+
+**Why:** The user could not infer from a generic 401 that a linked user's additional administrative permissions invalidated the agent; reissuing keys did not help.
+
+**How to apply:** Any future authorization restriction needs a corresponding admin-facing explanation. Distinguish an enabled agent from a usable connection and do not suggest stripping necessary human permissions as an automatic fix.

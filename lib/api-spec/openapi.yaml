@@ -6242,6 +6242,17 @@ components:
           type: integer
           nullable: true
           description: When set, the agent acts under this user's identity (roles, own-scope, audit) instead of its backing account.
+        accessIssues:
+          type: array
+          description: Current configuration blockers, computed by the admin list endpoint. Empty means no configuration blocker, not a live key test.
+          items:
+            type: string
+            enum: [module_disabled, agent_disabled, account_disabled, linked_user_unavailable, linked_user_privileged]
+        accessBlockingRoleIds:
+          type: array
+          description: Primary or additional roles preventing access on behalf of the linked user.
+          items:
+            type: integer
         tokenPrefix:
           type: string
         isActive:

@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { AiAgentAccessIssuesItem } from './aiAgentAccessIssuesItem';
 import type { AiAgentMask } from './aiAgentMask';
 
 export interface AiAgent {
@@ -15,6 +16,10 @@ export interface AiAgent {
   capabilityMask: AiAgentMask;
   /** When set, the agent acts under this user's identity (roles, own-scope, audit) instead of its backing account. */
   actsAsUserId?: number | null;
+  /** Current configuration blockers, computed by the admin list endpoint. Empty means no configuration blocker, not a live key test. */
+  accessIssues?: AiAgentAccessIssuesItem[];
+  /** Primary or additional roles preventing access on behalf of the linked user. */
+  accessBlockingRoleIds?: number[];
   tokenPrefix: string;
   isActive: boolean;
   lastUsedAt?: Date | null;

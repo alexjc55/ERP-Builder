@@ -10,6 +10,7 @@ export * from './adminOperationalAlerts';
 export * from './adminOperationalAlertsDrive';
 export * from './adminOperationalAlertsInbound';
 export * from './aiAgent';
+export * from './aiAgentAccessIssuesItem';
 export * from './aiAgentActsAsCandidate';
 export * from './aiAgentInput';
 export * from './aiAgentMask';
