@@ -8,6 +8,16 @@ description: How the ERP is deployed to the external Debian/FastPanel server (er
 Production runs OUTSIDE Replit on a Debian server with FastPanel (user `ordis_co_il_usr`, home `/var/www/ordis_co_il_usr/data`, project at `~/www/erp.davidov-k.co.il`, IP 178.236.17.141).
 
 ## Topology
+Production should expose ERP through nginx/HTTPS, not the direct API port.
+The user approved a loopback-only API listener on the external server.
+
+**Why:** An external TCP check confirmed the API port accepted direct connections;
+nginx's upstream was verified to use loopback. This is not an IP allowlist for users.
+
+**How to apply:** Keep this setting explicit in the external PM2 deployment,
+not a global default that would break Replit's preview routing. Do not claim the
+production port is closed until the user deploys and an external check confirms it.
+
 - Node 24 + repository-pinned pnpm 11 through Corepack. API under PM2 as `erp-davidov` on port 10000: `set -a; source .env; set +a; pm2 start artifacts/api-server/dist/index.mjs --name erp-davidov --node-args="--enable-source-maps"; pm2 save`. api-server serves ONLY /api; env is captured by PM2 at start (no dotenv).
 - Frontend is a static build: `PORT=10000 BASE_PATH=/ corepack pnpm --filter @workspace/erp-platform run build` → `artifacts/erp-platform/dist/public`, served by nginx.
 - DB: local Postgres, db `erp_davidov`, user `erp_davidov_usr` (in `.env`).

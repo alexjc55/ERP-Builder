@@ -8,6 +8,7 @@ import { activeRequestTracker } from "./app";
 import { startMemoryDiagnostics } from "./lib/memory-diagnostics";
 import { disposeCollaboration } from "./lib/collaboration";
 import { createGracefulShutdown, type GracefulShutdownOwner } from "./lib/server-lifecycle";
+import { resolveListenHost } from "./lib/listen-host";
 
 const rawPort = process.env["PORT"];
 
@@ -18,6 +19,7 @@ if (!rawPort) {
 }
 
 const port = Number(rawPort);
+const host = resolveListenHost(process.env["API_BIND_HOST"]);
 
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
@@ -44,13 +46,13 @@ async function start(): Promise<void> {
   recoveryTimer.unref();
   const stopSecurityRetention = startSecurityRetention();
 
-  httpServer = app.listen(port, (err) => {
+  httpServer = app.listen({ port, host }, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");
       process.exit(1);
     }
 
-    logger.info({ port }, "Server listening");
+    logger.info({ port, address: httpServer?.address() }, "Server listening");
     const stopMemoryDiagnostics = startMemoryDiagnostics({
       logger,
       getActiveRequests: () => activeRequestTracker.getActiveRequests(),
