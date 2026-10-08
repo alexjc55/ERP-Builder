@@ -400,7 +400,7 @@ export default function InboundIntegrationsListPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>{t("inbound.deleteTitle", "Удалить интеграцию?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t("inbound.deleteConfirm", "Прием данных будет немедленно прекращен. История доставок и ошибки будут сохранены.")}
+              {t("inbound.deleteRemoveConfirm", "Интеграция исчезнет из списка, приём данных прекратится, технический пользователь будет отключён. История сохранится в базе для расследования. Созданные записи и клиенты не удаляются.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

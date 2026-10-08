@@ -19,6 +19,12 @@ description: Durable security, execution, matching, and concurrency rules for ge
 
 **Rule:** Receipt idempotency and business execution atomicity are separate boundaries. The event ID plus payload hash deduplicates receipt; all mapped writes, audit rows, versions, links, and the terminal delivery status commit in one transaction.
 
+**Deletion policy:** Remove deleted integrations from the operational workspace, but retain delivery/audit evidence and business records. Disabling is reversible; deleting must not be reversible through the active toggle.
+
+**Why:** An incident investigation relies on retained history, while reporting an integration as deleted but leaving it in the working list misleads the administrator.
+
+**How to apply:** Block execution and revival, not merely hide a card. Do not retroactively treat all disabled integrations as deleted: earlier deletion requests and intentional disabling were indistinguishable.
+
 **Why:** Marking a delivery complete after committing business rows leaves a crash window where recovery repeats already committed work.
 
 **How to apply:** Keep step logs and `completed` in the business transaction. Emit best-effort system events only after commit. Failed and dry-run transactions must not emit mutation events.

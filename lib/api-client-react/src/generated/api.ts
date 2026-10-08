@@ -1957,7 +1957,7 @@ export const getDeleteInboundIntegrationUrl = (id: number,) => {
 }
 
 /**
- * @summary Revoke an integration while preserving delivery and audit history
+ * @summary Remove integration from the workspace and revoke access, preserving historical evidence
  */
 export const deleteInboundIntegration = async (id: number, options?: RequestInit): Promise<void> => {
 
@@ -2005,7 +2005,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type DeleteInboundIntegrationMutationError = ErrorType<unknown>
 
     /**
- * @summary Revoke an integration while preserving delivery and audit history
+ * @summary Remove integration from the workspace and revoke access, preserving historical evidence
  */
 export const useDeleteInboundIntegration = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteInboundIntegration>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}

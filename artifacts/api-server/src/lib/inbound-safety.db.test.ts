@@ -107,6 +107,28 @@ test("inbound safety is fail-closed for old mappings, roles, events and disabled
         { key: "missing", operation: "find", target: { kind: "entity", entityId: 1 }, matches: [] }] } }).returning();
     assert.equal((await queue(failing.id, "rollback@fixture.invalid")).status, "failed");
     assert.equal((await db.select().from(usersTable).where(eq(usersTable.email, "rollback@fixture.invalid"))).length, 0);
+    const adminRequest = (path: string, method = "GET", body?: unknown) =>
+      fetch(`http://127.0.0.1:${addr.port}${path}`, {
+        method, headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    assert.equal((await adminRequest("/inbound-integrations/1", "PUT", { isActive: false })).status, 200);
+    assert.equal(((await (await adminRequest("/inbound-integrations")).json()) as unknown[]).length, 1, "Disabled integrations remain visible");
+    const historyCount = (await db.select().from(inboundDeliveriesTable)).length;
+    assert.equal((await adminRequest("/inbound-integrations/1", "DELETE")).status, 200);
+    assert.equal(((await (await adminRequest("/inbound-integrations")).json()) as unknown[]).length, 0);
+    assert.equal((await adminRequest("/inbound-integrations/1")).status, 404);
+    assert.equal((await adminRequest("/inbound-integrations/1", "PUT", { isActive: true })).status, 404);
+    assert.equal((await adminRequest("/inbound-integrations/1/regenerate-secret", "POST", {})).status, 404);
+    assert.equal((await adminRequest(`/inbound-deliveries/${queued.id}/reprocess`, "POST", {})).status, 410);
+    assert.equal((await call("accepted")).status, 401);
+    assert.equal((await db.select().from(inboundDeliveriesTable)).length, historyCount);
+    const [technical] = await db.select().from(usersTable).where(eq(usersTable.id, 1));
+    assert.equal(technical.isActive, false);
+    assert.equal(technical.sessionVersion, 1);
+    assert.equal((await db.select().from(usersTable).where(eq(usersTable.email, "guest@fixture.invalid"))).length, 1);
+    const errors = await (await adminRequest("/inbound-integrations/errors")).json() as { unresolved: number };
+    assert.equal(errors.unresolved, 0, "Deleted integration errors must not leave an actionable banner");
   } finally {
     if (server) await new Promise<void>((resolve) => { server!.close(() => resolve()); server!.closeAllConnections(); });
     await bootstrap.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`);

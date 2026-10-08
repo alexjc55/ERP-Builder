@@ -87,7 +87,7 @@ async function validateRoleIds(roleIds: number[]): Promise<string | null> {
 }
 
 adminRouter.get("/inbound-integrations", requireAuth, requireAdmin("inboundIntegrations"), async (_req, res) => {
-  const rows = await db.select().from(inboundIntegrationsTable).orderBy(desc(inboundIntegrationsTable.createdAt));
+  const rows = await db.select().from(inboundIntegrationsTable).where(isNull(inboundIntegrationsTable.deletedAt)).orderBy(desc(inboundIntegrationsTable.createdAt));
   res.json(await Promise.all(rows.map(async ({ tokenHash: _secretHash, ...row }) =>
     ({ ...row, securityIssues: await inboundSafetyIssues(row) }))));
 });
@@ -126,8 +126,21 @@ adminRouter.get("/inbound-integrations/errors", requireAuth, requireAdmin("inbou
     .where(and(
       eq(inboundDeliveriesTable.status, "failed"),
       isNull(inboundDeliveriesTable.attentionDismissedAt),
+      inArray(inboundDeliveriesTable.integrationId, db.select({ id: inboundIntegrationsTable.id })
+        .from(inboundIntegrationsTable).where(isNull(inboundIntegrationsTable.deletedAt))),
     )).orderBy(desc(inboundDeliveriesTable.receivedAt)).limit(limit);
   res.json({ unresolved: rows.length, items: rows });
+});
+
+// Keep retained evidence in the database, but do not expose deleted configurations
+// through the normal workspace or allow writes to resurrect them.
+adminRouter.use("/inbound-integrations/:id", requireAuth, requireAdmin("inboundIntegrations"), async (req, res, next) => {
+  const id = int(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [row] = await db.select({ deletedAt: inboundIntegrationsTable.deletedAt })
+    .from(inboundIntegrationsTable).where(eq(inboundIntegrationsTable.id, id));
+  if (!row || row.deletedAt) { res.status(404).json({ error: "Integration not found" }); return; }
+  next();
 });
 
 adminRouter.get("/inbound-integrations/:id", requireAuth, requireAdmin("inboundIntegrations"), async (req, res): Promise<void> => {
@@ -161,6 +174,9 @@ adminRouter.put("/inbound-integrations/:id", requireAuth, requireAdmin("inboundI
     updates.roleId = roleIds[0]!;
   }
   const updated = await db.transaction(async (tx) => {
+    const [current] = await tx.select().from(inboundIntegrationsTable)
+      .where(eq(inboundIntegrationsTable.id, id)).for("update");
+    if (!current || current.deletedAt) return null;
     if (roleIds) {
       await tx.update(usersTable).set({ roleId: roleIds[0]! }).where(eq(usersTable.id, existing.userId));
       await tx.delete(userRolesTable).where(eq(userRolesTable.userId, existing.userId));
@@ -171,6 +187,7 @@ adminRouter.put("/inbound-integrations/:id", requireAuth, requireAdmin("inboundI
     const [row] = await tx.update(inboundIntegrationsTable).set(updates).where(eq(inboundIntegrationsTable.id, id)).returning();
     return row;
   });
+  if (!updated) { res.status(404).json({ error: "Integration not found" }); return; }
   res.json(updated);
 });
 
@@ -180,8 +197,10 @@ adminRouter.delete("/inbound-integrations/:id", requireAuth, requireAdmin("inbou
   const [existing] = await db.select().from(inboundIntegrationsTable).where(eq(inboundIntegrationsTable.id, id));
   if (!existing) { res.status(404).json({ error: "Integration not found" }); return; }
   await db.transaction(async (tx) => {
-    await tx.update(inboundIntegrationsTable).set({ isActive: false }).where(eq(inboundIntegrationsTable.id, id));
-    await tx.update(usersTable).set({ isActive: false }).where(eq(usersTable.id, existing.userId));
+    await tx.update(inboundIntegrationsTable).set({ isActive: false, deletedAt: new Date() })
+      .where(eq(inboundIntegrationsTable.id, id));
+    await tx.update(usersTable).set({ isActive: false, sessionVersion: sql`${usersTable.sessionVersion} + 1` })
+      .where(eq(usersTable.id, existing.userId));
   });
   res.json({ success: true });
 });
@@ -259,8 +278,11 @@ adminRouter.post("/inbound-integrations/:id/dry-run", requireAuth, requireAdmin(
 
 adminRouter.post("/inbound-deliveries/:id/reprocess", requireAuth, requireAdmin("inboundIntegrations"), async (req, res): Promise<void> => {
   const id = int(req.params.id); if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
-  const [current] = await db.select({ status: inboundDeliveriesTable.status }).from(inboundDeliveriesTable).where(eq(inboundDeliveriesTable.id, id));
+  const [current] = await db.select({ status: inboundDeliveriesTable.status, integrationId: inboundDeliveriesTable.integrationId }).from(inboundDeliveriesTable).where(eq(inboundDeliveriesTable.id, id));
   if (!current) { res.status(404).json({ error: "Delivery not found" }); return; }
+  const [owner] = await db.select({ deletedAt: inboundIntegrationsTable.deletedAt }).from(inboundIntegrationsTable)
+    .where(eq(inboundIntegrationsTable.id, current.integrationId));
+  if (!owner || owner.deletedAt) { res.status(410).json({ error: "Integration deleted; delivery cannot be reprocessed" }); return; }
   if (current.status === "processing") { res.status(409).json({ error: "Delivery is currently processing" }); return; }
   const [row] = await db.update(inboundDeliveriesTable)
     .set({

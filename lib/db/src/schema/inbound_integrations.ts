@@ -28,6 +28,7 @@ export const inboundIntegrationsTable = pgTable("inbound_integrations", {
   tokenHash: text("token_hash").notNull().unique(),
   tokenPrefix: text("token_prefix").notNull(),
   isActive: boolean("is_active").notNull().default(true),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   maxBodyBytes: integer("max_body_bytes").notNull().default(1048576),
   publishedMappingVersionId: integer("published_mapping_version_id"),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),

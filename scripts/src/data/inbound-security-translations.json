@@ -1,4 +1,5 @@
 [
+  {"key":"inbound.deleteRemoveConfirm","ru":"Интеграция исчезнет из списка, приём данных прекратится, технический пользователь будет отключён. История сохранится в базе для расследования. Созданные записи и клиенты не удаляются.","en":"The integration will disappear from the list, incoming data will stop, and its technical user will be disabled. History stays in the database for investigation. Created records and customers are not deleted.","he":"האינטגרציה תוסר מהרשימה, קליטת הנתונים תופסק והמשתמש הטכני יושבת. ההיסטוריה תישמר במסד הנתונים לצורך בדיקה. רשומות ולקוחות שנוצרו לא יימחקו."},
   {"key":"inbound.securityBlocked","ru":"Выполнение заблокировано до исправления настроек","en":"Execution blocked until settings are corrected","he":"הביצוע חסום עד לתיקון ההגדרות"},
   {"key":"inbound.securityBlockedShort","ru":"Заблокирована защитой","en":"Blocked by safety policy","he":"חסומה על ידי מדיניות האבטחה"},
   {"key":"inbound.allowedEvents","ru":"Разрешённые события — по одному на строку","en":"Allowed events — one per line","he":"אירועים מותרים — אחד בכל שורה"},

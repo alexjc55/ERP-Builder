@@ -920,7 +920,7 @@ export const UpdateInboundIntegrationResponse = zod.object({
 
 
 /**
- * @summary Revoke an integration while preserving delivery and audit history
+ * @summary Remove integration from the workspace and revoke access, preserving historical evidence
  */
 export const DeleteInboundIntegrationParams = zod.object({
   "id": zod.coerce.number()

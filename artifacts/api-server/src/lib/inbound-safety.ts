@@ -28,11 +28,12 @@ export function inboundEventAllowed(mapping: InboundMapping, payload: unknown): 
 
 type Executor = Pick<typeof db, "select">;
 export async function inboundSafetyIssues(
-  integration: { userId: number; roleId: number; publishedMappingVersionId?: number | null },
+  integration: { userId: number; roleId: number; publishedMappingVersionId?: number | null; deletedAt?: Date | null },
   exec: Executor = db,
   draft?: InboundMapping,
 ): Promise<string[]> {
   const issues: string[] = [];
+  if (integration.deletedAt) issues.push("Интеграция удалена");
   const [module] = await exec.select().from(modulesTable).where(eq(modulesTable.moduleKey, "inbound_integrations")).for("share");
   if (!module?.isEnabled) issues.push("Модуль входящих интеграций выключен");
   const [user] = await exec.select().from(usersTable).where(eq(usersTable.id, integration.userId)).for("share");

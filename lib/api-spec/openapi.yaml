@@ -431,10 +431,10 @@ paths:
     delete:
       operationId: deleteInboundIntegration
       tags: [inboundIntegrations]
-      summary: Revoke an integration while preserving delivery and audit history
+      summary: Remove integration from the workspace and revoke access, preserving historical evidence
       parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
       responses:
-        "200": { description: Revoked }
+        "200": { description: Deleted from workspace; delivery and audit history retained }
 
   /inbound-integrations/{id}/regenerate-secret:
     post:
