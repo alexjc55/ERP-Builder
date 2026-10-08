@@ -43,7 +43,9 @@ router.post("/security/retention/cleanup", async (_req, res) => {
   res.json(await getRetentionStatus());
 });
 
-router.post("/security/events/query", async (req, res) => {
+router.post(["/security/events/query", "/security/events/export"], async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const exporting = req.path.endsWith("/export");
   const parsed = QuerySecurityEventsBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid security filters" }); return; }
   const q = parsed.data;
@@ -71,10 +73,41 @@ router.post("/security/events/query", async (req, res) => {
       reviewedAt: sql<Date | null>`CASE WHEN ${events.lastSeenAt} > ${reviews.reviewedAt} THEN NULL ELSE ${reviews.reviewedAt} END`,
       reviewedBy: reviews.reviewedBy })
       .from(events).leftJoin(reviews, eq(events.id, reviews.eventId)).where(where)
-      .orderBy(desc(events.createdAt), desc(events.id)).limit(q.limit ?? 50).offset(q.offset ?? 0),
-    db.select({ total: sql<number>`count(*)::int` }).from(events)
+      .orderBy(desc(events.createdAt), desc(events.id)).limit(exporting ? 10001 : (q.limit ?? 50)).offset(exporting ? 0 : (q.offset ?? 0)),
+    exporting ? [] : db.select({ total: sql<number>`count(*)::int` }).from(events)
       .leftJoin(reviews, eq(events.id, reviews.eventId)).where(where),
   ]);
+  if (exporting) {
+    const tooLarge = () => res.status(413).json({ error: "Export exceeds 10000 events or 20 MiB. Narrow the date range or filters." });
+    const maxBytes = 20 * 1024 * 1024;
+    if (data.length > 10000 || Buffer.byteLength(JSON.stringify(data)) > maxBytes) { tooLarge(); return; }
+    // One query captures the evidence rows. Resolve current display names in
+    // bounded batches; never page through a changing event list by offset.
+    const enriched: Awaited<ReturnType<typeof enrichSecurityReferences<typeof data[number]>>> = [];
+    let bytes = 0;
+    for (let offset = 0; offset < data.length; offset += 200) {
+      if (res.destroyed) return;
+      const batch = await enrichSecurityReferences(data.slice(offset, offset + 200));
+      bytes += Buffer.byteLength(JSON.stringify(batch));
+      if (bytes > maxBytes) { tooLarge(); return; }
+      enriched.push(...batch);
+    }
+    const { limit: _limit, offset: _offset, ...filters } = q;
+    const exportedAt = new Date().toISOString();
+    const file = JSON.stringify({
+      formatVersion: 1, exportedAt, timezone: "UTC", filters, count: enriched.length,
+      notes: [
+        "Complete matching selection; pagination is ignored. Aggregated rows retain occurrenceCount and lastSeenAt.",
+        "Names are current lookup values, not historical snapshots. Account names and IP addresses do not prove a person's identity.",
+        "HTTP evidence does not cover direct SQL/SSH, deleted evidence or unlogged past events. Contains personal and security information; share only with trusted recipients.",
+      ],
+      data: enriched,
+    });
+    if (Buffer.byteLength(file) > maxBytes) { tooLarge(); return; }
+    res.setHeader("Content-Disposition", `attachment; filename="security-audit-${exportedAt.replace(/[:.]/g, "-")}.json"`);
+    res.type("application/json").send(file);
+    return;
+  }
   res.json({ data: await enrichSecurityReferences(data), total: count[0]?.total ?? 0 });
 });
 

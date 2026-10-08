@@ -435,6 +435,7 @@ export * from './securityDisplayReferenceNameJson';
 export * from './securityDisplayReferenceRelation';
 export * from './securityEvent';
 export * from './securityEventDetailsJson';
+export * from './securityEventExport';
 export * from './securityEventPage';
 export * from './securityEventQuery';
 export * from './securityEventQueryOutcome';

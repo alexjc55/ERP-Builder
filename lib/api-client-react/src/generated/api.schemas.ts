@@ -161,6 +161,16 @@ export interface SecurityEvent {
   displayReferences?: SecurityDisplayReference[];
 }
 
+export interface SecurityEventExport {
+  formatVersion: number;
+  exportedAt: string;
+  timezone: string;
+  filters: SecurityEventQuery;
+  count: number;
+  notes: string[];
+  data: SecurityEvent[];
+}
+
 export interface SecurityEventPage {
   data: SecurityEvent[];
   total: number;

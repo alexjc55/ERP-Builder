@@ -1,4 +1,9 @@
 [
+  {"key":"securityAudit.export.button","ru":"Экспорт JSON","en":"Export JSON","he":"ייצוא JSON"},
+  {"key":"securityAudit.export.busy","ru":"Подготовка файла…","en":"Preparing file…","he":"מכין קובץ…"},
+  {"key":"securityAudit.export.hint","ru":"Экспортируются все события по заполненным фильтрам, а не только текущая страница. До 10 000 строк / 20 МБ за один файл. Файл содержит имена, IP и сведения безопасности — передавайте его только доверенным получателям.","en":"Exports all events matching the entered filters, not just this page. Up to 10,000 rows / 20 MiB per file. Contains names, IPs and security information — share only with trusted recipients.","he":"מייצא את כל האירועים לפי המסננים שהוזנו, ולא רק את הדף הנוכחי. עד 10,000 שורות / 20 MiB לקובץ. כולל שמות, כתובות IP ומידע אבטחה — יש לשתף רק עם נמענים מהימנים."},
+  {"key":"securityAudit.export.large","ru":"Слишком большой журнал. Сузьте период или фильтры и повторите экспорт. Частичный файл не создан.","en":"Export too large. Narrow the date range or filters and retry. No partial file was created.","he":"הייצוא גדול מדי. יש לצמצם את טווח התאריכים או המסננים ולנסות שוב. לא נוצר קובץ חלקי."},
+  {"key":"securityAudit.export.failed","ru":"Не удалось выгрузить журнал. Проверьте подключение и права доступа, затем повторите экспорт.","en":"Export failed. Check your connection and access permissions, then retry.","he":"הייצוא נכשל. יש לבדוק את החיבור והרשאות הגישה ולנסות שוב."},
   {"key":"securityAudit.ref.role","ru":"Роль","en":"Role","he":"תפקיד"},
   {"key":"securityAudit.ref.entity","ru":"Сущность","en":"Entity","he":"ישות"},
   {"key":"securityAudit.ref.record","ru":"Запись","en":"Record","he":"רשומה"},

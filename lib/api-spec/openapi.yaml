@@ -4718,6 +4718,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SecurityEventPage"
+  /security/events/export:
+    post:
+      operationId: exportSecurityEvents
+      tags: [security]
+      summary: Export all matching security events (human super-admin only)
+      description: Pagination is ignored. Exports at most 10000 rows and 20 MiB; larger selections fail explicitly with 413.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecurityEventQuery"
+      responses:
+        "200":
+          description: Complete JSON export of the matching rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityEventExport"
+        "413":
+          description: Narrow the date range or filters; no partial export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /security/retention:
     get:
       operationId: getSecurityRetention
@@ -4888,6 +4913,19 @@ components:
         nameJson:
           type: object
           additionalProperties: { type: string }
+    SecurityEventExport:
+      type: object
+      required: [formatVersion, exportedAt, timezone, filters, count, notes, data]
+      properties:
+        formatVersion: { type: integer }
+        exportedAt: { type: string, format: date-time }
+        timezone: { type: string }
+        filters: { $ref: "#/components/schemas/SecurityEventQuery" }
+        count: { type: integer }
+        notes: { type: array, items: { type: string } }
+        data:
+          type: array
+          items: { $ref: "#/components/schemas/SecurityEvent" }
     SecurityEventPage:
       type: object
       required: [data, total]

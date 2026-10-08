@@ -11833,6 +11833,137 @@ export const QuerySecurityEventsResponse = zod.object({
 })
 
 
+/**
+ * Pagination is ignored. Exports at most 10000 rows and 20 MiB; larger selections fail explicitly with 413.
+ * @summary Export all matching security events (human super-admin only)
+ */
+export const exportSecurityEventsBodyLimitDefault = 50;
+export const exportSecurityEventsBodyLimitMax = 100;
+
+export const exportSecurityEventsBodyOffsetDefault = 0;
+export const exportSecurityEventsBodyOffsetMin = 0;
+export const exportSecurityEventsBodyOffsetMax = 100000;
+
+export const exportSecurityEventsBodyActionMax = 100;
+
+
+
+
+
+export const exportSecurityEventsBodySessionRefMax = 64;
+
+export const exportSecurityEventsBodyRequestIdMax = 64;
+
+export const exportSecurityEventsBodyClientIpMax = 64;
+
+export const exportSecurityEventsBodyLoginEmailMax = 254;
+
+export const exportSecurityEventsBodyOnlyUnreviewedDefault = false;
+
+export const ExportSecurityEventsBody = zod.object({
+  "limit": zod.number().min(1).max(exportSecurityEventsBodyLimitMax).default(exportSecurityEventsBodyLimitDefault),
+  "offset": zod.number().min(exportSecurityEventsBodyOffsetMin).max(exportSecurityEventsBodyOffsetMax).default(exportSecurityEventsBodyOffsetDefault),
+  "from": zod.coerce.date().optional(),
+  "to": zod.coerce.date().optional(),
+  "action": zod.string().max(exportSecurityEventsBodyActionMax).optional(),
+  "outcome": zod.enum(['attempt', 'success', 'denied', 'failure', 'interrupted']).optional(),
+  "actorUserId": zod.number().min(1).optional(),
+  "targetUserId": zod.number().min(1).optional(),
+  "agentId": zod.number().min(1).optional(),
+  "integrationId": zod.number().min(1).optional(),
+  "sessionRef": zod.string().max(exportSecurityEventsBodySessionRefMax).optional(),
+  "requestId": zod.string().max(exportSecurityEventsBodyRequestIdMax).optional(),
+  "clientIp": zod.string().max(exportSecurityEventsBodyClientIpMax).optional(),
+  "loginEmail": zod.string().max(exportSecurityEventsBodyLoginEmailMax).optional(),
+  "onlyUnreviewed": zod.boolean().default(exportSecurityEventsBodyOnlyUnreviewedDefault)
+})
+
+export const exportSecurityEventsResponseFiltersLimitDefault = 50;
+export const exportSecurityEventsResponseFiltersLimitMax = 100;
+
+export const exportSecurityEventsResponseFiltersOffsetDefault = 0;
+export const exportSecurityEventsResponseFiltersOffsetMin = 0;
+export const exportSecurityEventsResponseFiltersOffsetMax = 100000;
+
+export const exportSecurityEventsResponseFiltersActionMax = 100;
+
+
+
+
+
+export const exportSecurityEventsResponseFiltersSessionRefMax = 64;
+
+export const exportSecurityEventsResponseFiltersRequestIdMax = 64;
+
+export const exportSecurityEventsResponseFiltersClientIpMax = 64;
+
+export const exportSecurityEventsResponseFiltersLoginEmailMax = 254;
+
+export const exportSecurityEventsResponseFiltersOnlyUnreviewedDefault = false;
+
+export const ExportSecurityEventsResponse = zod.object({
+  "formatVersion": zod.number(),
+  "exportedAt": zod.coerce.date(),
+  "timezone": zod.string(),
+  "filters": zod.object({
+  "limit": zod.number().min(1).max(exportSecurityEventsResponseFiltersLimitMax).default(exportSecurityEventsResponseFiltersLimitDefault),
+  "offset": zod.number().min(exportSecurityEventsResponseFiltersOffsetMin).max(exportSecurityEventsResponseFiltersOffsetMax).default(exportSecurityEventsResponseFiltersOffsetDefault),
+  "from": zod.coerce.date().optional(),
+  "to": zod.coerce.date().optional(),
+  "action": zod.string().max(exportSecurityEventsResponseFiltersActionMax).optional(),
+  "outcome": zod.enum(['attempt', 'success', 'denied', 'failure', 'interrupted']).optional(),
+  "actorUserId": zod.number().min(1).optional(),
+  "targetUserId": zod.number().min(1).optional(),
+  "agentId": zod.number().min(1).optional(),
+  "integrationId": zod.number().min(1).optional(),
+  "sessionRef": zod.string().max(exportSecurityEventsResponseFiltersSessionRefMax).optional(),
+  "requestId": zod.string().max(exportSecurityEventsResponseFiltersRequestIdMax).optional(),
+  "clientIp": zod.string().max(exportSecurityEventsResponseFiltersClientIpMax).optional(),
+  "loginEmail": zod.string().max(exportSecurityEventsResponseFiltersLoginEmailMax).optional(),
+  "onlyUnreviewed": zod.boolean().default(exportSecurityEventsResponseFiltersOnlyUnreviewedDefault)
+}),
+  "count": zod.number(),
+  "notes": zod.array(zod.string()),
+  "data": zod.array(zod.object({
+  "occurrenceCount": zod.number().optional(),
+  "lastSeenAt": zod.coerce.date().optional(),
+  "id": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "requestId": zod.string(),
+  "action": zod.string(),
+  "outcome": zod.string(),
+  "severity": zod.string(),
+  "isAlert": zod.boolean(),
+  "actorUserId": zod.number().nullish(),
+  "impersonatorUserId": zod.number().nullish(),
+  "targetUserId": zod.number().nullish(),
+  "agentId": zod.number().nullish(),
+  "integrationId": zod.number().nullish(),
+  "authSource": zod.string(),
+  "sessionRef": zod.string().nullish(),
+  "loginEmail": zod.string().nullish(),
+  "peerIp": zod.string(),
+  "clientIp": zod.string(),
+  "ipSource": zod.string(),
+  "userAgent": zod.string().nullish(),
+  "method": zod.string(),
+  "route": zod.string(),
+  "statusCode": zod.number().nullish(),
+  "reason": zod.string().nullish(),
+  "detailsJson": zod.record(zod.string(), zod.unknown()),
+  "reviewedAt": zod.coerce.date().nullish(),
+  "reviewedBy": zod.number().nullish(),
+  "displayReferences": zod.array(zod.object({
+  "kind": zod.enum(['user', 'role', 'agent', 'integration', 'entity', 'record']),
+  "relation": zod.enum(['actor', 'impersonator', 'target', 'reviewer', 'agent', 'integration', 'requested_role', 'entity', 'record']),
+  "id": zod.number(),
+  "missing": zod.boolean(),
+  "nameJson": zod.record(zod.string(), zod.string()).optional()
+})).optional().describe('Current names resolved for authorized security administrators, not historical snapshots or verified actor identities.')
+}))
+})
+
+
 export const GetSecurityRetentionResponse = zod.object({
   "revision": zod.number(),
   "ordinaryDays": zod.number(),

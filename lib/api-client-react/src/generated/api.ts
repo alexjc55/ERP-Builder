@@ -185,6 +185,7 @@ import type {
   Role,
   RoleInput,
   RoleUpdate,
+  SecurityEventExport,
   SecurityEventPage,
   SecurityEventQuery,
   SecurityRetention,
@@ -16579,6 +16580,78 @@ export const useQuerySecurityEvents = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getQuerySecurityEventsMutationOptions(options));
+    }
+
+export const getExportSecurityEventsUrl = () => {
+
+
+
+
+  return `/api/security/events/export`
+}
+
+/**
+ * Pagination is ignored. Exports at most 10000 rows and 20 MiB; larger selections fail explicitly with 413.
+ * @summary Export all matching security events (human super-admin only)
+ */
+export const exportSecurityEvents = async (securityEventQuery: SecurityEventQuery, options?: RequestInit): Promise<SecurityEventExport> => {
+
+  return customFetch<SecurityEventExport>(getExportSecurityEventsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      securityEventQuery,)
+  }
+);}
+
+
+
+
+export const getExportSecurityEventsMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportSecurityEvents>>, TError,{data: BodyType<SecurityEventQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof exportSecurityEvents>>, TError,{data: BodyType<SecurityEventQuery>}, TContext> => {
+
+const mutationKey = ['exportSecurityEvents'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof exportSecurityEvents>>, {data: BodyType<SecurityEventQuery>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  exportSecurityEvents(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExportSecurityEventsMutationResult = NonNullable<Awaited<ReturnType<typeof exportSecurityEvents>>>
+    export type ExportSecurityEventsMutationBody = BodyType<SecurityEventQuery>
+    export type ExportSecurityEventsMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Export all matching security events (human super-admin only)
+ */
+export const useExportSecurityEvents = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof exportSecurityEvents>>, TError,{data: BodyType<SecurityEventQuery>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof exportSecurityEvents>>,
+        TError,
+        {data: BodyType<SecurityEventQuery>},
+        TContext
+      > => {
+      return useMutation(getExportSecurityEventsMutationOptions(options));
     }
 
 export const getGetSecurityRetentionUrl = () => {

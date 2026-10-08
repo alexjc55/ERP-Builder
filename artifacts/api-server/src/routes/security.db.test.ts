@@ -5,7 +5,7 @@ import express from "express";
 import bcrypt from "bcryptjs";
 import { db, pool, rolesTable, usersTable, securityEventsTable, securityEventReviewsTable, NO_ACCESS_PERMS,
   entitiesTable, entityFieldsTable, entityRecordsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { signToken } from "../lib/jwt";
 import { securityAuditContext, securityAuditStart, flushSecurityAudit, securityTokenRef, classifySecurityRequest } from "../lib/security-audit";
 import { createSecurityIpResolver } from "../lib/security-ip";
@@ -162,6 +162,55 @@ test("security evidence HTTP and database boundaries", { timeout: 120000 }, asyn
       assert.equal(deleted!.displayReferences.find(r => r.kind === "record")?.nameJson, undefined);
       assert.deepEqual(await enrichSecurityReferences([]), []);
       assert.deepEqual(securityReferenceIds({ detailsJson: { targetUserId: 1001, targetRecordId: "1007", targetEntityId: -1 } }), []);
+    });
+    await t.test("export includes every filtered page, names and metadata without modifying evidence; limits fail explicitly", async () => {
+      const insertRows = (from: number, to: number) => db.execute(sql`
+        INSERT INTO security_events (id, request_id, action, outcome, actor_user_id,
+          peer_ip, client_ip, ip_source, method, route, created_at, last_seen_at, occurrence_count)
+        SELECT 2000000 + n, 'export-fixture', 'export.fixture', 'denied', 1001,
+          '127.0.0.1', '198.51.100.9', 'socket', 'GET', '/fixture',
+          '2020-01-01T12:00:00Z'::timestamptz, '2020-01-01T12:10:00Z'::timestamptz, 3
+        FROM generate_series(${from}::int, ${to}::int) AS n
+      `);
+      try {
+        await insertRows(1, 60);
+        const filters = { action: "export.fixture", actorUserId: 1001, clientIp: "198.51.100.9",
+          from: "2020-01-01T00:00:00Z", to: "2020-01-02T00:00:00Z", limit: 1, offset: 40 };
+        const before = await db.select().from(securityEventsTable).where(eq(securityEventsTable.action, "export.fixture"));
+        const response = await fetch(base + "/security/events/export", {
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(filters),
+        });
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("cache-control"), "no-store");
+        assert.match(response.headers.get("content-disposition")!, /^attachment; filename="security-audit-.*\.json"$/);
+        const file = await response.json() as Record<string, any>;
+        assert.equal(file.count, 60); assert.equal(file.data.length, 60);
+        assert.equal(file.timezone, "UTC"); assert.ok(file.exportedAt);
+        assert.equal(file.filters.limit, undefined); assert.equal(file.filters.offset, undefined);
+        assert.equal(file.filters.clientIp, filters.clientIp);
+        assert.ok(file.data.every((r: any) => r.action === "export.fixture" && r.occurrenceCount === 3 && r.displayReferences[0].nameJson));
+        assert.equal(new Set(file.data.map((r: any) => r.id)).size, 60);
+        assert.ok(!JSON.stringify(file).includes(password));
+        const after = await db.select().from(securityEventsTable).where(eq(securityEventsTable.action, "export.fixture"));
+        assert.deepEqual(after, before);
+        assert.equal((await request("/security/events/export", token, { action: "export.none" })).data.count, 0);
+        assert.equal((await request("/security/events/export", token, { ...filters, onlyUnreviewed: true })).data.count, 0);
+        assert.equal((await request("/security/events/export", token, { from: "2021-01-01T00:00:00Z", to: "2020-01-01T00:00:00Z" })).status, 400);
+        assert.equal((await request("/security/events/export", undefined, {})).status, 401);
+        for (const identity of [
+          { userId: 1002, roleId: 1002 },
+          { userId: 1001, roleId: 1001, guest: true },
+          { userId: 1001, roleId: 1001, agentId: 999 },
+          { userId: 1001, roleId: 1001, impersonatorId: 1001, impersonatorSessionVersion: 0 },
+        ]) assert.equal((await request("/security/events/export", signToken(identity), {})).status, 403);
+        await insertRows(61, 10001);
+        const large = await request("/security/events/export", token, filters);
+        assert.equal(large.status, 413);
+        assert.equal(large.data.data, undefined);
+      } finally {
+        await db.delete(securityEventsTable).where(eq(securityEventsTable.action, "export.fixture"));
+      }
     });
     await t.test("repeated failed login followed by success is highlighted", async () => {
       for (let i = 0; i < 5; i++) await request("/auth/login", undefined, { email: "admin@security.invalid", password: "wrong-fixture-password" });

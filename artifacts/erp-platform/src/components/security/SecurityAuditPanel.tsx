@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from "react"
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useQuerySecurityEvents,
+  exportSecurityEvents,
   useGetSecuritySummary,
   getGetSecuritySummaryQueryKey,
   useReviewSecurityEvent,
@@ -26,7 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ShieldAlert, ShieldCheck, Info, RefreshCw, RotateCcw, Search,
-  ChevronLeft, ChevronRight, Eye, Check, History, AlertTriangle,
+  ChevronLeft, ChevronRight, Eye, Check, History, AlertTriangle, Download,
 } from "lucide-react";
 
 const PAGE_SIZE = 50; // server max 100
@@ -127,13 +128,16 @@ export default function SecurityAuditPanel() {
   const [selected, setSelected] = useState<SecurityEvent | null>(null);
   const [reviewingId, setReviewingId] = useState<number | null>(null);
   const [reviewError, setReviewError] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<"large" | "failed" | null>(null);
+  const exportAbort = useRef<AbortController | null>(null);
 
   // Latest-generation guard: only the newest request may write state; unmount invalidates all.
   const genRef = useRef(0);
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; genRef.current++; };
+    return () => { mountedRef.current = false; genRef.current++; exportAbort.current?.abort(); };
   }, []);
 
   const load = useCallback(async (clear: boolean) => {
@@ -166,6 +170,37 @@ export default function SecurityAuditPanel() {
     setApplied({ q, page: 0 });
   };
   const onSubmit = (e: FormEvent) => { e.preventDefault(); apply(draft); };
+  const downloadExport = async () => {
+    if (exportAbort.current) return;
+    const q = buildQuery(draft);
+    if (!q) { setInvalid(true); return; }
+    setInvalid(false);
+    setApplied({ q, page: 0 });
+    setExportError(null);
+    setExporting(true);
+    const controller = new AbortController();
+    exportAbort.current = controller;
+    try {
+      const file = await exportSecurityEvents(q, { signal: controller.signal });
+      if (!mountedRef.current || controller.signal.aborted) return;
+      const blob = new Blob([JSON.stringify(file)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `security-audit-${file.exportedAt.replace(/[:.]/g, "-")}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      if (mountedRef.current && !controller.signal.aborted) {
+        setExportError((error as { status?: number })?.status === 413 ? "large" : "failed");
+      }
+    } finally {
+      exportAbort.current = null;
+      if (mountedRef.current) setExporting(false);
+    }
+  };
   const reset = () => { setDraft(EMPTY); setInvalid(false); setApplied({ q: {}, page: 0 }); };
   const followTrail = (kind: "sessionRef" | "requestId", value: string) => {
     const next = { ...EMPTY, [kind]: value };
@@ -255,11 +290,25 @@ export default function SecurityAuditPanel() {
           </h2>
           <p className="text-sm text-slate-500">{t("securityAudit.subtitle", "Доказательная запись HTTP-событий входа, отказов и критических изменений")}</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={() => void downloadExport()} disabled={exporting} data-testid="button-security-export">
+          <Download className="w-4 h-4 me-1.5" aria-hidden="true" />
+          {exporting ? t("securityAudit.export.busy", "Подготовка файла…") : t("securityAudit.export.button", "Экспорт JSON")}
+        </Button>
         <Button variant="outline" size="sm" onClick={() => { void load(false); void summary.refetch(); }} disabled={loading} data-testid="button-security-refresh">
           <RefreshCw className={cn("w-4 h-4 me-1.5", loading && "animate-spin")} aria-hidden="true" />
           {t("securityAudit.refresh", "Обновить")}
         </Button>
+        </div>
       </div>
+      <p className="text-xs text-slate-500">
+        {t("securityAudit.export.hint", "Экспортируются все события по заполненным фильтрам, а не только текущая страница. До 10 000 строк / 20 МБ за один файл. Файл содержит имена, IP и сведения безопасности — передавайте его только доверенным получателям.")}
+      </p>
+      {exportError && <p role="alert" className="text-sm text-red-700" data-testid="security-export-error">
+        {exportError === "large"
+          ? t("securityAudit.export.large", "Слишком большой журнал. Сузьте период или фильтры и повторите экспорт. Частичный файл не создан.")
+          : t("securityAudit.export.failed", "Не удалось выгрузить журнал. Проверьте подключение и права доступа, затем повторите экспорт.")}
+      </p>}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {stats.map((s) => (
