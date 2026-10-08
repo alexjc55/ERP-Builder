@@ -322,6 +322,14 @@ export default function EntityViewsPage() {
   // targetPageId is bound to the view's current target. If null, we fetch nothing.
   const { data: allPageFields = [] } = useListPageFields(targetPageId ?? 0, { query: { enabled: !!targetPageId, queryKey: getListPageFieldsQueryKey(targetPageId ?? 0) } });
   const activePageFields = allPageFields
+    .filter((f: PageField) => f.isActive)
+    .map((f: PageField): PageField => f.fieldType === "page_ref" && f.pageRefConfigJson?.resolvedFieldType
+      ? { ...f,
+          fieldType: f.pageRefConfigJson.resolvedFieldType as PageField["fieldType"],
+          optionsJson: normalizeSelectOptions(f.pageRefConfigJson.resolvedOptionsJson),
+          percentConfigJson: f.pageRefConfigJson.resolvedPercentConfigJson ?? {},
+        }
+      : f)
     .filter((f: PageField) => PAGE_LOCAL_FILTERABLE_TYPES.has(f.fieldType))
     .sort((a: PageField, b: PageField) => a.sortOrder - b.sortOrder);
   pageFilterFieldsRef.current = activePageFields;

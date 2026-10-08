@@ -15,6 +15,12 @@ Rules that must stay consistent:
 
 **How to apply:** treat `page_ref` as a typed alias and explicit source-key patch, never as a second stored value or as a full-map field. Build reads from the authorized entity-record universe rather than requiring either page to already have a value row.
 
+Hard view filters may reference scalar page aliases. Their source access/row restrictions must be ANDed outside any OR condition group, including empty-value tests. A missing, deactivated, cross-entity or inaccessible source must fail closed rather than drop the filter. Hard view filters do not depend on the quick-filter `isFilterable` flag.
+
+**Why:** A page alias stores no local value; querying its own storage silently produces incorrect rows. Treating an inaccessible source as empty, or OR-ing its access restriction with another condition, exposes restricted information.
+
+**How to apply:** Use the source type and options in the editor while retaining the alias field key in the saved condition; resolve live source storage and recheck both field and page/row boundaries at execution.
+
 For a mapped select edited through an alias, destination policy belongs to the initiating page, not the source storage page. Its all-destinations option may allow a move outside either page's visible statuses. Source-page row visibility and field/page edit access still apply before the write.
 
 **Why:** Storage authority and the employee's workflow page are different concerns. Intersecting both destination lists would unexpectedly restrict handoffs from the initiating page; ignoring source access would make the alias a permission bypass.

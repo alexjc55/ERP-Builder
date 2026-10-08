@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { viewPageRefSource } from "../lib/view-page-ref";
 import { db, viewsTable, entitiesTable, pagesTable, entityFieldsTable, pageFieldsTable } from "@workspace/db";
 import { eq, asc, and, ne, inArray, isNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
@@ -74,7 +75,7 @@ type StoredViewConfig = {
   [key: string]: unknown;
 };
 
-async function validateTargetAndConfig(
+export async function validateTargetAndConfig(
   entityId: number,
   targetPageId: number | null,
   config: StoredViewConfig,
@@ -89,11 +90,9 @@ async function validateTargetAndConfig(
   const filters = config.filters ?? [];
   const entityKeys = new Set((await db.select({ key: entityFieldsTable.fieldKey }).from(entityFieldsTable)
     .where(and(eq(entityFieldsTable.entityId, entityId), eq(entityFieldsTable.isActive, true)))).map((f) => f.key));
-  const pageFields = targetPageId == null ? [] : await db.select({
-    key: pageFieldsTable.fieldKey,
-    type: pageFieldsTable.fieldType,
-  }).from(pageFieldsTable).where(and(eq(pageFieldsTable.pageId, targetPageId), eq(pageFieldsTable.isActive, true)));
-  const pageByKey = new Map(pageFields.map((f) => [f.key, f.type]));
+  const pageFields = targetPageId == null ? [] : await db.select()
+    .from(pageFieldsTable).where(and(eq(pageFieldsTable.pageId, targetPageId), eq(pageFieldsTable.isActive, true)));
+  const pageByKey = new Map(pageFields.map((f) => [f.fieldKey, f.fieldType]));
   if (config.viewType === "kanban" && config.kanban == null) {
     return "Kanban views require a kanban configuration";
   }
@@ -120,7 +119,9 @@ async function validateTargetAndConfig(
     } else {
       if (targetPageId == null) return "Page-source filters require a targeted mirror page";
       const type = pageByKey.get(condition.field);
-      if (!type || !PAGE_FILTER_TYPES.has(type)) {
+      const alias = pageFields.find(f => f.fieldKey === condition.field);
+      const reference = type === "page_ref" && alias ? await viewPageRefSource(alias, entityId) : null;
+      if (!type || (!PAGE_FILTER_TYPES.has(type) && !reference)) {
         return `Unknown, inactive, or unsupported page field "${condition.field}"`;
       }
     }

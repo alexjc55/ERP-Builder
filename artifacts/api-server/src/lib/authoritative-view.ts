@@ -1,4 +1,5 @@
 import type { Request } from "express";
+import { viewPageRefSource, viewPageRefBoundary } from "./view-page-ref";
 import {
   db,
   entityFieldsTable,
@@ -186,10 +187,20 @@ export async function resolveAuthoritativeView(args: {
       eq(pageFieldsTable.fieldKey, condition.field),
       eq(pageFieldsTable.isActive, true),
     )).limit(1);
-    if (!field || !PAGE_FILTER_TYPES.has(field.fieldType)) {
+    const reference = field?.fieldType === "page_ref" ? await viewPageRefSource(field, entityId) : null;
+    if (!field || (!PAGE_FILTER_TYPES.has(field.fieldType) && !reference)) {
       return { ok: false, status: 400, error: `Invalid stored page filter field "${condition.field}"` };
     }
-    const built = buildPageLocalCondition(condition, field.fieldType, pageId);
+    if (reference) {
+      const boundary = await viewPageRefBoundary(req, field, reference, entityId);
+      if (!boundary.allowed) return { ok: false, status: 403, error: "View filter source access denied" };
+      if (boundary.where) hardParts.push(boundary.where);
+    }
+    const built = buildPageLocalCondition(
+      reference ? { ...condition, field: reference.fieldKey } : condition,
+      reference?.fieldType ?? field.fieldType,
+      reference?.pageId ?? pageId,
+    );
     if ("error" in built) return { ok: false, status: 400, error: built.error };
     chunks.push(built.sql);
   }
