@@ -255,6 +255,31 @@ test("security evidence HTTP and database boundaries", { timeout: 120000 }, asyn
       assert.equal((await db.select().from(securityEventsTable).where(eq(securityEventsTable.id, 92003))).length, 1);
       assert.equal((await request("/security/retention", token)).data.expiredCount, 0);
     });
+    await t.test("revoked-session batches preserve counts, isolate sessions and reopen review on new requests", async () => {
+      const base = { requestId: "revoked-fixture", action: "access.denied", outcome: "denied",
+        statusCode: 401, authSource: "revoked-session", reason: "session_revoked_or_account_inactive",
+        actorUserId: 1002, sessionRef: "revoked-fixture-session", peerIp: "127.0.0.1",
+        clientIp: "192.0.2.55", ipSource: "socket", method: "GET", isAlert: true };
+      await Promise.all(Array.from({ length: 14 }, (_, i) =>
+        storeSecurityEvidence({ ...base, route: `/fixture-${i % 2}` })));
+      const [group] = await db.select().from(securityEventsTable).where(eq(securityEventsTable.sessionRef, base.sessionRef));
+      assert.equal(group.occurrenceCount, 14);
+      assert.deepEqual((group.detailsJson.requestSummary as { count: number }[]).map((r) => r.count), [7, 7]);
+      const reviewedAt = new Date();
+      await db.insert(securityEventReviewsTable).values({ eventId: group.id, reviewedAt, reviewedBy: 1001 });
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      await storeSecurityEvidence({ ...base, route: "/fixture-0" });
+      const [updated] = await db.select().from(securityEventsTable).where(eq(securityEventsTable.id, group.id));
+      assert.equal(updated.occurrenceCount, 15);
+      assert.ok(updated.lastSeenAt > reviewedAt);
+      const unreviewed = await request("/security/events/query", token, { sessionRef: base.sessionRef, onlyUnreviewed: true });
+      assert.ok(unreviewed.data.data.some((event: { id: number; reviewedAt: unknown }) =>
+        event.id === group.id && event.reviewedAt === null));
+      await storeSecurityEvidence({ ...base, sessionRef: "other-revoked-session", route: "/fixture-0" });
+      const isolated = await db.select().from(securityEventsTable).where(eq(securityEventsTable.sessionRef, "other-revoked-session"));
+      assert.equal(isolated.length, 1);
+      assert.equal(isolated[0].occurrenceCount, 1);
+    });
     await t.test("repeat counters are atomic, successful actions stay separate and anonymous group growth is bounded", async () => {
       const base = { requestId: "aggregation-fixture", action: "access.denied", outcome: "denied",
         peerIp: "127.0.0.1", clientIp: "198.51.100.1", ipSource: "socket", method: "GET", route: "/probe", isAlert: true };

@@ -1,5 +1,17 @@
 [
  {
+  "key": "securityRetention.revokedSummary",
+  "ru": "Обращения после завершения сеанса",
+  "en": "Requests after session revocation",
+  "he": "בקשות לאחר ביטול ההפעלה"
+ },
+ {
+  "key": "securityRetention.revokedExplanation",
+  "ru": "Обращения с отозванной сессией объединены за 5 минут. Сохранены число обращений, время и сводка маршрутов в подробностях ниже. Основной запрос и связанные объекты — пример первого обращения. Это не доказательство атаки: причиной может быть открытая вкладка после завершения сеансов.",
+  "en": "Requests using a revoked session are grouped within 5 minutes. Counts, times and a route summary are retained in the details below. The main request and related objects sample the first request. This does not prove an attack: an open tab after session revocation can cause it.",
+  "he": "בקשות עם הפעלה שבוטלה מקובצות בחלון של 5 דקות. מספר הבקשות, הזמנים וסיכום הנתיבים נשמרים בפרטים למטה. הבקשה הראשית והאובייקטים המקושרים הם דוגמה מהבקשה הראשונה. אין בכך הוכחה לתקיפה: לשונית פתוחה לאחר ביטול הפעלות יכולה לגרום לכך."
+ },
+ {
   "key": "securityRetention.loadError",
   "ru": "Не удалось загрузить настройки хранения журнала",
   "en": "Failed to load log retention settings",

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { invalidateCurrentSession } from "./sessionLifecycle";
 import {
   useGetMe,
+  getMe,
   getGetMeQueryKey,
   setAuthTokenGetter,
   setUnauthorizedHandler,
@@ -52,7 +53,12 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(localStorage.getItem("erp_token"));
+  const [{ token, epoch }, setSession] = useState(() => ({
+    token: localStorage.getItem("erp_token"), epoch: 0,
+  }));
+  const [ready, setReady] = useState(false);
+  const setToken = (next: string | null) =>
+    setSession((previous) => ({ token: next, epoch: previous.epoch + 1 }));
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -72,24 +78,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       queryClient.clear();
     };
     window.addEventListener("storage", onStorage);
+    setReady(true);
     return () => {
       setUnauthorizedHandler(null);
       window.removeEventListener("storage", onStorage);
     };
   }, [queryClient]);
 
-  const { data: user, isLoading, refetch } = useGetMe({
+  const { data: user, isLoading } = useGetMe({
     query: {
-      queryKey: getGetMeQueryKey(),
-      enabled: !!token,
+      // No credentials in cache keys. Each identity change requires a fresh
+      // check before ProtectedRoute can mount any working-page readers.
+      queryKey: [...getGetMeQueryKey(), epoch],
+      queryFn: ({ signal }) => getMe({
+        signal, headers: { Authorization: `Bearer ${token}` },
+      }),
+      enabled: ready && !!token,
+      staleTime: 0,
+      refetchOnMount: "always",
       retry: false,
     }
   });
 
   const handleLogin = (newToken: string, _newUser: UserProfile) => {
     localStorage.setItem("erp_token", newToken);
+    queryClient.clear();
     setToken(newToken);
-    refetch();
   };
 
   const handleLogout = () => {
@@ -107,7 +121,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("erp_token", newToken);
     queryClient.clear();
     setToken(newToken);
-    await refetch();
   };
 
   const handleImpersonate = async (userId: number) => {
@@ -200,7 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider
       value={{
         user: token ? user || null : null,
-        isLoading: isLoading && !!token,
+        isLoading: !!token && (!ready || isLoading),
         login: handleLogin,
         logout: handleLogout,
         permissions,

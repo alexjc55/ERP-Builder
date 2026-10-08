@@ -440,6 +440,9 @@ export default function SecurityAuditPanel() {
                         <div className="flex items-center gap-1.5">
                           {ev.isAlert && <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" aria-label={t("securityAudit.alert", "Тревога")} />}
                           <code dir="ltr" className="text-xs font-mono text-slate-700">{ev.action}</code>
+                          {ev.detailsJson?.summaryType === "revoked-session" && (
+                            <p className="text-xs text-slate-600 mt-1">{t("securityRetention.revokedSummary", "Обращения после завершения сеанса")}</p>
+                          )}
                           {(ev.occurrenceCount ?? 1) > 1 && (
                             <Badge variant="outline" className="h-5 px-1.5 text-[11px] tabular-nums border-slate-300 text-slate-600" title={t("securityRetention.occurrenceHint", "Агрегированная запись: хранится только первый образец запроса/сессии")} data-testid={`text-security-occurrences-${ev.id}`}>
                               ×{ev.occurrenceCount}
@@ -521,6 +524,11 @@ export default function SecurityAuditPanel() {
               {(selected.occurrenceCount ?? 1) > 1 && (
                 <p className="text-sm rounded-md border border-slate-200 bg-slate-50 text-slate-700 p-3" data-testid="text-security-detail-aggregated">
                   {t("securityRetention.aggregatedNote", "Агрегированная запись: доказательства (запрос, сессия) сохранены только для первого случая, а не для каждого повторения.")}
+                </p>
+              )}
+              {selected.detailsJson?.summaryType === "revoked-session" && (
+                <p className="text-sm bg-slate-50 border rounded p-3">
+                  {t("securityRetention.revokedExplanation", "Обращения с отозванной сессией объединены за 5 минут. Сохранены число обращений, время и сводка маршрутов в подробностях ниже. Основной запрос и связанные объекты — пример первого обращения. Это не доказательство атаки: причиной может быть открытая вкладка после завершения сеансов.")}
                 </p>
               )}
               {selected.detailsJson?.sourceDetailsTruncated === true && (
