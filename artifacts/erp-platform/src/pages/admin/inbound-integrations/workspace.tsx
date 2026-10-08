@@ -1,4 +1,5 @@
 import { JsonTree } from "./JsonTree";
+import { safeGuestRole } from "./safety";
 import { useState, useEffect, useMemo, useRef, useId } from "react";
 import { useParams, useLocation } from "wouter";
 import {
@@ -86,6 +87,7 @@ export interface InboundStep {
 
 export interface InboundMapping {
   atomic?: boolean;
+  allowedEvents?: string[];
   steps: InboundStep[];
 }
 
@@ -116,6 +118,8 @@ export default function InboundIntegrationWorkspacePage() {
   const [analyzedPaths, setAnalyzedPaths] = useState<AnalyzedPath[]>([]);
   const [parsedSample, setParsedSample] = useState<any>(null);
   const [steps, setSteps] = useState<InboundStep[]>([]);
+  const [allowedEventsText, setAllowedEventsText] = useState("");
+  const allowedEvents = [...new Set(allowedEventsText.split("\n").map((s) => s.trim()).filter(Boolean))];
   const [dryRunResult, setDryRunResult] = useState<InboundDryRunResult | null>(null);
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<number | null>(() => {
     const value = Number(new URLSearchParams(window.location.search).get("delivery"));
@@ -170,7 +174,7 @@ export default function InboundIntegrationWorkspacePage() {
         queryClient.invalidateQueries({ queryKey: [`/api/inbound-integrations/${integrationId}`] });
         toast({ title: t("inbound.published", "Маппинг опубликован") });
       },
-      onError: () => toast({ title: t("inbound.publishError", "Ошибка публикации"), variant: "destructive" })
+      onError: (err: any) => toast({ title: t("inbound.publishError", "Ошибка публикации"), description: err?.message, variant: "destructive" })
     }
   });
 
@@ -178,7 +182,12 @@ export default function InboundIntegrationWorkspacePage() {
     mutation: {
       onSuccess: (res: any) => {
         setDryRunResult(res);
-        toast({ title: t("inbound.dryRunSuccess", "Тест успешно выполнен (отменен)") });
+        if (res.delivery?.status === "failed") {
+          toast({ title: t("inbound.dryRunError", "Тест завершился с ошибкой"),
+            description: res.delivery.errorMessage, variant: "destructive" });
+        } else {
+          toast({ title: t("inbound.dryRunSuccess", "Тест успешно выполнен (отменен)") });
+        }
       },
       onError: (err: any) => {
         setDryRunResult(null);
@@ -190,6 +199,7 @@ export default function InboundIntegrationWorkspacePage() {
   // Init steps
   useEffect(() => {
     if (latestVersion?.mappingJson?.steps && steps.length === 0) {
+      setAllowedEventsText((latestVersion.mappingJson.allowedEvents ?? []).join("\n"));
       setSteps(latestVersion.mappingJson.steps.map((s: any) => {
         // Hydrate _uiEntityId for users
         if (s.target?.kind === "user" && !s._uiEntityId) {
@@ -227,7 +237,7 @@ export default function InboundIntegrationWorkspacePage() {
       return;
     }
     try {
-      const draft = await saveDraftMutation.mutateAsync({ id: integrationId, data: { atomic: true, steps } as any });
+      const draft = await saveDraftMutation.mutateAsync({ id: integrationId, data: { atomic: true, allowedEvents, steps } as any });
       await dryRunMutation.mutateAsync({ id: integrationId, data: { mappingVersionId: (draft as any).id, sample: parsedSample } as any });
     } catch (e) {
       // Error handled in mutations
@@ -236,7 +246,7 @@ export default function InboundIntegrationWorkspacePage() {
 
   const handlePublish = async () => {
     try {
-      const draft = await saveDraftMutation.mutateAsync({ id: integrationId, data: { atomic: true, steps } as any });
+      const draft = await saveDraftMutation.mutateAsync({ id: integrationId, data: { atomic: true, allowedEvents, steps } as any });
       publishMutation.mutate({ id: integrationId, versionId: (draft as any).id } as any);
     } catch (e) {
       // Error handled
@@ -275,7 +285,7 @@ export default function InboundIntegrationWorkspacePage() {
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => {
             saveDraftMutation.mutate(
-              { id: integrationId, data: { atomic: true, steps } as any },
+              { id: integrationId, data: { atomic: true, allowedEvents, steps } as any },
               { onSuccess: () => toast({ title: t("inbound.draftSaved", "Черновик сохранён") }) },
             );
           }} disabled={saveDraftMutation.isPending}>
@@ -311,6 +321,17 @@ export default function InboundIntegrationWorkspacePage() {
                 <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2 bg-slate-50/50">
                   <Webhook className="w-4 h-4 text-purple-500" />
                   <h2 className="text-sm font-semibold text-slate-800">{t("inbound.connection", "1. Подключение")}</h2>
+                  {!!integration.securityIssues?.length && (
+                    <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">
+                      <strong>{t("inbound.securityBlocked", "Выполнение заблокировано до исправления настроек")}</strong>
+                      <ul className="list-disc ps-4">{integration.securityIssues.map((issue, i) => <li key={i}>{issue}</li>)}</ul>
+                    </div>
+                  )}
+                  <Label htmlFor="inbound-allowed-events">{t("inbound.allowedEvents", "Разрешённые события — по одному на строку")}</Label>
+                  <Textarea id="inbound-allowed-events" value={allowedEventsText}
+                    onChange={(event) => setAllowedEventsText(event.target.value)}
+                    placeholder="transferred_to_production" />
+                  <p className="text-xs text-slate-500">{t("inbound.eventSafetyHint", "Проверяется точное значение поля event в JSON. Пустое или неизвестное событие отклоняется до запуска шагов. Сохраните правила публикацией сценария.")}</p>
                 </div>
                 <div className="p-4 space-y-4">
                   <div className="space-y-1.5">
@@ -839,11 +860,11 @@ function StepCard({ step, idx, steps, entities, roles, pages, analyzedPaths, onC
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-slate-600">{t("inbound.defaultRole", "Роль по умолчанию (фиксированная)")}</Label>
+                  <Label className="text-xs text-slate-600">{t("inbound.guestRoleOnly", "Гостевая роль: только просмотр, без пароля и административных прав")}</Label>
                   <Select value={String(step.target?.roleId || "")} onValueChange={v => update({ target: { ...step.target, roleId: Number(v) } })}>
                     <SelectTrigger className="h-8 text-xs bg-white"><SelectValue placeholder={t("inbound.selectRole", "Выберите роль")} /></SelectTrigger>
                     <SelectContent>
-                      {roles.map((r: any) => (
+                      {roles.filter((r: any) => safeGuestRole(r.permissionsJson)).map((r: any) => (
                          <SelectItem key={r.id} value={String(r.id)}>{ml(r.nameJson)}</SelectItem>
                       ))}
                     </SelectContent>

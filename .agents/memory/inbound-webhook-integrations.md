@@ -9,7 +9,13 @@ description: Durable security, execution, matching, and concurrency rules for ge
 
 **Why:** External systems act inside the same ERP security model as interactive users; a separate privileged import path would make the configured role misleading and create data leaks.
 
-**How to apply:** Re-apply the full role union and all write/read boundaries at execution time. Inline customer creation is allowed only through an editable `user` field with `allowCreate`, uses an administrator-fixed non-privileged role, and never accepts a role from payload data.
+**How to apply:** Re-apply the full role union and all write/read boundaries at execution time. Inline customer creation is allowed only through an editable `user` field with `allowCreate`, uses an administrator-fixed guest role (no administrative or record-write rights), and never accepts a role or password from payload data.
+
+**Rule:** Block legacy integrations until their safety settings are corrected; do not grandfather administrative technical roles or missing event allowlists. No IP allowlist.
+
+**Why:** The user explicitly approved fail-closed interruption of existing integrations after an intrusion. They pointed out that a compromised authorized sender defeats IP restrictions.
+
+**How to apply:** Show actionable blocking reasons, preserve historical deliveries, and require explicit republishing with allowed business events. “Guest” must be constrained by capabilities, not a renameable role label. A valid webhook key still authorizes the permitted scenario; do not claim event-name checks authenticate the business event or protect a fully compromised ERP server.
 
 **Rule:** Receipt idempotency and business execution atomicity are separate boundaries. The event ID plus payload hash deduplicates receipt; all mapped writes, audit rows, versions, links, and the terminal delivery status commit in one transaction.
 

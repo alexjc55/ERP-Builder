@@ -1,0 +1,7 @@
+[
+  {"key":"inbound.securityBlocked","ru":"Выполнение заблокировано до исправления настроек","en":"Execution blocked until settings are corrected","he":"הביצוע חסום עד לתיקון ההגדרות"},
+  {"key":"inbound.securityBlockedShort","ru":"Заблокирована защитой","en":"Blocked by safety policy","he":"חסומה על ידי מדיניות האבטחה"},
+  {"key":"inbound.allowedEvents","ru":"Разрешённые события — по одному на строку","en":"Allowed events — one per line","he":"אירועים מותרים — אחד בכל שורה"},
+  {"key":"inbound.eventSafetyHint","ru":"Проверяется точное значение поля event в JSON. Пустое или неизвестное событие отклоняется до запуска шагов. Сохраните правила публикацией сценария.","en":"The JSON event field must match exactly. Missing or unknown events are rejected before any steps run. Publish the mapping to apply these rules.","he":"נדרשת התאמה מדויקת לשדה event ב-JSON. אירועים חסרים או לא מוכרים נדחים לפני הפעלת השלבים. יש לפרסם את התרחיש כדי להחיל את הכללים."},
+  {"key":"inbound.guestRoleOnly","ru":"Гостевая роль: только просмотр, без пароля и административных прав","en":"Guest role: read-only, no password or administrative permissions","he":"תפקיד אורח: צפייה בלבד, ללא סיסמה או הרשאות ניהול"}
+]

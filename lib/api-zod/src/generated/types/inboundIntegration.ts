@@ -7,6 +7,8 @@
  */
 
 export interface InboundIntegration {
+  /** Blocking safety issues. An active flag does not bypass these checks. */
+  securityIssues?: string[];
   id: number;
   name: string;
   userId: number;

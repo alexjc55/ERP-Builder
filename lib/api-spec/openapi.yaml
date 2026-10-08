@@ -6564,6 +6564,10 @@ components:
       type: object
       required: [id, name, userId, roleId, tokenPrefix, isActive, maxBodyBytes, createdAt, updatedAt]
       properties:
+        securityIssues:
+          type: array
+          description: Blocking safety issues. An active flag does not bypass these checks.
+          items: { type: string }
         id: { type: integer }
         name: { type: string }
         userId: { type: integer }
@@ -6637,6 +6641,11 @@ components:
       type: object
       required: [steps]
       properties:
+        allowedEvents:
+          type: array
+          description: Exact allowed strings in the top-level payload event. Required for publishing and execution.
+          maxItems: 30
+          items: { type: string, maxLength: 120 }
         atomic: { type: boolean, default: true }
         steps:
           type: array

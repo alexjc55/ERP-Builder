@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { safeIntegrationRole } from "./safety";
 import { useLocation } from "wouter";
 import {
   useListInboundIntegrations,
@@ -116,7 +117,8 @@ export default function InboundIntegrationsListPage() {
   const openCreate = () => {
     setEditing(null);
     setName("");
-    setRoleIds(roles[0] ? [roles[0].id] : []);
+    const firstSafeRole = roles.find((role) => safeIntegrationRole(role.permissionsJson));
+    setRoleIds(firstSafeRole ? [firstSafeRole.id] : []);
     setDialogOpen(true);
   };
 
@@ -125,7 +127,8 @@ export default function InboundIntegrationsListPage() {
       const detail = await getInboundIntegration(integration.id);
       setEditing(integration);
       setName(integration.name);
-      setRoleIds(detail.roleIds);
+      setRoleIds(detail.roleIds.filter((id) => roles.some((role) =>
+        role.id === id && safeIntegrationRole(role.permissionsJson))));
       setDialogOpen(true);
     } catch {
       toast({ title: t("inbound.loadError", "Не удалось загрузить роли интеграции"), variant: "destructive" });
@@ -243,8 +246,11 @@ export default function InboundIntegrationsListPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-3 flex-wrap">
                       <span className="text-lg font-semibold text-slate-800">{integration.name}</span>
+                      {!!integration.securityIssues?.length && (
+                        <ul className="w-full text-sm text-red-700 list-disc ps-4">{integration.securityIssues.map((issue, i) => <li key={i}>{issue}</li>)}</ul>
+                      )}
                       <Badge variant="secondary" className={integration.isActive ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-500 hover:bg-slate-100"}>
-                        {integration.isActive ? t("inbound.active", "Активна") : t("inbound.inactive", "Отключена")}
+                        {integration.securityIssues?.length ? t("inbound.securityBlockedShort", "Заблокирована защитой") : integration.isActive ? t("inbound.active", "Активна") : t("inbound.inactive", "Отключена")}
                       </Badge>
                       <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
                         {role ? ml(role.nameJson) : `#${integration.roleId}`}
@@ -314,7 +320,7 @@ export default function InboundIntegrationsListPage() {
             <div className="space-y-1.5">
               <Label>{t("inbound.role", "Роль (права доступа к сущностям)")}</Label>
               <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-slate-200 p-2">
-                {roles.map((role) => {
+                {roles.filter((role) => safeIntegrationRole(role.permissionsJson)).map((role) => {
                   const checked = roleIds.includes(role.id);
                   return (
                     <label key={role.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-50">

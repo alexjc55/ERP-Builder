@@ -57,6 +57,10 @@ async function main() {
     readFileSync(join(__dirname, "data", "security-retention-translations.json"), "utf8"),
   ) as Entry[];
   for (const e of retentionTranslations) curatedMap.set(e.key, e);
+  const inboundSecurityTranslations = JSON.parse(
+    readFileSync(join(__dirname, "data", "inbound-security-translations.json"), "utf8"),
+  ) as Entry[];
+  for (const e of inboundSecurityTranslations) curatedMap.set(e.key, e);
 
   const sourceKeys = extractSourceKeys();
   // Card-builder translations are kept together; Russian source fallbacks are

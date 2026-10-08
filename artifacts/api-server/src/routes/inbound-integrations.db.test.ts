@@ -19,6 +19,7 @@ import {
   rolesTable,
   systemEventsTable,
   usersTable,
+  modulesTable,
 } from "@workspace/db";
 import { EVENT_ANY, subscribe } from "../lib/events";
 import { EVENT_RECORD_UPDATED } from "../lib/events";
@@ -33,6 +34,8 @@ import adminRouter, {
 } from "./inbound-integrations";
 
 const runId = `inbound-db-${randomUUID()}`;
+const fixtureSchema = `inbound_test_${randomUUID().replaceAll("-", "")}`;
+let bootstrap: { query: typeof pool.query; release: () => void } | undefined;
 const ids: {
   role?: number;
   user?: number;
@@ -40,6 +43,8 @@ const ids: {
   deniedUser?: number;
   entity?: number;
   integration?: number;
+  technicalRole?: number;
+  technicalUser?: number;
   versions: number[];
   deliveries: number[];
 } = { versions: [], deliveries: [] };
@@ -83,7 +88,7 @@ async function addVersion(mappingJson: Record<string, unknown>) {
     integrationId: ids.integration!,
     version: ids.versions.length + 1,
     state: "published",
-    mappingJson,
+    mappingJson: { ...mappingJson, allowedEvents: ["fixture"] },
     createdBy: ids.user!,
     publishedAt: new Date(),
   }).returning({ id: inboundMappingVersionsTable.id });
@@ -104,6 +109,7 @@ async function addDelivery(mappingVersionId: number, suffix: string, options: {
     eventId: `${runId}:${suffix}`,
     payloadHash: `${runId}:${suffix}:hash`,
     payloadJson: {
+      event: "fixture",
       externalId: `${runId}:customer`,
       orderId: `${runId}:order`,
       name: options.name ?? "Concurrent customer",
@@ -161,6 +167,17 @@ async function requestAdminRouter(path: string, method: string, body: unknown, a
 }
 
 async function setup() {
+  assert.equal(process.env.REPLIT_ENVIRONMENT, "development");
+  assert.equal(process.env.NODE_ENV, "test");
+  bootstrap = await pool.connect();
+  await bootstrap.query(`CREATE SCHEMA "${fixtureSchema}"`);
+  const tables = await bootstrap.query("SELECT tablename FROM pg_tables WHERE schemaname='public'");
+  for (const { tablename } of tables.rows) {
+    const name = tablename.replaceAll('"', '""');
+    await bootstrap.query(`CREATE TABLE "${fixtureSchema}"."${name}" (LIKE public."${name}" INCLUDING ALL)`);
+  }
+  pool.options.options = `-c search_path=${fixtureSchema}`;
+  await db.insert(modulesTable).values({ moduleKey: "inbound_integrations", nameJson: {}, version: "1", isEnabled: true });
   const [role] = await db.insert(rolesTable).values({
     nameJson: { en: runId },
     permissionsJson: {
@@ -202,14 +219,26 @@ async function setup() {
     nameJson: { en: runId },
   }).returning({ id: entitiesTable.id });
   ids.entity = entity!.id;
+  const [technicalRole] = await db.insert(rolesTable).values({
+    nameJson: { en: `${runId}-technical` },
+    permissionsJson: { ...NO_ACCESS_PERMS, records: {
+      [ids.entity]: { view: true, create: true, update: true, delete: false },
+    } },
+  }).returning();
+  ids.technicalRole = technicalRole.id;
+  const [technicalUser] = await db.insert(usersTable).values({
+    email: `${runId}-technical@example.invalid`, firstName: runId, lastName: "Technical",
+    roleId: technicalRole.id, passwordHash: null,
+  }).returning();
+  ids.technicalUser = technicalUser.id;
   await db.insert(entityFieldsTable).values([
     { entityId: ids.entity, fieldKey: "external_key", nameJson: { en: "External key" }, fieldType: "text", isKey: true },
     { entityId: ids.entity, fieldKey: "name", nameJson: { en: "Name" }, fieldType: "text" },
   ]);
   const [integration] = await db.insert(inboundIntegrationsTable).values({
     name: runId,
-    userId: ids.user,
-    roleId: ids.role,
+    userId: ids.technicalUser,
+    roleId: ids.technicalRole,
     tokenHash: `${runId}:token`,
     tokenPrefix: runId,
   }).returning({ id: inboundIntegrationsTable.id });
@@ -233,12 +262,17 @@ async function cleanup() {
   if (ids.entity) await db.delete(entitiesTable).where(eq(entitiesTable.id, ids.entity));
   if (ids.deniedUser) await db.delete(usersTable).where(eq(usersTable.id, ids.deniedUser));
   if (ids.user) await db.delete(usersTable).where(eq(usersTable.id, ids.user));
+  if (ids.technicalUser) await db.delete(usersTable).where(eq(usersTable.id, ids.technicalUser));
+  if (ids.technicalRole) await db.delete(rolesTable).where(eq(rolesTable.id, ids.technicalRole));
   if (ids.deniedRole) await db.delete(rolesTable).where(eq(rolesTable.id, ids.deniedRole));
   if (ids.role) await db.delete(rolesTable).where(eq(rolesTable.id, ids.role));
 }
 
 after(async () => {
-  await cleanup();
+  if (bootstrap) {
+    await bootstrap.query(`DROP SCHEMA IF EXISTS "${fixtureSchema}" CASCADE`);
+    bootstrap.release();
+  }
   await pool.end();
 });
 
@@ -520,6 +554,7 @@ test("inbound worker PostgreSQL concurrency and atomicity regressions", async (t
     const storedDismissed = await delivery(id);
     assert.equal(storedDismissed.status, "failed");
     assert.deepEqual(storedDismissed.payloadJson, {
+      event: "fixture",
       externalId: `${runId}:customer`,
       orderId: `${runId}:order`,
       name: "Concurrent customer",

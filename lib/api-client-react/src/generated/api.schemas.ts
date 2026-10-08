@@ -1701,6 +1701,8 @@ export interface ColumnGroupUpdate {
 }
 
 export interface InboundIntegration {
+  /** Blocking safety issues. An active flag does not bypass these checks. */
+  securityIssues?: string[];
   id: number;
   name: string;
   userId: number;
@@ -1762,6 +1764,11 @@ export const InboundMappingVersionState = {
 export type InboundMappingStepsItem = { [key: string]: unknown };
 
 export interface InboundMapping {
+  /**
+     * Exact allowed strings in the top-level payload event. Required for publishing and execution.
+     * @maxItems 30
+     */
+  allowedEvents?: string[];
   atomic?: boolean;
   /**
      * @minItems 1

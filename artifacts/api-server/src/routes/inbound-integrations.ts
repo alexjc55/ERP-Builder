@@ -33,7 +33,6 @@ import {
   getUserRoleIds,
   effectiveRecordPerm,
   effectiveScopeFor,
-  isPrivilegedRole,
   mostPermissiveFieldPerm,
   resolveFieldAccess,
 } from "../middlewares/permissions";
@@ -45,6 +44,7 @@ import { getAccessToken, getConnection, isGoogleDriveModuleEnabled, uploadToFold
 import type { FileFieldConfig, DriveNameSection } from "@workspace/db";
 import { validateInboundMapping, resolveInboundValue, readInboundPath, type InboundMatch, type InboundStep } from "../lib/inbound-mapping";
 import { INBOUND_SECRET_PREFIX, classifyInboundDuplicate, hashInboundSecret, parseInboundBearer } from "../lib/inbound-auth";
+import { inboundSafetyIssues, inboundEventAllowed, inboundRoleIsPrivileged, isInboundGuestRole } from "../lib/inbound-safety";
 import {
   UpdateInboundDeliveryAttentionBody,
   UpdateInboundDeliveryAttentionParams,
@@ -60,6 +60,11 @@ import {
 } from "../lib/events";
 
 const adminRouter: IRouter = Router();
+// A machine key must never manage integrations, even if its role was misconfigured.
+adminRouter.use(["/inbound-integrations", "/inbound-deliveries"], requireAuth, (req, res, next) => {
+  if (req.user?.agentId) { res.status(403).json({ error: "Machine keys cannot manage inbound integrations" }); return; }
+  next();
+});
 export const inboundWebhookRouter: IRouter = Router();
 export const INBOUND_INTEGRATIONS_MODULE_KEY = "inbound_integrations";
 const makeSecret = () => {
@@ -75,17 +80,21 @@ const errorMessage = (err: unknown) => err instanceof Error ? err.message.slice(
 async function validateRoleIds(roleIds: number[]): Promise<string | null> {
   const unique = [...new Set(roleIds)];
   if (unique.length === 0) return "At least one role is required";
-  const rows = await db.select({ id: rolesTable.id }).from(rolesTable);
+  const rows = await db.select({ id: rolesTable.id, permissions: rolesTable.permissionsJson }).from(rolesTable).where(inArray(rolesTable.id, unique));
+  if (rows.some((r) => inboundRoleIsPrivileged(r.permissions))) return "Administrative roles are forbidden for integrations";
   const found = new Set(rows.map((r) => r.id));
   return unique.find((id) => !found.has(id)) == null ? null : "Role not found";
 }
 
 adminRouter.get("/inbound-integrations", requireAuth, requireAdmin("inboundIntegrations"), async (_req, res) => {
   const rows = await db.select().from(inboundIntegrationsTable).orderBy(desc(inboundIntegrationsTable.createdAt));
-  res.json(rows);
+  res.json(await Promise.all(rows.map(async ({ tokenHash: _secretHash, ...row }) =>
+    ({ ...row, securityIssues: await inboundSafetyIssues(row) }))));
 });
 
 adminRouter.post("/inbound-integrations", requireAuth, requireAdmin("inboundIntegrations"), async (req, res): Promise<void> => {
+  const [module] = await db.select().from(modulesTable).where(eq(modulesTable.moduleKey, INBOUND_INTEGRATIONS_MODULE_KEY));
+  if (!module?.isEnabled) { res.status(403).json({ error: "Inbound integrations module is disabled" }); return; }
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   const roleIds: number[] = Array.isArray(req.body?.roleIds) ? req.body.roleIds.map(Number).filter((n: number) => Number.isInteger(n)) : [];
   if (!name || roleIds.length === 0) { res.status(400).json({ error: "Name and roleIds are required" }); return; }
@@ -131,7 +140,9 @@ adminRouter.get("/inbound-integrations/:id", requireAuth, requireAdmin("inboundI
     db.select().from(inboundDeliveriesTable).where(eq(inboundDeliveriesTable.integrationId, id)).orderBy(desc(inboundDeliveriesTable.receivedAt)).limit(100),
     db.select({ roleId: userRolesTable.roleId }).from(userRolesTable).where(eq(userRolesTable.userId, integration.userId)),
   ]);
-  res.json({ ...integration, roleIds: [integration.roleId, ...roleRows.map((r) => r.roleId)], versions, deliveries });
+  const { tokenHash: _secretHash, ...publicIntegration } = integration;
+  res.json({ ...publicIntegration, securityIssues: await inboundSafetyIssues(integration),
+    roleIds: [...new Set([integration.roleId, ...roleRows.map((r) => r.roleId)])], versions, deliveries });
 });
 
 adminRouter.put("/inbound-integrations/:id", requireAuth, requireAdmin("inboundIntegrations"), async (req, res): Promise<void> => {
@@ -203,6 +214,10 @@ adminRouter.post("/inbound-integrations/:id/mappings/:versionId/publish", requir
   if (!mapping) { res.status(404).json({ error: "Mapping not found" }); return; }
   const checked = validateInboundMapping(mapping.mappingJson);
   if (!checked.ok) { res.status(400).json({ error: "Mapping is no longer valid", details: checked.errors }); return; }
+  const [integration] = await db.select().from(inboundIntegrationsTable).where(eq(inboundIntegrationsTable.id, id));
+  if (!integration) { res.status(404).json({ error: "Integration not found" }); return; }
+  const safety = await inboundSafetyIssues(integration, db, checked.mapping);
+  if (safety.length) { res.status(400).json({ error: safety.join("; "), securityIssues: safety }); return; }
   await db.transaction(async (tx) => {
     await tx.update(inboundMappingVersionsTable).set({ state: "published", publishedAt: new Date() }).where(eq(inboundMappingVersionsTable.id, versionId));
     await tx.update(inboundIntegrationsTable).set({ publishedMappingVersionId: versionId }).where(eq(inboundIntegrationsTable.id, id));
@@ -335,6 +350,14 @@ inboundWebhookRouter.post("/api/webhooks/inbound/:integrationId", async (req, re
   try { payload = JSON.parse(raw.toString("utf8")); } catch { res.status(400).json({ error: "Invalid JSON" }); return; }
   const eventId = (req.header("x-event-id") ?? "").trim();
   if (!eventId || eventId.length > 255) { res.status(400).json({ error: "A valid X-Event-Id header is required" }); return; }
+  const safety = await inboundSafetyIssues(integration.inbound_integrations);
+  if (safety.length) { res.status(403).json({ error: "Integration blocked by safety policy" }); return; }
+  const [published] = await db.select().from(inboundMappingVersionsTable)
+    .where(eq(inboundMappingVersionsTable.id, integration.inbound_integrations.publishedMappingVersionId!));
+  const checked = validateInboundMapping(published?.mappingJson);
+  if (!checked.ok || !inboundEventAllowed(checked.mapping, payload)) {
+    res.status(422).json({ error: "Event is not allowed by the published mapping" }); return;
+  }
   const payloadHash = hashInboundSecret(raw);
   try {
     const [delivery] = await db.insert(inboundDeliveriesTable).values({
@@ -362,6 +385,13 @@ async function processDelivery(deliveryId: number, dryRun: boolean): Promise<voi
   const [version] = await db.select().from(inboundMappingVersionsTable).where(eq(inboundMappingVersionsTable.id, delivery.mappingVersionId));
   const checked = validateInboundMapping(version?.mappingJson);
   if (!checked.ok) { await failDelivery(deliveryId, "mapping_invalid", checked.errors.join("; ")); return; }
+  if (version?.integrationId !== integration.id || (!dryRun && version.state !== "published")) {
+    await failDelivery(deliveryId, "mapping_invalid", "Mapping does not belong to this integration or is not published"); return;
+  }
+  const safety = await inboundSafetyIssues(integration, db, checked.mapping);
+  if (safety.length || !inboundEventAllowed(checked.mapping, delivery.payloadJson)) {
+    await failDelivery(deliveryId, "security_policy_blocked", safety.join("; ") || "Event is not allowed by this mapping"); return;
+  }
   const authReq = { user: { userId: integration.userId, roleId: integration.roleId }, body: {}, params: {}, query: {} } as unknown as Request;
   let currentStepKey: string | null = null;
   const validatedStepKeys: string[] = [];
@@ -377,14 +407,23 @@ async function processDelivery(deliveryId: number, dryRun: boolean): Promise<voi
         .where(eq(inboundDeliveriesTable.id, deliveryId))
         .for("update");
       if (!lockedDelivery || lockedDelivery.status !== "processing") return [] as EventInput[];
+      // Recheck at the business-write boundary, not only when the webhook arrived.
+      const [currentIntegration] = await tx.select().from(inboundIntegrationsTable)
+        .where(eq(inboundIntegrationsTable.id, integration.id)).for("share");
+      if (!currentIntegration?.isActive) throw new Error("Integration is disabled");
+      const currentSafety = await inboundSafetyIssues(currentIntegration, tx, checked.mapping);
+      if (currentSafety.length) throw new Error(currentSafety.join("; "));
       await lockInboundMapping(tx, checked.mapping.steps);
       const [backingUser] = await tx.select({ email: usersTable.email }).from(usersTable).where(eq(usersTable.id, integration.userId)).limit(1);
       const results = new Map<string, { id: number }>();
       const events: EventInput[] = [];
+      let processedItems = 0;
       for (const step of checked.mapping.steps) {
         currentStepKey = step.key;
         const sources = step.source ? readInboundPath(delivery.payloadJson, step.source) : delivery.payloadJson;
         const items = Array.isArray(sources) ? sources : [sources];
+        processedItems += items.length;
+        if (processedItems > 500) throw new Error("Delivery exceeds the limit of 500 step executions");
         for (const source of items) await executeStep(tx, authReq, integration.id, deliveryId, step, source, results, events, dryRun, uploadedFileIds, backingUser?.email);
         validatedStepKeys.push(step.key);
       }
@@ -868,7 +907,7 @@ async function executeUserStep(tx: Executor, req: Request, integrationId: number
     if (allowed.length > 0 && !allowed.includes(step.target.roleId))
       throw new Error(`Step ${step.key}: configured role is not allowed for this field`);
     const [role] = await tx.select({ permissions: rolesTable.permissionsJson }).from(rolesTable).where(eq(rolesTable.id, step.target.roleId));
-    if (!role || isPrivilegedRole(role.permissions)) throw new Error(`Step ${step.key}: privileged user roles are forbidden`);
+    if (!role || !isInboundGuestRole(role.permissions)) throw new Error(`Step ${step.key}: only read-only guest roles are allowed`);
     const perms = await getPermissions(req);
     const [rp, roleIds] = await Promise.all([
       effectiveRecordPerm(req, perms, field.entityId, step.target.pageId),

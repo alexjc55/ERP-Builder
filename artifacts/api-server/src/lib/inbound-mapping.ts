@@ -46,7 +46,7 @@ export interface InboundStep {
   links?: { relationId: number; toStep: string }[];
 }
 
-export interface InboundMapping { atomic?: boolean; steps: InboundStep[] }
+export interface InboundMapping { atomic?: boolean; allowedEvents?: string[]; steps: InboundStep[] }
 
 const STEP_KEY = /^[a-z][a-z0-9_]{0,63}$/;
 const FIELD_KEY = /^[a-z][a-z0-9_]*$/;

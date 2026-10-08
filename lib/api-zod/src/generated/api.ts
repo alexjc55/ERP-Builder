@@ -760,6 +760,7 @@ export const ReceiveInboundWebhookBody = zod.unknown()
 
 
 export const ListInboundIntegrationsResponseItem = zod.object({
+  "securityIssues": zod.array(zod.string()).optional().describe('Blocking safety issues. An active flag does not bypass these checks.'),
   "id": zod.number(),
   "name": zod.string(),
   "userId": zod.number(),
@@ -830,12 +831,17 @@ export const GetInboundIntegrationParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getInboundIntegrationResponseTwoVersionsItemMappingJsonAllowedEventsItemMax = 120;
+
+export const getInboundIntegrationResponseTwoVersionsItemMappingJsonAllowedEventsMax = 30;
+
 export const getInboundIntegrationResponseTwoVersionsItemMappingJsonAtomicDefault = true;
 export const getInboundIntegrationResponseTwoVersionsItemMappingJsonStepsMax = 50;
 
 
 
 export const GetInboundIntegrationResponse = zod.object({
+  "securityIssues": zod.array(zod.string()).optional().describe('Blocking safety issues. An active flag does not bypass these checks.'),
   "id": zod.number(),
   "name": zod.string(),
   "userId": zod.number(),
@@ -855,6 +861,7 @@ export const GetInboundIntegrationResponse = zod.object({
   "version": zod.number(),
   "state": zod.enum(['draft', 'published']),
   "mappingJson": zod.object({
+  "allowedEvents": zod.array(zod.string().max(getInboundIntegrationResponseTwoVersionsItemMappingJsonAllowedEventsItemMax)).max(getInboundIntegrationResponseTwoVersionsItemMappingJsonAllowedEventsMax).optional().describe('Exact allowed strings in the top-level payload event. Required for publishing and execution.'),
   "atomic": zod.boolean().default(getInboundIntegrationResponseTwoVersionsItemMappingJsonAtomicDefault),
   "steps": zod.array(zod.record(zod.string(), zod.unknown())).min(1).max(getInboundIntegrationResponseTwoVersionsItemMappingJsonStepsMax)
 }),
@@ -897,6 +904,7 @@ export const UpdateInboundIntegrationBody = zod.object({
 })
 
 export const UpdateInboundIntegrationResponse = zod.object({
+  "securityIssues": zod.array(zod.string()).optional().describe('Blocking safety issues. An active flag does not bypass these checks.'),
   "id": zod.number(),
   "name": zod.string(),
   "userId": zod.number(),
@@ -924,6 +932,7 @@ export const RegenerateInboundIntegrationSecretParams = zod.object({
 })
 
 export const RegenerateInboundIntegrationSecretResponse = zod.object({
+  "securityIssues": zod.array(zod.string()).optional().describe('Blocking safety issues. An active flag does not bypass these checks.'),
   "id": zod.number(),
   "name": zod.string(),
   "userId": zod.number(),
@@ -944,12 +953,17 @@ export const CreateInboundMappingDraftParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const createInboundMappingDraftBodyAllowedEventsItemMax = 120;
+
+export const createInboundMappingDraftBodyAllowedEventsMax = 30;
+
 export const createInboundMappingDraftBodyAtomicDefault = true;
 export const createInboundMappingDraftBodyStepsMax = 50;
 
 
 
 export const CreateInboundMappingDraftBody = zod.object({
+  "allowedEvents": zod.array(zod.string().max(createInboundMappingDraftBodyAllowedEventsItemMax)).max(createInboundMappingDraftBodyAllowedEventsMax).optional().describe('Exact allowed strings in the top-level payload event. Required for publishing and execution.'),
   "atomic": zod.boolean().default(createInboundMappingDraftBodyAtomicDefault),
   "steps": zod.array(zod.record(zod.string(), zod.unknown())).min(1).max(createInboundMappingDraftBodyStepsMax)
 })
@@ -959,6 +973,10 @@ export const PublishInboundMappingParams = zod.object({
   "id": zod.coerce.number(),
   "versionId": zod.coerce.number()
 })
+
+export const publishInboundMappingResponseMappingJsonAllowedEventsItemMax = 120;
+
+export const publishInboundMappingResponseMappingJsonAllowedEventsMax = 30;
 
 export const publishInboundMappingResponseMappingJsonAtomicDefault = true;
 export const publishInboundMappingResponseMappingJsonStepsMax = 50;
@@ -971,6 +989,7 @@ export const PublishInboundMappingResponse = zod.object({
   "version": zod.number(),
   "state": zod.enum(['draft', 'published']),
   "mappingJson": zod.object({
+  "allowedEvents": zod.array(zod.string().max(publishInboundMappingResponseMappingJsonAllowedEventsItemMax)).max(publishInboundMappingResponseMappingJsonAllowedEventsMax).optional().describe('Exact allowed strings in the top-level payload event. Required for publishing and execution.'),
   "atomic": zod.boolean().default(publishInboundMappingResponseMappingJsonAtomicDefault),
   "steps": zod.array(zod.record(zod.string(), zod.unknown())).min(1).max(publishInboundMappingResponseMappingJsonStepsMax)
 }),
