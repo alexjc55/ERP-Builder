@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { SecurityDisplayReference } from './securityDisplayReference';
 import type { SecurityEventDetailsJson } from './securityEventDetailsJson';
 
 export interface SecurityEvent {
@@ -36,4 +37,6 @@ export interface SecurityEvent {
   detailsJson: SecurityEventDetailsJson;
   reviewedAt?: Date | null;
   reviewedBy?: number | null;
+  /** Current names resolved for authorized security administrators, not historical snapshots or verified actor identities. */
+  displayReferences?: SecurityDisplayReference[];
 }

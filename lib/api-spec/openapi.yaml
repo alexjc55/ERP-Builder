@@ -4868,6 +4868,26 @@ components:
           additionalProperties: true
         reviewedAt: { type: string, format: date-time, nullable: true }
         reviewedBy: { type: integer, nullable: true }
+        displayReferences:
+          type: array
+          description: Current names resolved for authorized security administrators, not historical snapshots or verified actor identities.
+          items:
+            $ref: "#/components/schemas/SecurityDisplayReference"
+    SecurityDisplayReference:
+      type: object
+      required: [kind, relation, id, missing]
+      properties:
+        kind:
+          type: string
+          enum: [user, role, agent, integration, entity, record]
+        relation:
+          type: string
+          enum: [actor, impersonator, target, reviewer, agent, integration, requested_role, entity, record]
+        id: { type: integer }
+        missing: { type: boolean }
+        nameJson:
+          type: object
+          additionalProperties: { type: string }
     SecurityEventPage:
       type: object
       required: [data, total]

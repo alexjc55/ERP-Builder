@@ -212,6 +212,11 @@ export function securityAuditContext(req: Request, res: Response, next: NextFunc
   }
   const target = /^\/(?:api\/)?users\/(\d+)/.exec(req.path);
   if (target) e.targetUserId = int(Number(target[1]));
+  // Capture only validated resource IDs, not arbitrary URL contents or values.
+  const entityTarget = /^\/(?:api\/)?entities\/(\d+)(?:\/|$)/.exec(req.path);
+  if (entityTarget) e.details.targetEntityId = int(Number(entityTarget[1]));
+  const recordTarget = /^\/(?:api\/)?records\/(\d+)(?:\/|$)/.exec(req.path);
+  if (recordTarget) e.details.targetRecordId = int(Number(recordTarget[1]));
   const resource = /^\/(?:api\/)?(roles|ai-agents|inbound-integrations|modules|guest-links)\/(\d+)/.exec(req.path);
   if (resource) {
     const names: Record<string, string> = {

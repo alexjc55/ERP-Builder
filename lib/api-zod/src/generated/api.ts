@@ -11820,7 +11820,14 @@ export const QuerySecurityEventsResponse = zod.object({
   "reason": zod.string().nullish(),
   "detailsJson": zod.record(zod.string(), zod.unknown()),
   "reviewedAt": zod.coerce.date().nullish(),
-  "reviewedBy": zod.number().nullish()
+  "reviewedBy": zod.number().nullish(),
+  "displayReferences": zod.array(zod.object({
+  "kind": zod.enum(['user', 'role', 'agent', 'integration', 'entity', 'record']),
+  "relation": zod.enum(['actor', 'impersonator', 'target', 'reviewer', 'agent', 'integration', 'requested_role', 'entity', 'record']),
+  "id": zod.number(),
+  "missing": zod.boolean(),
+  "nameJson": zod.record(zod.string(), zod.string()).optional()
+})).optional().describe('Current names resolved for authorized security administrators, not historical snapshots or verified actor identities.')
 })),
   "total": zod.number()
 })

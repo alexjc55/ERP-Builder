@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import express from "express";
 import bcrypt from "bcryptjs";
-import { db, pool, rolesTable, usersTable, securityEventsTable, securityEventReviewsTable, NO_ACCESS_PERMS } from "@workspace/db";
+import { db, pool, rolesTable, usersTable, securityEventsTable, securityEventReviewsTable, NO_ACCESS_PERMS,
+  entitiesTable, entityFieldsTable, entityRecordsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { signToken } from "../lib/jwt";
 import { securityAuditContext, securityAuditStart, flushSecurityAudit, securityTokenRef, classifySecurityRequest } from "../lib/security-audit";
@@ -12,6 +13,7 @@ import { requireAuth } from "../middlewares/auth";
 import { requireSuperAdmin } from "../middlewares/permissions";
 import { storeSecurityEvidence } from "../lib/security-aggregation";
 import { cleanupSecurityEvents } from "../lib/security-retention";
+import { enrichSecurityReferences, securityReferenceIds } from "../lib/security-display-references";
 
 test("IP attribution rejects spoofed chains and trusts only configured hops", () => {
   const resolve = createSecurityIpResolver("127.0.0.1/32").resolve;
@@ -56,6 +58,8 @@ test("security evidence HTTP and database boundaries", { timeout: 120000 }, asyn
       rotations++; res.json({ apiKey: "NEVER-STORE-AGENT-KEY" });
     });
     app.get("/probe", requireAuth, (_req, res) => res.json({ ok: true }));
+    app.get("/records/:id", requireAuth, (_req, res) => res.status(403).json({ error: "Denied test fixture" }));
+    app.get("/entities/:entityId/records", requireAuth, (_req, res) => res.status(403).json({ error: "Denied test fixture" }));
     server = app.listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => server!.once("listening", resolve));
     const addr = server.address(); assert.ok(addr && typeof addr !== "string");
@@ -108,6 +112,56 @@ test("security evidence HTTP and database boundaries", { timeout: 120000 }, asyn
       assert.equal((await db.select().from(securityEventReviewsTable)).length, 1);
       assert.equal((await request("/security/summary", token)).data.unreviewedAlerts, before - 1);
       assert.deepEqual((await db.select().from(securityEventsTable).where(eq(securityEventsTable.id, event!.id)))[0], event);
+    });
+    await t.test("authorized audit query resolves actor names and keeps missing targets explicit", async () => {
+      const page = await request("/security/events/query", token, { action: "user.create" });
+      const event = page.data.data.find((row: { outcome: string }) => row.outcome === "success");
+      assert.ok(event);
+      const [actor] = await db.select().from(usersTable).where(eq(usersTable.id, 1001));
+      const actorRef = event.displayReferences.find((ref: { relation: string }) => ref.relation === "actor");
+      assert.equal(actorRef.id, 1001);
+      assert.equal(actorRef.nameJson.ru, `${actor!.firstName} ${actor!.lastName}`.trim());
+      assert.equal(actorRef.missing, false);
+      const target = event.displayReferences.find((ref: { relation: string }) => ref.relation === "target");
+      assert.equal(target.id, 2001);
+      assert.equal(target.missing, true);
+      assert.ok(!JSON.stringify(event.displayReferences).includes("password"));
+      assert.equal((await request("/security/events/query", signToken({ userId: 1002, roleId: 1002 }), {})).status, 403);
+      assert.equal((await request("/security/events/query", signToken({ userId: 1001, roleId: 1001, agentId: 999 }), {})).status, 403);
+    });
+    await t.test("record and entity names are bounded live hints, not stored snapshots or full values", async () => {
+      await db.insert(entitiesTable).values({ id: 1007, entityKey: "security_labels_fixture", nameJson: { ru: "Заказы", en: "Orders", he: "הזמנות" } });
+      await db.insert(entityFieldsTable).values([
+        { id: 1007, entityId: 1007, fieldKey: "number", nameJson: {}, fieldType: "text", isKey: true },
+        { id: 1008, entityId: 1007, fieldKey: "file", nameJson: {}, fieldType: "file", sortOrder: -1 },
+      ]);
+      await db.insert(entityRecordsTable).values({ id: 1007, entityId: 1007,
+        valuesJson: { number: "Заказ 3715", file: { url: "NEVER-DISPLAY-FILE-URL" }, unknown: "NEVER-DISPLAY-UNKNOWN" } });
+      const evidence = { targetUserId: 1002, reviewedBy: 1001, detailsJson: { targetRecordId: 1007, requestedRoleIds: [1001, 1002] } };
+      const original = JSON.stringify(evidence);
+      const [result] = await enrichSecurityReferences([evidence]);
+      assert.equal(result!.displayReferences.find(r => r.kind === "record")?.nameJson?.ru, "Заказ 3715");
+      assert.equal(result!.displayReferences.find(r => r.kind === "entity")?.nameJson?.en, "Orders");
+      assert.equal(result!.displayReferences.filter(r => r.kind === "role").length, 2);
+      assert.ok(!JSON.stringify(result).includes("NEVER-DISPLAY"));
+      assert.equal(JSON.stringify(evidence), original);
+      await db.update(entityRecordsTable).set({ valuesJson: { number: "Новое название" } }).where(eq(entityRecordsTable.id, 1007));
+      const [renamed] = await enrichSecurityReferences([evidence]);
+      assert.equal(renamed!.displayReferences.find(r => r.kind === "record")?.nameJson?.ru, "Новое название");
+      const deniedRecord = await request("/records/1007", token);
+      const deniedEntity = await request("/entities/1007/records", token);
+      assert.equal(deniedRecord.status, 403);
+      const recordPage = await request("/security/events/query", token, { requestId: deniedRecord.requestId });
+      assert.equal(recordPage.data.data[0].detailsJson.targetRecordId, 1007);
+      assert.equal(recordPage.data.data[0].displayReferences.find((r: { kind: string }) => r.kind === "record").nameJson.ru, "Новое название");
+      const entityPage = await request("/security/events/query", token, { requestId: deniedEntity.requestId });
+      assert.equal(entityPage.data.data[0].displayReferences.find((r: { kind: string }) => r.kind === "entity").nameJson.ru, "Заказы");
+      await db.delete(entityRecordsTable).where(eq(entityRecordsTable.id, 1007));
+      const [deleted] = await enrichSecurityReferences([evidence]);
+      assert.equal(deleted!.displayReferences.find(r => r.kind === "record")?.missing, true);
+      assert.equal(deleted!.displayReferences.find(r => r.kind === "record")?.nameJson, undefined);
+      assert.deepEqual(await enrichSecurityReferences([]), []);
+      assert.deepEqual(securityReferenceIds({ detailsJson: { targetUserId: 1001, targetRecordId: "1007", targetEntityId: -1 } }), []);
     });
     await t.test("repeated failed login followed by success is highlighted", async () => {
       for (let i = 0; i < 5; i++) await request("/auth/login", undefined, { email: "admin@security.invalid", password: "wrong-fixture-password" });

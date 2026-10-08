@@ -19,6 +19,16 @@ recover unlogged past activity. An incomplete request is not proof of rollback.
 Administrator MFA and step-up protections need an enrollment/recovery path
 before enforcement; do not silently lock the owner out.
 
+Human-readable object names must accompany forensic IDs where available.
+
+**Why:** The user cannot identify people from numeric IDs in the ordinary admin
+screens and explicitly requested names for users, entities and records in audit details.
+
+**How to apply:** Keep IDs for tracing, distinguish the actor from the affected
+object, and clearly distinguish current lookup names from historical evidence.
+Do not fabricate historical names for deleted objects or infer a person's identity
+from an account name.
+
 Ограничение входа в ERP списком разрешённых IP пользователю не подходит.
 
 **Why:** Пользователь прямо указал это при обсуждении установки журнала безопасности.

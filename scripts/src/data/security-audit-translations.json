@@ -1,4 +1,12 @@
 [
+  {"key":"securityAudit.ref.role","ru":"Роль","en":"Role","he":"תפקיד"},
+  {"key":"securityAudit.ref.entity","ru":"Сущность","en":"Entity","he":"ישות"},
+  {"key":"securityAudit.ref.record","ru":"Запись","en":"Record","he":"רשומה"},
+  {"key":"securityAudit.ref.target","ru":"Объект действия","en":"Action target","he":"יעד הפעולה"},
+  {"key":"securityAudit.ref.requestedRole","ru":"Запрошенная роль","en":"Requested role","he":"תפקיד מבוקש"},
+  {"key":"securityAudit.ref.missing","ru":"объект удалён или не найден","en":"object deleted or not found","he":"האובייקט נמחק או לא נמצא"},
+  {"key":"securityAudit.ref.title","ru":"Участники и связанные объекты","en":"Participants and related objects","he":"משתתפים ואובייקטים קשורים"},
+  {"key":"securityAudit.ref.currentNames","ru":"Показаны текущие имена и названия, а не снимок на момент события. После удаления объекта остаётся ID. Имя учётной записи не устанавливает личность человека, выполнившего запрос.","en":"These are current names, not a snapshot at the time of the event. Deleted objects retain their ID. An account name does not identify the person who made the request.","he":"מוצגים השמות הנוכחיים, ולא צילום מצב בזמן האירוע. לאחר מחיקת אובייקט נשאר המזהה. שם חשבון אינו מזהה את האדם שביצע את הבקשה."},
   {"key":"securityAudit.tab.system","ru":"Системные события","en":"System events","he":"אירועי מערכת"},
   {"key":"securityAudit.tab.security","ru":"Аудит безопасности","en":"Security audit","he":"ביקורת אבטחה"},
   {"key":"securityAudit.title","ru":"Журнал аудита безопасности","en":"Security audit log","he":"יומן ביקורת אבטחה"},

@@ -5,6 +5,7 @@ import { QuerySecurityEventsBody, UpdateSecurityRetentionBody } from "@workspace
 import { requireAuth } from "../middlewares/auth";
 import { requireSuperAdmin } from "../middlewares/permissions";
 import { securityProxyAttribution } from "../lib/security-ip";
+import { enrichSecurityReferences } from "../lib/security-display-references";
 import { cleanupSecurityEvents, getRetentionStatus, updateRetentionSettings, recordCleanupFailure, SecurityCleanupBusyError } from "../lib/security-retention";
 
 const router = Router();
@@ -74,7 +75,7 @@ router.post("/security/events/query", async (req, res) => {
     db.select({ total: sql<number>`count(*)::int` }).from(events)
       .leftJoin(reviews, eq(events.id, reviews.eventId)).where(where),
   ]);
-  res.json({ data, total: count[0]?.total ?? 0 });
+  res.json({ data: await enrichSecurityReferences(data), total: count[0]?.total ?? 0 });
 });
 
 router.get("/security/summary", async (_req, res) => {

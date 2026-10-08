@@ -91,6 +91,43 @@ export interface SecurityEventQuery {
 
 export type SecurityEventDetailsJson = { [key: string]: unknown };
 
+export type SecurityDisplayReferenceKind = typeof SecurityDisplayReferenceKind[keyof typeof SecurityDisplayReferenceKind];
+
+
+export const SecurityDisplayReferenceKind = {
+  user: 'user',
+  role: 'role',
+  agent: 'agent',
+  integration: 'integration',
+  entity: 'entity',
+  record: 'record',
+} as const;
+
+export type SecurityDisplayReferenceRelation = typeof SecurityDisplayReferenceRelation[keyof typeof SecurityDisplayReferenceRelation];
+
+
+export const SecurityDisplayReferenceRelation = {
+  actor: 'actor',
+  impersonator: 'impersonator',
+  target: 'target',
+  reviewer: 'reviewer',
+  agent: 'agent',
+  integration: 'integration',
+  requested_role: 'requested_role',
+  entity: 'entity',
+  record: 'record',
+} as const;
+
+export type SecurityDisplayReferenceNameJson = {[key: string]: string};
+
+export interface SecurityDisplayReference {
+  kind: SecurityDisplayReferenceKind;
+  relation: SecurityDisplayReferenceRelation;
+  id: number;
+  missing: boolean;
+  nameJson?: SecurityDisplayReferenceNameJson;
+}
+
 export interface SecurityEvent {
   occurrenceCount?: number;
   lastSeenAt?: string;
@@ -120,6 +157,8 @@ export interface SecurityEvent {
   detailsJson: SecurityEventDetailsJson;
   reviewedAt?: string | null;
   reviewedBy?: number | null;
+  /** Current names resolved for authorized security administrators, not historical snapshots or verified actor identities. */
+  displayReferences?: SecurityDisplayReference[];
 }
 
 export interface SecurityEventPage {

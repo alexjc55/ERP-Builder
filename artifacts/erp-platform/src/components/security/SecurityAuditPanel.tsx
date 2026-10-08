@@ -9,8 +9,9 @@ import {
   type SecurityEvent,
   type SecurityEventPage,
   type SecurityEventQuery,
+  type SecurityDisplayReference,
 } from "@workspace/api-client-react";
-import { useT } from "@/lib/i18n";
+import { useT, useML } from "@/lib/i18n";
 import SecurityRetentionPanel from "./SecurityRetentionPanel";
 import { useManualDataRefresh } from "@/lib/manualDataRefresh";
 import { cn } from "@/lib/utils";
@@ -100,6 +101,7 @@ const fmtUtc = (iso?: string | null) => {
 
 export default function SecurityAuditPanel() {
   const t = useT();
+  const ml = useML();
   const queryClient = useQueryClient();
 
   const summary = useGetSecuritySummary({
@@ -201,10 +203,39 @@ export default function SecurityAuditPanel() {
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => setDraft((d) => ({ ...d, [k]: e.target.value })),
     "data-testid": `input-security-${k}`,
   });
+  const kindLabels = {
+    user: t("securityAudit.user", "Пользователь"),
+    role: t("securityAudit.ref.role", "Роль"),
+    entity: t("securityAudit.ref.entity", "Сущность"),
+    record: t("securityAudit.ref.record", "Запись"),
+    agent: t("securityAudit.detail.agent", "Агент"),
+    integration: t("securityAudit.detail.integration", "Интеграция"),
+  };
+  const relationLabels = {
+    actor: t("securityAudit.detail.actor", "Кто выполнил"),
+    impersonator: t("securityAudit.detail.impersonator", "Инициатор входа от имени пользователя"),
+    target: t("securityAudit.ref.target", "Объект действия"),
+    reviewer: t("securityAudit.detail.reviewedBy", "Проверил"),
+    agent: kindLabels.agent,
+    integration: kindLabels.integration,
+    requested_role: t("securityAudit.ref.requestedRole", "Запрошенная роль"),
+    entity: kindLabels.entity,
+    record: kindLabels.record,
+  };
+  const referenceText = (ref: SecurityDisplayReference) => {
+    const name = ref.nameJson ? ml(ref.nameJson) : "";
+    return `${kindLabels[ref.kind]}: ${name ? `${name} ` : ""}#${ref.id}${
+      ref.missing ? ` — ${t("securityAudit.ref.missing", "объект удалён или не найден")}` : ""
+    }`;
+  };
+  const named = (ev: SecurityEvent, kind: SecurityDisplayReference["kind"], id: number) => {
+    const ref = ev.displayReferences?.find(r => r.kind === kind && r.id === id);
+    return ref ? referenceText(ref) : `${kindLabels[kind]} #${id}`;
+  };
   const who = (ev: SecurityEvent) =>
-    ev.actorUserId != null ? `${t("securityAudit.user", "Пользователь")} #${ev.actorUserId}`
-      : ev.agentId != null ? `${t("securityAudit.detail.agent", "Агент")} #${ev.agentId}`
-      : ev.integrationId != null ? `${t("securityAudit.detail.integration", "Интеграция")} #${ev.integrationId}`
+    ev.actorUserId != null ? named(ev, "user", ev.actorUserId)
+      : ev.agentId != null ? named(ev, "agent", ev.agentId)
+      : ev.integrationId != null ? named(ev, "integration", ev.integrationId)
       : ev.loginEmail ?? t("securityAudit.anonymous", "Не аутентифицирован");
 
   const stats = [
@@ -373,7 +404,14 @@ export default function SecurityAuditPanel() {
                         )}
                       </td>
                       <td className="px-4 py-3"><Badge variant="secondary" className={OUTCOME_STYLE[ev.outcome] ?? "bg-slate-100 text-slate-700"} data-testid={`status-security-outcome-${ev.id}`}>{outcomeLabel(ev.outcome)}</Badge></td>
-                      <td className="px-4 py-3 text-slate-600 max-w-[200px] truncate">{who(ev)}</td>
+                      <td className="px-4 py-3 text-slate-600 max-w-[280px] break-words">
+                        <div>{who(ev)}</div>
+                        {ev.displayReferences?.filter(ref => ["target", "entity", "record"].includes(ref.relation)).map(ref => (
+                          <div key={`${ref.relation}-${ref.kind}-${ref.id}`} className="text-xs mt-1">
+                            {t("securityAudit.ref.target", "Объект действия")}: {referenceText(ref)}
+                          </div>
+                        ))}
+                      </td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-600" dir="ltr">{ev.clientIp}</td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-600" dir="ltr">{ev.statusCode ?? "—"}</td>
                       <td className="px-4 py-3 whitespace-nowrap">
@@ -447,11 +485,11 @@ export default function SecurityAuditPanel() {
                   ["occurrenceCount", selected.occurrenceCount != null ? String(selected.occurrenceCount) : null, true],
                   ["lastSeenAt", selected.lastSeenAt ? fmtUtc(selected.lastSeenAt) : null, true],
                   ["severity", selected.severity, true],
-                  ["actor", selected.actorUserId != null ? `#${selected.actorUserId}` : null, true],
-                  ["impersonator", selected.impersonatorUserId != null ? `#${selected.impersonatorUserId}` : null, true],
-                  ["target", selected.targetUserId != null ? `#${selected.targetUserId}` : null, true],
-                  ["agent", selected.agentId != null ? `#${selected.agentId}` : null, true],
-                  ["integration", selected.integrationId != null ? `#${selected.integrationId}` : null, true],
+                  ["actor", selected.actorUserId != null ? named(selected, "user", selected.actorUserId) : null, false],
+                  ["impersonator", selected.impersonatorUserId != null ? named(selected, "user", selected.impersonatorUserId) : null, false],
+                  ["target", selected.targetUserId != null ? named(selected, "user", selected.targetUserId) : null, false],
+                  ["agent", selected.agentId != null ? named(selected, "agent", selected.agentId) : null, false],
+                  ["integration", selected.integrationId != null ? named(selected, "integration", selected.integrationId) : null, false],
                   ["source", selected.authSource, true],
                   ["loginEmail", selected.loginEmail, true],
                   ["clientIp", selected.clientIp, true],
@@ -462,7 +500,7 @@ export default function SecurityAuditPanel() {
                   ["reason", selected.reason, false],
                   ["userAgent", selected.userAgent, true],
                   ["reviewedAt", selected.isAlert ? fmtUtc(selected.reviewedAt) : null, true],
-                  ["reviewedBy", selected.reviewedBy != null ? `#${selected.reviewedBy}` : null, true],
+                  ["reviewedBy", selected.reviewedBy != null ? named(selected, "user", selected.reviewedBy) : null, false],
                 ] as [string, string | null | undefined, boolean][]).map(([k, v, ltr]) => (
                   <div key={k} className="contents">
                     <dt className="text-slate-500">{k === "occurrenceCount" || k === "lastSeenAt" ? t(`securityRetention.detail.${k}`, k) : t(`securityAudit.detail.${k}`, k)}</dt>
@@ -488,6 +526,21 @@ export default function SecurityAuditPanel() {
                   ) : "—"}
                 </dd>
               </dl>
+              {!!selected.displayReferences?.length && (
+                <section className="rounded-md border border-slate-200 p-3 space-y-2" data-testid="security-reference-names">
+                  <h3 className="font-medium">{t("securityAudit.ref.title", "Участники и связанные объекты")}</h3>
+                  <ul className="space-y-1 text-sm break-words">
+                    {selected.displayReferences.map(ref => (
+                      <li key={`${ref.relation}-${ref.kind}-${ref.id}`}>
+                        <span className="text-slate-500">{relationLabels[ref.relation]}: </span>{referenceText(ref)}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-slate-500">
+                    {t("securityAudit.ref.currentNames", "Показаны текущие имена и названия, а не снимок на момент события. После удаления объекта остаётся ID. Имя учётной записи не устанавливает личность человека, выполнившего запрос.")}
+                  </p>
+                </section>
+              )}
               <div>
                 <div className="text-sm text-slate-500 mb-1">{t("securityAudit.detail.details", "Безопасные детали")}</div>
                 <pre dir="ltr" className="text-xs bg-slate-50 border border-slate-200 rounded p-3 overflow-x-auto whitespace-pre-wrap break-all" data-testid="text-security-detail-json">{JSON.stringify(selected.detailsJson, null, 2)}</pre>
