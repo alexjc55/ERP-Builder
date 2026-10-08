@@ -1,3 +1,4 @@
+- [Login protection](login-protection.md) — shared bounded login throttles; migration before API, no permanent account lock or IP allowlist.
 - [ERP platform core](erp-platform-core.md) — key foundational decisions for the metadata-driven Production ERP Builder (contract-first, metadata-driven, multilingual JSONB, custom JWT).
 - [System administrative pages](system-admin-pages.md) — preserve admin reachability while allowing menu appearance changes; new admin seeds must carry system identity.
 - [Admin-cap stage pattern](admin-cap-stage-pattern.md) — repeatable recipe for a new admin area: RBAC cap + OpenAPI CRUD + gated route + DB-backed i18n screen.

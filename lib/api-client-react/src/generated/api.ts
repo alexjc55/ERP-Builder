@@ -135,6 +135,7 @@ import type {
   ListInboundIntegrationErrorsParams,
   ListUsersParams,
   LocalFolder,
+  Login429,
   LoginHistoryEntry,
   LoginInput,
   MergeRecords,
@@ -2974,7 +2975,7 @@ export const login = async (loginInput: LoginInput, options?: RequestInit): Prom
 
 
 
-export const getLoginMutationOptions = <TError = ErrorType<ErrorResponse>,
+export const getLoginMutationOptions = <TError = ErrorType<ErrorResponse | Login429 | void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,{data: BodyType<LoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,{data: BodyType<LoginInput>}, TContext> => {
 
@@ -3003,12 +3004,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type LoginMutationResult = NonNullable<Awaited<ReturnType<typeof login>>>
     export type LoginMutationBody = BodyType<LoginInput>
-    export type LoginMutationError = ErrorType<ErrorResponse>
+    export type LoginMutationError = ErrorType<ErrorResponse | Login429 | void>
 
     /**
  * @summary Login with email and password
  */
-export const useLogin = <TError = ErrorType<ErrorResponse>,
+export const useLogin = <TError = ErrorType<ErrorResponse | Login429 | void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,{data: BodyType<LoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof login>>,

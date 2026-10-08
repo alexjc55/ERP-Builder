@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
+import { reserveLoginAttempt } from "../lib/login-throttle";
 import { db, usersTable, rolesTable, loginHistoryTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { signToken } from "../lib/jwt";
@@ -15,6 +16,7 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("non-account timing comparison", 12);
 
 /** Resolve the original admin behind an impersonation token, for display. */
 async function resolveImpersonator(
@@ -36,6 +38,21 @@ async function resolveImpersonator(
 }
 
 router.post("/auth/login", async (req, res): Promise<void> => {
+  let retry: number;
+  try {
+    retry = await reserveLoginAttempt(securityRequestIp(req).clientIp,
+      typeof req.body?.email === "string" ? req.body.email.slice(0, 320) : "");
+  } catch {
+    securityReason(req, "login_protection_unavailable");
+    res.status(503).json({ error: "Login protection unavailable" });
+    return;
+  }
+  if (retry > 0) {
+    securityReason(req, "login_rate_limited");
+    res.setHeader("Retry-After", String(retry));
+    res.status(429).json({ error: "Too many login attempts", retryAfterSeconds: retry });
+    return;
+  }
   const parsed = LoginBody.safeParse(req.body);
   if (!parsed.success) {
     securityReason(req, "invalid_login_input");
@@ -62,6 +79,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     .from(usersTable)
     .where(eq(usersTable.email, email.toLowerCase()));
 
+  const valid = await bcrypt.compare(password, user?.passwordHash || DUMMY_PASSWORD_HASH);
   if (!user || !user.isActive || !user.passwordHash) {
     securityReason(req, !user ? "unknown_account" : !user.isActive ? "inactive_account" : "password_not_set");
     if (req.securityEvidence && user) req.securityEvidence.targetUserId = user.id;
@@ -69,7 +87,6 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
-  const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
     securityReason(req, "password_mismatch");
     if (req.securityEvidence) req.securityEvidence.targetUserId = user.id;

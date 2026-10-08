@@ -282,6 +282,7 @@ export * from './listInboundIntegrationErrors200';
 export * from './listInboundIntegrationErrorsParams';
 export * from './listUsersParams';
 export * from './localFolder';
+export * from './login429';
 export * from './loginHistoryEntry';
 export * from './loginInput';
 export * from './mergeRecords';

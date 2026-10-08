@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   getGetSettingsQueryKey,
   useGetSettings,
@@ -16,6 +16,12 @@ import { getML, useT, type Lang } from "@/lib/i18n";
 import { Building2, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
+  const [waitSeconds, setWaitSeconds] = useState(0);
+  useEffect(() => {
+    if (!waitSeconds) return;
+    const timer = setTimeout(() => setWaitSeconds((seconds) => Math.max(0, seconds - 1)), 1000);
+    return () => clearTimeout(timer);
+  }, [waitSeconds]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const { login } = useAuth();
@@ -41,9 +47,15 @@ export default function LoginPage() {
       },
       onError: (error) => {
         const status = (error as { status?: number }).status;
+        if (status === 429) {
+          const seconds = Number((error as { data?: { retryAfterSeconds?: number } }).data?.retryAfterSeconds);
+          setWaitSeconds(Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 60);
+        }
         toast({
           title: t("login.error", "Ошибка входа"),
-          description: status === 401
+          description: status === 429
+            ? t("login.rateLimited", "Слишком много попыток входа. Дождитесь окончания отсчёта и повторите.")
+            : status === 401
             ? t("login.errorDesc", "Неверный email или пароль")
             : t("securityAudit.loginUnavailable", "Не удалось выполнить вход: ошибка сервера или соединения. Это не подтверждает неверный пароль."),
           variant: "destructive",
@@ -54,6 +66,7 @@ export default function LoginPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (waitSeconds > 0) return;
     loginMutation.mutate({ data: { email, password } });
   };
 
@@ -115,9 +128,9 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold"
-                disabled={loginMutation.isPending}
+                disabled={loginMutation.isPending || waitSeconds > 0}
               >
-                {loginMutation.isPending ? (
+                {waitSeconds > 0 ? `${t("login.retryInSeconds", "Повторить через (сек.)")}: ${waitSeconds}` : loginMutation.isPending ? (
                   <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{t("login.loggingIn", "Вход...")}</>
                 ) : (
                   t("login.submit", "Войти")

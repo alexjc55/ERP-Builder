@@ -5804,6 +5804,11 @@ export type StreamCollaborationPageEventsParams = {
 clientId: CollaborationClientId;
 };
 
+export type Login429 = {
+  error: string;
+  retryAfterSeconds: number;
+};
+
 export type ListUsersParams = {
 search?: string;
 /**

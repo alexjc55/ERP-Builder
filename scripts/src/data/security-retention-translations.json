@@ -1,4 +1,6 @@
 [
+  {"key":"login.rateLimited","ru":"Слишком много попыток входа. Дождитесь окончания отсчёта и повторите.","en":"Too many login attempts. Wait for the countdown and try again.","he":"יותר מדי ניסיונות כניסה. המתינו לסיום הספירה ונסו שוב."},
+  {"key":"login.retryInSeconds","ru":"Повторить через (сек.)","en":"Retry in (seconds)","he":"ניסיון חוזר בעוד (שניות)"},
  {
   "key": "securityRetention.revokedSummary",
   "ru": "Обращения после завершения сеанса",

@@ -690,6 +690,21 @@ paths:
             schema:
               $ref: "#/components/schemas/LoginInput"
       responses:
+        "429":
+          description: Temporary login rate limit
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, retryAfterSeconds]
+                properties:
+                  error: { type: string }
+                  retryAfterSeconds: { type: integer }
+        "503":
+          description: Login protection unavailable; login is refused safely
         "200":
           description: Login successful
           content:
