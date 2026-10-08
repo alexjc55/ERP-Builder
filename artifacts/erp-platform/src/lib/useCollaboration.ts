@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
+import { notifyUnauthorized } from "@workspace/api-client-react";
 
 export type CollaborationEditing = {
   entityId: number;
@@ -76,6 +77,7 @@ export function useCollaboration(pageId?: number | null, onPageConfigChange?: ()
       if (activeScope.current !== scope) return;
       if (response.status === 401 || response.status === 403) {
         scope.deny(response.status === 403);
+        if (response.status === 401) notifyUnauthorized(token);
         return;
       }
       if (!response.ok && !isGuest) {
@@ -194,6 +196,7 @@ export function useCollaboration(pageId?: number | null, onPageConfigChange?: ()
         );
         if (response.status === 401 || response.status === 403) {
           scope.deny(response.status === 403);
+          if (response.status === 401) notifyUnauthorized(token);
           return;
         }
         if (!response.ok || !response.body) throw new Error(`SSE request failed: ${response.status}`);

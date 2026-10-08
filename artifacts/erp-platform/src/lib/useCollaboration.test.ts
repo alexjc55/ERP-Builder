@@ -11,6 +11,7 @@ function harness() {
   let cursor = 0;
   let pageId = 10;
   let configInvalidations = 0;
+  const invalidatedTokens: string[] = [];
   let queuedEffects: Array<() => void> = [];
   const timers = new Map<number, { callback: () => void; interval: boolean; delay?: number }>();
   let timerId = 0;
@@ -53,6 +54,7 @@ function harness() {
     require: (name: string) => {
       if (name === "react") return react;
       if (name === "@/lib/auth") return { useAuth: () => ({ user: { id: 1 }, isGuest: false }) };
+      if (name === "@workspace/api-client-react") return { notifyUnauthorized: (token: string) => invalidatedTokens.push(token) };
       throw new Error(`Unexpected dependency ${name}`);
     },
     sessionStorage: storage, localStorage: storage,
@@ -96,7 +98,7 @@ function harness() {
     return result;
   };
   return {
-    render, requests, presenceResponses, streamResponses, timers,
+    render, requests, presenceResponses, streamResponses, timers, invalidatedTokens,
     get configInvalidations() { return configInvalidations; },
     retryAccess() {
       for (const [id, timer] of [...timers]) if (timer.delay === 30_000) {
@@ -213,6 +215,7 @@ test("three 403 attempts recover cleanly; 401 and unmount cancel access probes",
     await settle();
     assert.equal(h.timers.size, 0, "expired credentials do not poll");
     assert.equal(h.render().failureReason, "session_expired");
+    assert.deepEqual(h.invalidatedTokens, ["unit-token"]);
   } finally { h.cleanup(); }
   const unmounted = harness();
   unmounted.render();
@@ -221,6 +224,20 @@ test("three 403 attempts recover cleanly; 401 and unmount cancel access probes",
   await settle();
   unmounted.cleanup();
   assert.equal(unmounted.timers.size, 0);
+});
+
+test("401 presence response invalidates the session and stops all timers", async () => {
+  const h = harness();
+  try {
+    h.render();
+    await settle();
+    h.presenceResponses.push(Promise.resolve(new Response(null, { status: 401 })));
+    h.heartbeat();
+    await settle();
+    assert.deepEqual(h.invalidatedTokens, ["unit-token"]);
+    assert.equal(h.timers.size, 0);
+    assert.equal(h.render().failureReason, "session_expired");
+  } finally { h.cleanup(); }
 });
 
 test("denied heartbeat tears down an otherwise-open stream and stale heartbeat cannot deny a new page", async () => {

@@ -42,7 +42,13 @@ import { useListPages, type Page, type RoleAdminCaps } from "@workspace/api-clie
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1, staleTime: 30_000 },
+    queries: {
+      retry: (count, error) => {
+        const status = (error as { status?: number }).status;
+        return status !== 401 && status !== 403 && count < 1;
+      },
+      staleTime: 30_000,
+    },
   },
 });
 

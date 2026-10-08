@@ -1,9 +1,11 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { invalidateCurrentSession } from "./sessionLifecycle";
 import {
   useGetMe,
   getGetMeQueryKey,
   setAuthTokenGetter,
+  setUnauthorizedHandler,
   impersonate as apiImpersonate,
   stopImpersonation as apiStopImpersonation,
   redeemGuestLink as apiRedeemGuestLink,
@@ -55,7 +57,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setAuthTokenGetter(() => localStorage.getItem("erp_token"));
-  }, []);
+    setUnauthorizedHandler((failedToken) => {
+      invalidateCurrentSession(localStorage, failedToken, () => {
+        setToken(null);
+        void queryClient.cancelQueries();
+        queryClient.clear();
+      });
+    });
+    // Logout/revocation in another tab must also stop this tab's readers.
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== "erp_token" && event.key !== null) return;
+      setToken(localStorage.getItem("erp_token"));
+      void queryClient.cancelQueries();
+      queryClient.clear();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      setUnauthorizedHandler(null);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [queryClient]);
 
   const { data: user, isLoading, refetch } = useGetMe({
     query: {
@@ -178,7 +199,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        user: user || null,
+        user: token ? user || null : null,
         isLoading: isLoading && !!token,
         login: handleLogin,
         logout: handleLogout,

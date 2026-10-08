@@ -73,6 +73,8 @@ corepack pnpm --dir scripts run seed-translations --prefix=securityRetention.
 
 ## Определение IP — настройка на удалённом сервере
 
+Пошаговая проверка для nginx/FastPanel: [security-proxy-check.md](security-proxy-check.md).
+
 По умолчанию система доверяет только адресу непосредственного сетевого соединения.
 Если API работает за nginx, это может быть адрес nginx, а не посетителя.
 Обновление не включает доверие к пересланным заголовкам автоматически.

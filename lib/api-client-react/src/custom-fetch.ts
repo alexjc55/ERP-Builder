@@ -17,6 +17,17 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _unauthorizedHandler: ((token: string) => void) | null = null;
+
+/** The consumer must compare the failed token with the current session.
+ * Late failures from an old identity must not log out a newly signed-in user. */
+export function setUnauthorizedHandler(handler: ((token: string) => void) | null): void {
+  _unauthorizedHandler = handler;
+}
+
+export function notifyUnauthorized(token: string): void {
+  _unauthorizedHandler?.(token);
+}
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -376,6 +387,11 @@ export async function customFetch<T = unknown>(
   const response = await fetch(input, { ...init, method, headers });
 
   if (!response.ok) {
+    const bearer = headers.get("authorization");
+    if (response.status === 401 && bearer?.startsWith("Bearer ") &&
+        !/\/auth\/(?:login|guest\/redeem)(?:[?#]|$)/.test(requestInfo.url)) {
+      notifyUnauthorized(bearer.slice(7));
+    }
     const errorData = await parseErrorBody(response, method);
     throw new ApiError(response, errorData, requestInfo);
   }
