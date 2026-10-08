@@ -5278,6 +5278,76 @@ export const useCreatePage = <TError = ErrorType<unknown>,
       return useMutation(getCreatePageMutationOptions(options));
     }
 
+export const getDuplicatePageUrl = (id: number,) => {
+
+
+
+
+  return `/api/pages/${id}/duplicate`
+}
+
+/**
+ * @summary Copy a non-system page and its configuration, without records or role grants
+ */
+export const duplicatePage = async (id: number, options?: RequestInit): Promise<Page> => {
+
+  return customFetch<Page>(getDuplicatePageUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getDuplicatePageMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof duplicatePage>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof duplicatePage>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['duplicatePage'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof duplicatePage>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  duplicatePage(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DuplicatePageMutationResult = NonNullable<Awaited<ReturnType<typeof duplicatePage>>>
+
+    export type DuplicatePageMutationError = ErrorType<void>
+
+    /**
+ * @summary Copy a non-system page and its configuration, without records or role grants
+ */
+export const useDuplicatePage = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof duplicatePage>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof duplicatePage>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDuplicatePageMutationOptions(options));
+    }
+
 export const getGetPageUrl = (id: number,) => {
 
 

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { duplicatePage } from "../lib/duplicate-page";
 import { changesSystemPage, isAdminPath } from "../lib/system-pages";
 import {
   db,
@@ -204,6 +205,14 @@ router.post("/pages", requireAuth, requireAdmin("pages"), async (req, res): Prom
     .values({ ...parsed.data, groupByFieldKey: createGroupBy })
     .returning();
   res.status(201).json({ ...page, children: [] });
+});
+
+router.post("/pages/:id/duplicate", requireAuth, requireAdmin("pages"), async (req, res): Promise<void> => {
+  const params = GetPageParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "Invalid page id" }); return; }
+  const result = await duplicatePage(params.data.id);
+  if (result.status !== 201) { res.status(result.status).json({ error: result.error }); return; }
+  res.status(201).json(result.page);
 });
 
 router.get("/pages/:id", requireAuth, async (req, res): Promise<void> => {

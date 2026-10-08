@@ -1,0 +1,6 @@
+[
+  {"key":"pages.copy","ru":"Дублировать страницу","en":"Duplicate page","he":"שכפול דף"},
+  {"key":"pages.copied","ru":"Копия страницы создана","en":"Page copy created","he":"עותק הדף נוצר"},
+  {"key":"pages.copyError","ru":"Не удалось скопировать страницу","en":"Could not copy page","he":"לא ניתן לשכפל את הדף"},
+  {"key":"pages.copyDescription","ru":"Будут скопированы настройки, выбранные поля, виды, виджеты и карточки. Записи, значения собственных полей и дочерние страницы не копируются. Доступ ролей назначается отдельно. После создания можно изменить название и адрес копии.","en":"Settings, selected fields, views, widgets and card templates will be copied. Records, page-local values and child pages are not copied. Role access must be assigned separately. You can edit the copy's name and address after creation.","he":"ההגדרות, השדות שנבחרו, התצוגות, הווידג׳טים ותבניות הכרטיסים יועתקו. רשומות, ערכי שדות מקומיים ודפי משנה לא יועתקו. הרשאות תפקידים יש להגדיר בנפרד. לאחר היצירה ניתן לערוך את שם העותק וכתובתו."}
+]

@@ -4,6 +4,7 @@ import {
   useCreatePage,
   useUpdatePage,
   useDeletePage,
+  useDuplicatePage,
   useReorderPages,
   useListEntities,
   useListEntityFields,
@@ -52,7 +53,7 @@ import { IconPicker } from "@/components/IconPicker";
 import { TextDirectionSelect, type TextDirectionOverride } from "@/components/TextDirectionSelect";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Layout, Loader2, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink } from "lucide-react";
+import { Plus, Pencil, Copy, Trash2, Layout, Loader2, ChevronRight, ChevronUp, ChevronDown, Link2, Unlink } from "lucide-react";
 import { useLocation } from "wouter";
 import { useML, useT } from "@/lib/i18n";
 
@@ -73,6 +74,7 @@ export default function PagesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingPage, setEditingPage] = useState<Page | null>(null);
   const [deletePage, setDeletePage] = useState<Page | null>(null);
+  const [copyPage, setCopyPage] = useState<Page | null>(null);
   const [pageTab, setPageTab] = useState("main");
 
   const [nameJson, setNameJson] = useState<MLValue>({});
@@ -94,13 +96,26 @@ export default function PagesPage() {
   const [pivotConfig, setPivotConfig] = useState<PivotPageConfigValue | null>(null);
 
   const { data: pages = [], isLoading } = useListPages();
-  const { data: entities = [] } = useListEntities();
+  const { data: entities = [], isLoading: entitiesLoading } = useListEntities();
   const [, navigate] = useLocation();
 
   const entityForPage = (pageId: number): Entity | undefined =>
     entities.find((e: Entity) => e.pageId === pageId);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["/api/pages"] });
+  const canCopy = (page: Page) => !entitiesLoading && !page.isSystem && !entityForPage(page.id)
+    && !/^\/admin(?:\/|$)/.test(page.path?.trim() || "");
+  const copyMutation = useDuplicatePage({
+    mutation: {
+      onSuccess: (page) => {
+        setCopyPage(null);
+        invalidate();
+        toast({ title: t("pages.copied", "Копия страницы создана") });
+        openEdit(page);
+      },
+      onError: () => toast({ title: t("pages.copyError", "Не удалось скопировать страницу"), variant: "destructive" }),
+    },
+  });
 
   const createMutation = useCreatePage({
     mutation: {
@@ -355,6 +370,9 @@ export default function PagesPage() {
                           {!page.isSystem && <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setDeletePage(page)}>
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>}
+                          {canCopy(page) && <Button variant="ghost" size="icon" className="h-8 w-8" title={t("pages.copy", "Дублировать страницу")} aria-label={t("pages.copy", "Дублировать страницу")} disabled={copyMutation.isPending} onClick={() => setCopyPage(page)}>
+                            <Copy className="w-3.5 h-3.5" />
+                          </Button>}
                         </div>
                       </td>
                     </tr>,
@@ -398,6 +416,9 @@ export default function PagesPage() {
                             </Button>
                             {!child.isSystem && <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => setDeletePage(child)}>
                               <Trash2 className="w-3.5 h-3.5" />
+                            </Button>}
+                            {canCopy(child) && <Button variant="ghost" size="icon" className="h-8 w-8" title={t("pages.copy", "Дублировать страницу")} aria-label={t("pages.copy", "Дублировать страницу")} disabled={copyMutation.isPending} onClick={() => setCopyPage(child)}>
+                              <Copy className="w-3.5 h-3.5" />
                             </Button>}
                           </div>
                         </td>
@@ -642,6 +663,19 @@ export default function PagesPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!copyPage} onOpenChange={(o) => !o && !copyMutation.isPending && setCopyPage(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{t("pages.copy", "Дублировать страницу")}: {ml(copyPage?.nameJson)}</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">{t("pages.copyDescription", "Будут скопированы настройки, выбранные поля, виды, виджеты и карточки. Записи, значения собственных полей и дочерние страницы не копируются. Доступ ролей назначается отдельно. После создания можно изменить название и адрес копии.")}</p>
+          <DialogFooter>
+            <Button variant="outline" disabled={copyMutation.isPending} onClick={() => setCopyPage(null)}>{t("common.cancel", "Отмена")}</Button>
+            <Button disabled={copyMutation.isPending} onClick={() => copyPage && copyMutation.mutate({ id: copyPage.id })}>
+              {copyMutation.isPending && <Loader2 className="w-4 h-4 animate-spin me-2" />}
+              {t("pages.copy", "Дублировать страницу")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <AlertDialog open={!!deletePage} onOpenChange={(o) => !o && setDeletePage(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

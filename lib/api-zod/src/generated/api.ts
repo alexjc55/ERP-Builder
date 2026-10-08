@@ -2763,6 +2763,14 @@ export const CreatePageBody = zod.object({
 
 
 /**
+ * @summary Copy a non-system page and its configuration, without records or role grants
+ */
+export const DuplicatePageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
  * @summary Get page by ID
  */
 export const GetPageParams = zod.object({

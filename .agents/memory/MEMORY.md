@@ -21,6 +21,7 @@
 - [Impersonation](erp-impersonation.md) — impersonation modeled on the custom JWT; boundary/no-escalation rules that must stay consistent.
 - [Passwordless guest access](guest-access.md) — shareable-link guest sessions: read-only is a hard guard at requireAuth (not RBAC), guest reads must be side-effect free, links bind to passwordless accounts only.
 - [Mirror pages](mirror-pages.md) — a page shows another entity's LIVE records (bidirectional) via mirrorEntityId + display-only mirrorFieldKeys; source-entity RBAC is the boundary, with optional per-mirror-page CRUD overrides.
+- [Page duplication](page-duplication.md) — configuration-only copies; no primary entity/system pages, business data, child pages or automatic role grants.
 - [ERP i18n](erp-i18n.md) — how erp-platform i18n is wired and how to keep translation seeding complete.
 - [Settings & branding](settings-branding.md) — /settings page (profile + admin-only branding); singleton app_settings; GET-public/PUT-admin boundary; public logo route is no-IDOR because path comes from DB.
 - [Orval param collision](orval-param-collision.md) — why adding a query param to a path-param GET breaks api-zod codegen, and how to avoid it.
