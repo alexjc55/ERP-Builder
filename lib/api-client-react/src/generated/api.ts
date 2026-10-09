@@ -10253,6 +10253,84 @@ export const useReorderCustomFilters = <TError = ErrorType<unknown>,
       return useMutation(getReorderCustomFiltersMutationOptions(options));
     }
 
+export const getListPageCustomFiltersUrl = (pageId: number,) => {
+
+
+
+
+  return `/api/pages/${pageId}/custom-filters`
+}
+
+/**
+ * Returns an empty list for mirror-only viewers without entity-level read access. Does not grant access to entity filter definitions.
+ * @summary List entity custom filters available on an authorized mirror page
+ */
+export const listPageCustomFilters = async (pageId: number, options?: RequestInit): Promise<CustomFilter[]> => {
+
+  return customFetch<CustomFilter[]>(getListPageCustomFiltersUrl(pageId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPageCustomFiltersQueryKey = (pageId: number,) => {
+    return [
+    `/api/pages/${pageId}/custom-filters`
+    ] as const;
+    }
+
+
+export const getListPageCustomFiltersQueryOptions = <TData = Awaited<ReturnType<typeof listPageCustomFilters>>, TError = ErrorType<void>>(pageId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPageCustomFilters>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPageCustomFiltersQueryKey(pageId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPageCustomFilters>>> = ({ signal }) => listPageCustomFilters(pageId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(pageId), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPageCustomFilters>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPageCustomFiltersQueryResult = NonNullable<Awaited<ReturnType<typeof listPageCustomFilters>>>
+export type ListPageCustomFiltersQueryError = ErrorType<void>
+
+
+/**
+ * @summary List entity custom filters available on an authorized mirror page
+ */
+
+export function useListPageCustomFilters<TData = Awaited<ReturnType<typeof listPageCustomFilters>>, TError = ErrorType<void>>(
+ pageId: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPageCustomFilters>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPageCustomFiltersQueryOptions(pageId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getListEntityCustomFiltersUrl = (entityId: number,) => {
 
 

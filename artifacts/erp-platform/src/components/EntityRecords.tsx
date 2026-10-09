@@ -80,6 +80,8 @@ import {
   type BulkRecordsAction,
   useListEntityCustomFilters,
   getListEntityCustomFiltersQueryKey,
+  useListPageCustomFilters,
+  getListPageCustomFiltersQueryKey,
   useListEntities,
   useUpdateEntity,
   getGetEntityQueryKey,
@@ -3915,15 +3917,25 @@ export function EntityRecords({
   // chip bar renders for every viewer WHO CAN VIEW THIS ENTITY (the predicate is
   // admin-authored + applied server-side; returned rows still obey the viewer's
   // row/field boundary). Only ACTIVE filters become chips.
-  const { data: customFilterList } = useListEntityCustomFilters(entityId, {
+  const { data: entityCustomFilterList } = useListEntityCustomFilters(entityId, {
     // This endpoint is entity-scoped: a mirror-only permission does not grant
     // access to the source entity's filter definitions.
     query: {
       queryKey: getListEntityCustomFiltersQueryKey(entityId),
-      enabled: canRecord(entityId, "view"),
+      enabled: !isMirror && canRecord(entityId, "view"),
       retry: false,
     },
   });
+  const { data: pageCustomFilterList } = useListPageCustomFilters(pageId ?? 0, {
+    query: {
+      queryKey: getListPageCustomFiltersQueryKey(pageId ?? 0),
+      enabled: isMirror && pageId != null && canView,
+      retry: false,
+    },
+  });
+  const customFilterList = canView
+    ? (isMirror ? pageCustomFilterList : entityCustomFilterList)
+    : undefined;
   const customFilterDefs = useMemo<CustomFilter[]>(
     () => (Array.isArray(customFilterList) ? customFilterList.filter((d) => d.isActive) : []),
     [customFilterList],

@@ -13,7 +13,7 @@ import {
 } from "@workspace/db";
 import { eq, and, asc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
-import { requireAdmin, requireRecordParam } from "../middlewares/permissions";
+import { requireAdmin, requireRecordParam, getPermissions, effectiveRecordPerm } from "../middlewares/permissions";
 import {
   ListEntityCustomFiltersParams,
   CreateEntityCustomFilterParams,
@@ -26,6 +26,29 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+// A page's optional filter bar must not probe the entity-only endpoint. Page
+// access is checked first; mirror-only access never exposes entity definitions.
+router.get("/pages/:pageId/custom-filters", requireAuth, async (req, res): Promise<void> => {
+  const pageId = Number(req.params.pageId);
+  if (!Number.isSafeInteger(pageId) || pageId <= 0) {
+    res.status(400).json({ error: "Invalid page id" }); return;
+  }
+  const [page] = await db.select({ entityId: pagesTable.mirrorEntityId }).from(pagesTable)
+    .where(eq(pagesTable.id, pageId)).limit(1);
+  if (!page?.entityId) { res.status(404).json({ error: "Mirror page not found" }); return; }
+  const perms = await getPermissions(req);
+  const recordPerm = await effectiveRecordPerm(req, perms, page.entityId, pageId);
+  if (!perms.superAdmin && (!perms.pageIds.includes(pageId) || recordPerm?.view !== true)) {
+    res.status(403).json({ error: "Page access denied" }); return;
+  }
+  if (!perms.superAdmin && perms.records[String(page.entityId)]?.view !== true) {
+    res.json([]); return;
+  }
+  const rows = await db.select().from(customFiltersTable)
+    .where(eq(customFiltersTable.entityId, page.entityId)).orderBy(asc(customFiltersTable.sortOrder));
+  res.json(rows);
+});
 
 async function entityExists(entityId: number): Promise<boolean> {
   const [entity] = await db

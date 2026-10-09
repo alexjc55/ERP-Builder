@@ -2857,6 +2857,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+  /pages/{pageId}/custom-filters:
+    get:
+      operationId: listPageCustomFilters
+      tags: [customFilters]
+      summary: List entity custom filters available on an authorized mirror page
+      description: Returns an empty list for mirror-only viewers without entity-level read access. Does not grant access to entity filter definitions.
+      parameters:
+        - name: pageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Available custom filters
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomFilter"
+        "403":
+          description: Page or page records access denied
+        "404":
+          description: Mirror page not found
   /entities/{entityId}/custom-filters:
     get:
       operationId: listEntityCustomFilters

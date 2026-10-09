@@ -22,6 +22,12 @@ conditions can share one input (flagship «Работы за период»: one
 two date fields).
 
 ## The retirement that must not regress
+For a mirror page, optional filter discovery must check that page's membership and effective record-view permission first. A valid mirror-only viewer receives an empty list, not entity filter definitions and not a denial merely for opening the page. The entity-only endpoint must still deny that caller.
+
+**Why:** The user reports the «Производитель» role has access only to «Производство» and only its own rows. Optional entity-wide metadata requests from this ordinary table created misleading security alerts. Do not grant entity-wide access or suppress denied requests globally to resolve this.
+
+**How to apply:** Keep mirror discovery separate from entity administration, and preserve row-scope enforcement on record/filter-value queries. Test both page-only and entity-plus-page viewers.
+
 The OLD design (`pages.customFiltersJson` — per-page multi-date chip) is GONE.
 Do not re-add a `customFilters` prop on pages or reference `pages.customFiltersJson`.
 The client channel is now `CustomFilterPick[]` (`{ id, inputs?: [{inputId,value}] }`)

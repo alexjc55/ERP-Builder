@@ -8478,6 +8478,56 @@ export const ReorderCustomFiltersResponse = zod.object({
 
 
 /**
+ * Returns an empty list for mirror-only viewers without entity-level read access. Does not grant access to entity filter definitions.
+ * @summary List entity custom filters available on an authorized mirror page
+ */
+export const ListPageCustomFiltersParams = zod.object({
+  "pageId": zod.coerce.number()
+})
+
+export const listPageCustomFiltersResponseGroupsJsonItemConjunctionDefault = `and`;
+export const listPageCustomFiltersResponseGroupsJsonItemConditionsItemFieldSourceDefault = `entity`;
+export const listPageCustomFiltersResponseGroupsJsonItemConditionsItemValueSourceDefault = `static`;
+
+export const ListPageCustomFiltersResponseItem = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}),
+  "isActive": zod.boolean(),
+  "conjunction": zod.enum(['and', 'or']),
+  "groupsJson": zod.array(zod.object({
+  "conjunction": zod.enum(['and', 'or']).default(listPageCustomFiltersResponseGroupsJsonItemConjunctionDefault),
+  "conditions": zod.array(zod.object({
+  "fieldSource": zod.enum(['entity', 'page']).default(listPageCustomFiltersResponseGroupsJsonItemConditionsItemFieldSourceDefault),
+  "pageId": zod.number().optional().describe('The mirror page whose page-field to read (when fieldSource=page).'),
+  "fieldKey": zod.string(),
+  "operator": zod.enum(['eq', 'neq', 'contains', 'notContains', 'gt', 'lt', 'gte', 'lte', 'between', 'empty', 'notEmpty']),
+  "valueSource": zod.enum(['static', 'input']).default(listPageCustomFiltersResponseGroupsJsonItemConditionsItemValueSourceDefault),
+  "value": zod.unknown().optional(),
+  "inputId": zod.string().optional()
+}).describe('One condition of a custom filter: a field (entity or a mirror page\'s page-local field) compared by an operator against a fixed value or a user-supplied input. ANY field type is allowed, including formula fields (the computed result is compared), regardless of isFilterable.'))
+}).describe('A group of conditions combined by one conjunction (level 2 of the tree).')),
+  "inputsJson": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.enum(['text', 'number', 'date', 'datetime', 'dateRange', 'numberRange', 'select', 'boolean']),
+  "labelJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+}).optional()
+}).describe('A runtime user-supplied input a filter declares, referenced by a condition\'s inputId.')),
+  "sortOrder": zod.number(),
+  "createdAt": zod.string().optional(),
+  "updatedAt": zod.string().optional()
+}).describe('A per-entity CUSTOM FILTER (structured like an Automation). A two-level И\/ИЛИ condition tree over ANY field of the entity (or a mirror page\'s page-local field), including formula fields. Renders as ONE chip on the records filter bar and narrows the TABLE, PIVOT and CALENDAR views.')
+export const ListPageCustomFiltersResponse = zod.array(ListPageCustomFiltersResponseItem)
+
+
+/**
  * @summary List custom filters for an entity
  */
 export const ListEntityCustomFiltersParams = zod.object({
