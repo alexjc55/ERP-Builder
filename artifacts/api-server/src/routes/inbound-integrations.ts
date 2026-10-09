@@ -26,7 +26,8 @@ import {
   googleDriveFoldersTable,
   type InsertAuditLog,
 } from "@workspace/db";
-import { requireAuth } from "../middlewares/auth";
+import { requireAuth, invalidateUserAliveCache } from "../middlewares/auth";
+import { invalidateAgentCache } from "../lib/aiAgentAuth";
 import {
   requireAdmin,
   getPermissions,
@@ -199,9 +200,11 @@ adminRouter.delete("/inbound-integrations/:id", requireAuth, requireAdmin("inbou
   await db.transaction(async (tx) => {
     await tx.update(inboundIntegrationsTable).set({ isActive: false, deletedAt: new Date() })
       .where(eq(inboundIntegrationsTable.id, id));
-    await tx.update(usersTable).set({ isActive: false, sessionVersion: sql`${usersTable.sessionVersion} + 1` })
+    await tx.update(usersTable).set({ isActive: false, passwordHash: null, sessionVersion: sql`${usersTable.sessionVersion} + 1` })
       .where(eq(usersTable.id, existing.userId));
   });
+  invalidateUserAliveCache(existing.userId);
+  invalidateAgentCache();
   res.json({ success: true });
 });
 

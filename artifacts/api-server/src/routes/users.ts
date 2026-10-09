@@ -16,6 +16,7 @@ import {
   guestLinksTable,
   entityAutomationsTable,
   aiAgentsTable,
+  inboundIntegrationsTable,
 } from "@workspace/db";
 import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireAuth, invalidateUserAliveCache } from "../middlewares/auth";
@@ -128,7 +129,12 @@ router.get("/users", requireAuth, requireAdmin("users"), async (req, res): Promi
 
   const { search, roleId, isActive, limit = 50, offset = 0 } = parsed.data;
 
-  const conditions = [];
+  // Retain service identities for audit attribution, not as manageable accounts.
+  const conditions = [sql`NOT EXISTS (
+    SELECT 1 FROM ${inboundIntegrationsTable}
+    WHERE ${inboundIntegrationsTable.userId} = ${usersTable.id}
+      AND ${inboundIntegrationsTable.deletedAt} IS NOT NULL
+  )`];
   if (search) {
     conditions.push(
       sql`(${usersTable.email} ILIKE ${"%" + search + "%"} OR ${usersTable.firstName} ILIKE ${"%" + search + "%"} OR ${usersTable.lastName} ILIKE ${"%" + search + "%"})`
@@ -432,20 +438,23 @@ router.get("/users/:id", requireAuth, requireAdmin("users"), async (req, res): P
 });
 
 /**
- * Accounts that back an AI agent are managed exclusively through the AI-agents
- * module: editing them here would desynchronize the agent's role, and setting
+ * Service accounts are managed exclusively through their owning modules:
+ * editing them here would desynchronize the integration/agent role, and setting
  * a password would turn a machine key into a login — a privilege escalation.
  */
-async function isAgentBackedUser(userId: number): Promise<boolean> {
+async function isServiceBackedUser(userId: number): Promise<boolean> {
   const [row] = await db
     .select({ id: aiAgentsTable.id })
     .from(aiAgentsTable)
     .where(eq(aiAgentsTable.userId, userId))
     .limit(1);
-  return Boolean(row);
+  if (row) return true;
+  const [integration] = await db.select({ id: inboundIntegrationsTable.id })
+    .from(inboundIntegrationsTable).where(eq(inboundIntegrationsTable.userId, userId)).limit(1);
+  return Boolean(integration);
 }
 
-const AGENT_USER_ERROR = "Эта учётная запись принадлежит ИИ-агенту и управляется в модуле «ИИ-агенты»";
+const AGENT_USER_ERROR = "Это служебная учётная запись. Управляйте ею через соответствующий модуль «ИИ-агенты» или «Входящие интеграции».";
 
 router.put("/users/:id", requireAuth, requireAdmin("users"), async (req, res): Promise<void> => {
   const params = UpdateUserParams.safeParse(req.params);
@@ -454,7 +463,7 @@ router.put("/users/:id", requireAuth, requireAdmin("users"), async (req, res): P
     return;
   }
 
-  if (await isAgentBackedUser(params.data.id)) {
+  if (await isServiceBackedUser(params.data.id)) {
     res.status(400).json({ error: AGENT_USER_ERROR });
     return;
   }
@@ -572,7 +581,9 @@ router.post("/users/merge", requireAuth, requireSuperAdmin(), async (req, res): 
     .select({ userId: aiAgentsTable.userId })
     .from(aiAgentsTable)
     .where(inArray(aiAgentsTable.userId, allIds));
-  if (agentBacked.length > 0) {
+  const integrationBacked = await db.select({ userId: inboundIntegrationsTable.userId })
+    .from(inboundIntegrationsTable).where(inArray(inboundIntegrationsTable.userId, allIds));
+  if (agentBacked.length > 0 || integrationBacked.length > 0) {
     res.status(400).json({ error: AGENT_USER_ERROR });
     return;
   }
@@ -903,7 +914,23 @@ router.delete("/users/:id", requireAuth, requireAdmin("users"), async (req, res)
     return;
   }
 
-  if (await isAgentBackedUser(params.data.id)) {
+  const [integration] = await db.select().from(inboundIntegrationsTable)
+    .where(eq(inboundIntegrationsTable.userId, params.data.id)).limit(1);
+  if (integration) {
+    if (!integration.deletedAt) {
+      res.status(409).json({ error: "Сначала удалите связанную интеграцию в модуле «Входящие интеграции». Её служебная учётная запись будет убрана из списка автоматически." });
+      return;
+    }
+    // Legacy deleted integrations retain their identity for delivery/audit history.
+    await db.update(usersTable).set({
+      isActive: false, passwordHash: null, sessionVersion: sql`${usersTable.sessionVersion} + 1`,
+    }).where(eq(usersTable.id, params.data.id));
+    invalidateUserAliveCache(params.data.id);
+    invalidateAgentCache();
+    res.json({ success: true, message: "Service account removed from user list; audit identity retained" });
+    return;
+  }
+  if (await isServiceBackedUser(params.data.id)) {
     res.status(400).json({ error: AGENT_USER_ERROR });
     return;
   }
@@ -950,6 +977,10 @@ router.post("/users/:id/unblock", requireAuth, requireAdmin("users"), async (req
     return;
   }
 
+  if (await isServiceBackedUser(params.data.id)) {
+    res.status(400).json({ error: AGENT_USER_ERROR });
+    return;
+  }
   await db
     .update(usersTable)
     .set({ isActive: true })
@@ -976,7 +1007,7 @@ router.post("/users/:id/reset-password", requireAuth, requireAdmin("users"), asy
     return;
   }
 
-  if (await isAgentBackedUser(params.data.id)) {
+  if (await isServiceBackedUser(params.data.id)) {
     res.status(400).json({ error: AGENT_USER_ERROR });
     return;
   }

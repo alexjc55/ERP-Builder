@@ -177,6 +177,7 @@ export default function UsersPage() {
   const deleteMutation = useDeleteUser({
     mutation: {
       onSuccess: () => { toast({ title: t("users.deleted", "Пользователь удалён") }); setDeleteUser(null); invalidate(); },
+      onError: (e: unknown) => toast({ title: t("users.error", "Ошибка"), description: (e as { message?: string })?.message, variant: "destructive" }),
     },
   });
 
@@ -198,7 +199,10 @@ export default function UsersPage() {
   });
 
   const blockMutation = useBlockUser({ mutation: { onSuccess: () => { toast({ title: t("users.blocked", "Заблокирован") }); invalidate(); } } });
-  const unblockMutation = useUnblockUser({ mutation: { onSuccess: () => { toast({ title: t("users.unblocked", "Разблокирован") }); invalidate(); } } });
+  const unblockMutation = useUnblockUser({ mutation: {
+    onSuccess: () => { toast({ title: t("users.unblocked", "Разблокирован") }); invalidate(); },
+    onError: (e: unknown) => toast({ title: t("users.error", "Ошибка"), description: (e as { message?: string })?.message, variant: "destructive" }),
+  } });
   const resetPwMutation = useResetUserPassword({
     mutation: {
       onSuccess: () => { toast({ title: t("users.passwordReset", "Пароль сброшен") }); setResetPwUser(null); setNewPassword(""); invalidate(); },

@@ -80,7 +80,11 @@ export default function InboundIntegrationsListPage() {
   const [regenTarget, setRegenTarget] = useState<InboundIntegration | null>(null);
   const [issuedSecret, setIssuedSecret] = useState<string | null>(null);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["/api/inbound-integrations"] });
+  const invalidate = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ["/api/inbound-integrations"] }),
+    queryClient.invalidateQueries({ queryKey: ["/api/users"] }),
+    queryClient.invalidateQueries({ queryKey: ["/api/users/options"] }),
+  ]);
 
   const createMutation = useCreateInboundIntegration({
     mutation: {

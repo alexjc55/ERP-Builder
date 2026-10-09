@@ -9,6 +9,7 @@ import { inboundSafetyIssues, inboundEventAllowed, isInboundGuestRole } from "./
 import { hashInboundSecret } from "./inbound-auth";
 import adminRouter, { inboundWebhookRouter, claimAndProcessInboundDelivery } from "../routes/inbound-integrations";
 import { signToken } from "./jwt";
+import usersRouter from "../routes/users";
 
 test("inbound safety is fail-closed for old mappings, roles, events and disabled modules", async () => {
   assert.equal(process.env.NODE_ENV, "test");
@@ -52,7 +53,7 @@ test("inbound safety is fail-closed for old mappings, roles, events and disabled
     const app = express();
     app.use("/api/webhooks", express.raw({ type: "application/json" }));
     app.use(inboundWebhookRouter);
-    app.use(express.json(), adminRouter);
+    app.use(express.json(), adminRouter, usersRouter);
     server = app.listen(0, "127.0.0.1");
     await new Promise<void>((resolve) => server!.once("listening", resolve));
     const addr = server.address(); assert.ok(addr && typeof addr !== "string");
@@ -114,6 +115,10 @@ test("inbound safety is fail-closed for old mappings, roles, events and disabled
       });
     assert.equal((await adminRequest("/inbound-integrations/1", "PUT", { isActive: false })).status, 200);
     assert.equal(((await (await adminRequest("/inbound-integrations")).json()) as unknown[]).length, 1, "Disabled integrations remain visible");
+    const userList = async (query = "") => (await (await adminRequest(`/users${query}`)).json()) as { data: { id: number }[]; total: number };
+    assert.ok((await userList()).data.some(u => u.id === 1), "Disabled, not deleted service user remains visible");
+    assert.equal((await adminRequest("/users/1", "DELETE")).status, 409, "Delete the integration, not its standalone identity");
+    assert.equal((await adminRequest("/users/1/reset-password", "POST", { newPassword: "FixtureOnly!123" })).status, 400);
     const historyCount = (await db.select().from(inboundDeliveriesTable)).length;
     assert.equal((await adminRequest("/inbound-integrations/1", "DELETE")).status, 200);
     assert.equal(((await (await adminRequest("/inbound-integrations")).json()) as unknown[]).length, 0);
@@ -126,6 +131,16 @@ test("inbound safety is fail-closed for old mappings, roles, events and disabled
     const [technical] = await db.select().from(usersTable).where(eq(usersTable.id, 1));
     assert.equal(technical.isActive, false);
     assert.equal(technical.sessionVersion, 1);
+    assert.equal(technical.passwordHash, null);
+    const remaining = await userList();
+    assert.ok(!remaining.data.some(u => u.id === 1));
+    assert.equal(remaining.total, remaining.data.length, "Pagination count excludes retired identities");
+    assert.equal((await userList("?search=fixture%40inbound.invalid")).total, 0);
+    assert.ok(!(await userList("?isActive=false")).data.some(u => u.id === 1));
+    assert.equal((await adminRequest("/users/1/unblock", "POST", {})).status, 400);
+    assert.equal((await adminRequest("/users/1", "DELETE")).status, 200, "Stale manual deletion remains safe and idempotent");
+    assert.equal((await db.select().from(inboundDeliveriesTable)).length, historyCount);
+    assert.equal((await db.select().from(usersTable).where(eq(usersTable.id, 1))).length, 1, "Audit identity is preserved");
     assert.equal((await db.select().from(usersTable).where(eq(usersTable.email, "guest@fixture.invalid"))).length, 1);
     const errors = await (await adminRequest("/inbound-integrations/errors")).json() as { unresolved: number };
     assert.equal(errors.unresolved, 0, "Deleted integration errors must not leave an actionable banner");

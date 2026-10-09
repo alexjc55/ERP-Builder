@@ -3,6 +3,11 @@ name: Inbound webhook integrations
 description: Durable security, execution, matching, and concurrency rules for generic external-system ingestion.
 ---
 
+**Rule:** Removing an integration retires its technical account from the users list but retains its database identity for audit/delivery attribution. This applies retrospectively to already-deleted integrations. Business/guest users created by its mappings are independent and must remain.
+
+**Why:** A blocked service account continuing to appear as an ordinary manageable user is misleading; physically deleting it can break historical attribution. Restoring login or changing its roles independently also desynchronizes it from its owner.
+
+**How to apply:** Delete through the owning module, revoke access and invalidate caches, hide only identities linked to deleted integrations in both list and count. Explain standalone deletion failures in the UI; never delete the integration's created customers as cleanup.
 # Inbound webhook integrations
 
 **Rule:** Treat every integration as a passwordless technical user with one or more existing roles. Mapping configuration may narrow those permissions but must never widen record, row, field, page, or relation access.
