@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { sql, eq } from "drizzle-orm";
 import { db, securityEventsTable as events } from "@workspace/db";
 import { revokedSessionGroup, addRevokedRequest } from "./revoked-session-summary";
+import { isOptionalFilterDenial } from "./security-alert-policy";
 
 export const SECURITY_AGGREGATION_WINDOW_MS = 5 * 60_000;
 export const SECURITY_AGGREGATION_GROUP_LIMIT = 100;
@@ -10,7 +11,7 @@ export const SECURITY_AGGREGATION_GROUP_LIMIT = 100;
  * Revoked sessions retain identity/source plus bounded cross-route summaries. */
 export async function storeSecurityEvidence(row: typeof events.$inferInsert) {
   const revokedGroup = revokedSessionGroup(row);
-  const aggregate = revokedGroup !== null || row.outcome === "attempt" ||
+  const aggregate = revokedGroup !== null || isOptionalFilterDenial(row) || row.outcome === "attempt" ||
     (!row.actorUserId && ["denied", "failure", "interrupted"].includes(row.outcome));
   if (!aggregate) { await db.insert(events).values(row); return; }
   const now = new Date();
@@ -19,6 +20,7 @@ export async function storeSecurityEvidence(row: typeof events.$inferInsert) {
     row.action, row.outcome, row.clientIp, row.loginEmail, row.route, row.method, row.reason,
     row.targetUserId, row.detailsJson?.targetAgentId, row.detailsJson?.targetRoleId,
     row.detailsJson?.targetIntegrationId,
+    row.actorUserId, row.sessionRef, row.detailsJson?.targetEntityId,
   ])).digest("hex");
   await db.transaction(async (tx) => {
     // A database lock also coordinates multiple API processes. No in-memory,

@@ -5,6 +5,7 @@ import { QuerySecurityEventsBody, UpdateSecurityRetentionBody } from "@workspace
 import { requireAuth } from "../middlewares/auth";
 import { requireSuperAdmin } from "../middlewares/permissions";
 import { securityProxyAttribution } from "../lib/security-ip";
+import { actionableAlertSql, classifyDisplayedEvidence } from "../lib/security-alert-policy";
 import { enrichSecurityReferences } from "../lib/security-display-references";
 import { cleanupSecurityEvents, getRetentionStatus, updateRetentionSettings, recordCleanupFailure, SecurityCleanupBusyError } from "../lib/security-retention";
 
@@ -65,7 +66,7 @@ router.post(["/security/events/query", "/security/events/export"], async (req, r
     q.requestId ? eq(events.requestId, q.requestId) : undefined,
     q.clientIp ? eq(events.clientIp, q.clientIp) : undefined,
     q.loginEmail ? eq(events.loginEmail, q.loginEmail.trim().toLowerCase()) : undefined,
-    q.onlyUnreviewed ? and(eq(events.isAlert, true), or(isNull(reviews.eventId), gt(events.lastSeenAt, reviews.reviewedAt))) : undefined,
+    q.onlyUnreviewed ? and(actionableAlertSql, or(isNull(reviews.eventId), gt(events.lastSeenAt, reviews.reviewedAt))) : undefined,
   ];
   const where = and(...filters);
   const [data, count] = await Promise.all([
@@ -87,7 +88,7 @@ router.post(["/security/events/query", "/security/events/export"], async (req, r
     let bytes = 0;
     for (let offset = 0; offset < data.length; offset += 200) {
       if (res.destroyed) return;
-      const batch = await enrichSecurityReferences(data.slice(offset, offset + 200));
+      const batch = await enrichSecurityReferences(data.slice(offset, offset + 200).map(classifyDisplayedEvidence));
       bytes += Buffer.byteLength(JSON.stringify(batch));
       if (bytes > maxBytes) { tooLarge(); return; }
       enriched.push(...batch);
@@ -108,12 +109,12 @@ router.post(["/security/events/query", "/security/events/export"], async (req, r
     res.type("application/json").send(file);
     return;
   }
-  res.json({ data: await enrichSecurityReferences(data), total: count[0]?.total ?? 0 });
+  res.json({ data: await enrichSecurityReferences(data.map(classifyDisplayedEvidence)), total: count[0]?.total ?? 0 });
 });
 
 router.get("/security/summary", async (_req, res) => {
   const [counts] = await db.select({
-    unreviewedAlerts: sql<number>`count(*) filter (where ${events.isAlert} and (${reviews.eventId} is null or ${events.lastSeenAt} > ${reviews.reviewedAt}))::int`,
+    unreviewedAlerts: sql<number>`count(*) filter (where ${actionableAlertSql} and (${reviews.eventId} is null or ${events.lastSeenAt} > ${reviews.reviewedAt}))::int`,
     failedLogins24h: sql<number>`coalesce(sum(${events.occurrenceCount}) filter (where ${events.action}='auth.login' and ${events.outcome}='denied' and ${events.lastSeenAt} >= now() - interval '24 hours'),0)::float8`,
     deniedRequests24h: sql<number>`coalesce(sum(${events.occurrenceCount}) filter (where ${events.outcome}='denied' and ${events.action}<>'auth.login' and ${events.lastSeenAt} >= now() - interval '24 hours'),0)::float8`,
     criticalChanges24h: sql<number>`count(*) filter (where ${events.severity}='critical' and ${events.outcome}='success' and ${events.createdAt} >= now() - interval '24 hours')::int`,

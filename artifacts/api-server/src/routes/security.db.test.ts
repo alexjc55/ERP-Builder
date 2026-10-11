@@ -12,6 +12,7 @@ import { createSecurityIpResolver } from "../lib/security-ip";
 import { requireAuth } from "../middlewares/auth";
 import { requireSuperAdmin } from "../middlewares/permissions";
 import { storeSecurityEvidence } from "../lib/security-aggregation";
+import { isOptionalFilterDenial } from "../lib/security-alert-policy";
 import { cleanupSecurityEvents } from "../lib/security-retention";
 import { enrichSecurityReferences, securityReferenceIds } from "../lib/security-display-references";
 
@@ -58,6 +59,7 @@ test("security evidence HTTP and database boundaries", { timeout: 120000 }, asyn
       rotations++; res.json({ apiKey: "NEVER-STORE-AGENT-KEY" });
     });
     app.get("/probe", requireAuth, (_req, res) => res.json({ ok: true }));
+    app.get("/entities/:entityId/custom-filters", requireAuth, (_req, res) => res.status(403).json({ error: "Denied" }));
     app.get("/records/:id", requireAuth, (_req, res) => res.status(403).json({ error: "Denied test fixture" }));
     app.get("/entities/:entityId/records", requireAuth, (_req, res) => res.status(403).json({ error: "Denied test fixture" }));
     server = app.listen(0, "127.0.0.1");
@@ -92,6 +94,41 @@ test("security evidence HTTP and database boundaries", { timeout: 120000 }, asyn
       const encoded = JSON.stringify(rows);
       for (const secret of [password, "NEVER-STORE-PASSWORD", "NEVER-STORE-HASH", "NEVER-STORE-ARBITRARY", token]) assert.ok(!encoded.includes(secret));
       assert.ok(created.requestId && changed.requestId === created.requestId);
+    });
+    await t.test("optional filter refusals stay denied and retained, but old and new rows do not demand review", async () => {
+      const userToken = signToken({ userId: 1002, roleId: 1002 });
+      const before = (await request("/security/summary", token)).data.unreviewedAlerts;
+      for (let i = 0; i < 2; i++) {
+        assert.equal((await request("/entities/72/custom-filters", userToken)).status, 403);
+      }
+      const rows = await db.select().from(securityEventsTable)
+        .where(eq(securityEventsTable.route, "/entities/:entityId/custom-filters"));
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].occurrenceCount, 2);
+      assert.equal(rows[0].isAlert, false);
+      const [legacy] = await db.insert(securityEventsTable).values({
+        requestId: "legacy-filter-fixture", action: "access.denied", outcome: "denied",
+        statusCode: 403, method: "GET", route: "/entities/:entityId/custom-filters",
+        authSource: "session", actorUserId: 1002, isAlert: true, severity: "warning",
+        peerIp: "127.0.0.1", clientIp: "127.0.0.1", ipSource: "socket",
+      }).returning();
+      assert.equal((await request("/security/summary", token)).data.unreviewedAlerts, before);
+      const alerts = await request("/security/events/query", token, { onlyUnreviewed: true });
+      assert.ok(!alerts.data.data.some((e: { id: number }) => e.id === legacy.id));
+      const history = await request("/security/events/query", token, { requestId: "legacy-filter-fixture" });
+      assert.equal(history.data.data[0].isAlert, false);
+      assert.equal(history.data.data[0].severity, "info");
+      assert.ok(history.data.data[0].detailsJson.alertClassification);
+      assert.equal(history.data.data[0].reviewedAt, null);
+      // Projection is not deletion or a forged review.
+      assert.equal((await db.select().from(securityEventsTable).where(eq(securityEventsTable.id, legacy.id)))[0].isAlert, true);
+      for (const override of [
+        { method: "POST" }, { statusCode: 401 }, { authSource: "agent", agentId: 1 },
+        { authSource: "anonymous", actorUserId: null }, { impersonatorUserId: 1001 },
+        { route: "/records/:id" }, { reason: "session_revoked_or_account_inactive" },
+      ]) assert.equal(isOptionalFilterDenial({ ...legacy, ...override }), false);
+      assert.equal((await request("/records/42", userToken)).status, 403);
+      assert.ok((await request("/security/summary", token)).data.unreviewedAlerts > before);
     });
     await t.test("ordinary, guest, impersonated users cannot access evidence; malformed filters are rejected", async () => {
       assert.equal((await request("/security/summary", signToken({ userId: 1002, roleId: 1002 }))).status, 403);

@@ -6,6 +6,7 @@ import { APP_SECRET } from "./secret";
 import { logger } from "./logger";
 import { securityRequestIp } from "./security-ip";
 import { storeSecurityEvidence } from "./security-aggregation";
+import { isOptionalFilterDenial } from "./security-alert-policy";
 
 type Evidence = {
   requestId: string; action: string; route: string; critical: boolean;
@@ -174,7 +175,8 @@ async function append(req: Request, outcome: string, statusCode?: number) {
     !["auth.login", "guest.redeem", "inbound.receive", "drive.post"].includes(e.action);
   const credentialChange = outcome === "success" && e.action === "drive.post" && !e.route.endsWith("/check");
   const isAlert = criticalSuccess || credentialChange || repeatedLoginFailure ||
-    (outcome === "denied" && e.route !== "/auth/me" && !["auth.login", "guest.redeem"].includes(e.action));
+    (outcome === "denied" && e.route !== "/auth/me" && !["auth.login", "guest.redeem"].includes(e.action) &&
+      !isOptionalFilterDenial({ ...e, outcome, statusCode, method: req.method }));
   const row = {
     requestId: e.requestId, action: e.action, outcome,
     severity: isAlert ? (criticalSuccess || credentialChange ? "critical" : "warning") : "info", isAlert,
