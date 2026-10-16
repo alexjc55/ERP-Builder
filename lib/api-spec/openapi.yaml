@@ -4846,6 +4846,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SecuritySummary"
+  /security/events/review-batch:
+    post:
+      operationId: reviewSecurityEventBatch
+      tags: [security]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecurityReviewSelection" }
+      responses:
+        "200":
+          description: Reviewed IDs and changed or missing IDs skipped
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SecurityReviewResult" }
   /security/events/{eventId}/review:
     post:
       operationId: reviewSecurityEvent
@@ -4871,6 +4886,27 @@ components:
       scheme: bearer
       description: Opaque one-time-disclosed inbound integration secret
   schemas:
+    SecurityReviewSelection:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [id, occurrenceCount, lastSeenAt]
+            properties:
+              id: { type: integer, minimum: 1 }
+              occurrenceCount: { type: integer, minimum: 1 }
+              lastSeenAt: { type: string, format: date-time }
+    SecurityReviewResult:
+      type: object
+      required: [reviewed, skipped]
+      properties:
+        reviewed: { type: array, items: { type: integer } }
+        skipped: { type: array, items: { type: integer } }
     SecurityRetentionInput:
       type: object
       required: [revision, ordinaryDays, importantDays, warningSizeMb, cleanupEnabled, confirmed]

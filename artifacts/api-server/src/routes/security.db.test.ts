@@ -171,6 +171,36 @@ test("security evidence HTTP and database boundaries", { timeout: 120000 }, asyn
       await db.execute(sql`DELETE FROM ${securityEventsTable}
         WHERE session_ref IN ('test-opaque-token', 'another-opaque-token')`);
     });
+    await t.test("batch review acknowledges only selected unchanged snapshots and enforces boundaries", async () => {
+      const row = { requestId: "batch-fixture", action: "access.denied", outcome: "denied",
+        peerIp: "127.0.0.1", clientIp: "192.0.2.99", ipSource: "socket", method: "GET", route: "/batch-test", isAlert: true };
+      await storeSecurityEvidence(row);
+      const [event] = await db.select().from(securityEventsTable).where(eq(securityEventsTable.requestId, row.requestId));
+      const snapshot = { id: event.id, occurrenceCount: event.occurrenceCount, lastSeenAt: event.lastSeenAt.toISOString() };
+      for (const auth of [undefined, signToken({ userId: 1002, roleId: 1002 }),
+        signToken({ userId: 1001, roleId: 1001, guest: true }),
+        signToken({ userId: 1001, roleId: 1001, impersonatorId: 1001, impersonatorSessionVersion: 0 })]) {
+        assert.ok([401, 403].includes((await request("/security/events/review-batch", auth, { events: [snapshot] })).status));
+      }
+      for (const events of [[], [snapshot, snapshot], Array.from({ length: 101 }, (_, i) => ({ ...snapshot, id: i + 1 }))]) {
+        assert.equal((await request("/security/events/review-batch", token, { events })).status, 400);
+      }
+      await storeSecurityEvidence(row);
+      const skipped = await request("/security/events/review-batch", token, { events: [snapshot] });
+      assert.deepEqual(skipped.data.skipped, [event.id]);
+      const [current] = await db.select().from(securityEventsTable).where(eq(securityEventsTable.id, event.id));
+      const before = (await request("/security/summary", token)).data.unreviewedAlerts;
+      const result = await request("/security/events/review-batch", token, { events: [{
+        id: current.id, occurrenceCount: current.occurrenceCount, lastSeenAt: current.lastSeenAt.toISOString(),
+      }] });
+      assert.deepEqual(result.data.reviewed, [event.id]);
+      assert.equal((await request("/security/summary", token)).data.unreviewedAlerts, before - 1);
+      assert.deepEqual((await db.select().from(securityEventsTable).where(eq(securityEventsTable.id, event.id)))[0], current);
+      await storeSecurityEvidence(row);
+      assert.equal((await request("/security/summary", token)).data.unreviewedAlerts, before);
+      await db.execute(sql`DELETE FROM ${securityEventReviewsTable} WHERE event_id = ${event.id}`);
+      await db.delete(securityEventsTable).where(eq(securityEventsTable.id, event.id));
+    });
     await t.test("ordinary, guest, impersonated users cannot access evidence; malformed filters are rejected", async () => {
       assert.equal((await request("/security/summary", signToken({ userId: 1002, roleId: 1002 }))).status, 403);
       assert.equal((await request("/security/summary", signToken({ userId: 1001, roleId: 1001, guest: true }))).status, 403);

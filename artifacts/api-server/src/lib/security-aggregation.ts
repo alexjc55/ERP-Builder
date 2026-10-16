@@ -60,7 +60,7 @@ export async function storeSecurityEvidence(row: typeof events.$inferInsert) {
         target: events.aggregationKey,
         set: {
           occurrenceCount: sql`${events.occurrenceCount} + 1`,
-          lastSeenAt: now,
+          lastSeenAt: sql`GREATEST(clock_timestamp(), ${events.lastSeenAt}) + interval '1 microsecond'`,
           ...(summary ? { detailsJson: summary } : {}),
           isAlert: sql`${events.isAlert} OR ${value.isAlert ?? false}`,
           severity: sql`CASE WHEN ${events.isAlert} OR ${value.isAlert ?? false} THEN 'warning' ELSE ${events.severity} END`,

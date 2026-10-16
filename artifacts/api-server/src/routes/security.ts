@@ -1,7 +1,7 @@
 import { Router, type RequestHandler } from "express";
 import { and, or, desc, eq, gt, gte, lte, isNull, getTableColumns, sql } from "drizzle-orm";
 import { db, securityEventsTable as events, securityEventReviewsTable as reviews } from "@workspace/db";
-import { QuerySecurityEventsBody, UpdateSecurityRetentionBody } from "@workspace/api-zod";
+import { QuerySecurityEventsBody, UpdateSecurityRetentionBody, ReviewSecurityEventBatchBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/auth";
 import { requireSuperAdmin } from "../middlewares/permissions";
 import { securityProxyAttribution } from "../lib/security-ip";
@@ -121,6 +121,32 @@ router.get("/security/summary", async (_req, res) => {
     criticalChanges24h: sql<number>`count(*) filter (where ${events.severity}='critical' and ${events.outcome}='success' and ${events.createdAt} >= now() - interval '24 hours')::int`,
   }).from(events).leftJoin(reviews, eq(events.id, reviews.eventId));
   res.json({ ...counts, proxyAttribution: securityProxyAttribution });
+});
+
+router.post("/security/events/review-batch", async (req, res) => {
+  const parsed = ReviewSecurityEventBatchBody.safeParse(req.body);
+  if (!parsed.success || new Set(parsed.data.events.map(e => e.id)).size !== parsed.data.events.length) {
+    res.status(400).json({ error: "Select 1–100 distinct event snapshots" }); return;
+  }
+  const result = await db.transaction(async tx => {
+    const reviewed: number[] = [], skipped: number[] = [];
+    for (const snapshot of [...parsed.data.events].sort((a, b) => a.id - b.id)) {
+      const [event] = await tx.select().from(events).where(eq(events.id, snapshot.id)).for("update");
+      if (!event || !event.isAlert || event.occurrenceCount !== snapshot.occurrenceCount ||
+          event.lastSeenAt.getTime() !== new Date(snapshot.lastSeenAt).getTime()) {
+        skipped.push(snapshot.id); continue;
+      }
+      await tx.insert(reviews).values({ eventId: event.id, reviewedBy: req.user!.userId,
+        reviewedAt: sql`clock_timestamp()` })
+        .onConflictDoNothing({ target: reviews.eventId });
+      // Do not overwrite another administrator's review of this exact version.
+      await tx.update(reviews).set({ reviewedBy: req.user!.userId, reviewedAt: sql`clock_timestamp()` })
+        .where(and(eq(reviews.eventId, event.id), sql`${reviews.reviewedAt} < ${event.lastSeenAt}`));
+      reviewed.push(event.id);
+    }
+    return { reviewed, skipped };
+  });
+  res.json(result);
 });
 
 router.post("/security/events/:eventId/review", async (req, res) => {

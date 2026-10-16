@@ -12123,6 +12123,26 @@ export const GetSecuritySummaryResponse = zod.object({
 })
 
 
+
+
+export const reviewSecurityEventBatchBodyEventsMax = 100;
+
+
+
+export const ReviewSecurityEventBatchBody = zod.object({
+  "events": zod.array(zod.object({
+  "id": zod.number().min(1),
+  "occurrenceCount": zod.number().min(1),
+  "lastSeenAt": zod.coerce.date()
+})).min(1).max(reviewSecurityEventBatchBodyEventsMax)
+})
+
+export const ReviewSecurityEventBatchResponse = zod.object({
+  "reviewed": zod.array(zod.number()),
+  "skipped": zod.array(zod.number())
+})
+
+
 /**
  * @summary Acknowledge one alert without modifying its evidence
  */

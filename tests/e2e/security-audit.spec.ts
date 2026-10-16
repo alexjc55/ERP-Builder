@@ -14,6 +14,7 @@ async function setup(page: import("@playwright/test").Page, superAdmin = true) {
     actorUserId: 1, targetUserId: 12, authSource: "session", sessionRef: "session-fixture",
     peerIp: "127.0.0.1", clientIp: "127.0.0.1", ipSource: "socket", method: "POST",
     route: "/users", statusCode: 200, detailsJson: { requestedRoleIds: [1] },
+    occurrenceCount: 1, lastSeenAt: "2026-10-06T10:00:00Z",
   };
   await page.addInitScript(() => localStorage.setItem("erp_token", "ui-test-only"));
   await page.route("**/api/**", async (route) => {
@@ -40,6 +41,9 @@ async function setup(page: import("@playwright/test").Page, superAdmin = true) {
     }
     if (path.endsWith("/security/events/41/review")) {
       reviewed = true; return route.fulfill({ json: { success: true } });
+    }
+    if (path.endsWith("/security/events/review-batch")) {
+      reviewed = true; return route.fulfill({ json: { reviewed: [41], skipped: [] } });
     }
     if (path.endsWith("/settings")) return route.fulfill({ json: { appNameJson: { ru: "ERP" }, defaultLanguage: "ru" } });
     if (path.endsWith("/events")) return route.fulfill({ json: { data: [], total: 0 } });
@@ -81,6 +85,23 @@ test("mobile filters are usable and invalid IDs do not reach the API", async ({ 
   await expect(page.getByTestId("status-security-filter-invalid")).toBeVisible();
   expect(queries).toHaveLength(count);
   await page.screenshot({ path: "/tmp/security-audit-mobile.png", fullPage: true });
+});
+
+test("batch review requires explicit selection and confirmation and submits frozen snapshots", async ({ page }) => {
+  await setup(page);
+  await page.getByRole("checkbox", { name: "Выбрать тревогу 41" }).check();
+  await page.getByRole("button", { name: "Отметить выбранные (1)" }).click();
+  await expect(page.getByRole("dialog")).toContainText("История не удаляется");
+  await page.getByRole("button", { name: "Отмена", exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: "Выбрать тревогу 41" })).toBeChecked();
+  await page.getByRole("button", { name: "Отметить выбранные (1)" }).click();
+  const request = page.waitForRequest(r => r.url().endsWith("/security/events/review-batch"));
+  await page.getByRole("button", { name: "Подтвердить отметку", exact: true }).click();
+  expect((await request).postDataJSON()).toEqual({ events: [{
+    id: 41, occurrenceCount: 1, lastSeenAt: "2026-10-06T10:00:00Z",
+  }] });
+  await expect(page.getByRole("checkbox", { name: "Выбрать тревогу 41" })).toHaveCount(0);
+  await expect(page.getByTestId("row-security-event-41")).toContainText("Просмотрено");
 });
 
 test("retention save requires confirmation and cleanup requires a separate confirmation", async ({ page }) => {

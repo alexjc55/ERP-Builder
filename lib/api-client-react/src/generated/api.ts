@@ -191,6 +191,8 @@ import type {
   SecurityEventQuery,
   SecurityRetention,
   SecurityRetentionInput,
+  SecurityReviewResult,
+  SecurityReviewSelection,
   SecuritySummary,
   Status,
   StatusInput,
@@ -17079,6 +17081,71 @@ export function useGetSecuritySummary<TData = Awaited<ReturnType<typeof getSecur
 
 
 
+
+export const getReviewSecurityEventBatchUrl = () => {
+
+
+
+
+  return `/api/security/events/review-batch`
+}
+
+export const reviewSecurityEventBatch = async (securityReviewSelection: SecurityReviewSelection, options?: RequestInit): Promise<SecurityReviewResult> => {
+
+  return customFetch<SecurityReviewResult>(getReviewSecurityEventBatchUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      securityReviewSelection,)
+  }
+);}
+
+
+
+
+export const getReviewSecurityEventBatchMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewSecurityEventBatch>>, TError,{data: BodyType<SecurityReviewSelection>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewSecurityEventBatch>>, TError,{data: BodyType<SecurityReviewSelection>}, TContext> => {
+
+const mutationKey = ['reviewSecurityEventBatch'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewSecurityEventBatch>>, {data: BodyType<SecurityReviewSelection>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  reviewSecurityEventBatch(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewSecurityEventBatchMutationResult = NonNullable<Awaited<ReturnType<typeof reviewSecurityEventBatch>>>
+    export type ReviewSecurityEventBatchMutationBody = BodyType<SecurityReviewSelection>
+    export type ReviewSecurityEventBatchMutationError = ErrorType<unknown>
+
+    export const useReviewSecurityEventBatch = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewSecurityEventBatch>>, TError,{data: BodyType<SecurityReviewSelection>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewSecurityEventBatch>>,
+        TError,
+        {data: BodyType<SecurityReviewSelection>},
+        TContext
+      > => {
+      return useMutation(getReviewSecurityEventBatchMutationOptions(options));
+    }
 
 export const getReviewSecurityEventUrl = (eventId: number,) => {
 

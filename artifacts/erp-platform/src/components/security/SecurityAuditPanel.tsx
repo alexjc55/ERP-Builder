@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useQuerySecurityEvents,
   exportSecurityEvents,
+  reviewSecurityEventBatch,
   useGetSecuritySummary,
   getGetSecuritySummaryQueryKey,
   useReviewSecurityEvent,
@@ -127,6 +128,26 @@ export default function SecurityAuditPanel() {
   const [error, setError] = useState(false);
   const [selected, setSelected] = useState<SecurityEvent | null>(null);
   const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [checked, setChecked] = useState<Record<number, SecurityEvent>>({});
+  const [confirmBatch, setConfirmBatch] = useState(false);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchMessage, setBatchMessage] = useState("");
+  useEffect(() => { setChecked({}); setConfirmBatch(false); }, [applied]);
+  const reviewBatch = async () => {
+    setBatchBusy(true); setBatchMessage("");
+    try {
+      const response = await reviewSecurityEventBatch({ events: Object.values(checked).map(e => ({
+        id: e.id, occurrenceCount: e.occurrenceCount ?? 1, lastSeenAt: e.lastSeenAt ?? e.createdAt,
+      })) });
+      if (!mountedRef.current) return;
+      setChecked({}); setConfirmBatch(false);
+      setBatchMessage(`Отмечено: ${response.reviewed.length}. Изменились или недоступны, пропущено: ${response.skipped.length}.`);
+      void queryClient.invalidateQueries({ queryKey: getGetSecuritySummaryQueryKey() });
+      await load(false);
+    } catch {
+      if (mountedRef.current) setBatchMessage("Не удалось отметить выбранные тревоги. Выбор сохранён.");
+    } finally { if (mountedRef.current) setBatchBusy(false); }
+  };
   const [reviewError, setReviewError] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<"large" | "failed" | null>(null);
@@ -406,6 +427,26 @@ export default function SecurityAuditPanel() {
 
       <Card className="border-slate-200 shadow-sm">
         <CardContent className="p-0">
+          <div className="p-4 flex flex-wrap gap-3 items-center">
+            <Button variant="outline" disabled={loading || batchBusy} onClick={() => setChecked(Object.fromEntries(events.filter(e => e.isAlert && !e.reviewedAt).map(e => [e.id, e])))}>
+              Выбрать непросмотренные на этой странице
+            </Button>
+            <Button disabled={!Object.keys(checked).length || batchBusy} onClick={() => setConfirmBatch(true)}>
+              Отметить выбранные ({Object.keys(checked).length})
+            </Button>
+            <Button variant="ghost" disabled={batchBusy} onClick={() => setChecked({})}>Снять выбор</Button>
+            {batchMessage && <p role="status">{batchMessage}</p>}
+          </div>
+          <Dialog open={confirmBatch} onOpenChange={open => { if (!batchBusy) setConfirmBatch(open); }}>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Отметить выбранные тревоги?</DialogTitle>
+                <DialogDescription>Выбрано: {Object.keys(checked).length}. История не удаляется. События, изменившиеся после выбора, будут пропущены. Другие строки журнала не затрагиваются.</DialogDescription>
+              </DialogHeader>
+              <Button disabled={batchBusy} onClick={() => void reviewBatch()}>{batchBusy ? "Сохранение…" : "Подтвердить отметку"}</Button>
+              <Button variant="outline" disabled={batchBusy} onClick={() => setConfirmBatch(false)}>Отмена</Button>
+              {batchMessage && <p role="status">{batchMessage}</p>}
+            </DialogContent>
+          </Dialog>
           {error ? (
             <div className="px-4 py-12 text-center text-sm text-red-700" role="alert" data-testid="status-security-error">
               <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-red-300" aria-hidden="true" />
@@ -435,7 +476,13 @@ export default function SecurityAuditPanel() {
                     </td></tr>
                   ) : events.map((ev) => (
                     <tr key={ev.id} className={cn("border-b border-slate-100 hover:bg-slate-50 align-top", ev.isAlert && !ev.reviewedAt && "bg-rose-50/60")} data-testid={`row-security-event-${ev.id}`}>
-                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap font-mono text-xs" dir="ltr">{fmtUtc(ev.createdAt)}</td>
+                      <td className="px-4 py-3 text-slate-500 whitespace-nowrap font-mono text-xs" dir="ltr">
+                        {ev.isAlert && !ev.reviewedAt && <input type="checkbox" aria-label={`Выбрать тревогу ${ev.id}`} className="me-2"
+                          disabled={batchBusy || confirmBatch} checked={!!checked[ev.id]} onChange={e => setChecked(previous => {
+                            const next = { ...previous }; if (e.target.checked) next[ev.id] = ev; else delete next[ev.id]; return next;
+                          })} />}
+                        {fmtUtc(ev.createdAt)}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-1.5">
                           {ev.isAlert && <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" aria-label={t("securityAudit.alert", "Тревога")} />}

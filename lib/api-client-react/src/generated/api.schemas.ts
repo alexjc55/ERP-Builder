@@ -5,6 +5,27 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+export type SecurityReviewSelectionEventsItem = {
+  /** @minimum 1 */
+  id: number;
+  /** @minimum 1 */
+  occurrenceCount: number;
+  lastSeenAt: string;
+};
+
+export interface SecurityReviewSelection {
+  /**
+     * @minItems 1
+     * @maxItems 100
+     */
+  events: SecurityReviewSelectionEventsItem[];
+}
+
+export interface SecurityReviewResult {
+  reviewed: number[];
+  skipped: number[];
+}
+
 export interface SecurityRetentionInput {
   /** @minimum 1 */
   revision: number;
