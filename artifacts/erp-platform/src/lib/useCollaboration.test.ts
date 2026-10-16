@@ -12,6 +12,12 @@ function harness() {
   let pageId = 10;
   let configInvalidations = 0;
   const invalidatedTokens: string[] = [];
+  const unauthorizedListeners = new Set<(token: string) => void>();
+  let currentToken = "unit-token";
+  const notifyUnauthorized = (token: string) => {
+    invalidatedTokens.push(token);
+    unauthorizedListeners.forEach(listener => listener(token));
+  };
   let queuedEffects: Array<() => void> = [];
   const timers = new Map<number, { callback: () => void; interval: boolean; delay?: number }>();
   let timerId = 0;
@@ -47,14 +53,20 @@ function harness() {
       }
     },
   };
-  const storage = { getItem: (key: string) => key === "erp_token" ? "unit-token" : "unit-client", setItem() {} };
+  const storage = { getItem: (key: string) => key === "erp_token" ? currentToken : "unit-client", setItem() {} };
   const exports: any = {};
   const context = vm.createContext({
     exports,
     require: (name: string) => {
       if (name === "react") return react;
       if (name === "@/lib/auth") return { useAuth: () => ({ user: { id: 1 }, isGuest: false }) };
-      if (name === "@workspace/api-client-react") return { notifyUnauthorized: (token: string) => invalidatedTokens.push(token) };
+      if (name === "@workspace/api-client-react") return {
+        notifyUnauthorized,
+        subscribeUnauthorized: (listener: (token: string) => void) => {
+          unauthorizedListeners.add(listener);
+          return () => unauthorizedListeners.delete(listener);
+        },
+      };
       throw new Error(`Unexpected dependency ${name}`);
     },
     sessionStorage: storage, localStorage: storage,
@@ -99,6 +111,8 @@ function harness() {
   };
   return {
     render, requests, presenceResponses, streamResponses, timers, invalidatedTokens,
+    notifyUnauthorized, unauthorizedListeners,
+    setToken(token: string) { currentToken = token; },
     get configInvalidations() { return configInvalidations; },
     retryAccess() {
       for (const [id, timer] of [...timers]) if (timer.delay === 30_000) {
@@ -238,6 +252,30 @@ test("401 presence response invalidates the session and stops all timers", async
     assert.equal(h.timers.size, 0);
     assert.equal(h.render().failureReason, "session_expired");
   } finally { h.cleanup(); }
+});
+
+test("401 from another reader stops the stream and pending 403 recovery; new login works", async () => {
+  const h = harness();
+  try {
+    h.render(); await settle();
+    h.notifyUnauthorized("unrelated-old-token");
+    assert.equal(h.render().connected, true);
+    h.notifyUnauthorized("unit-token");
+    const count = h.requests.length;
+    h.heartbeat(); h.retryAccess(); await settle();
+    assert.equal(h.requests.length, count);
+    assert.equal(h.timers.size, 0);
+    assert.equal(h.render().failureReason, "session_expired");
+    h.setToken("replacement-token");
+    h.changePage(11); await settle();
+    assert.equal(h.render().connected, true);
+    h.notifyUnauthorized("unit-token");
+    assert.equal(h.render().connected, true);
+    h.send("access_denied", {}); await settle();
+    h.notifyUnauthorized("replacement-token");
+    assert.equal(h.timers.size, 0);
+  } finally { h.cleanup(); }
+  assert.equal(h.unauthorizedListeners.size, 0);
 });
 
 test("denied heartbeat tears down an otherwise-open stream and stale heartbeat cannot deny a new page", async () => {

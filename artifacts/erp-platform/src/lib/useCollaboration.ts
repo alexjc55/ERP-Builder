@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
-import { notifyUnauthorized } from "@workspace/api-client-react";
+import { notifyUnauthorized, subscribeUnauthorized } from "@workspace/api-client-react";
 
 export type CollaborationEditing = {
   entityId: number;
@@ -55,7 +55,8 @@ export function useCollaboration(pageId?: number | null, onPageConfigChange?: ()
   const currentEditing = useRef<CollaborationEditing | null>(null);
   const deniedScope = useRef<{ pageId: number; userId: number } | null>(null);
   const activeScope = useRef<{
-    pageId: number; userId: number; denied: boolean; deny: (retryAccess?: boolean) => void;
+    pageId: number; userId: number; token: string | null; signal: AbortSignal;
+    denied: boolean; deny: (retryAccess?: boolean) => void;
   } | null>(null);
 
   const publishPresence = useCallback((editing: CollaborationEditing | null) => {
@@ -65,7 +66,7 @@ export function useCollaboration(pageId?: number | null, onPageConfigChange?: ()
     if (deniedScope.current?.pageId === pageId && deniedScope.current?.userId === userId) return;
     currentEditing.current = editing;
     const token = localStorage.getItem("erp_token");
-    if (!token) return;
+    if (!token || token !== scope.token) return;
     fetch(`/api/collaboration/pages/${pageId}/presence`, {
       method: "PUT",
       headers: {
@@ -73,8 +74,9 @@ export function useCollaboration(pageId?: number | null, onPageConfigChange?: ()
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ clientId: clientId.current, editing }),
+      signal: scope.signal,
     }).then((response) => {
-      if (activeScope.current !== scope) return;
+      if (activeScope.current !== scope || localStorage.getItem("erp_token") !== token) return;
       if (response.status === 401 || response.status === 403) {
         scope.deny(response.status === 403);
         if (response.status === 401) notifyUnauthorized(token);
@@ -84,7 +86,7 @@ export function useCollaboration(pageId?: number | null, onPageConfigChange?: ()
         console.warn(`Collaboration presence failed: ${response.status}`);
       }
     }).catch((error) => {
-      if (!isGuest) console.warn("Collaboration presence failed", error);
+      if (!scope.signal.aborted && !isGuest) console.warn("Collaboration presence failed", error);
     });
   }, [isGuest, pageId, userId]);
 
@@ -100,6 +102,7 @@ export function useCollaboration(pageId?: number | null, onPageConfigChange?: ()
     }
 
     const controller = new AbortController();
+    const sessionToken = localStorage.getItem("erp_token");
     const id = clientId.current;
     let stopped = false;
     let reconnectTimer: number | undefined;
@@ -108,9 +111,17 @@ export function useCollaboration(pageId?: number | null, onPageConfigChange?: ()
     let accessRetryTimer: number | undefined;
     let retry = 0;
     const scope = {
-      pageId, userId, denied: false,
+      pageId, userId, token: sessionToken, signal: controller.signal, denied: false,
       deny: (retryAccess = true) => {
-        if (stopped || activeScope.current !== scope) return;
+        if (activeScope.current !== scope) return;
+        if (stopped) {
+          if (!retryAccess) {
+            if (accessRetryTimer !== undefined) window.clearTimeout(accessRetryTimer);
+            if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+            setFailure({ pageId, userId, reason: "session_expired" });
+          }
+          return;
+        }
         scope.denied = true;
         deniedScope.current = { pageId, userId };
         stopped = true;
@@ -134,6 +145,9 @@ export function useCollaboration(pageId?: number | null, onPageConfigChange?: ()
       },
     };
     activeScope.current = scope;
+    const unsubscribeUnauthorized = subscribeUnauthorized((failedToken) => {
+      if (failedToken === sessionToken) scope.deny(false);
+    });
     setUsers([]);
     setLastMessage(null);
     currentEditing.current = null;
@@ -181,7 +195,7 @@ export function useCollaboration(pageId?: number | null, onPageConfigChange?: ()
 
     const connect = async () => {
       const token = localStorage.getItem("erp_token");
-      if (stopped || !token) return;
+      if (stopped || !token || token !== sessionToken) return;
       try {
         const response = await fetch(
           `/api/collaboration/pages/${pageId}/stream?clientId=${encodeURIComponent(id)}`,
@@ -194,6 +208,7 @@ export function useCollaboration(pageId?: number | null, onPageConfigChange?: ()
             signal: controller.signal,
           },
         );
+        if (stopped || localStorage.getItem("erp_token") !== token) return;
         if (response.status === 401 || response.status === 403) {
           scope.deny(response.status === 403);
           if (response.status === 401) notifyUnauthorized(token);
@@ -259,6 +274,7 @@ export function useCollaboration(pageId?: number | null, onPageConfigChange?: ()
     );
 
     return () => {
+      unsubscribeUnauthorized();
       stopped = true;
       controller.abort();
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);

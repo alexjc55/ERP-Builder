@@ -18,6 +18,13 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
 let _unauthorizedHandler: ((token: string) => void) | null = null;
+const unauthorizedListeners = new Set<(token: string) => void>();
+
+/** Transports stop synchronously, before React unmounts authenticated readers. */
+export function subscribeUnauthorized(listener: (token: string) => void): () => void {
+  unauthorizedListeners.add(listener);
+  return () => { unauthorizedListeners.delete(listener); };
+}
 
 /** The consumer must compare the failed token with the current session.
  * Late failures from an old identity must not log out a newly signed-in user. */
@@ -26,7 +33,11 @@ export function setUnauthorizedHandler(handler: ((token: string) => void) | null
 }
 
 export function notifyUnauthorized(token: string): void {
-  _unauthorizedHandler?.(token);
+  try {
+    for (const listener of unauthorizedListeners) listener(token);
+  } finally {
+    _unauthorizedHandler?.(token);
+  }
 }
 
 /**

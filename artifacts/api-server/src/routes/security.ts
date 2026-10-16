@@ -6,6 +6,7 @@ import { requireAuth } from "../middlewares/auth";
 import { requireSuperAdmin } from "../middlewares/permissions";
 import { securityProxyAttribution } from "../lib/security-ip";
 import { actionableAlertSql, classifyDisplayedEvidence } from "../lib/security-alert-policy";
+import { invalidTokenEpisodeSql } from "../lib/invalid-token-episode";
 import { enrichSecurityReferences } from "../lib/security-display-references";
 import { cleanupSecurityEvents, getRetentionStatus, updateRetentionSettings, recordCleanupFailure, SecurityCleanupBusyError } from "../lib/security-retention";
 
@@ -66,12 +67,12 @@ router.post(["/security/events/query", "/security/events/export"], async (req, r
     q.requestId ? eq(events.requestId, q.requestId) : undefined,
     q.clientIp ? eq(events.clientIp, q.clientIp) : undefined,
     q.loginEmail ? eq(events.loginEmail, q.loginEmail.trim().toLowerCase()) : undefined,
-    q.onlyUnreviewed ? and(actionableAlertSql, or(isNull(reviews.eventId), gt(events.lastSeenAt, reviews.reviewedAt))) : undefined,
+    q.onlyUnreviewed ? and(actionableAlertSql, or(isNull(reviews.eventId), sql`(${events.lastSeenAt} > ${reviews.reviewedAt} AND NOT ${invalidTokenEpisodeSql})`)) : undefined,
   ];
   const where = and(...filters);
   const [data, count] = await Promise.all([
     db.select({ ...getTableColumns(events),
-      reviewedAt: sql<Date | null>`CASE WHEN ${events.lastSeenAt} > ${reviews.reviewedAt} THEN NULL ELSE ${reviews.reviewedAt} END`,
+      reviewedAt: sql<Date | null>`CASE WHEN ${events.lastSeenAt} > ${reviews.reviewedAt} AND NOT ${invalidTokenEpisodeSql} THEN NULL ELSE ${reviews.reviewedAt} END`,
       reviewedBy: reviews.reviewedBy })
       .from(events).leftJoin(reviews, eq(events.id, reviews.eventId)).where(where)
       .orderBy(desc(events.createdAt), desc(events.id)).limit(exporting ? 10001 : (q.limit ?? 50)).offset(exporting ? 0 : (q.offset ?? 0)),
@@ -114,7 +115,7 @@ router.post(["/security/events/query", "/security/events/export"], async (req, r
 
 router.get("/security/summary", async (_req, res) => {
   const [counts] = await db.select({
-    unreviewedAlerts: sql<number>`count(*) filter (where ${actionableAlertSql} and (${reviews.eventId} is null or ${events.lastSeenAt} > ${reviews.reviewedAt}))::int`,
+    unreviewedAlerts: sql<number>`count(*) filter (where ${actionableAlertSql} and (${reviews.eventId} is null or (${events.lastSeenAt} > ${reviews.reviewedAt} AND NOT ${invalidTokenEpisodeSql})))::int`,
     failedLogins24h: sql<number>`coalesce(sum(${events.occurrenceCount}) filter (where ${events.action}='auth.login' and ${events.outcome}='denied' and ${events.lastSeenAt} >= now() - interval '24 hours'),0)::float8`,
     deniedRequests24h: sql<number>`coalesce(sum(${events.occurrenceCount}) filter (where ${events.outcome}='denied' and ${events.action}<>'auth.login' and ${events.lastSeenAt} >= now() - interval '24 hours'),0)::float8`,
     criticalChanges24h: sql<number>`count(*) filter (where ${events.severity}='critical' and ${events.outcome}='success' and ${events.createdAt} >= now() - interval '24 hours')::int`,

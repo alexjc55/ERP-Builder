@@ -13,6 +13,7 @@ import { requireAuth } from "../middlewares/auth";
 import { requireSuperAdmin } from "../middlewares/permissions";
 import { storeSecurityEvidence } from "../lib/security-aggregation";
 import { isOptionalFilterDenial } from "../lib/security-alert-policy";
+import { invalidTokenGroup } from "../lib/invalid-token-episode";
 import { cleanupSecurityEvents } from "../lib/security-retention";
 import { enrichSecurityReferences, securityReferenceIds } from "../lib/security-display-references";
 
@@ -129,6 +130,46 @@ test("security evidence HTTP and database boundaries", { timeout: 120000 }, asyn
       ]) assert.equal(isOptionalFilterDenial({ ...legacy, ...override }), false);
       assert.equal((await request("/records/42", userToken)).status, 403);
       assert.ok((await request("/security/summary", token)).data.unreviewedAlerts > before);
+    });
+    await t.test("invalid token episode survives time buckets and review, but separates new tokens and sources", async () => {
+      const row = {
+        requestId: "invalid-episode", action: "access.denied", outcome: "denied",
+        statusCode: 401, reason: "invalid_or_expired_token", authSource: "unverified-token",
+        sessionRef: "test-opaque-token", method: "GET", route: "/collaboration/pages/:pageId/stream",
+        clientIp: "192.0.2.1", peerIp: "127.0.0.1", ipSource: "socket", userAgent: "Chrome",
+        severity: "warning", isAlert: true,
+      };
+      for (const delta of [{ action: "user.update" }, { outcome: "success" }, { actorUserId: 1001 },
+        { statusCode: 403 }, { authSource: "session" }, { agentId: 1 }, { sessionRef: null }]) {
+        assert.equal(invalidTokenGroup({ ...row, ...delta }), null);
+      }
+      await storeSecurityEvidence(row);
+      const [first] = await db.select().from(securityEventsTable).where(eq(securityEventsTable.sessionRef, row.sessionRef));
+      assert.ok(first.aggregationKey?.startsWith("invalid-token-v1:"));
+      await db.update(securityEventsTable).set({
+        createdAt: new Date(Date.now() - 3 * 3600_000),
+        lastSeenAt: new Date(Date.now() - 3 * 3600_000),
+      }).where(eq(securityEventsTable.id, first.id));
+      assert.equal((await request(`/security/events/${first.id}/review`, token, {})).status, 200);
+      await Promise.all(Array.from({ length: 5 }, () =>
+        storeSecurityEvidence({ ...row, route: "/collaboration/pages/:pageId/presence", method: "PUT" })));
+      const rows = await db.select().from(securityEventsTable).where(eq(securityEventsTable.sessionRef, row.sessionRef));
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].occurrenceCount, 6);
+      assert.equal(rows[0].actorUserId, null);
+      assert.equal((rows[0].detailsJson.requestSummary as { count: number }[]).reduce((n, r) => n + r.count, 0), 6);
+      assert.ok(rows[0].lastSeenAt > rows[0].createdAt);
+      assert.ok(!(await request("/security/events/query", token, { onlyUnreviewed: true })).data.data.some((r: { id: number }) => r.id === first.id));
+      assert.ok((await request("/security/events/query", token, { sessionRef: row.sessionRef })).data.data[0].reviewedAt);
+      const before = (await request("/security/summary", token)).data.unreviewedAlerts;
+      await storeSecurityEvidence({ ...row, clientIp: "192.0.2.2" });
+      await storeSecurityEvidence({ ...row, sessionRef: "another-opaque-token" });
+      assert.equal((await request("/security/summary", token)).data.unreviewedAlerts, before + 2);
+      // Keep shared-suite fixtures isolated (other tests assert global quotas).
+      await db.execute(sql`DELETE FROM ${securityEventReviewsTable} WHERE event_id IN
+        (SELECT id FROM ${securityEventsTable} WHERE session_ref IN ('test-opaque-token', 'another-opaque-token'))`);
+      await db.execute(sql`DELETE FROM ${securityEventsTable}
+        WHERE session_ref IN ('test-opaque-token', 'another-opaque-token')`);
     });
     await t.test("ordinary, guest, impersonated users cannot access evidence; malformed filters are rejected", async () => {
       assert.equal((await request("/security/summary", signToken({ userId: 1002, roleId: 1002 }))).status, 403);

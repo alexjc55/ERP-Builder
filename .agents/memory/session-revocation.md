@@ -19,3 +19,14 @@ processes. An already authenticated request is not retroactively cancelled.
 Guest links and machine keys remain independent credentials: revoking user
 sessions is not a substitute for rotating compromised integration/agent keys or
 revoking guest links. State that distinction in incident-response instructions.
+
+All long-lived browser transports should subscribe to the shared authenticated
+401 notification and stop synchronously, including pending permission-recovery
+timers and presence requests. A late response belongs to the token it used.
+
+**Why:** One reader discovering invalid credentials must not leave sibling
+timers running until their next request or React's next render. Network/5xx
+failures are not evidence of an invalid session.
+
+**How to apply:** Compare session identity, abort in-flight transport, unregister
+listeners on teardown, and preserve re-login with a replacement token.
