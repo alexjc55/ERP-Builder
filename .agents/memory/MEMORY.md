@@ -82,6 +82,7 @@
 - [Document generation](document-generation.md) — DOCX revisions own design/mappings; automation actions own output; rendering authority and fail-closed PDF isolation must remain distinct.
 - [Manual data refresh](manual-data-refresh.md) — global refresh refetches active queries plus registered mutation-backed readers; coalescing and unmount safety are mandatory.
 - [Automation folders](automation-folders.md) — folders are entity-scoped organization only; deleting one must preserve its automations as ungrouped.
+- [Entity folders](entity-folders.md) — visual organization of the admin list only; folder deletion preserves entities and their access rules.
 - [Table loading order](table-loading-order.md) — defer expensive incomplete rendering; preserve SSE snapshot coverage and generation-safe manual refresh.
 - [Global status tags](status-tags.md) — shared catalog; expand per-role restrictions before merging; serialize deletion with JSON-reference writes.
 - [API memory lifecycle](api-memory-lifecycle.md) — bounded expiry, invalidation-safe cache fills, explicit SSE cleanup, and cautious RSS attribution.

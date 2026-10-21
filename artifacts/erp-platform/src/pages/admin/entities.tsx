@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { EntityFolderActions } from "@/components/EntityFolderActions";
 import {
   useListEntities,
+  useListEntityFolders,
+  getListEntityFoldersQueryKey, getListEntitiesQueryKey,
   useCreateEntity,
   useUpdateEntity,
   useDeleteEntity,
@@ -73,8 +76,12 @@ export default function EntitiesPage() {
   const [pageId, setPageId] = useState<string>("none");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
+  const [folderId, setFolderId] = useState("none");
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const foldersQuery = useListEntityFolders({ query: { queryKey: getListEntityFoldersQueryKey(), staleTime: 0, refetchInterval: 30000 } });
+  const folders = foldersQuery.data ?? [];
 
-  const { data: entities = [], isLoading } = useListEntities();
+  const { data: entities = [], isLoading } = useListEntities({ query: { queryKey: getListEntitiesQueryKey(), staleTime: 0, refetchInterval: 30000 } });
   const { data: pages = [] } = useListPages();
   const search = useSearch();
 
@@ -103,6 +110,7 @@ export default function EntitiesPage() {
 
   const openCreate = (prefillPageId?: number) => {
     setEditingEntity(null);
+    setFolderId("none");
     setEntityKey("");
     setNameJson({});
     setDescJson({});
@@ -114,6 +122,7 @@ export default function EntitiesPage() {
 
   const openEdit = (entity: Entity) => {
     setEditingEntity(entity);
+    setFolderId(entity.folderId ? String(entity.folderId) : "none");
     const n = entity.nameJson;
     const d = entity.descriptionJson;
     setEntityKey(entity.entityKey);
@@ -134,6 +143,7 @@ export default function EntitiesPage() {
     const resolvedKey = entityKey.trim() || uniqueKey(autoBase, existingKeys);
     const payload = {
       entityKey: resolvedKey,
+      folderId: folderId === "none" ? null : Number(folderId),
       nameJson: nameJson as MultilingualText,
       descriptionJson: descJson as MultilingualText,
       icon: editingEntity?.icon || "table",
@@ -192,6 +202,8 @@ export default function EntitiesPage() {
         </Button>
       </div>
 
+      <EntityFolderActions />
+      {foldersQuery.isError && <p role="alert" className="text-red-600">{t("entityFolders.loadError", "Не удалось загрузить папки.")} <Button variant="outline" onClick={() => void foldersQuery.refetch()}>{t("common.retry", "Повторить")}</Button></p>}
       <Card className="border-slate-200 shadow-sm">
         <CardContent className="p-0">
           {isLoading ? (
@@ -200,7 +212,7 @@ export default function EntitiesPage() {
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
-          ) : entities.length === 0 ? (
+          ) : entities.length === 0 && folders.length === 0 ? (
             <div className="text-center py-16 text-slate-400">
               {t("entities.empty", "Сущности ещё не созданы. Нажмите «Создать сущность», чтобы добавить первую.")}
             </div>
@@ -216,7 +228,23 @@ export default function EntitiesPage() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((entity: Entity) => (
+                {[...folders, { id: 0, nameJson: {} }].map(folder => {
+                  const members = sorted.filter(e => (e.folderId ?? 0) === folder.id || (folder.id === 0 && !folders.some(f => f.id === e.folderId)));
+                  return <Fragment key={folder.id}>
+                    <tr className="bg-slate-100">
+                      <td colSpan={5} className="px-4 py-2">
+                        <div className="flex items-center justify-between">
+                          <button type="button" className="flex items-center gap-2 font-medium" aria-expanded={!collapsed.has(folder.id)} onClick={() => setCollapsed(prev => {
+                            const next = new Set(prev); if (next.has(folder.id)) next.delete(folder.id); else next.add(folder.id); return next;
+                          })}>
+                            <ChevronDown className={`w-4 h-4 ${collapsed.has(folder.id) ? "-rotate-90" : ""}`} />
+                            {folder.id ? ml(folder.nameJson) : t("auto.ungrouped", "Без папки")} ({members.length})
+                          </button>
+                          {!!folder.id && <EntityFolderActions folder={folder} count={members.length} />}
+                        </div>
+                      </td>
+                    </tr>
+                    {!collapsed.has(folder.id) && members.map((entity: Entity) => (
                   <tr key={entity.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -287,7 +315,9 @@ export default function EntitiesPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                    ))}
+                  </Fragment>;
+                })}
               </tbody>
             </table>
           )}
@@ -303,6 +333,16 @@ export default function EntitiesPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>{t("auto.folderName", "Папка")}</Label>
+              <Select value={folderId} onValueChange={setFolderId} disabled={foldersQuery.isError || foldersQuery.isPending}>
+                <SelectTrigger aria-label={t("auto.folderName", "Папка")}><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t("auto.ungrouped", "Без папки")}</SelectItem>
+                  {folders.map(f => <SelectItem key={f.id} value={String(f.id)}>{ml(f.nameJson)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <MultilingualInput label={t("entities.fieldName", "Название")} value={nameJson} onChange={setNameJson} required />
             <MultilingualInput label={t("entities.fieldDescription", "Описание")} value={descJson} onChange={setDescJson} multiline />
             <div className="space-y-1.5">

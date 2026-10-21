@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, entitiesTable, entityRecordsTable, pagesTable, relationsTable, recordLinksTable, usersTable } from "@workspace/db";
+import { db, entitiesTable, entityFoldersTable, entityRecordsTable, pagesTable, relationsTable, recordLinksTable, usersTable } from "@workspace/db";
 import { eq, asc, and, ne, or, inArray } from "drizzle-orm";
 import { lockRecordsStable, touchLockedRecords } from "../lib/record-links";
 import { emitEvent, EVENT_RECORD_UPDATED } from "../lib/events";
@@ -11,11 +11,45 @@ import {
   GetEntityParams,
   UpdateEntityParams,
   DeleteEntityParams,
+  CreateEntityFolderBody, UpdateEntityFolderBody, UpdateEntityFolderParams, DeleteEntityFolderParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
 const ENTITY_KEY_RE = /^[a-z][a-z0-9_]*$/;
+
+router.get("/entity-folders", requireAuth, requireAdmin("entities"), async (_req, res) => {
+  res.json(await db.select().from(entityFoldersTable).orderBy(asc(entityFoldersTable.id)));
+});
+router.post("/entity-folders", requireAuth, requireAdmin("entities"), async (req, res) => {
+  const body = CreateEntityFolderBody.safeParse(req.body);
+  if (!body.success || !Object.values(body.data.nameJson).some(v => typeof v === "string" && v.trim())) {
+    res.status(400).json({ error: "Folder name is required" }); return;
+  }
+  const [folder] = await db.insert(entityFoldersTable).values(body.data).returning();
+  res.status(201).json(folder);
+});
+router.put("/entity-folders/:id", requireAuth, requireAdmin("entities"), async (req, res) => {
+  const params = UpdateEntityFolderParams.safeParse(req.params);
+  const body = UpdateEntityFolderBody.safeParse(req.body);
+  if (!params.success || !body.success || !Object.values(body.data.nameJson).some(v => typeof v === "string" && v.trim())) {
+    res.status(400).json({ error: "Invalid folder or name" }); return;
+  }
+  const [folder] = await db.update(entityFoldersTable).set(body.data).where(eq(entityFoldersTable.id, params.data.id)).returning();
+  if (!folder) { res.status(404).json({ error: "Folder not found" }); return; }
+  res.json(folder);
+});
+router.delete("/entity-folders/:id", requireAuth, requireAdmin("entities"), async (req, res) => {
+  const params = DeleteEntityFolderParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "Invalid folder" }); return; }
+  const [folder] = await db.delete(entityFoldersTable).where(eq(entityFoldersTable.id, params.data.id)).returning();
+  if (!folder) { res.status(404).json({ error: "Folder not found" }); return; }
+  res.sendStatus(204);
+});
+
+async function folderExists(id: number | null | undefined) {
+  return id == null || (await db.select({ id: entityFoldersTable.id }).from(entityFoldersTable).where(eq(entityFoldersTable.id, id))).length > 0;
+}
 
 async function validateStatusManualEditUsers(
   userIds: number[] | undefined,
@@ -99,6 +133,9 @@ router.post("/entities", requireAuth, requireAdmin("entities"), async (req, res)
   }
 
   const key = parsed.data.entityKey.trim();
+  if (!(await folderExists(parsed.data.folderId))) {
+    res.status(400).json({ error: "Folder not found" }); return;
+  }
   if (!ENTITY_KEY_RE.test(key)) {
     res.status(400).json({
       error: "Entity key must be lowercase and contain only letters, digits and underscores, starting with a letter",
@@ -134,10 +171,14 @@ router.post("/entities", requireAuth, requireAdmin("entities"), async (req, res)
     return;
   }
 
-  const [entity] = await db
-    .insert(entitiesTable)
-    .values({ ...parsed.data, entityKey: key })
-    .returning();
+  const entity = await db.transaction(async tx => {
+    if (parsed.data.folderId != null) {
+      const [folder] = await tx.select().from(entityFoldersTable).where(eq(entityFoldersTable.id, parsed.data.folderId)).for("key share");
+      if (!folder) return null;
+    }
+    return (await tx.insert(entitiesTable).values({ ...parsed.data, entityKey: key }).returning())[0];
+  });
+  if (!entity) { res.status(409).json({ error: "Folder was deleted. Reload and retry." }); return; }
   res.status(201).json(entity);
 });
 
@@ -176,6 +217,10 @@ router.put("/entities/:id", requireAuth, requireAdmin("entities"), async (req, r
 
   const body = parsed.data;
   const updateData: Record<string, unknown> = {};
+  if (body.folderId !== undefined) {
+    if (!(await folderExists(body.folderId))) { res.status(400).json({ error: "Folder not found" }); return; }
+    updateData.folderId = body.folderId;
+  }
 
   if (body.entityKey != null) {
     const key = body.entityKey.trim();
@@ -242,11 +287,13 @@ router.put("/entities/:id", requireAuth, requireAdmin("entities"), async (req, r
     return;
   }
 
-  const [entity] = await db
-    .update(entitiesTable)
-    .set(updateData)
-    .where(eq(entitiesTable.id, params.data.id))
-    .returning();
+  const entity = await db.transaction(async tx => {
+    if (body.folderId != null) {
+      const [folder] = await tx.select().from(entityFoldersTable).where(eq(entityFoldersTable.id, body.folderId)).for("key share");
+      if (!folder) return null;
+    }
+    return (await tx.update(entitiesTable).set(updateData).where(eq(entitiesTable.id, params.data.id)).returning())[0];
+  });
 
   if (!entity) {
     res.status(404).json({ error: "Entity not found" });

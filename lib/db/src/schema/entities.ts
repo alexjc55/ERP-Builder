@@ -3,8 +3,14 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { pagesTable } from "./pages";
 
+export const entityFoldersTable = pgTable("entity_folders", {
+  id: serial("id").primaryKey(),
+  nameJson: jsonb("name_json").notNull().default({}),
+});
+
 export const entitiesTable = pgTable("entities", {
   id: serial("id").primaryKey(),
+  folderId: integer("folder_id").references(() => entityFoldersTable.id, { onDelete: "set null" }),
   entityKey: text("entity_key").notNull().unique(),
   nameJson: jsonb("name_json").notNull().default({}),
   descriptionJson: jsonb("description_json").default({}),

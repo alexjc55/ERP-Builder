@@ -11519,4 +11519,7 @@
   {"key":"gdrive.disconnectFlow.accountMismatch","ru":"Выберите прежний Google-аккаунт. Сохранённые папки принадлежат другому подключению.","en":"Choose the previous Google account. Saved folders belong to a different connection.","he":"יש לבחור את חשבון Google הקודם. התיקיות השמורות שייכות לחיבור אחר."},
   {"key":"gdrive.disconnectFlow.unavailable","ru":"Нет доступа к сохранённым папкам. Проверьте аккаунт и разрешения Google. Настройки сохранены; новая папка не создана.","en":"Saved folders are inaccessible. Check the Google account and permissions. Settings were preserved; no new folder was created.","he":"אין גישה לתיקיות השמורות. יש לבדוק את חשבון Google וההרשאות. ההגדרות נשמרו; לא נוצרה תיקייה חדשה."},
   {"key":"gdrive.disconnectFlow.manageRetained","ru":"Сохранённые папки: сохранить или удалить","en":"Saved folders: keep or remove","he":"תיקיות שמורות: שמירה או הסרה"}
+  ,{"key":"entityFolders.deleteHint","ru":"Удаляется только папка. Сущности останутся в разделе «Без папки». Количество:","en":"Only the folder is deleted. Entities remain in Ungrouped. Count:","he":"רק התיקייה תימחק. הישויות יישארו ללא תיקייה. כמות:"}
+  ,{"key":"entityFolders.hint","ru":"Папки служат только для группировки списка и не меняют права доступа.","en":"Folders only organize this list and do not change permissions.","he":"תיקיות משמשות לארגון הרשימה בלבד ואינן משנות הרשאות."}
+  ,{"key":"entityFolders.loadError","ru":"Не удалось загрузить папки.","en":"Could not load folders.","he":"לא ניתן לטעון תיקיות."}
 ]

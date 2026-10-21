@@ -197,6 +197,13 @@
       "when": 1791318119413,
       "tag": "0027_noisy_magma",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792594253583,
+      "tag": "0028_flashy_hitman",
+      "breakpoints": true
     }
   ]
 }

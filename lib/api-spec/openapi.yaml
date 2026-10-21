@@ -4137,6 +4137,65 @@ paths:
                 $ref: "#/components/schemas/SuccessResponse"
 
   # ENTITIES
+  /entity-folders:
+    get:
+      operationId: listEntityFolders
+      tags: [entities]
+      responses:
+        "200":
+          description: Organizational folders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EntityFolder"
+    post:
+      operationId: createEntityFolder
+      tags: [entities]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityFolderInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityFolder"
+  /entity-folders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    put:
+      operationId: updateEntityFolder
+      tags: [entities]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityFolderInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntityFolder"
+    delete:
+      operationId: deleteEntityFolder
+      tags: [entities]
+      responses:
+        "204":
+          description: Folder removed; entities remain ungrouped
   /entities:
     get:
       operationId: listEntities
@@ -7891,10 +7950,27 @@ components:
                 type: string
 
     # ENTITIES
+    EntityFolder:
+      type: object
+      required: [id, nameJson]
+      properties:
+        id:
+          type: integer
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
+    EntityFolderInput:
+      type: object
+      required: [nameJson]
+      properties:
+        nameJson:
+          $ref: "#/components/schemas/MultilingualText"
     Entity:
       type: object
       required: [id, entityKey, nameJson, icon, defaultSortJson, statusNameJson, statusManualEditPolicy, statusManualEditUserIds, sortOrder, isActive, createdAt, updatedAt]
       properties:
+        folderId:
+          type: ["integer", "null"]
+          minimum: 1
         id:
           type: integer
         entityKey:
@@ -7962,6 +8038,9 @@ components:
       type: object
       required: [entityKey, nameJson, icon]
       properties:
+        folderId:
+          type: ["integer", "null"]
+          minimum: 1
         entityKey:
           type: string
         nameJson:
@@ -8016,6 +8095,9 @@ components:
     EntityUpdate:
       type: object
       properties:
+        folderId:
+          type: ["integer", "null"]
+          minimum: 1
         entityKey:
           type: string
         nameJson:

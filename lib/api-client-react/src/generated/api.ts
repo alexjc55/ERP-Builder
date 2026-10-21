@@ -90,6 +90,8 @@ import type {
   DriveNameTemplate,
   DryRunInboundMappingBody,
   Entity,
+  EntityFolder,
+  EntityFolderInput,
   EntityInput,
   EntityRecord,
   EntityUpdate,
@@ -14526,6 +14528,272 @@ export const useReorderViews = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getReorderViewsMutationOptions(options));
+    }
+
+export const getListEntityFoldersUrl = () => {
+
+
+
+
+  return `/api/entity-folders`
+}
+
+export const listEntityFolders = async ( options?: RequestInit): Promise<EntityFolder[]> => {
+
+  return customFetch<EntityFolder[]>(getListEntityFoldersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEntityFoldersQueryKey = () => {
+    return [
+    `/api/entity-folders`
+    ] as const;
+    }
+
+
+export const getListEntityFoldersQueryOptions = <TData = Awaited<ReturnType<typeof listEntityFolders>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEntityFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEntityFoldersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEntityFolders>>> = ({ signal }) => listEntityFolders({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEntityFolders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEntityFoldersQueryResult = NonNullable<Awaited<ReturnType<typeof listEntityFolders>>>
+export type ListEntityFoldersQueryError = ErrorType<unknown>
+
+
+
+export function useListEntityFolders<TData = Awaited<ReturnType<typeof listEntityFolders>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEntityFolders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEntityFoldersQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateEntityFolderUrl = () => {
+
+
+
+
+  return `/api/entity-folders`
+}
+
+export const createEntityFolder = async (entityFolderInput: EntityFolderInput, options?: RequestInit): Promise<EntityFolder> => {
+
+  return customFetch<EntityFolder>(getCreateEntityFolderUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      entityFolderInput,)
+  }
+);}
+
+
+
+
+export const getCreateEntityFolderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEntityFolder>>, TError,{data: BodyType<EntityFolderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEntityFolder>>, TError,{data: BodyType<EntityFolderInput>}, TContext> => {
+
+const mutationKey = ['createEntityFolder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEntityFolder>>, {data: BodyType<EntityFolderInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createEntityFolder(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEntityFolderMutationResult = NonNullable<Awaited<ReturnType<typeof createEntityFolder>>>
+    export type CreateEntityFolderMutationBody = BodyType<EntityFolderInput>
+    export type CreateEntityFolderMutationError = ErrorType<unknown>
+
+    export const useCreateEntityFolder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEntityFolder>>, TError,{data: BodyType<EntityFolderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEntityFolder>>,
+        TError,
+        {data: BodyType<EntityFolderInput>},
+        TContext
+      > => {
+      return useMutation(getCreateEntityFolderMutationOptions(options));
+    }
+
+export const getUpdateEntityFolderUrl = (id: number,) => {
+
+
+
+
+  return `/api/entity-folders/${id}`
+}
+
+export const updateEntityFolder = async (id: number,
+    entityFolderInput: EntityFolderInput, options?: RequestInit): Promise<EntityFolder> => {
+
+  return customFetch<EntityFolder>(getUpdateEntityFolderUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      entityFolderInput,)
+  }
+);}
+
+
+
+
+export const getUpdateEntityFolderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEntityFolder>>, TError,{id: number;data: BodyType<EntityFolderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateEntityFolder>>, TError,{id: number;data: BodyType<EntityFolderInput>}, TContext> => {
+
+const mutationKey = ['updateEntityFolder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEntityFolder>>, {id: number;data: BodyType<EntityFolderInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateEntityFolder(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateEntityFolderMutationResult = NonNullable<Awaited<ReturnType<typeof updateEntityFolder>>>
+    export type UpdateEntityFolderMutationBody = BodyType<EntityFolderInput>
+    export type UpdateEntityFolderMutationError = ErrorType<unknown>
+
+    export const useUpdateEntityFolder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEntityFolder>>, TError,{id: number;data: BodyType<EntityFolderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateEntityFolder>>,
+        TError,
+        {id: number;data: BodyType<EntityFolderInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateEntityFolderMutationOptions(options));
+    }
+
+export const getDeleteEntityFolderUrl = (id: number,) => {
+
+
+
+
+  return `/api/entity-folders/${id}`
+}
+
+export const deleteEntityFolder = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteEntityFolderUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteEntityFolderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEntityFolder>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteEntityFolder>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteEntityFolder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteEntityFolder>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteEntityFolder(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteEntityFolderMutationResult = NonNullable<Awaited<ReturnType<typeof deleteEntityFolder>>>
+
+    export type DeleteEntityFolderMutationError = ErrorType<unknown>
+
+    export const useDeleteEntityFolder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEntityFolder>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteEntityFolder>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteEntityFolderMutationOptions(options));
     }
 
 export const getListEntitiesUrl = () => {

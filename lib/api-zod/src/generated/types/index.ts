@@ -192,6 +192,8 @@ export * from './driveNameSectionKind';
 export * from './driveNameTemplate';
 export * from './dryRunInboundMappingBody';
 export * from './entity';
+export * from './entityFolder';
+export * from './entityFolderInput';
 export * from './entityInput';
 export * from './entityInputStatusManualEditPolicy';
 export * from './entityRecord';

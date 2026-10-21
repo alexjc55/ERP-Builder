@@ -12,6 +12,11 @@ import type { PivotConfig } from './pivotConfig';
 import type { SortSpec } from './sortSpec';
 
 export interface EntityInput {
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  folderId?: number | null;
   entityKey: string;
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;

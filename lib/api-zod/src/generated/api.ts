@@ -10866,13 +10866,68 @@ export const ReorderViewsResponse = zod.object({
 })
 
 
+export const ListEntityFoldersResponseItem = zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})
+export const ListEntityFoldersResponse = zod.array(ListEntityFoldersResponseItem)
+
+
+export const CreateEntityFolderBody = zod.object({
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})
+
+
+
+
+
+export const UpdateEntityFolderParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+export const UpdateEntityFolderBody = zod.object({
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})
+
+export const UpdateEntityFolderResponse = zod.object({
+  "id": zod.number(),
+  "nameJson": zod.object({
+  "ru": zod.string().optional(),
+  "en": zod.string().optional(),
+  "he": zod.string().optional()
+})
+})
+
+
+
+
+
+export const DeleteEntityFolderParams = zod.object({
+  "id": zod.coerce.number().min(1)
+})
+
+
 /**
  * @summary List all entities
  */
+
 export const listEntitiesResponseDefaultSortJsonItemDirectionDefault = `asc`;
 
 
 export const ListEntitiesResponseItem = zod.object({
+  "folderId": zod.number().min(1).nullish(),
   "id": zod.number(),
   "entityKey": zod.string(),
   "nameJson": zod.object({
@@ -10965,12 +11020,14 @@ export const ListEntitiesResponse = zod.array(ListEntitiesResponseItem)
 /**
  * @summary Create a new entity
  */
+
 export const createEntityBodyDefaultSortJsonItemDirectionDefault = `asc`;
 export const createEntityBodyAllowNoStatusDefault = true;
 export const createEntityBodyStatusManualEditPolicyDefault = `allowed`;
 export const createEntityBodyIsActiveDefault = true;
 
 export const CreateEntityBody = zod.object({
+  "folderId": zod.number().min(1).nullish(),
   "entityKey": zod.string(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -11063,10 +11120,12 @@ export const GetEntityParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
 export const getEntityResponseDefaultSortJsonItemDirectionDefault = `asc`;
 
 
 export const GetEntityResponse = zod.object({
+  "folderId": zod.number().min(1).nullish(),
   "id": zod.number(),
   "entityKey": zod.string(),
   "nameJson": zod.object({
@@ -11162,10 +11221,12 @@ export const UpdateEntityParams = zod.object({
   "id": zod.coerce.number()
 })
 
+
 export const updateEntityBodyDefaultSortJsonItemDirectionDefault = `asc`;
 
 
 export const UpdateEntityBody = zod.object({
+  "folderId": zod.number().min(1).nullish(),
   "entityKey": zod.string().optional(),
   "nameJson": zod.object({
   "ru": zod.string().optional(),
@@ -11250,10 +11311,12 @@ export const UpdateEntityBody = zod.object({
   "isActive": zod.boolean().optional()
 })
 
+
 export const updateEntityResponseDefaultSortJsonItemDirectionDefault = `asc`;
 
 
 export const UpdateEntityResponse = zod.object({
+  "folderId": zod.number().min(1).nullish(),
   "id": zod.number(),
   "entityKey": zod.string(),
   "nameJson": zod.object({

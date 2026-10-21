@@ -3355,6 +3355,15 @@ export interface NotesContentInput {
   cells?: NotesContentInputCellsItem[] | null;
 }
 
+export interface EntityFolder {
+  id: number;
+  nameJson: MultilingualText;
+}
+
+export interface EntityFolderInput {
+  nameJson: MultilingualText;
+}
+
 /**
  * Controls explicit human statusId writes. System-assigned statuses are unaffected.
  */
@@ -3368,6 +3377,11 @@ export const EntityStatusManualEditPolicy = {
 } as const;
 
 export interface Entity {
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  folderId?: number | null;
   id: number;
   entityKey: string;
   nameJson: MultilingualText;
@@ -3416,6 +3430,11 @@ export const EntityInputStatusManualEditPolicy = {
 } as const;
 
 export interface EntityInput {
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  folderId?: number | null;
   entityKey: string;
   nameJson: MultilingualText;
   descriptionJson?: MultilingualText;
@@ -3452,6 +3471,11 @@ export const EntityUpdateStatusManualEditPolicy = {
 } as const;
 
 export interface EntityUpdate {
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  folderId?: number | null;
   entityKey?: string;
   nameJson?: MultilingualText;
   descriptionJson?: MultilingualText;
