@@ -67,6 +67,50 @@ async function auth(page: Page) {
   await page.addInitScript(() => localStorage.setItem("erp_token", "intercepted-card-ui"));
 }
 
+test("builder: published edits save in place, preserve local conflict edits and lock scope", async ({ page }) => {
+  await auth(page);
+  let current = { id: 8, name: "Published", entityId: A, pageId: null, state: "published", revision: 4, layout: layout("Lines") };
+  const writes: any[] = [];
+  let conflict = false;
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (await common(route, path)) return;
+    if (path === "/api/card-templates") return route.fulfill({ json: [current] });
+    if (path === "/api/card-templates/8" && route.request().method() === "PUT") {
+      const input = route.request().postDataJSON(); writes.push(input);
+      if (conflict) return route.fulfill({ status: 409, json: { error: "Template changed" } });
+      current = { ...current, ...input, revision: current.revision + 1 };
+      return route.fulfill({ json: current });
+    }
+    if (path.includes("/publish") || path.includes("/unpublish")) throw new Error("Saving must not toggle publication");
+    return route.fulfill({ json: [] });
+  });
+  await page.goto("/admin/card-templates/8");
+  const name = page.getByTestId("input-editor-name");
+  await expect(name).toBeEnabled();
+  await expect(page.getByTestId("select-scope")).toBeDisabled();
+  await name.fill("Updated published card");
+  expect(writes).toHaveLength(0);
+  await page.getByTestId("button-save-published").click();
+  await expect(page.getByTestId("text-dirty")).toHaveCount(0);
+  expect(writes[0].expectedRevision).toBe(4);
+  expect(current.state).toBe("published");
+  await name.fill("Local edits");
+  // Refresh the registry while dirty: a newer server revision must not replace
+  // the editor's original revision and permit a lost update.
+  current = { ...current, revision: 6, name: "Other admin" };
+  await page.evaluate(() => { window.dispatchEvent(new Event("blur")); window.dispatchEvent(new Event("focus")); });
+  conflict = true;
+  await page.getByTestId("button-save-published").click();
+  await expect(name).toHaveValue("Local edits");
+  expect(writes[1].expectedRevision).toBe(5);
+  await expect(page.getByTestId("button-save-published")).toBeDisabled();
+  const back = page.getByRole("link", { name: /./ }).first();
+  page.once("dialog", dialog => dialog.dismiss());
+  await back.click();
+  await expect(name).toHaveValue("Local edits");
+});
+
 test("runtime: user field offers humans only, even with service names in the response", async ({ page }) => {
   await auth(page);
   await page.route("**/api/**", async route => {

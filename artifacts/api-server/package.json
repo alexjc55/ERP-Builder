@@ -8,6 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:card-published-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/card-published.db.test.ts",
     "test:settings": "tsx --test src/lib/app-settings-validation.test.ts",
     "test:page-custom-filters-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/lib/page-custom-filters.db.test.ts",
     "test:inbound-safety-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/lib/inbound-safety.db.test.ts",

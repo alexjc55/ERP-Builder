@@ -154,9 +154,9 @@ function StateBadge({ state }: { state: CardTemplate["state"] }) {
     : <Badge className="border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-50" variant="outline" data-testid="badge-draft">{t("cards.stateDraft", "Черновик")}</Badge>;
 }
 
-function EntityPageFields({ entityId, pageId, onEntity, onPage, entities, pages, lockEntity }: {
+function EntityPageFields({ entityId, pageId, onEntity, onPage, entities, pages, lockEntity, lockScope }: {
   entityId: number | null; pageId: number | null; onEntity: (id: number) => void; onPage: (id: number | null) => void;
-  entities: Entity[]; pages: Page[]; lockEntity?: boolean;
+  entities: Entity[]; pages: Page[]; lockEntity?: boolean; lockScope?: boolean;
 }) {
   const t = useT();
   const ml = useML();
@@ -174,7 +174,7 @@ function EntityPageFields({ entityId, pageId, onEntity, onPage, entities, pages,
       </div>
       <div className="space-y-1.5">
         <Label>{t("cards.scope", "Область применения")}</Label>
-        <Select value={pageId != null ? String(pageId) : NO_PAGE} onValueChange={v => onPage(v === NO_PAGE ? null : Number(v))} disabled={entityId == null}>
+        <Select value={pageId != null ? String(pageId) : NO_PAGE} onValueChange={v => onPage(v === NO_PAGE ? null : Number(v))} disabled={entityId == null || lockScope}>
           <SelectTrigger data-testid="select-scope"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value={NO_PAGE}>{t("cards.scopeEntity", "Все страницы сущности (по умолчанию)")}</SelectItem>
@@ -508,7 +508,30 @@ function TemplateEditor({ id }: { id: number }) {
   }, [template?.id, template?.revision]);
 
   const flow = usePublishFlow(() => undefined);
-  const readOnly = template?.state === "published";
+  const published = template?.state === "published";
+  const readOnly = saving || flow.busy;
+  const discardMessage = t("cards.discardChanges", "Есть несохранённые изменения. Уйти и потерять их?");
+  useEffect(() => {
+    if (!dirty) return;
+    const unload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    const editingUrl = window.location.href;
+    const pop = (event: PopStateEvent) => {
+      if (window.location.href !== editingUrl && !window.confirm(discardMessage)) {
+        event.stopImmediatePropagation();
+        window.history.pushState(null, "", editingUrl);
+      }
+    };
+    const click = (event: MouseEvent) => {
+      const link = (event.target as Element)?.closest?.("a[href]");
+      if (link && link.getAttribute("href") !== window.location.pathname && !window.confirm(discardMessage)) {
+        event.preventDefault(); event.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", unload);
+    window.addEventListener("popstate", pop, true);
+    document.addEventListener("click", click, true);
+    return () => { window.removeEventListener("beforeunload", unload); window.removeEventListener("popstate", pop, true); document.removeEventListener("click", click, true); };
+  }, [dirty, discardMessage]);
   const fieldByKey = useMemo(() => new Map(fields.map(f => [f.fieldKey, f])), [fields]);
   const bound = useMemo(() => layout ? boundFieldKeys(layout) : new Set<string>(), [layout]);
   const issues = useMemo(() => layout ? layoutIssues(layout, fields) : [], [layout, fields]);
@@ -532,15 +555,16 @@ function TemplateEditor({ id }: { id: number }) {
     return false;
   };
   const save = async (): Promise<CardTemplate | null> => {
-    if (!template || !layout) return null;
+    if (!template || !layout || saving || staleConflict) return null;
     if (!checkStyles()) return null;
     setSaving(true);
     try {
-      const updated = await updateCardTemplate(template.id, { name: name.trim() || template.name, entityId: template.entityId, pageId, layout: asInput(layout), expectedRevision: template.revision });
+      const expectedRevision = Number(initFor.current?.split(":")[1]);
+      const updated = await updateCardTemplate(template.id, { name: name.trim() || template.name, entityId: template.entityId, pageId, layout: asInput(layout), expectedRevision });
       initFor.current = `${updated.id}:${updated.revision}`;
       qc.setQueryData<CardTemplate[]>(getListCardTemplatesQueryKey(), old => old?.map(x => x.id === updated.id ? updated : x));
       setDirty(false);
-      toast({ title: t("cards.saved", "Черновик сохранён") });
+      toast({ title: updated.state === "published" ? t("cards.savedPublished", "Изменения сохранены и опубликованы") : t("cards.saved", "Черновик сохранён") });
       return updated;
     } catch (e) {
       if (errStatus(e) === 409) setStaleConflict(true);
@@ -553,17 +577,27 @@ function TemplateEditor({ id }: { id: number }) {
     const current = dirty ? await save() : template ?? null;
     if (current) await flow.publish(current);
   };
-  const reloadServer = () => { initFor.current = null; setDirty(false); void refetch().then(() => setStaleConflict(false)); };
+  const reloadServer = () => {
+    if (dirty && !window.confirm(discardMessage)) return;
+    void refetch().then(result => {
+      const fresh = result.data?.find(x => x.id === id);
+      if (!fresh || result.isError) return;
+      initFor.current = `${fresh.id}:${fresh.revision}`;
+      setLayout(parseCardLayout(fresh.layout)); setName(fresh.name); setPageId(fresh.pageId);
+      setDirty(false); setStaleConflict(false);
+    });
+  };
   const copyToDraft = async () => {
     if (!template || !layout) return;
     try {
       const created = await createCardTemplate({ name: `${template.name} (${t("cards.draftSuffix", "черновик")})`, entityId: template.entityId, pageId: template.pageId, layout: asInput(copyLayout(layout, true)) });
       await qc.invalidateQueries({ queryKey: getListCardTemplatesQueryKey() });
+      setDirty(false);
       navigate(`/admin/card-templates/${created.id}`);
     } catch (e) { toast({ variant: "destructive", title: t("cards.copyFailed", "Не удалось скопировать"), description: errMessage(e) }); }
   };
   const unpublish = async () => {
-    if (!template) return;
+    if (!template || dirty || saving) return;
     try { await unpublishCardTemplate(template.id, { expectedRevision: template.revision }); toast({ title: t("cards.unpublished", "Карточка снята с публикации") }); }
     catch (e) { toast({ variant: "destructive", title: t("cards.unpublishFailed", "Не удалось снять с публикации"), description: errMessage(e) }); }
     finally { void qc.invalidateQueries({ queryKey: getListCardTemplatesQueryKey() }); }
@@ -677,10 +711,13 @@ function TemplateEditor({ id }: { id: number }) {
           </TooltipTrigger>
           <TooltipContent>{t("cards.preview", "Предпросмотр")}</TooltipContent>
         </Tooltip>
-        {readOnly ? (
+        {published ? (
           <>
-            <Button size="sm" variant="outline" data-testid="button-copy-to-draft" onClick={() => void copyToDraft()}><Copy className="me-1.5 h-3.5 w-3.5" />{t("cards.copyToDraft", "Копировать в черновик")}</Button>
-            <Button size="sm" variant="outline" data-testid="button-editor-unpublish" onClick={() => void unpublish()}><Undo2 className="me-1.5 h-3.5 w-3.5" />{t("cards.unpublish", "Снять с публикации")}</Button>
+            <Button size="sm" data-testid="button-save-published" disabled={saving || !dirty || staleConflict} onClick={() => void save()}>
+              <Save className="me-1.5 h-3.5 w-3.5" />{t("cards.savePublished", "Сохранить и опубликовать")}
+            </Button>
+            <Button size="sm" variant="outline" disabled={saving} data-testid="button-copy-to-draft" onClick={() => void copyToDraft()}><Copy className="me-1.5 h-3.5 w-3.5" />{t("cards.copyToDraft", "Копировать в черновик")}</Button>
+            <Button size="sm" variant="outline" disabled={dirty || saving} data-testid="button-editor-unpublish" onClick={() => void unpublish()}><Undo2 className="me-1.5 h-3.5 w-3.5" />{t("cards.unpublish", "Снять с публикации")}</Button>
           </>
         ) : (
           <>
@@ -701,9 +738,9 @@ function TemplateEditor({ id }: { id: number }) {
         )}
       </div>
 
-      {readOnly && (
+      {published && (
         <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-xs text-emerald-800" data-testid="text-published-readonly">
-          {t("cards.publishedReadonly", "Опубликованная карточка не изменяется. Чтобы внести правки, скопируйте её в черновик и опубликуйте с заменой.")}
+          {t("cards.publishedEditing", "Пока вы редактируете, сотрудники видят прежнюю версию. Сохранение опубликует изменения; уже открытые формы останутся без изменений.")}
         </div>
       )}
       {staleConflict && (
@@ -948,7 +985,7 @@ function TemplateEditor({ id }: { id: number }) {
           <div className="min-w-0 space-y-4 rounded-xl border border-slate-200 bg-white p-4">
             {selection.type === "style" && (
               <StylePanel layout={layout} readOnly={readOnly} onChange={change}
-                scope={<><EntityPageFields entityId={template.entityId} pageId={pageId} lockEntity onEntity={() => undefined}
+                scope={<><EntityPageFields entityId={template.entityId} pageId={pageId} lockEntity lockScope={published || saving} onEntity={() => undefined}
                   onPage={p => { if (!readOnly) { setPageId(p); setDirty(true); } }} entities={entities} pages={pages} />
                   <div className="space-y-1.5">
                     <Label>{t("cards.previewMode", "Режим предпросмотра")}</Label>

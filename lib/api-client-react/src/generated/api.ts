@@ -391,6 +391,9 @@ export const getUpdateCardTemplateUrl = (id: number,) => {
   return `/api/card-templates/${id}`
 }
 
+/**
+ * Save a draft or atomically replace a published layout. Published scope is immutable; expectedRevision protects concurrent edits.
+ */
 export const updateCardTemplate = async (id: number,
     cardTemplateInput: CardTemplateInput, options?: RequestInit): Promise<CardTemplate> => {
 

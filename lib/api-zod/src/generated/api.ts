@@ -29,6 +29,9 @@ export const CreateCardTemplateBody = zod.object({
 })
 
 
+/**
+ * Save a draft or atomically replace a published layout. Published scope is immutable; expectedRevision protects concurrent edits.
+ */
 export const UpdateCardTemplateParams = zod.object({
   "id": zod.coerce.number()
 })

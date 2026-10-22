@@ -126,11 +126,24 @@ router.put("/card-templates/:id", requireAuth, requireAdmin("cardTemplates"), as
   const id = idSchema.safeParse(req.params.id), body = cardTemplateInputSchema.safeParse(req.body);
   if (!id.success || !body.success || !body.data.expectedRevision) { res.status(400).json({ error: "Valid template and expectedRevision are required" }); return; }
   const { expectedRevision, ...input } = body.data;
-  if (!await scopeValid(db, input.entityId, input.pageId)) { res.status(400).json({ error: "Page must belong to selected entity" }); return; }
-  const [row] = await db.update(cards).set({ ...input, updatedAt: new Date(), revision: sql`${cards.revision} + 1` })
-    .where(and(eq(cards.id, id.data), eq(cards.state, "draft"), eq(cards.revision, expectedRevision))).returning();
-  if (!row) { res.status(409).json({ error: "Template changed or is published. Reload or create a draft copy." }); return; }
-  res.json(row);
+  const result = await db.transaction(async tx => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(782361904)`);
+    const [card] = await tx.select().from(cards).where(eq(cards.id, id.data)).for("update");
+    if (!card) return { status: 404, body: { error: "Template not found" } };
+    if (card.revision !== expectedRevision) return { status: 409, body: { error: "Template changed. Reload before saving." } };
+    if (card.state === "published" && (input.entityId !== card.entityId || input.pageId !== card.pageId)) {
+      return { status: 400, body: { error: "Published template scope cannot be changed. Create a draft copy for another scope." } };
+    }
+    if (!await scopeValid(tx, input.entityId, input.pageId)) return { status: 400, body: { error: "Page must belong to selected entity" } };
+    if (card.state === "published") {
+      const errors = await publicationErrors(tx, input.entityId, input.layout);
+      if (errors.length) return { status: 400, body: { error: errors.join("\n") } };
+    }
+    const [row] = await tx.update(cards).set({ ...input, updatedAt: new Date(), revision: card.revision + 1 })
+      .where(eq(cards.id, card.id)).returning();
+    return { status: 200, body: row };
+  });
+  res.status(result.status).json(result.body);
 });
 
 router.delete("/card-templates/:id", requireAuth, requireAdmin("cardTemplates"), async (req, res) => {

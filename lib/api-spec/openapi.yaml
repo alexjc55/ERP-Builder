@@ -67,6 +67,7 @@ paths:
       - { name: id, in: path, required: true, schema: { type: integer } }
     put:
       operationId: updateCardTemplate
+      description: Save a draft or atomically replace a published layout. Published scope is immutable; expectedRevision protects concurrent edits.
       requestBody:
         required: true
         content:
@@ -74,7 +75,7 @@ paths:
             schema: { $ref: "#/components/schemas/CardTemplateInput" }
       responses:
         "200":
-          description: Draft saved
+          description: Draft saved or updated version published
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CardTemplate" }

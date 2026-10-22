@@ -11523,4 +11523,8 @@
   ,{"key":"entityFolders.hint","ru":"Папки служат только для группировки списка и не меняют права доступа.","en":"Folders only organize this list and do not change permissions.","he":"תיקיות משמשות לארגון הרשימה בלבד ואינן משנות הרשאות."}
   ,{"key":"entityFolders.loadError","ru":"Не удалось загрузить папки.","en":"Could not load folders.","he":"לא ניתן לטעון תיקיות."}
   ,{"key":"records.fileSourceLabel","ru":"Источник файла","en":"File source","he":"מקור הקובץ"}
+  ,{"key":"cards.savePublished","ru":"Сохранить и опубликовать","en":"Save and publish","he":"שמירה ופרסום"}
+  ,{"key":"cards.savedPublished","ru":"Изменения сохранены и опубликованы","en":"Changes saved and published","he":"השינויים נשמרו ופורסמו"}
+  ,{"key":"cards.publishedEditing","ru":"Пока вы редактируете, сотрудники видят прежнюю версию. Сохранение опубликует изменения; уже открытые формы останутся без изменений.","en":"While you edit, staff see the previous version. Saving publishes changes; already-open forms remain unchanged.","he":"בזמן העריכה העובדים רואים את הגרסה הקודמת. שמירה תפרסם את השינויים; טפסים פתוחים לא ישתנו."}
+  ,{"key":"cards.discardChanges","ru":"Есть несохранённые изменения. Уйти и потерять их?","en":"You have unsaved changes. Leave and discard them?","he":"יש שינויים שלא נשמרו. לצאת ולוותר עליהם?"}
 ]
