@@ -67,6 +67,51 @@ async function auth(page: Page) {
   await page.addInitScript(() => localStorage.setItem("erp_token", "intercepted-card-ui"));
 }
 
+test("runtime: file source and input align with ordinary fields without mobile overflow", async ({ page }) => {
+  await auth(page);
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    const reply = (json: unknown) => route.fulfill({ json });
+    if (path === `/api/entities/${A}/fields`) return reply([
+      fieldsA[0], field(2, A, "note", "file", { fileConfigJson: { allowedSources: ["link", "gdrive", "server"] } }),
+    ]);
+    if (await common(route, path)) return;
+    if (path === "/api/card-templates/resolve") return reply({ template: {
+      id: 1, name: "Mixed fields", entityId: A, pageId: null, state: "published", revision: 1, layout: layout("Lines"),
+    } });
+    if (path === `/api/entities/${A}/records/query`) return reply({ data: [], total: 0 });
+    return reply([]);
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/card-orders");
+  await page.getByRole("button", { name: /Add record|Добавить запись/ }).first().click();
+  const file = page.getByTestId("form-field-note");
+  const url = file.locator('input[type="url"]');
+  await expect(url).toBeVisible();
+  await expect.poll(async () => {
+    const a = await page.getByTestId("form-field-title").locator("input").boundingBox();
+    const b = await url.boundingBox();
+    return Math.round(Math.abs(a!.y - b!.y));
+  }).toBe(0);
+  const source = file.getByRole("combobox");
+  await expect.poll(async () => {
+    const a = await source.boundingBox(), b = await url.boundingBox();
+    return Math.round(Math.abs(a!.y - b!.y) + Math.abs(a!.height - b!.height));
+  }).toBe(0);
+  await url.fill("https://example.com/drawing.pdf");
+  await source.click();
+  await page.getByRole("option", { name: "Google Drive", exact: true }).click();
+  await expect(file.locator('input[type="file"]')).toHaveCount(1);
+  await source.click();
+  await page.getByRole("option", { name: /^(Link|Ссылка)$/ }).click();
+  await expect(url).toHaveValue("https://example.com/drawing.pdf");
+  for (const dir of ["ltr", "rtl"]) {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await file.evaluate((el, direction) => el.setAttribute("dir", direction), dir);
+    expect(await file.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+});
+
 test("builder: custom style uses the shared saved-color palette and clears overrides", async ({ page }) => {
   await auth(page);
   await page.addInitScript(() => localStorage.setItem("erp.colorPresets", JSON.stringify(["#123456"])));

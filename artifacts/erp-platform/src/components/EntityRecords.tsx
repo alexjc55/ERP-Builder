@@ -12991,38 +12991,32 @@ function FileFieldInput({
   };
 
   return (
-    <div className="space-y-1.5">
+    <div className={cn("grid min-w-0 gap-1.5 items-start", allowedSources.length > 1 && "grid-cols-[minmax(0,2fr)_minmax(0,3fr)]")} data-testid="file-field-input">
       {allowedSources.length > 1 && (
-        <div className="flex flex-wrap gap-1">
-          {allowedSources.map((s) => (
-            <Button
-              key={s}
-              type="button"
-              variant={s === source ? "default" : "outline"}
-              size="sm"
-              className={`h-7 px-2.5 text-xs ${s === source ? "bg-blue-600 hover:bg-blue-700" : ""}`}
-              disabled={disabled || uploading}
-              onClick={() => setSource(s)}
-            >
-              {sourceLabel(t, s)}
-            </Button>
-          ))}
-        </div>
+        <Select value={source} onValueChange={(s) => setSource(s as FileSource)} disabled={disabled || uploading}>
+          <SelectTrigger className={cn("min-w-0 w-full px-2 text-xs [&>span]:truncate", compact ? "h-8" : "h-9")}
+            aria-label={t("records.fileSourceLabel", "Источник файла")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {allowedSources.map(s => <SelectItem key={s} value={s}>{sourceLabel(t, s)}</SelectItem>)}
+          </SelectContent>
+        </Select>
       )}
 
       {source === "server" && (
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1">
           <input ref={inputRef} type="file" className="hidden" onChange={handlePick} disabled={disabled || uploading} />
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className={compact ? "h-8" : undefined}
+            className={cn("min-w-0 flex-1 px-2", compact ? "h-8" : "h-9")}
             disabled={disabled || uploading}
             onClick={() => inputRef.current?.click()}
           >
             {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-            <span className="ml-1.5">
+            <span className="ms-1.5 truncate">
               {showName ? t("records.fileReplace", "Заменить файл") : t("records.fileUpload", "Загрузить файл")}
             </span>
           </Button>
@@ -13043,18 +13037,18 @@ function FileFieldInput({
       )}
 
       {source === "gdrive" && (
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1">
           <input ref={inputRef} type="file" className="hidden" onChange={handleDriveUpload} disabled={disabled || uploading || !gdriveReady} />
           <Button
             type="button"
             variant="outline"
             size="sm"
-            className={compact ? "h-8" : undefined}
+            className={cn("min-w-0 flex-1 px-2", compact ? "h-8" : "h-9")}
             disabled={disabled || uploading || !gdriveReady}
             onClick={() => inputRef.current?.click()}
           >
             {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-            <span className="ml-1.5">
+            <span className="ms-1.5 truncate">
               {showName ? t("records.driveReplace", "Заменить в Google Drive") : t("records.driveUpload", "Загрузить в Google Drive")}
             </span>
           </Button>
@@ -13075,7 +13069,7 @@ function FileFieldInput({
       )}
 
       {source === "gdrive" && !gdriveReady && (
-        <p className="text-xs text-amber-600">
+        <p className="col-span-full text-xs text-amber-600">
           {t("records.driveNotConnected", "Google Drive не подключён. Подключите его в настройках.")}
         </p>
       )}
@@ -13095,7 +13089,7 @@ function FileFieldInput({
           }}
           placeholder="https://"
           disabled={disabled}
-          className={compact ? "h-8 text-sm" : undefined}
+          className={cn("min-w-0 w-full", compact ? "h-8 text-sm" : "h-9")}
         />
       )}
 
@@ -13105,7 +13099,7 @@ function FileFieldInput({
           onChange={(e) => onChange({ ...fileValue, name: e.target.value } as FileValue)}
           placeholder={t("records.fileDisplayName", "Отображаемое имя")}
           disabled={disabled}
-          className={compact ? "h-8 text-sm" : undefined}
+          className={cn("col-span-full min-w-0", compact ? "h-8 text-sm" : undefined)}
         />
       )}
 

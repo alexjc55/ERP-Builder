@@ -11522,4 +11522,5 @@
   ,{"key":"entityFolders.deleteHint","ru":"Удаляется только папка. Сущности останутся в разделе «Без папки». Количество:","en":"Only the folder is deleted. Entities remain in Ungrouped. Count:","he":"רק התיקייה תימחק. הישויות יישארו ללא תיקייה. כמות:"}
   ,{"key":"entityFolders.hint","ru":"Папки служат только для группировки списка и не меняют права доступа.","en":"Folders only organize this list and do not change permissions.","he":"תיקיות משמשות לארגון הרשימה בלבד ואינן משנות הרשאות."}
   ,{"key":"entityFolders.loadError","ru":"Не удалось загрузить папки.","en":"Could not load folders.","he":"לא ניתן לטעון תיקיות."}
+  ,{"key":"records.fileSourceLabel","ru":"Источник файла","en":"File source","he":"מקור הקובץ"}
 ]
