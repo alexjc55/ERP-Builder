@@ -10,11 +10,15 @@ import type { Field, UserOption } from "@workspace/api-client-react";
  * the records filter bar, and the view-config filter editor) so the role boundary
  * stays consistent — see `.agents/memory/user-field-role-filter.md`.
  */
-export function filterUserOptionsByRoles(field: Field, options: UserOption[]): UserOption[] {
+export function filterUserOptionsByRoles(field: Field, options: UserOption[], currentValue?: unknown): UserOption[] {
+  // Keep a saved technical identity available for its label only. The combobox
+  // never offers it as a choice, and read-only name maps keep historical names.
+  const humans = options.filter(u => !u.isServiceAccount || u.id === Number(currentValue));
   const allowed = field.userConfigJson?.allowedRoleIds;
-  if (!Array.isArray(allowed) || allowed.length === 0) return options;
+  if (!Array.isArray(allowed) || allowed.length === 0) return humans;
   const allowedSet = new Set(allowed);
-  return options.filter((u) => {
+  return humans.filter((u) => {
+    if (u.isServiceAccount && u.id === Number(currentValue)) return true;
     const userRoles = u.roleIds && u.roleIds.length > 0 ? u.roleIds : [u.roleId];
     return userRoles.some((rid) => allowedSet.has(rid));
   });

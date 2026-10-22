@@ -1281,6 +1281,8 @@ export interface AuthResult {
 }
 
 export interface UserOption {
+  /** Technical identity; must not be offered for assignment to user fields. */
+  isServiceAccount?: boolean;
   id: number;
   name: string;
   roleId: number;
@@ -5866,6 +5868,13 @@ roleId?: number | null;
 isActive?: boolean | null;
 limit?: number;
 offset?: number;
+};
+
+export type ListUserOptionsParams = {
+/**
+ * Include technical identities for displaying existing references, not for selection.
+ */
+includeServiceAccounts?: boolean;
 };
 
 export type GetEntityRelationOptionsParams = {

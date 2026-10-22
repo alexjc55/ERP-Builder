@@ -1952,7 +1952,14 @@ export const CreateUserFromFieldBody = zod.object({
 /**
  * @summary List users as id+name options (auth-only; for user-type field pickers)
  */
+export const listUserOptionsQueryIncludeServiceAccountsDefault = false;
+
+export const ListUserOptionsQueryParams = zod.object({
+  "includeServiceAccounts": zod.coerce.boolean().default(listUserOptionsQueryIncludeServiceAccountsDefault).describe('Include technical identities for displaying existing references, not for selection.')
+})
+
 export const ListUserOptionsResponseItem = zod.object({
+  "isServiceAccount": zod.boolean().optional().describe('Technical identity; must not be offered for assignment to user fields.'),
   "id": zod.number(),
   "name": zod.string(),
   "roleId": zod.number(),

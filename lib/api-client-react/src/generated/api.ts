@@ -135,6 +135,7 @@ import type {
   ListEventsParams,
   ListInboundIntegrationErrors200,
   ListInboundIntegrationErrorsParams,
+  ListUserOptionsParams,
   ListUsersParams,
   LocalFolder,
   Login429,
@@ -4111,20 +4112,27 @@ export const useCreateUserFromField = <TError = ErrorType<ErrorResponse>,
       return useMutation(getCreateUserFromFieldMutationOptions(options));
     }
 
-export const getListUserOptionsUrl = () => {
+export const getListUserOptionsUrl = (params?: ListUserOptionsParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/users/options`
+  return stringifiedParams.length > 0 ? `/api/users/options?${stringifiedParams}` : `/api/users/options`
 }
 
 /**
  * @summary List users as id+name options (auth-only; for user-type field pickers)
  */
-export const listUserOptions = async ( options?: RequestInit): Promise<UserOption[]> => {
+export const listUserOptions = async (params?: ListUserOptionsParams, options?: RequestInit): Promise<UserOption[]> => {
 
-  return customFetch<UserOption[]>(getListUserOptionsUrl(),
+  return customFetch<UserOption[]>(getListUserOptionsUrl(params),
   {
     ...options,
     method: 'GET'
@@ -4137,23 +4145,23 @@ export const listUserOptions = async ( options?: RequestInit): Promise<UserOptio
 
 
 
-export const getListUserOptionsQueryKey = () => {
+export const getListUserOptionsQueryKey = (params?: ListUserOptionsParams,) => {
     return [
-    `/api/users/options`
+    `/api/users/options`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListUserOptionsQueryOptions = <TData = Awaited<ReturnType<typeof listUserOptions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUserOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListUserOptionsQueryOptions = <TData = Awaited<ReturnType<typeof listUserOptions>>, TError = ErrorType<unknown>>(params?: ListUserOptionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUserOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListUserOptionsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListUserOptionsQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUserOptions>>> = ({ signal }) => listUserOptions({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUserOptions>>> = ({ signal }) => listUserOptions(params, { signal, ...requestOptions });
 
 
 
@@ -4171,11 +4179,11 @@ export type ListUserOptionsQueryError = ErrorType<unknown>
  */
 
 export function useListUserOptions<TData = Awaited<ReturnType<typeof listUserOptions>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUserOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: ListUserOptionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUserOptions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListUserOptionsQueryOptions(options)
+  const queryOptions = getListUserOptionsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -2704,7 +2704,7 @@ export function EntityRecords({
     isPending: userOptionsPending,
     isError: userOptionsError,
     refetch: refetchUserOptions,
-  } = useListUserOptions();
+  } = useListUserOptions({ includeServiceAccounts: true });
   // Roles are only needed to label per-field permission overrides in setup mode.
   const { data: rolesList = [] } = useListRoles({
     query: { enabled: canConfigureColumns, queryKey: getListRolesQueryKey() },
@@ -8433,7 +8433,7 @@ export function EntityRecords({
                         <CommandList>
                           <CommandEmpty>{t("records.userNotFound", "Пользователь не найден")}</CommandEmpty>
                           <CommandGroup>
-                            {userOptions.map((option: UserOption) => {
+                            {userOptions.filter(option => !option.isServiceAccount).map((option: UserOption) => {
                               const checked = statusConfigUserIds.includes(option.id);
                               return (
                                 <CommandItem
@@ -11521,7 +11521,7 @@ function RecordEditModal({
   // User options for `user` field selects; without them a `user` field's dropdown
   // is empty and cannot be selected. Relation/lookup values are now fetched inside
   // RecordFormBody (the shared editor body), not here.
-  const { data: userOptions = [] } = useListUserOptions();
+  const { data: userOptions = [] } = useListUserOptions({ includeServiceAccounts: true });
 
   const visibleFields = fields.filter((f: Field) => f.isActive && fieldAccess(f, entityId) !== "hidden");
 
@@ -11718,7 +11718,7 @@ function QuickCreateRelatedRecordDialog({
   const { data: entities = [] } = useListEntities();
   const relatedEntity = entities.find((e: Entity) => e.id === relatedEntityId);
   const allowNoStatus = relatedEntity?.allowNoStatus ?? true;
-  const { data: userOptions = [] } = useListUserOptions();
+  const { data: userOptions = [] } = useListUserOptions({ includeServiceAccounts: true });
   const createMutation = useCreateEntityRecord();
   const [form, setForm] = useState<FormState>({});
   const [statusId, setStatusId] = useState<string>(NO_STATUS);
@@ -12341,7 +12341,7 @@ function UserCombobox({
             <CommandList>
               <CommandEmpty>{t("records.userNotFound", "Пользователи не найдены")}</CommandEmpty>
               <CommandGroup>
-                {options.map((u) => (
+                {options.filter(u => !u.isServiceAccount).map((u) => (
                   <CommandItem
                     key={u.id}
                     value={`${u.name} #${u.id}`}
@@ -12532,7 +12532,7 @@ function InlineCellEditor({
     return (
       <div onKeyDownCapture={cancelPickerOnEscape}>
         <UserCombobox
-          options={filterUserOptionsByRoles(field, userOptions)}
+          options={filterUserOptionsByRoles(field, userOptions, draft)}
           value={draft != null && draft !== "" ? Number(draft) : null}
           onChange={(id) => commitOnce(id)}
           placeholder={t("records.selectUser", "Выберите пользователя")}
@@ -12833,7 +12833,7 @@ function FieldInput({
     case "user": {
       return (
         <UserCombobox
-          options={filterUserOptionsByRoles(field, userOptions)}
+          options={filterUserOptionsByRoles(field, userOptions, value)}
           value={value != null && value !== "" ? Number(value) : null}
           onChange={(id) => onChange(id)}
           placeholder={t("records.selectUser", "Выберите пользователя")}

@@ -7,6 +7,8 @@
  */
 
 export interface UserOption {
+  /** Technical identity; must not be offered for assignment to user fields. */
+  isServiceAccount?: boolean;
   id: number;
   name: string;
   roleId: number;

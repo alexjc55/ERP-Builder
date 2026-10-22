@@ -41,6 +41,7 @@ import {
   ResetUserPasswordBody,
   ListUserLoginHistoryParams,
   ListUsersQueryParams,
+  ListUserOptionsQueryParams,
   CreateUserFromFieldParams,
   CreateUserFromFieldBody,
   MergeUsersBody,
@@ -381,7 +382,21 @@ router.post("/fields/:fieldId/users", requireAuth, async (req, res): Promise<voi
   res.status(201).json(result);
 });
 
-router.get("/users/options", requireAuth, async (_req, res): Promise<void> => {
+router.get("/users/options", requireAuth, async (req, res): Promise<void> => {
+  const include = req.query.includeServiceAccounts;
+  if (include !== undefined && include !== "true" && include !== "false") {
+    res.status(400).json({ error: "Invalid options query" }); return;
+  }
+  const parsed = ListUserOptionsQueryParams.safeParse({ includeServiceAccounts: include === "true" });
+  if (!parsed.success) { res.status(400).json({ error: "Invalid options query" }); return; }
+  // Ownership, not assigned role, identifies technical users. Reserved generated
+  // emails also cover retained identities whose module row was hard-deleted.
+  // actsAsUserId is deliberately NOT included: that is a real human account.
+  const isServiceAccount = sql<boolean>`(
+    EXISTS (SELECT 1 FROM ${aiAgentsTable} WHERE ${aiAgentsTable}."user_id" = ${usersTable}."id")
+    OR EXISTS (SELECT 1 FROM ${inboundIntegrationsTable} WHERE ${inboundIntegrationsTable}."user_id" = ${usersTable}."id")
+    OR ${usersTable}."email" ~* ${"^(ai-agent-[0-9a-f]+@agents[.]local|inbound-[0-9a-f]+@integrations[.]local)$"}
+  )`;
   const rows = await db
     .select({
       id: usersTable.id,
@@ -389,8 +404,10 @@ router.get("/users/options", requireAuth, async (_req, res): Promise<void> => {
       lastName: usersTable.lastName,
       email: usersTable.email,
       roleId: usersTable.roleId,
+      isServiceAccount,
     })
     .from(usersTable)
+    .where(parsed.data.includeServiceAccounts ? undefined : sql`NOT ${isServiceAccount}`)
     .orderBy(usersTable.firstName, usersTable.lastName);
   // A user can hold additional roles beyond their primary one. Resolve the full
   // role set per user so `user`-field role restrictions match on ANY of the
@@ -416,6 +433,7 @@ router.get("/users/options", requireAuth, async (_req, res): Promise<void> => {
       name: name || u.email,
       roleId: u.roleId,
       roleIds: [...new Set([u.roleId, ...(rolesByUser.get(u.id) ?? [])])],
+      isServiceAccount: u.isServiceAccount,
     };
   });
   res.json(options);

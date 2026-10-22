@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import express from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { db, pool, usersTable, rolesTable } from "@workspace/db";
+import { db, pool, usersTable, rolesTable, aiAgentsTable, inboundIntegrationsTable, userRolesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { APP_SECRET } from "../lib/secret";
 import { signToken, verifyToken } from "../lib/jwt";
@@ -78,6 +78,34 @@ test("session revocation HTTP and database regressions (isolated schema)", { tim
     let adminToken = await login(admin);
     let userToken = await login(user);
     const protectedSecret = encryptSecret("non-secret encryption regression fixture");
+
+    await t.test("user options exclude service identities but retain human roles and historical labels", async () => {
+      const technical = await db.insert(usersTable).values([
+        { email: "renamed-agent@example.invalid", firstName: "Agent", lastName: "Technical", roleId: ordinaryRole!.id },
+        { email: "renamed-inbound@example.invalid", firstName: "Integration", lastName: "Technical", roleId: ordinaryRole!.id, isActive: false },
+        { email: "inbound-0038ce75406316b5@integrations.local", firstName: "Retained", lastName: "Technical", roleId: ordinaryRole!.id, isActive: false },
+        { email: "ai-agent-abcdef123456@agents.local", firstName: "Deleted agent", lastName: "Technical", roleId: ordinaryRole!.id },
+      ]).returning();
+      await db.insert(aiAgentsTable).values({ name: "Test agent", userId: technical[0].id, roleId: ordinaryRole!.id,
+        actsAsUserId: user!.id, tokenHash: "fixture-agent", tokenPrefix: "fixture", isActive: false });
+      await db.insert(inboundIntegrationsTable).values({ name: "Deleted integration", userId: technical[1].id, roleId: ordinaryRole!.id,
+        tokenHash: "fixture-inbound", tokenPrefix: "fixture", isActive: false, deletedAt: new Date() });
+      await db.insert(userRolesTable).values({ userId: user!.id, roleId: adminRole!.id });
+      for (const query of ["", "?includeServiceAccounts=false"]) {
+        const result = await request(`/users/options${query}`, userToken);
+        assert.equal(result.status, 200);
+        const options = result.body as unknown as { id: number; roleIds: number[] }[];
+        assert.ok(technical.every(u => !options.some(o => o.id === u.id)));
+        assert.ok(options.some(o => o.id === user!.id && o.roleIds.includes(adminRole!.id)));
+        assert.ok(options.some(o => o.id === guest!.id)); // normal passwordless guests remain eligible
+      }
+      const history = await request("/users/options?includeServiceAccounts=true", userToken);
+      const names = history.body as unknown as { id: number; name: string; isServiceAccount: boolean }[];
+      assert.ok(technical.every(u => names.some(o => o.id === u.id && o.isServiceAccount && o.name.includes(u.firstName))));
+      assert.equal(names.find(o => o.id === user!.id)?.isServiceAccount, false);
+      assert.equal((await request("/users/options?includeServiceAccounts=garbage", userToken)).status, 400);
+      await db.delete(userRolesTable).where(eq(userRolesTable.userId, user!.id));
+    });
 
     await t.test("reject legacy, malformed and wrong-algorithm JWTs", async () => {
       const legacy = jwt.sign({ userId: admin!.id, roleId: adminRole!.id }, APP_SECRET, { expiresIn: "7d" });

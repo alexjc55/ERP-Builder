@@ -16,3 +16,16 @@ A `user`-type field can restrict its picker to certain roles via `userConfigJson
 - The shared client filter `filterUserOptionsByRoles(field, options)` lives in `lib/userFieldRoles.ts` and intersects `allowedRoleIds` with the user's `roleIds` (falls back to `[roleId]` if `roleIds` absent). Empty/unset `allowedRoleIds` = all users. It is reused by record editors, the records filter bar, AND the view-config filter editor.
 - The view-config value picker (`getDomainOptions`) must apply this too: a `user` filter offers the FULL allowed-role domain (not just users present in records), so resolve the field's `allowedRoleIds` and filter — for relation/lookup the config lives on the PROJECTED linked field, so pass that field, not the relation field itself.
 - If you add any other "filter users by role" surface, reuse `filterUserOptionsByRoles` — don't reintroduce a primary-only check or a local copy.
+
+Technical identities belonging to AI agents or inbound integrations must not be
+offered as new user-field choices, regardless of their role or active state.
+The real human referenced by an agent's “act as user” remains eligible.
+
+**Why:** The user found a deleted integration's retained identity in the Client
+picker and AI backing accounts in project-manager choices. These are not staff
+or customers; their retention serves attribution, not assignment.
+
+**How to apply:** Separate historical name resolution from selectable options.
+Keep existing stored references intact and readable. Do not infer “technical”
+from a privileged role, a missing password, or the act-as relationship; ordinary
+passwordless guests and humans with additional roles must still work.

@@ -1104,6 +1104,13 @@ paths:
 
   /users/options:
     get:
+      parameters:
+        - name: includeServiceAccounts
+          in: query
+          description: Include technical identities for displaying existing references, not for selection.
+          schema:
+            type: boolean
+            default: false
       operationId: listUserOptions
       tags: [users]
       summary: List users as id+name options (auth-only; for user-type field pickers)
@@ -5998,6 +6005,9 @@ components:
       type: object
       required: [id, name, roleId, roleIds]
       properties:
+        isServiceAccount:
+          type: boolean
+          description: Technical identity; must not be offered for assignment to user fields.
         id:
           type: integer
         name:

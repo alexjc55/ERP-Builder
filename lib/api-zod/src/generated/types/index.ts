@@ -282,6 +282,7 @@ export * from './listDocumentTemplatesParams';
 export * from './listEventsParams';
 export * from './listInboundIntegrationErrors200';
 export * from './listInboundIntegrationErrorsParams';
+export * from './listUserOptionsParams';
 export * from './listUsersParams';
 export * from './localFolder';
 export * from './login429';

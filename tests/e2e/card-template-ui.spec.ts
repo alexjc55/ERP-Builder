@@ -67,6 +67,35 @@ async function auth(page: Page) {
   await page.addInitScript(() => localStorage.setItem("erp_token", "intercepted-card-ui"));
 }
 
+test("runtime: user field offers humans only, even with service names in the response", async ({ page }) => {
+  await auth(page);
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    const reply = (json: unknown) => route.fulfill({ json });
+    if (path === `/api/entities/${A}/fields`) return reply([
+      fieldsA[0], field(2, A, "note", "user", { userConfigJson: { allowedRoleIds: [3] } }),
+    ]);
+    if (path === "/api/users/options") return reply([
+      { id: 10, name: "Human Manager", roleId: 2, roleIds: [2, 3], isServiceAccount: false },
+      { id: 11, name: "Technical AI", roleId: 3, roleIds: [3], isServiceAccount: true },
+      { id: 12, name: "Technical Integration", roleId: 3, roleIds: [3], isServiceAccount: true },
+    ]);
+    if (await common(route, path)) return;
+    if (path === "/api/card-templates/resolve") return reply({ template: {
+      id: 1, name: "Users", entityId: A, pageId: null, state: "published", revision: 1, layout: layout("Lines"),
+    } });
+    if (path === `/api/entities/${A}/records/query`) return reply({ data: [], total: 0 });
+    return reply([]);
+  });
+  await page.goto("/card-orders");
+  await page.getByRole("button", { name: /Add record|Добавить запись/ }).first().click();
+  await page.getByTestId("form-field-note").getByRole("combobox").click();
+  await expect(page.getByRole("option", { name: "Human Manager" })).toBeVisible();
+  await expect(page.getByRole("option", { name: /Technical/ })).toHaveCount(0);
+  await page.getByRole("option", { name: "Human Manager" }).click();
+  await expect(page.getByTestId("form-field-note")).toContainText("Human Manager");
+});
+
 test("runtime: file source and input align with ordinary fields without mobile overflow", async ({ page }) => {
   await auth(page);
   await page.route("**/api/**", async route => {
