@@ -1,4 +1,5 @@
 [
+  { "key": "records.viewStatusEditable", "ru": "Поля доступны для просмотра. Изменение статуса сохраняется сразу.", "en": "Fields are read-only. Status changes are saved immediately.", "he": "השדות לקריאה בלבד. שינויי סטטוס נשמרים מיד." },
   { "key": "activity.noStatus", "ru": "Без статуса", "en": "No status", "he": "ללא סטטוס" },
   { "key": "activity.statusUnavailable", "ru": "Статус недоступен", "en": "Status unavailable", "he": "הסטטוס אינו זמין" },
   { "key": "activity.statusNotRecorded", "ru": "Статус изменён. Название не сохранено в старой истории.", "en": "Status changed. Its name was not saved in the old history.", "he": "הסטטוס השתנה. שמו לא נשמר בהיסטוריה הישנה." },

@@ -125,6 +125,7 @@ test("record card: log a call with a next task; deep link params are cleaned", a
   ];
   const tasks: any[] = [];
   const posts: any[] = [];
+  const statusWrites: any[] = [];
   await page.route("**/api/**", async route => {
     const req = route.request();
     const path = new URL(req.url()).pathname;
@@ -132,6 +133,12 @@ test("record card: log a call with a next task; deep link params are cleaned", a
     if (await common(route, path, reply)) return;
     if (path === "/api/card-templates/resolve") return reply({ template: null });
     if (path === `/api/entities/${E}/records/query`) return reply({ data: [record], total: 1, numericTotals: {} });
+    if (path === "/api/records/50" && req.method() === "PUT") {
+      const body = req.postDataJSON();
+      statusWrites.push(body);
+      Object.assign(record, { statusId: body.statusId, version: record.version + 1 });
+      return reply(record);
+    }
     if (path === "/api/records/50") return reply(record);
     if (path === "/api/activity-assignees") return reply([{ id: ME, name: "Dana" }, { id: 2, name: "Lior" }]);
     if (path === "/api/record-activity" && req.method() === "POST") {
@@ -196,4 +203,11 @@ test("record card: log a call with a next task; deep link params are cleaned", a
   entries.unshift({ ...entries[0], id: 902, statusChange: { from: ml("Approved"), to: ml("Completed"), cleared: false } });
   await page.getByTestId("record-view-button").first().click();
   await expect(panel.getByTestId("activity-entry-902")).toContainText("Approved → Completed", { timeout: 5000 });
+  await page.getByTestId("record-dialog-status").getByRole("combobox").click();
+  await page.getByRole("option", { name: "New", exact: true }).click();
+  await expect.poll(() => statusWrites.length).toBe(1);
+  expect(statusWrites[0]).toMatchObject({ statusId: 41, expectedVersion: 2 });
+  expect(statusWrites[0].valuesJson).toBeUndefined();
+  await expect(page.getByTestId("record-dialog-status")).toContainText("New");
+  await expect(page.getByTestId("record-dialog-close")).toBeVisible();
 });

@@ -5719,6 +5719,7 @@ export function EntityRecords({
   // fields. Keep their mutation separate so ordinary inline edits do not incur
   // the delayed refetches needed to observe those automation results.
   const statusUpdateMutation = useUpdateRecord();
+  const viewStatusMutation = useUpdateRecord();
   const updateMutation = useUpdateRecord({
     mutation: {
       onSuccess: () => { toast({ title: t("records.updated", "Запись обновлена") }); closeRecordDialog(); invalidate(); },
@@ -9600,7 +9601,10 @@ export function EntityRecords({
         header={<>
             <DialogTitle>{viewing ? t("records.viewTitle", "Просмотр записи") : editing ? t("records.editTitle", "Редактировать запись") : t("records.newTitle", "Новая запись")}</DialogTitle>
             <DialogDescription>
-              {viewing ? t("records.viewDesc", "Запись открыта только для чтения.") : t("records.dialogDesc", "Заполните поля записи. Обязательные поля помечены звёздочкой.")}
+              {viewing ? statusManualEditable && canUpdate && !editing?.archivedAt
+                ? t("records.viewStatusEditable", "Поля доступны для просмотра. Изменение статуса сохраняется сразу.")
+                : t("records.viewDesc", "Запись открыта только для чтения.")
+                : t("records.dialogDesc", "Заполните поля записи. Обязательные поля помечены звёздочкой.")}
             </DialogDescription>
           </>}
         footer={<>
@@ -9608,7 +9612,7 @@ export function EntityRecords({
               <>
                 <Button variant="outline" data-testid="record-dialog-close" onClick={() => setDialogOpen(false)}>{t("common.close", "Закрыть")}</Button>
                 {canUpdate && editing && (
-                  <Button data-testid="record-dialog-to-edit" className="bg-blue-600 hover:bg-blue-700" onClick={() => setViewing(false)}>
+                  <Button data-testid="record-dialog-to-edit" disabled={viewStatusMutation.isPending} className="bg-blue-600 hover:bg-blue-700" onClick={() => setViewing(false)}>
                     <Pencil className="w-3.5 h-3.5 me-1.5" />{t("records.edit", "Редактировать")}
                   </Button>
                 )}
@@ -9629,9 +9633,38 @@ export function EntityRecords({
             {statuses.length > 0 && (
               <div className="space-y-1.5" data-testid="record-dialog-status">
                 <Label>{statusColumnName}</Label>
-                {statusManualEditable && !viewing ? <Select
+                {statusManualEditable && (editing ? canUpdate && !editing.archivedAt : canCreate) ? <Select
                   value={statusId}
+                  disabled={viewStatusMutation.isPending || dialogRelationEditing}
                   onValueChange={(next) => {
+                    if (viewing && editing) {
+                      if (next === statusId || viewStatusMutation.isPending) return;
+                      viewStatusMutation.mutate({
+                        id: editing.id,
+                        data: { statusId: next === NO_STATUS ? null : Number(next),
+                          expectedVersion: editingVersionRef.current ?? editing.version, pageId: permPageId },
+                      }, {
+                        onSuccess: saved => {
+                          setDialog(current => {
+                            if (current !== dialog) return current;
+                            editingVersionRef.current = saved.version;
+                            const refreshed: FormState = {};
+                            for (const f of fields) refreshed[f.fieldKey] = valueToForm(f, saved.valuesJson?.[f.fieldKey]);
+                            return { ...current, editing: saved, form: refreshed,
+                              statusId: saved.statusId == null ? NO_STATUS : String(saved.statusId), statusDirty: false };
+                          });
+                          invalidate();
+                          scheduleAutomationRefresh();
+                        },
+                        onError: err => toast({
+                          title: (err as { status?: number })?.status === 409
+                            ? t("collaboration.conflict", "Данные изменились на сервере")
+                            : t("records.updateError", "Ошибка обновления"),
+                          description: extractError(err), variant: "destructive",
+                        }),
+                      });
+                      return;
+                    }
                     setStatusId(next);
                     setStatusDirty(true);
                   }}
