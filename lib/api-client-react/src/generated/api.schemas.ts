@@ -419,6 +419,28 @@ export interface SecuritySummary {
   proxyAttribution: SecuritySummaryProxyAttribution;
 }
 
+export type CardStylePresetInputAppearance = { [key: string]: unknown };
+
+export interface CardStylePresetInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+  appearance: CardStylePresetInputAppearance;
+  /** @minimum 1 */
+  expectedRevision?: number;
+}
+
+export type CardStylePresetAppearance = { [key: string]: unknown };
+
+export interface CardStylePreset {
+  id: number;
+  name: string;
+  appearance: CardStylePresetAppearance;
+  revision: number;
+}
+
 export type CardTemplateState = typeof CardTemplateState[keyof typeof CardTemplateState];
 
 
@@ -6119,6 +6141,10 @@ export type ListActivityNotificationsParams = {
  * @minimum 0
  */
 offset?: number;
+};
+
+export type DeleteCardStylePresetParams = {
+expectedRevision: number;
 };
 
 export type ListDocumentGenerationRunsParams = {

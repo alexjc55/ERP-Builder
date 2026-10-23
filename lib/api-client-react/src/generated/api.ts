@@ -62,6 +62,8 @@ import type {
   CardPublicationInput,
   CardResolution,
   CardResolveInput,
+  CardStylePreset,
+  CardStylePresetInput,
   CardTemplate,
   CardTemplateInput,
   ChangePasswordInput,
@@ -80,6 +82,7 @@ import type {
   DashboardWidget,
   DashboardWidgetData,
   DashboardWidgetInput,
+  DeleteCardStylePresetParams,
   DeleteRecordLinkInput,
   DeleteRecordLinkResult,
   DeletedFile,
@@ -1042,6 +1045,281 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getReadActivityNotificationMutationOptions(options));
+    }
+
+export const getListCardStylePresetsUrl = () => {
+
+
+
+
+  return `/api/card-style-presets`
+}
+
+export const listCardStylePresets = async ( options?: RequestInit): Promise<CardStylePreset[]> => {
+
+  return customFetch<CardStylePreset[]>(getListCardStylePresetsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListCardStylePresetsQueryKey = () => {
+    return [
+    `/api/card-style-presets`
+    ] as const;
+    }
+
+
+export const getListCardStylePresetsQueryOptions = <TData = Awaited<ReturnType<typeof listCardStylePresets>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCardStylePresets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListCardStylePresetsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listCardStylePresets>>> = ({ signal }) => listCardStylePresets({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listCardStylePresets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListCardStylePresetsQueryResult = NonNullable<Awaited<ReturnType<typeof listCardStylePresets>>>
+export type ListCardStylePresetsQueryError = ErrorType<unknown>
+
+
+
+export function useListCardStylePresets<TData = Awaited<ReturnType<typeof listCardStylePresets>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listCardStylePresets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListCardStylePresetsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateCardStylePresetUrl = () => {
+
+
+
+
+  return `/api/card-style-presets`
+}
+
+export const createCardStylePreset = async (cardStylePresetInput: CardStylePresetInput, options?: RequestInit): Promise<CardStylePreset> => {
+
+  return customFetch<CardStylePreset>(getCreateCardStylePresetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      cardStylePresetInput,)
+  }
+);}
+
+
+
+
+export const getCreateCardStylePresetMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCardStylePreset>>, TError,{data: BodyType<CardStylePresetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createCardStylePreset>>, TError,{data: BodyType<CardStylePresetInput>}, TContext> => {
+
+const mutationKey = ['createCardStylePreset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createCardStylePreset>>, {data: BodyType<CardStylePresetInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createCardStylePreset(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCardStylePresetMutationResult = NonNullable<Awaited<ReturnType<typeof createCardStylePreset>>>
+    export type CreateCardStylePresetMutationBody = BodyType<CardStylePresetInput>
+    export type CreateCardStylePresetMutationError = ErrorType<unknown>
+
+    export const useCreateCardStylePreset = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCardStylePreset>>, TError,{data: BodyType<CardStylePresetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createCardStylePreset>>,
+        TError,
+        {data: BodyType<CardStylePresetInput>},
+        TContext
+      > => {
+      return useMutation(getCreateCardStylePresetMutationOptions(options));
+    }
+
+export const getUpdateCardStylePresetUrl = (id: number,) => {
+
+
+
+
+  return `/api/card-style-presets/${id}`
+}
+
+export const updateCardStylePreset = async (id: number,
+    cardStylePresetInput: CardStylePresetInput, options?: RequestInit): Promise<CardStylePreset> => {
+
+  return customFetch<CardStylePreset>(getUpdateCardStylePresetUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      cardStylePresetInput,)
+  }
+);}
+
+
+
+
+export const getUpdateCardStylePresetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCardStylePreset>>, TError,{id: number;data: BodyType<CardStylePresetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCardStylePreset>>, TError,{id: number;data: BodyType<CardStylePresetInput>}, TContext> => {
+
+const mutationKey = ['updateCardStylePreset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCardStylePreset>>, {id: number;data: BodyType<CardStylePresetInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateCardStylePreset(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCardStylePresetMutationResult = NonNullable<Awaited<ReturnType<typeof updateCardStylePreset>>>
+    export type UpdateCardStylePresetMutationBody = BodyType<CardStylePresetInput>
+    export type UpdateCardStylePresetMutationError = ErrorType<void>
+
+    export const useUpdateCardStylePreset = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCardStylePreset>>, TError,{id: number;data: BodyType<CardStylePresetInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCardStylePreset>>,
+        TError,
+        {id: number;data: BodyType<CardStylePresetInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateCardStylePresetMutationOptions(options));
+    }
+
+export const getDeleteCardStylePresetUrl = (id: number,
+    params: DeleteCardStylePresetParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/card-style-presets/${id}?${stringifiedParams}` : `/api/card-style-presets/${id}`
+}
+
+export const deleteCardStylePreset = async (id: number,
+    params: DeleteCardStylePresetParams, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteCardStylePresetUrl(id,params),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteCardStylePresetMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCardStylePreset>>, TError,{id: number;params: DeleteCardStylePresetParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteCardStylePreset>>, TError,{id: number;params: DeleteCardStylePresetParams}, TContext> => {
+
+const mutationKey = ['deleteCardStylePreset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteCardStylePreset>>, {id: number;params: DeleteCardStylePresetParams}> = (props) => {
+          const {id,params} = props ?? {};
+
+          return  deleteCardStylePreset(id,params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCardStylePresetMutationResult = NonNullable<Awaited<ReturnType<typeof deleteCardStylePreset>>>
+
+    export type DeleteCardStylePresetMutationError = ErrorType<void>
+
+    export const useDeleteCardStylePreset = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteCardStylePreset>>, TError,{id: number;params: DeleteCardStylePresetParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteCardStylePreset>>,
+        TError,
+        {id: number;params: DeleteCardStylePresetParams},
+        TContext
+      > => {
+      return useMutation(getDeleteCardStylePresetMutationOptions(options));
     }
 
 export const getListCardTemplatesUrl = () => {

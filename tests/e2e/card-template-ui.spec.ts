@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { parseCardLayout } from "../../artifacts/erp-platform/src/lib/cardLayout";
 
 // Route-intercepted frontend tests for the card builder and runtime card.
 // Every /api request is fulfilled here; no real API/DB data is touched.
@@ -36,6 +37,50 @@ const layout = (secondTabTitle: string) => ({
       { id: "blk_items", kind: "relatedTable", fieldKey: "items", span: 3, modes: ["view", "create", "edit"], columns: ["name", "qty"] },
     ] }] },
   ],
+});
+
+test("appearance presets persist all styling and apply without replacing card structure", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("erp_token", "cards-style-fixture"));
+  const current = { id: 8, entityId: A, pageId: null, name: "Card", state: "draft", revision: 1, layout: layout("Items") };
+  const appearance = { style: "custom", presentation: "side", customStyle: {
+    background: "#ffffff", sectionBackground: "#eeeeee", accent: "#112233", textColor: "#223344",
+    spacing: 14, radius: 10, fontSize: 15, border: true, shadow: false,
+  } };
+  const presets: any[] = [{ id: 10, name: "Company style", appearance, revision: 1 }];
+  const savedCards: any[] = [];
+  await page.route("**/api/**", async route => {
+    const req = route.request(), path = new URL(req.url()).pathname;
+    if (await common(route, path)) return;
+    if (path === "/api/card-style-presets") {
+      if (req.method() === "POST") {
+        const created = { ...req.postDataJSON(), id: 11, revision: 1 };
+        presets.push(created);
+        return route.fulfill({ status: 201, json: created });
+      }
+      return route.fulfill({ json: presets });
+    }
+    if (path === "/api/card-templates") return route.fulfill({ json: [current] });
+    if (path === "/api/card-templates/8" && req.method() === "PUT") {
+      const body = req.postDataJSON(); savedCards.push(body);
+      return route.fulfill({ json: { ...current, ...body, revision: 2 } });
+    }
+    return route.fulfill({ json: [] });
+  });
+  await page.goto("/admin/card-templates/8");
+  await page.getByTestId("button-inspector-style").click();
+  await page.locator("#card-style-preset").selectOption("10");
+  await page.getByTestId("apply-card-style").click();
+  await expect(page.getByTestId("editor-card-preview")).toHaveAttribute("data-card-style", "custom");
+  await expect(page.getByTestId("button-presentation-side")).toHaveAttribute("aria-checked", "true");
+  await page.locator("#card-style-name").fill("Reusable style");
+  await page.getByTestId("create-card-style").click();
+  await expect.poll(() => presets.length).toBe(2);
+  expect(presets[1].appearance).toEqual(appearance);
+  expect(presets[1].appearance.tabs).toBeUndefined();
+  await page.getByTestId("button-save-draft").click();
+  await expect.poll(() => savedCards.length).toBe(1);
+  expect(savedCards[0].layout.tabs).toEqual(parseCardLayout(current.layout)!.tabs);
+  expect(savedCards[0].layout.customStyle).toEqual(appearance.customStyle);
 });
 
 function me(superAdmin: boolean) {

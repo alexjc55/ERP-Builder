@@ -41,6 +41,7 @@ import {
 import { MultilingualInput } from "@/components/MultilingualInput";
 import { ColorPickerControl } from "@/components/ColorPickerControl";
 import { useToast } from "@/hooks/use-toast";
+import { CardStylePresets } from "@/components/CardStylePresets";
 import { useML, useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
@@ -1126,6 +1127,7 @@ function StylePanel({ layout, readOnly, onChange, scope }: { layout: CardLayout;
   return (
     <fieldset disabled={readOnly} className="space-y-4">
       {scope}
+      <CardStylePresets layout={layout} onChange={onChange} />
       <div className="space-y-1.5">
         <Label>{t("cards.style", "Стиль")}</Label>
         <div className="grid grid-cols-2 gap-1.5">

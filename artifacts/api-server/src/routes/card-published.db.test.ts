@@ -20,6 +20,7 @@ test("published edits are atomic, validated, scope-locked and revision-checked",
     }
     pool.options.options = `-c search_path=${schema}`;
     const { default: router } = await import("./card-templates");
+    const { default: styleRouter } = await import("./card-style-presets");
     const [entity, other] = await db.insert(entitiesTable).values([
       { entityKey: "test", nameJson: {} }, { entityKey: "other", nameJson: {} },
     ]).returning();
@@ -27,10 +28,38 @@ test("published edits are atomic, validated, scope-locked and revision-checked",
     const [role] = await db.insert(rolesTable).values({ nameJson: {}, permissionsJson: { ...NO_ACCESS_PERMS, superAdmin: true } }).returning();
     const [user] = await db.insert(usersTable).values({ email: "fixture@example.invalid", firstName: "Test", lastName: "Admin", roleId: role.id }).returning();
     const app = express(); app.use(express.json()); app.use(router);
+    app.use(styleRouter);
     server = app.listen(0, "127.0.0.1");
     await new Promise<void>(resolve => server!.once("listening", resolve));
     const address = server.address(); assert.ok(address && typeof address !== "string");
     const token = signToken({ userId: user.id, roleId: role.id });
+    const styleCall = async (path: string, body?: unknown, method = body ? "POST" : "GET", authToken: string | null = token) => {
+      const response = await fetch(`http://127.0.0.1:${address.port}/card-style-presets${path}`, {
+        method, headers: { "content-type": "application/json", ...(authToken ? { authorization: `Bearer ${authToken}` } : {}) },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      return { status: response.status, body: await response.json().catch(() => null) as any };
+    };
+    const appearance = { style: "custom", presentation: "side", customStyle: {
+      background: "#ffffff", sectionBackground: "#eeeeee", accent: "#112233", textColor: "#223344",
+      spacing: 14, radius: 10, fontSize: 15, border: true, shadow: false,
+    } };
+    assert.equal((await styleCall("", undefined, "GET", null)).status, 401);
+    const [limitedRole] = await db.insert(rolesTable).values({ nameJson: {}, permissionsJson: NO_ACCESS_PERMS }).returning();
+    const [limited] = await db.insert(usersTable).values({ email: "limited@example.invalid", firstName: "Limited", lastName: "", roleId: limitedRole.id }).returning();
+    const limitedToken = signToken({ userId: limited.id, roleId: limitedRole.id });
+    assert.equal((await styleCall("", undefined, "GET", limitedToken)).status, 403);
+    assert.equal((await styleCall("", { name: "Bad", appearance: { ...appearance, tabs: [] } })).status, 400);
+    const preset = await styleCall("", { name: "Shared", appearance });
+    assert.equal(preset.status, 201);
+    assert.deepEqual(preset.body.appearance, appearance);
+    assert.equal((await styleCall("")).body.length, 1);
+    const changed = await styleCall(`/${preset.body.id}`, { name: "Renamed", appearance, expectedRevision: 1 }, "PUT");
+    assert.equal(changed.body.revision, 2);
+    assert.equal((await styleCall(`/${preset.body.id}`, { name: "Lost update", appearance, expectedRevision: 1 }, "PUT")).status, 409);
+    assert.equal((await styleCall(`/${preset.body.id}?expectedRevision=1`, undefined, "DELETE")).status, 409);
+    assert.equal((await styleCall(`/${preset.body.id}?expectedRevision=2`, undefined, "DELETE")).status, 204);
+    assert.deepEqual((await styleCall("")).body, []);
     const call = async (path: string, data?: unknown, method = "POST", authenticated = true) => {
       const response = await fetch(`http://127.0.0.1:${address.port}/card-templates${path}`, { method,
         headers: { "content-type": "application/json", ...(authenticated ? { authorization: `Bearer ${token}` } : {}) },

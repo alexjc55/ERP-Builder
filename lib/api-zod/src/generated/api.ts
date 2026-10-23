@@ -288,6 +288,59 @@ export const ReadActivityNotificationParams = zod.object({
 })
 
 
+export const ListCardStylePresetsResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "appearance": zod.record(zod.string(), zod.unknown()),
+  "revision": zod.number()
+})
+export const ListCardStylePresetsResponse = zod.array(ListCardStylePresetsResponseItem)
+
+
+export const createCardStylePresetBodyNameMax = 120;
+
+
+
+
+export const CreateCardStylePresetBody = zod.object({
+  "name": zod.string().min(1).max(createCardStylePresetBodyNameMax),
+  "appearance": zod.record(zod.string(), zod.unknown()),
+  "expectedRevision": zod.number().min(1).optional()
+})
+
+
+export const UpdateCardStylePresetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updateCardStylePresetBodyNameMax = 120;
+
+
+
+
+export const UpdateCardStylePresetBody = zod.object({
+  "name": zod.string().min(1).max(updateCardStylePresetBodyNameMax),
+  "appearance": zod.record(zod.string(), zod.unknown()),
+  "expectedRevision": zod.number().min(1).optional()
+})
+
+export const UpdateCardStylePresetResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "appearance": zod.record(zod.string(), zod.unknown()),
+  "revision": zod.number()
+})
+
+
+export const DeleteCardStylePresetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteCardStylePresetQueryParams = zod.object({
+  "expectedRevision": zod.coerce.number()
+})
+
+
 export const ListCardTemplatesResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),

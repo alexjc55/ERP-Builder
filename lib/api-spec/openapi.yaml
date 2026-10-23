@@ -146,6 +146,52 @@ paths:
       parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
       responses:
         "204": { description: Read }
+  /card-style-presets:
+    get:
+      operationId: listCardStylePresets
+      responses:
+        "200":
+          description: Project-wide reusable card appearance presets
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CardStylePreset" } }
+    post:
+      operationId: createCardStylePreset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CardStylePresetInput" }
+      responses:
+        "201":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardStylePreset" }
+  /card-style-presets/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    put:
+      operationId: updateCardStylePreset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CardStylePresetInput" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CardStylePreset" }
+        "409": { description: Revision conflict }
+    delete:
+      operationId: deleteCardStylePreset
+      parameters:
+        - { name: expectedRevision, in: query, required: true, schema: { type: integer } }
+      responses:
+        "204": { description: Deleted; existing forms are unaffected }
+        "409": { description: Revision conflict }
   /card-templates:
     get:
       operationId: listCardTemplates
@@ -5332,6 +5378,21 @@ components:
         deniedRequests24h: { type: integer }
         criticalChanges24h: { type: integer }
         proxyAttribution: { type: string, enum: [socket-only, trusted-proxy] }
+    CardStylePresetInput:
+      type: object
+      required: [name, appearance]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        appearance: { type: object, additionalProperties: true }
+        expectedRevision: { type: integer, minimum: 1 }
+    CardStylePreset:
+      type: object
+      required: [id, name, appearance, revision]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        appearance: { type: object, additionalProperties: true }
+        revision: { type: integer }
     CardTemplate:
       type: object
       required: [id, name, entityId, pageId, state, layout, revision]
