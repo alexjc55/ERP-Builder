@@ -144,7 +144,8 @@ test("record card: log a call with a next task; deep link params are cleaned", a
     if (path === "/api/record-activity") return reply({ enabled: true, canWrite: true, items: entries, nextBeforeId: null });
     if (path === "/api/activity-tasks") return reply({ items: tasks, nextOffset: null });
     if (path === "/api/activity-notifications") return reply({ items: [], nextOffset: null });
-    if (path.endsWith("/statuses") || path.endsWith("/views") || path.endsWith("/relations")) return reply([]);
+    if (path.endsWith("/statuses")) return reply([{ id: 41, entityId: E, nameJson: ml("New"), statusKey: "new", isActive: true, color: "#2563eb", sortOrder: 0 }]);
+    if (path.endsWith("/views") || path.endsWith("/relations")) return reply([]);
     return reply([]);
   });
 
@@ -152,6 +153,9 @@ test("record card: log a call with a next task; deep link params are cleaned", a
   await page.goto("/act-clients?recordId=50&keep=1");
   const panel = page.getByTestId("activity-panel");
   await expect(panel).toBeVisible();
+  const statusControl = page.getByTestId("record-dialog-status");
+  await expect(statusControl).toBeVisible();
+  expect(await statusControl.evaluate(el => Boolean(el.compareDocumentPosition(document.querySelector('[data-testid="activity-panel"]')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
   await expect(panel.getByTestId("activity-entry-298")).toContainText("New → In progress");
   await expect(panel.getByTestId("activity-entry-298")).toContainText("Status changed");
   await expect(panel.getByTestId("activity-entry-298")).not.toContainText("status_changed");

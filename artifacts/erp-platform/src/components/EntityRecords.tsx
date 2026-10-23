@@ -9626,36 +9626,8 @@ export function EntityRecords({
             </>)}
           </>}>
           <div className="space-y-4 py-2 min-w-0">
-            <CardSnapshotGate snapshot={cardSnapshot}>{cardLayout => (
-            <RecordFormBody
-              cardLayout={cardLayout}
-              entityId={entityId}
-              pageId={permPageId}
-              mode={viewing ? "view" : editing ? "edit" : "create"}
-              recordId={editing?.id ?? null}
-              expectedVersion={editing?.version}
-              allFields={fields}
-              formulaPageFields={pageFields}
-              formFields={visibleFormFields}
-              form={form}
-              setForm={setForm}
-              userOptions={userOptions}
-              formulaOptions={formulaOptions}
-              onRelationChanged={(version) => {
-                if (version != null) {
-                  editingVersionRef.current = version;
-                  setEditing((current) =>
-                    current ? { ...current, version } : current,
-                  );
-                }
-                setRefreshTick((x) => x + 1);
-              }}
-              onRelationEditingChange={setDialogRelationEditing}
-            />
-            )}</CardSnapshotGate>
-
             {statuses.length > 0 && (
-              <div className="space-y-1.5">
+              <div className="space-y-1.5" data-testid="record-dialog-status">
                 <Label>{statusColumnName}</Label>
                 {statusManualEditable && !viewing ? <Select
                   value={statusId}
@@ -9709,6 +9681,33 @@ export function EntityRecords({
               </div>
             )}
 
+            <CardSnapshotGate snapshot={cardSnapshot}>{cardLayout => (
+            <RecordFormBody
+              cardLayout={cardLayout}
+              entityId={entityId}
+              pageId={permPageId}
+              mode={viewing ? "view" : editing ? "edit" : "create"}
+              recordId={editing?.id ?? null}
+              expectedVersion={editing?.version}
+              allFields={fields}
+              formulaPageFields={pageFields}
+              formFields={visibleFormFields}
+              form={form}
+              setForm={setForm}
+              userOptions={userOptions}
+              formulaOptions={formulaOptions}
+              onRelationChanged={(version) => {
+                if (version != null) {
+                  editingVersionRef.current = version;
+                  setEditing((current) =>
+                    current ? { ...current, version } : current,
+                  );
+                }
+                setRefreshTick((x) => x + 1);
+              }}
+              onRelationEditingChange={setDialogRelationEditing}
+            />
+            )}</CardSnapshotGate>
           </div>
       </CardDialogShell>}
       </CardTemplateSnapshot>;
