@@ -37,6 +37,7 @@ import DocumentsPage from "@/pages/admin/documents";
 import CardTemplatesPage from "@/pages/admin/card-templates";
 import DynamicPage from "@/pages/dynamic";
 import SettingsPage from "@/pages/settings";
+import MyTasksPage from "@/pages/my-tasks";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { useListPages, type Page, type RoleAdminCaps } from "@workspace/api-client-react";
 
@@ -180,6 +181,12 @@ function Router() {
       <Route path="/">
         <ProtectedRoute>
           <HomeRoute />
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/my-tasks">
+        <ProtectedRoute>
+          <MyTasksPage />
         </ProtectedRoute>
       </Route>
 

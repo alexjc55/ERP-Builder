@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
+import { runActivityAction, runActivityRule, runActivityReminders, claimActivitySchedule, recordStatusActivity } from "./activity-automation";
 import { lockAndValidateUserReferences, referencedUserIds } from "./user-reference-barrier";
 import { isIP } from "node:net";
 import { lookup } from "node:dns/promises";
@@ -1189,15 +1190,28 @@ async function runActions(
     /** Page contexts of the triggering record, for page source/target refs. */
     pageContexts: Map<number, PageContext>;
     automationId: number;
+    activityTaskId?: number;
+    notificationKey: string;
   },
   log: Log,
 ): Promise<{ type: string; ok: boolean; matched?: number; error?: string }[]> {
   const summary: { type: string; ok: boolean; matched?: number; error?: string }[] = [];
-  for (const action of actions) {
+  for (const [actionIndex, action] of actions.entries()) {
     let ok = false;
     let matched: number | undefined;
     let error: string | undefined;
     switch (action.type) {
+      case "notify":
+      case "create_task": {
+        try {
+          matched = await runActivityAction(action, { ...ctx, actionIndex });
+          ok = true;
+        } catch (err) {
+          error = String(err);
+          log.error({ err, automationId: ctx.automationId, recordId: ctx.recordId }, "Activity action failed");
+        }
+        break;
+      }
       case "set_field":
         // A set_field can target a page-local field of the triggering record
         // (targetFieldSource "page" + targetPageId), written AS SYSTEM.
@@ -1428,6 +1442,11 @@ function triggerMatchesEvent(
       return changed.includes(trigger.fieldKey);
     }
     case "date_reached":
+    case "inactivity":
+    case "status_age":
+    case "task_due":
+    case "activity_logged":
+    case "task_completed":
       return false; // scheduler-only
   }
 }
@@ -1491,7 +1510,7 @@ async function dispatchEvent(kind: EventKind, ev: { entityId: number | null; rec
  * record fresh, evaluates conditions, then executes actions inside a depth-
  * incremented context.
  */
-async function runOne(
+export async function runOne(
   automation: EntityAutomation,
   trigger: AutomationTrigger,
   entityId: number,
@@ -1499,6 +1518,7 @@ async function runOne(
   actorUserId: number | null,
   triggerName: string,
   dedupeKey: string | null,
+  monitor?: { taskId?: number; claim?: () => Promise<string | null>; conditionsFalse?: () => Promise<void> },
 ): Promise<void> {
   const log = logger;
   const parent = cascade.getStore();
@@ -1588,6 +1608,7 @@ async function runOne(
     );
 
     if (!evalConditions(conditions, values, record.statusId ?? null, fieldByKey, conjunction, values, pageContexts)) {
+      if (monitor?.claim) { await monitor.conditionsFalse?.(); return; }
       await writeRun({
         automationId: automation.id,
         entityId,
@@ -1601,11 +1622,17 @@ async function runOne(
     }
 
     const nextChain = new Set(chain);
+    if (monitor?.claim) {
+      const claimedKey = await monitor.claim();
+      if (!claimedKey) return;
+      dedupeKey = claimedKey;
+    }
     nextChain.add(key);
     const summary = await cascade.run({ depth: depth + 1, chain: nextChain }, () =>
       runActions(
         actions,
-        { entityId, recordId, values, statusId: record.statusId ?? null, actorUserId, formulaOptions, pageContexts, automationId: automation.id },
+        { entityId, recordId, values, statusId: record.statusId ?? null, actorUserId, formulaOptions, pageContexts, automationId: automation.id,
+          activityTaskId: monitor?.taskId, notificationKey: dedupeKey ?? `event:${automation.id}:${recordId}:${crypto.randomUUID()}` },
         log,
       ),
     );
@@ -1631,6 +1658,7 @@ async function runOne(
 
 const SCHEDULER_INTERVAL_MS = 60_000;
 let schedulerTimer: NodeJS.Timeout | null = null;
+let schedulerBusy = false;
 
 /** One scheduler sweep: fire due date_reached automations exactly once each. */
 export async function runDateSweep(now: Date = new Date()): Promise<void> {
@@ -1649,7 +1677,13 @@ export async function runDateSweep(now: Date = new Date()): Promise<void> {
 
   for (const automation of automations) {
     const trigger = safeTrigger(automation.triggerJson);
+    if (trigger && ["inactivity", "status_age", "task_due"].includes(trigger.type)) {
+      try { await runActivityRule(automation, trigger as Extract<AutomationTrigger, { type: "inactivity" | "status_age" | "task_due" }>, now); }
+      catch (err) { log.error({ err, automationId: automation.id }, "Activity monitoring sweep failed"); }
+      continue;
+    }
     if (!trigger || trigger.type !== "date_reached") continue;
+    if (!await claimActivitySchedule(automation, trigger, now)) continue;
     const offsetDays = trigger.offsetDays ?? 0;
 
     let rows: (typeof entityRecordsTable.$inferSelect)[];
@@ -1733,11 +1767,18 @@ export function initAutomations(): void {
 
   subscribe(EVENT_RECORD_CREATED, (ev) => scheduleDispatch("record.created", ev));
   subscribe(EVENT_RECORD_UPDATED, (ev) => scheduleDispatch("record.updated", ev));
-  subscribe(EVENT_STATUS_CHANGED, (ev) => scheduleDispatch("status.changed", ev));
+  subscribe(EVENT_STATUS_CHANGED, async (ev) => {
+    scheduleDispatch("status.changed", ev);
+    await recordStatusActivity(ev);
+  });
   subscribe(EVENT_PAGE_FIELD_SAVED, (ev) => scheduleDispatch("page_field.saved", ev));
 
   schedulerTimer = setInterval(() => {
-    runDateSweep().catch((err) => logger.error({ err }, "Date sweep crashed"));
+    if (schedulerBusy) return;
+    schedulerBusy = true;
+    Promise.all([runDateSweep(), runActivityReminders()])
+      .catch((err) => logger.error({ err }, "Scheduled automation sweep crashed"))
+      .finally(() => { schedulerBusy = false; });
   }, SCHEDULER_INTERVAL_MS);
   // Don't keep the process alive solely for the sweep.
   schedulerTimer.unref?.();

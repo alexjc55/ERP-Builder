@@ -20,4 +20,9 @@ export const AutomationTriggerType = {
   status_changed: 'status_changed',
   date_reached: 'date_reached',
   page_field_changed: 'page_field_changed',
+  inactivity: 'inactivity',
+  status_age: 'status_age',
+  task_due: 'task_due',
+  activity_logged: 'activity_logged',
+  task_completed: 'task_completed',
 } as const;

@@ -69,7 +69,33 @@ export const conditionConjunctionSchema = z.enum(["and", "or"]);
 export type ConditionConjunction = z.infer<typeof conditionConjunctionSchema>;
 
 /** Trigger: exactly one per automation. */
+export const automationCheckScheduleSchema = z.object({
+  frequency: z.enum(["minute", "hour", "day", "month"]).default("hour"),
+  hour: z.number().int().min(0).max(23).default(9),
+  day: z.number().int().min(1).max(28).default(1),
+  timezone: z.string().max(100).default("Asia/Jerusalem").refine(value => {
+    try { new Intl.DateTimeFormat("en", { timeZone: value }); return true; } catch { return false; }
+  }, "Invalid time zone"),
+});
+const monitoringOptions = {
+  schedule: automationCheckScheduleSchema,
+  repeatHours: z.number().min(1).max(8760).nullable().optional(),
+  maxRuns: z.number().int().min(1).max(1000).nullable().optional(),
+};
 export const automationTriggerSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("activity_logged") }),
+  z.object({ type: z.literal("task_completed") }),
+  z.object({
+    type: z.literal("inactivity"),
+    ...monitoringOptions,
+    days: z.number().min(0.01).max(3650),
+    kinds: z.array(z.enum(["call", "email", "meeting", "note"])).min(1).max(4),
+    successfulOnly: z.boolean().default(false),
+    baseline: z.enum(["created", "status"]).default("status"),
+    skipWithFutureTask: z.boolean().default(false),
+  }),
+  z.object({ type: z.literal("status_age"), ...monitoringOptions, days: z.number().min(0.01).max(3650) }),
+  z.object({ type: z.literal("task_due"), ...monitoringOptions, offsetMinutes: z.number().int().min(-43200).max(43200).default(0) }),
   z.object({ type: z.literal("record_created") }),
   /** Create OR status-change events only; status filtering uses common conditions. */
   z.object({ type: z.literal("record_created_or_status_changed") }),
@@ -90,6 +116,7 @@ export const automationTriggerSchema = z.discriminatedUnion("type", [
     type: z.literal("date_reached"),
     fieldKey: z.string().min(1),
     offsetDays: z.number().int().optional(),
+    schedule: automationCheckScheduleSchema.optional(),
   }),
   /**
    * Fires when a page-local field (`fieldKey`) on a MIRROR page (`pageId`) of
@@ -139,6 +166,23 @@ export type AutomationMapping = z.infer<typeof automationMappingSchema>;
 
 /** Actions: executed in order, as the system. */
 export const automationActionSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("notify"),
+    message: z.string().trim().min(1).max(2000),
+    userIds: z.array(z.number().int().positive()).max(100).default([]),
+    userFieldKeys: z.array(z.string().min(1)).max(20).default([]),
+    taskAssignee: z.boolean().default(false),
+  }),
+  z.object({
+    type: z.literal("create_task"),
+    title: z.string().trim().min(1).max(500),
+    description: z.string().max(10000).default(""),
+    kind: z.enum(["call", "email", "meeting", "task"]).default("task"),
+    dueInHours: z.number().min(0).max(8760).default(24),
+    userIds: z.array(z.number().int().positive()).max(100).default([]),
+    userFieldKeys: z.array(z.string().min(1)).max(20).default([]),
+    taskAssignee: z.boolean().default(false),
+  }),
   /**
    * Set a field on the triggering record. When `targetFieldSource` is "page",
    * writes a page-local field on a MIRROR page (`targetPageId`) of this entity

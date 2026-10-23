@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
+import { ActivitySettingsToggle } from "@/components/activity/ActivitySettingsToggle";
 import {
   useListEntityFields,
   useDeleteField,
@@ -139,6 +140,8 @@ export default function EntityFieldsPage() {
           </Button>
         </div>
       </div>
+
+      {entityId > 0 && <ActivitySettingsToggle entityId={entityId} />}
 
       <Card className="border-slate-200 shadow-sm">
         <CardContent className="p-0">

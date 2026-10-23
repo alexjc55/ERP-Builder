@@ -1,4 +1,5 @@
 import { useAuth } from "@/lib/auth";
+import { ActivityBell } from "@/components/activity/ActivityBell";
 import { useML, useT, useLang, LANGS } from "@/lib/i18n";
 import { adminCapForPath } from "@/lib/permissions";
 import {
@@ -10,7 +11,7 @@ import {
 import type { Page } from "@workspace/api-client-react";
 import { useLocation, Link } from "wouter";
 import {
-  Building2, Languages, Settings, LayoutDashboard,
+  Building2, Languages, Settings, LayoutDashboard, ListChecks,
   LogOut, ChevronDown, ChevronRight,
   Menu, X, Check, UserCog, Eye,
   PanelLeftClose, PanelLeftOpen, RefreshCw, AlertTriangle,
@@ -231,6 +232,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         )}
         <div className={cn("hidden lg:flex items-center shrink-0", collapsed ? "flex-col gap-1" : "ml-auto gap-1")}>
+          {!isGuest && <ActivityBell />}
           <button
             type="button"
             onClick={() => { void refreshData(); }}
@@ -258,6 +260,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </div>
 
       <nav className={cn("flex-1 overflow-y-auto py-4 space-y-1", collapsed ? "px-2" : "px-3")}>
+        {!isGuest && (
+          <SidebarItem name={t("activity.myTitle", "Мои задачи")} icon="list-checks" route="/my-tasks" collapsed={collapsed} />
+        )}
         {topPages.sort((a: Page, b: Page) => a.sortOrder - b.sortOrder).map((page: Page) => {
           const name = ml(page.nameJson);
           const children = getSubPages(page.id);
@@ -356,6 +361,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
+              <Link href="/my-tasks" className="flex items-center w-full cursor-pointer" data-testid="link-my-tasks">
+                <ListChecks className="w-4 h-4 mr-2" />
+                {t("activity.myTitle", "Мои задачи")}
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
               <Link href="/settings" className="flex items-center w-full cursor-pointer">
                 <Settings className="w-4 h-4 mr-2" />
                 {t("layout.settings", "Настройки")}
@@ -437,6 +448,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         )}
         <header className="lg:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-slate-200">
+          {!isGuest && <ActivityBell />}
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)}>
             {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </Button>

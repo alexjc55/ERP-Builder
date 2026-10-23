@@ -5,6 +5,7 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { AutomationActionKind } from './automationActionKind';
 import type { AutomationActionLanguage } from './automationActionLanguage';
 import type { AutomationActionRelationDirection } from './automationActionRelationDirection';
 import type { AutomationActionTargetFieldSource } from './automationActionTargetFieldSource';
@@ -15,6 +16,18 @@ import type { DocumentGenerationOutput } from './documentGenerationOutput';
 
 export interface AutomationAction {
   type: AutomationActionType;
+  /** @maxLength 2000 */
+  message?: string;
+  userIds?: number[];
+  userFieldKeys?: string[];
+  taskAssignee?: boolean;
+  /** @maxLength 500 */
+  title?: string;
+  /** @maxLength 10000 */
+  description?: string;
+  kind?: AutomationActionKind;
+  /** @minimum 0 */
+  dueInHours?: number;
   /**
      * Required for set_related_status; selects the normalized relation to traverse.
      * @minimum 1

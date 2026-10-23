@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ActivityBlockPreview } from "@/components/activity/ActivityBlockPreview";
 import { useListEntityFields, getListEntityFieldsQueryKey, type Field } from "@workspace/api-client-react";
 import { Eye, FlaskConical, Paperclip, UserRound } from "lucide-react";
 import { DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -33,6 +34,9 @@ export function CardPreviewDialog({ open, onOpenChange, layout, fields, relation
   const renderBlock = (b: CardBlock) => {
     if (b.kind === "text") return <CardTextBlock block={b} />;
     if (b.kind === "divider") return <CardDividerBlock block={b} />;
+    if (b.kind === "activity") return mode === "create"
+      ? <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50/60 p-4 text-sm text-slate-500" data-testid="activity-preview-save-first">{t("activity.saveFirst", "Звонки, договорённости и задачи станут доступны после сохранения записи.")}</p>
+      : <ActivityBlockPreview />;
     const f = b.fieldKey ? byKey.get(b.fieldKey) : undefined;
     if (b.kind === "relatedTable") return <DemoRelatedTable block={b} field={f} relatedEntityId={relatedEntityOf(f)} mode={mode} />;
     return <DemoField block={b} field={f} mode={mode} />;

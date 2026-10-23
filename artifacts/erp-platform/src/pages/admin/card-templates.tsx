@@ -23,7 +23,7 @@ import {
 } from "@workspace/api-client-react";
 import {
   ArrowDown, ArrowLeft, ArrowUp, Columns2, Rows3, Columns3, Copy, GripVertical, LayoutTemplate, Minus, Pencil, Plus,
-  Rocket, Save, Eye, Square, Table2, Trash2, Type, Undo2, AlertTriangle, Loader2, FileText,
+  Rocket, Save, Eye, Square, Table2, Trash2, Type, Undo2, AlertTriangle, Loader2, FileText, MessagesSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +47,7 @@ import {
   CARD_MODES, boundFieldKeys, copyLayout, findBlock, insertBlock, layoutIssues, makeBlock, moveBlock, moveItem,
   newId, parseCardLayout, presetLayout, removeBlock, updateBlock, mlIsEmpty,
   addRow, blockColumnLimit, convertSectionToRows, effectiveSpan, spanChoices, findRowOf, insertBlockInRow, moveBlockAcrossRows, moveBlockToRow, moveRow, removeRow, setRowColumns,
-  CARD_PRESENTATIONS, layoutPresentation, type CardPresentation,
+  CARD_PRESENTATIONS, layoutPresentation, layoutHasActivity, type CardPresentation,
   type CardBlock, type CardBlockKind, type CardLayout, type CardMode, type CardSection, type CardStyle, type LayoutPreset,
 } from "@/lib/cardLayout";
 import { cardAppearance } from "@/lib/cardAppearance";
@@ -56,6 +56,7 @@ import { SECTION_GRID, BLOCK_SPAN, CardTextBlock, CardDividerBlock } from "@/com
 import { TextStyleEditor, DividerStyleEditor } from "@/components/CardBlockStyleEditor";
 import { CardPreviewDialog } from "@/components/CardPreviewDialog";
 import { blockStyleIssues } from "@/lib/cardBlockStyle";
+import { ActivityBlockPreview } from "@/components/activity/ActivityBlockPreview";
 
 const NO_PAGE = "__entity__";
 type ApiErr = { status?: number; data?: unknown; message?: string };
@@ -678,9 +679,11 @@ function TemplateEditor({ id }: { id: number }) {
     }
   };
 
+  const hasActivityBlock = layoutHasActivity(layout);
   const blockTitle = (b: CardBlock) => {
     if (b.kind === "text") return ml(b.text) || t("cards.blockText", "Текст");
     if (b.kind === "divider") return ml(b.label) || t("cards.blockDivider", "Разделитель");
+    if (b.kind === "activity") return ml(b.label) || t("cards.blockActivity", "Работа с клиентом");
     const f = b.fieldKey ? fieldByKey.get(b.fieldKey) : undefined;
     if (!b.fieldKey || (!f && fieldsLoaded)) return t("cards.emptySlot", "Пустая ячейка");
     return ml(b.label) || ml(f?.nameJson) || b.fieldKey;
@@ -762,6 +765,10 @@ function TemplateEditor({ id }: { id: number }) {
               <PaletteItem key={kind} testId={`palette-kind-${kind}`} icon={icon} label={label} disabled={readOnly}
                 onDragStart={e => startDrag(e, { type: "kind", kind })} onAdd={() => addToActive(makeBlock(kind))} />
             ))}
+            <PaletteItem testId="palette-kind-activity" icon={<MessagesSquare className="h-3.5 w-3.5" />}
+              label={t("cards.blockActivity", "Работа с клиентом")} placed={hasActivityBlock} disabled={readOnly || hasActivityBlock}
+              onDragStart={e => startDrag(e, { type: "kind", kind: "activity" })} onAdd={() => addToActive(makeBlock("activity"))} />
+            {hasActivityBlock && <p className="px-1 text-[11px] text-slate-400" data-testid="text-activity-placed">{t("cards.activityOnce", "Панель уже размещена: в карточке может быть только одна.")}</p>}
           </PaletteGroup>
           <PaletteGroup title={t("cards.paletteFields", "Поля")} count={fields.filter(f => f.isActive).length}>
             {fields.filter(f => f.isActive).sort((a, b) => a.sortOrder - b.sortOrder).map(f => (
@@ -894,14 +901,15 @@ function TemplateEditor({ id }: { id: number }) {
                           {!readOnly && <GripVertical className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-grab text-slate-300 group-hover:text-slate-500" />}
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                              {b.kind === "relatedTable" ? <Table2 className="h-3 w-3" /> : b.kind === "text" ? <FileText className="h-3 w-3" /> : b.kind === "divider" ? <Minus className="h-3 w-3" /> : null}
-                              {empty ? null : b.kind === "field" ? t("cards.kindField", "Поле") : b.kind === "relatedTable" ? t("cards.kindTable", "Таблица") : b.kind === "text" ? t("cards.kindText", "Текст") : t("cards.kindDivider", "Разделитель")}
+                              {b.kind === "activity" ? <MessagesSquare className="h-3 w-3" /> : b.kind === "relatedTable" ? <Table2 className="h-3 w-3" /> : b.kind === "text" ? <FileText className="h-3 w-3" /> : b.kind === "divider" ? <Minus className="h-3 w-3" /> : null}
+                              {empty ? null : b.kind === "field" ? t("cards.kindField", "Поле") : b.kind === "activity" ? t("cards.kindActivity", "Активность") : b.kind === "relatedTable" ? t("cards.kindTable", "Таблица") : b.kind === "text" ? t("cards.kindText", "Текст") : t("cards.kindDivider", "Разделитель")}
                               {b.modes.length < 3 && <span className="normal-case text-slate-400">· {b.modes.join("/")}</span>}
                             </div>
                             <div style={layout.style === "custom" && (b.kind === "text" || b.kind === "divider") ? { color: layout.customStyle.textColor } : undefined} className={cn("truncate", empty ? "text-slate-400" : "text-slate-800", b.kind === "text" && "whitespace-pre-wrap line-clamp-2")}>
                               {b.kind === "text" && !mlIsEmpty(b.text) ? <div className="line-clamp-3 whitespace-normal"><CardTextBlock block={b} /></div> : blockTitle(b)}
                               {b.fieldKey && fieldByKey.get(b.fieldKey)?.isRequired && <span className="ms-0.5 text-red-500">*</span>}
                             </div>
+                            {b.kind === "activity" && <ActivityBlockPreview compact />}
                             {b.kind === "divider" && <div className="mt-1" aria-hidden><CardDividerBlock block={{ ...b, label: {} }} /></div>}
                             {styleIssues.some(x => x.blockId === b.id) && <div className="mt-1 text-xs text-red-600" data-testid={`text-block-style-error-${b.id}`}>{t("cards.blockStyleInvalid", "Исправьте ссылку или цвет")}</div>}
                             {b.kind === "relatedTable" && b.columns.length > 0 && (

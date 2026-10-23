@@ -6,7 +6,8 @@ import { parseDividerStyle, parseTextRuns, parseTextStyle, type CardDividerStyle
 export type CardMode = "view" | "create" | "edit";
 export const CARD_MODES: readonly CardMode[] = ["view", "create", "edit"];
 export type CardML = { ru?: string; en?: string; he?: string };
-export type CardBlockKind = "field" | "text" | "divider" | "relatedTable";
+/** "activity" = record activity panel (feed, next steps, tasks); at most one per layout is rendered. */
+export type CardBlockKind = "field" | "text" | "divider" | "relatedTable" | "activity";
 export type CardStyle = "standard" | "compact" | "sectioned" | "custom";
 export const CARD_STYLES: readonly CardStyle[] = ["standard", "compact", "sectioned", "custom"];
 
@@ -90,7 +91,7 @@ export function mlIsEmpty(v: CardML | undefined): boolean {
 function parseBlock(v: unknown): CardBlock | null {
   if (!isObj(v) || typeof v.id !== "string" || !v.id) return null;
   const kind = v.kind;
-  if (kind !== "field" && kind !== "text" && kind !== "divider" && kind !== "relatedTable") return null;
+  if (kind !== "field" && kind !== "text" && kind !== "divider" && kind !== "relatedTable" && kind !== "activity") return null;
   const modes = Array.isArray(v.modes) ? (v.modes.filter(m => CARD_MODES.includes(m as CardMode)) as CardMode[]) : [];
   return {
     id: v.id,
@@ -486,7 +487,7 @@ export function moveBlock(layout: CardLayout, blockId: string, sectionId: string
 export function makeBlock(kind: CardBlockKind, fieldKey: string | null = null): CardBlock {
   return {
     id: newId("blk"), kind, fieldKey: kind === "field" || kind === "relatedTable" ? fieldKey : null,
-    span: kind === "divider" || kind === "relatedTable" ? 3 : 1,
+    span: kind === "divider" || kind === "relatedTable" || kind === "activity" ? 3 : 1,
     modes: [...CARD_MODES], columns: [],
     ...(kind === "text" ? { text: {} } : {}),
   };
@@ -534,3 +535,8 @@ export function blockColumnLimit(layout: CardLayout, blockId: string): number {
 /** Span actually rendered (desktop); phones are always one column. */
 export const effectiveSpan = (span: number, columns: number) => Math.min(Math.min(3, Math.max(1, columns)), Math.max(1, Math.round(span)));
 export const spanChoices = (columns: number) => [1, 2, 3].map(n => ({ n, available: n <= Math.min(3, Math.max(1, columns)) }));
+
+/** Whether the layout explicitly places the activity panel (for any mode). */
+export function layoutHasActivity(layout: CardLayout | null | undefined): boolean {
+  return !!layout?.tabs.some(t => t.sections.some(s => s.blocks.some(b => b.kind === "activity")));
+}

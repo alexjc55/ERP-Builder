@@ -9,6 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:card-published-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/card-published.db.test.ts",
+    "test:record-activity-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/record-activity.db.test.ts",
     "test:settings": "tsx --test src/lib/app-settings-validation.test.ts",
     "test:page-custom-filters-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/lib/page-custom-filters.db.test.ts",
     "test:inbound-safety-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/lib/inbound-safety.db.test.ts",
@@ -64,7 +65,8 @@
     "jszip": "^3.10.1",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
-    "sanitize-html": "^2.17.4"
+    "sanitize-html": "^2.17.4",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",

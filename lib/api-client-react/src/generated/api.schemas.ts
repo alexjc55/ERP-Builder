@@ -5,6 +5,212 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+export interface ActivitySettings {
+  entityId: number;
+  enabled: boolean;
+}
+
+export interface ActivityPerson {
+  id: number;
+  name: string;
+}
+
+export type ActivityTaskInputKind = typeof ActivityTaskInputKind[keyof typeof ActivityTaskInputKind];
+
+
+export const ActivityTaskInputKind = {
+  call: 'call',
+  email: 'email',
+  meeting: 'meeting',
+  task: 'task',
+} as const;
+
+export interface ActivityTaskInput {
+  entityId: number;
+  recordId: number;
+  /** @nullable */
+  pageId?: number | null;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  title: string;
+  /** @maxLength 10000 */
+  description?: string;
+  kind: ActivityTaskInputKind;
+  dueAt: string;
+  assigneeId: number;
+  /**
+     * @minimum 0
+     * @maximum 43200
+     * @nullable
+     */
+  reminderMinutes?: number | null;
+}
+
+export type ActivityInputKind = typeof ActivityInputKind[keyof typeof ActivityInputKind];
+
+
+export const ActivityInputKind = {
+  call: 'call',
+  email: 'email',
+  meeting: 'meeting',
+  note: 'note',
+} as const;
+
+export type ActivityInputOutcome = typeof ActivityInputOutcome[keyof typeof ActivityInputOutcome];
+
+
+export const ActivityInputOutcome = {
+  successful: 'successful',
+  attempted: 'attempted',
+  none: 'none',
+} as const;
+
+export interface ActivityInput {
+  entityId: number;
+  recordId: number;
+  /** @nullable */
+  pageId?: number | null;
+  kind: ActivityInputKind;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  body: string;
+  outcome?: ActivityInputOutcome;
+  occurredAt?: string;
+  nextTask?: ActivityTaskInput;
+}
+
+export type ActivityAmendmentAction = typeof ActivityAmendmentAction[keyof typeof ActivityAmendmentAction];
+
+
+export const ActivityAmendmentAction = {
+  edit: 'edit',
+  delete: 'delete',
+} as const;
+
+export interface ActivityAmendment {
+  expectedVersion: number;
+  action: ActivityAmendmentAction;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  reason: string;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  body?: string;
+  /** @nullable */
+  pageId?: number | null;
+}
+
+export interface ActivityEntry {
+  id: number;
+  entityId: number;
+  recordId: number;
+  kind: string;
+  body: string;
+  outcome: string;
+  occurredAt: string;
+  createdAt: string;
+  /** @nullable */
+  actorId?: number | null;
+  actorName: string;
+  /** @nullable */
+  taskId?: number | null;
+  version: number;
+  deleted: boolean;
+  canAmend: boolean;
+}
+
+export interface ActivityFeed {
+  enabled: boolean;
+  canWrite: boolean;
+  items: ActivityEntry[];
+  /** @nullable */
+  nextBeforeId: number | null;
+}
+
+export type ActivityTaskStatus = typeof ActivityTaskStatus[keyof typeof ActivityTaskStatus];
+
+
+export const ActivityTaskStatus = {
+  open: 'open',
+  completed: 'completed',
+  cancelled: 'cancelled',
+} as const;
+
+export type ActivityTask = ActivityTaskInput & ({
+  id: number;
+  status: ActivityTaskStatus;
+  version: number;
+  createdAt: string;
+  assigneeName: string;
+  canManage: boolean;
+  result: string;
+  recordLabel: string;
+  /** @nullable */
+  recordUrl?: string | null;
+});
+
+export type ActivityTaskChangeAction = typeof ActivityTaskChangeAction[keyof typeof ActivityTaskChangeAction];
+
+
+export const ActivityTaskChangeAction = {
+  complete: 'complete',
+  reschedule: 'reschedule',
+  cancel: 'cancel',
+} as const;
+
+export type ActivityTaskChangeOutcome = typeof ActivityTaskChangeOutcome[keyof typeof ActivityTaskChangeOutcome];
+
+
+export const ActivityTaskChangeOutcome = {
+  successful: 'successful',
+  attempted: 'attempted',
+  none: 'none',
+} as const;
+
+export interface ActivityTaskChange {
+  expectedVersion: number;
+  action: ActivityTaskChangeAction;
+  /** @nullable */
+  pageId?: number | null;
+  dueAt?: string;
+  /** @maxLength 10000 */
+  result?: string;
+  outcome?: ActivityTaskChangeOutcome;
+}
+
+export interface ActivityTaskList {
+  items: ActivityTask[];
+  /** @nullable */
+  nextOffset: number | null;
+}
+
+export interface ActivityNotification {
+  id: number;
+  entityId: number;
+  recordId: number;
+  message: string;
+  createdAt: string;
+  /** @nullable */
+  readAt: string | null;
+  recordLabel: string;
+  /** @nullable */
+  recordUrl?: string | null;
+}
+
+export interface ActivityNotificationList {
+  items: ActivityNotification[];
+  /** @nullable */
+  nextOffset: number | null;
+}
+
 export type SecurityReviewSelectionEventsItem = {
   /** @minimum 1 */
   id: number;
@@ -4595,6 +4801,31 @@ export interface AutomationCondition {
   valueFieldKey?: string;
 }
 
+export type AutomationCheckScheduleFrequency = typeof AutomationCheckScheduleFrequency[keyof typeof AutomationCheckScheduleFrequency];
+
+
+export const AutomationCheckScheduleFrequency = {
+  minute: 'minute',
+  hour: 'hour',
+  day: 'day',
+  month: 'month',
+} as const;
+
+export interface AutomationCheckSchedule {
+  frequency: AutomationCheckScheduleFrequency;
+  /**
+     * @minimum 0
+     * @maximum 23
+     */
+  hour: number;
+  /**
+     * @minimum 1
+     * @maximum 28
+     */
+  day: number;
+  timezone: string;
+}
+
 /**
  * record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from/to status selectors; use common conditions (including __status__) to constrain the record's current status.
  */
@@ -4609,11 +4840,52 @@ export const AutomationTriggerType = {
   status_changed: 'status_changed',
   date_reached: 'date_reached',
   page_field_changed: 'page_field_changed',
+  inactivity: 'inactivity',
+  status_age: 'status_age',
+  task_due: 'task_due',
+  activity_logged: 'activity_logged',
+  task_completed: 'task_completed',
+} as const;
+
+export type AutomationTriggerKindsItem = typeof AutomationTriggerKindsItem[keyof typeof AutomationTriggerKindsItem];
+
+
+export const AutomationTriggerKindsItem = {
+  call: 'call',
+  email: 'email',
+  meeting: 'meeting',
+  note: 'note',
+} as const;
+
+export type AutomationTriggerBaseline = typeof AutomationTriggerBaseline[keyof typeof AutomationTriggerBaseline];
+
+
+export const AutomationTriggerBaseline = {
+  created: 'created',
+  status: 'status',
 } as const;
 
 export interface AutomationTrigger {
   /** record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from/to status selectors; use common conditions (including __status__) to constrain the record's current status. */
   type: AutomationTriggerType;
+  schedule?: AutomationCheckSchedule;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  repeatHours?: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  maxRuns?: number | null;
+  /** @minimum 0.01 */
+  days?: number;
+  kinds?: AutomationTriggerKindsItem[];
+  successfulOnly?: boolean;
+  baseline?: AutomationTriggerBaseline;
+  skipWithFutureTask?: boolean;
+  offsetMinutes?: number;
   fieldKey?: string;
   /** @nullable */
   fromStatusId?: number | null;
@@ -4681,6 +4953,18 @@ export const AutomationActionType = {
   update_records_where: 'update_records_where',
   webhook: 'webhook',
   generate_document: 'generate_document',
+  notify: 'notify',
+  create_task: 'create_task',
+} as const;
+
+export type AutomationActionKind = typeof AutomationActionKind[keyof typeof AutomationActionKind];
+
+
+export const AutomationActionKind = {
+  call: 'call',
+  email: 'email',
+  meeting: 'meeting',
+  task: 'task',
 } as const;
 
 /**
@@ -4719,6 +5003,18 @@ export const AutomationActionLanguage = {
 
 export interface AutomationAction {
   type: AutomationActionType;
+  /** @maxLength 2000 */
+  message?: string;
+  userIds?: number[];
+  userFieldKeys?: string[];
+  taskAssignee?: boolean;
+  /** @maxLength 500 */
+  title?: string;
+  /** @maxLength 10000 */
+  description?: string;
+  kind?: AutomationActionKind;
+  /** @minimum 0 */
+  dueInHours?: number;
   /**
      * Required for set_related_status; selects the normalized relation to traverse.
      * @minimum 1
@@ -5775,6 +6071,54 @@ export interface DashboardStats {
   totalPages: number;
   recentLogins?: number;
 }
+
+export type ListRecordActivityParams = {
+entityId: number;
+recordId: number;
+pageId?: number;
+beforeId?: number;
+};
+
+export type GetActivitySettingsParams = {
+entityId: number;
+};
+
+export type ListActivityAssigneesParams = {
+entityId: number;
+recordId: number;
+pageId?: number;
+};
+
+export type ListActivityTasksParams = {
+entityId?: number;
+recordId?: number;
+pageId?: number;
+filter?: ListActivityTasksFilter;
+/**
+ * @minimum 0
+ */
+offset?: number;
+};
+
+export type ListActivityTasksFilter = typeof ListActivityTasksFilter[keyof typeof ListActivityTasksFilter];
+
+
+export const ListActivityTasksFilter = {
+  open: 'open',
+  overdue: 'overdue',
+  today: 'today',
+  upcoming: 'upcoming',
+  completed: 'completed',
+  cancelled: 'cancelled',
+  all: 'all',
+} as const;
+
+export type ListActivityNotificationsParams = {
+/**
+ * @minimum 0
+ */
+offset?: number;
+};
 
 export type ListDocumentGenerationRunsParams = {
 /**

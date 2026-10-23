@@ -5,11 +5,32 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { AutomationCheckSchedule } from './automationCheckSchedule';
+import type { AutomationTriggerBaseline } from './automationTriggerBaseline';
+import type { AutomationTriggerKindsItem } from './automationTriggerKindsItem';
 import type { AutomationTriggerType } from './automationTriggerType';
 
 export interface AutomationTrigger {
   /** record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from/to status selectors; use common conditions (including __status__) to constrain the record's current status. */
   type: AutomationTriggerType;
+  schedule?: AutomationCheckSchedule;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  repeatHours?: number | null;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  maxRuns?: number | null;
+  /** @minimum 0.01 */
+  days?: number;
+  kinds?: AutomationTriggerKindsItem[];
+  successfulOnly?: boolean;
+  baseline?: AutomationTriggerBaseline;
+  skipWithFutureTask?: boolean;
+  offsetMinutes?: number;
   fieldKey?: string;
   /** @nullable */
   fromStatusId?: number | null;

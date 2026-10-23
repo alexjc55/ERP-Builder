@@ -1,3 +1,4 @@
+export * from "./record-activity";
 export * from "./login_throttle";
 export * from "./card-templates";
 export * from "./users";

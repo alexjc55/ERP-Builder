@@ -35,10 +35,12 @@ import collaborationRouter from "./collaboration";
 import inboundIntegrationsRouter from "./inbound-integrations";
 import documentGenerationRouter from "./document-generation";
 import tagsRouter from "./tags";
+import recordActivityRouter from "./record-activity";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(recordActivityRouter);
 router.use(securityRouter);
 router.use(cardTemplatesRouter);
 router.use(authRouter);

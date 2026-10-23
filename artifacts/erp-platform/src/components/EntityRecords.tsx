@@ -10,7 +10,8 @@ import { CardRelatedRecordsTable } from "./CardRelatedRecordsTable";
 import { CardTemplateSnapshot } from "@/components/CardTemplateSnapshot";
 import { DialogStateBoundary, type DialogStateHandle } from "./DialogStateBoundary";
 import { CardDialogShell } from "./CardDialogShell";
-import { layoutIsWide, layoutPresentation, type CardBlock, type CardLayout } from "@/lib/cardLayout";
+import { layoutHasActivity, layoutIsWide, layoutPresentation, type CardBlock, type CardLayout } from "@/lib/cardLayout";
+import { ActivityPanel } from "@/components/activity/ActivityPanel";
 import { columnGroupBodyStyle, resolveColumnGroupCellStyle } from "@/lib/columnGroupStyles";
 import { InlineListPicker } from "@/components/InlineListPicker";
 import { InlineStatusPicker } from "@/components/InlineStatusPicker";
@@ -5878,7 +5879,7 @@ export function EntityRecords({
   const deepLinkSearch = useSearch();
   const [location, navigate] = useLocation();
   const deepLinkId = useMemo(() => {
-    const raw = new URLSearchParams(deepLinkSearch).get("record");
+    const raw = new URLSearchParams(deepLinkSearch).get("record") ?? new URLSearchParams(deepLinkSearch).get("recordId");
     const n = raw ? Number(raw) : NaN;
     return Number.isInteger(n) && n > 0 ? n : null;
   }, [deepLinkSearch]);
@@ -5898,9 +5899,10 @@ export function EntityRecords({
     if (deepLinkRecord && deepLinkRecord.id === deepLinkId) {
       handledDeepLinkRef.current = deepLinkId;
       openEdit(deepLinkRecord);
-      // Strip only the `record` param, preserving any other query params.
+      // Strip only the deep-link params (`record` and server-style `recordId`).
       const params = new URLSearchParams(deepLinkSearch);
       params.delete("record");
+      params.delete("recordId");
       const qs = params.toString();
       navigate(qs ? `${location}?${qs}` : location, { replace: true });
     }
@@ -11389,7 +11391,14 @@ function RecordFormBody({
   const fallbackRequired = cardLayout && requestedMode === "create"
     ? formFields.filter((f: Field) => f.isRequired && !placedForMode.has(f.fieldKey)) : [];
 
+  // Only the first activity block renders the panel; duplicates stay empty.
+  let firstActivityBlockId: string | null = null;
+  if (cardLayout) for (const tab of cardLayout.tabs) for (const sec of tab.sections) for (const b of sec.blocks)
+    if (!firstActivityBlockId && b.kind === "activity" && b.modes.includes(requestedMode)) firstActivityBlockId = b.id;
   const renderCardBlock = (block: CardBlock): React.ReactNode => {
+    if (block.kind === "activity") return block.id === firstActivityBlockId
+      ? <ActivityPanel entityId={entityId} recordId={mode === "edit" ? recordId : null} pageId={pageId ?? null} variant="block" />
+      : null;
     if (block.kind === "text") return <CardTextBlock block={block} />;
     if (block.kind === "divider") return <CardDividerBlock block={block} />;
     // Unbound slots and fields this viewer may not see render nothing: the
@@ -11452,6 +11461,13 @@ function RecordFormBody({
           )}
         </>
       ) : formFields.map((field: Field) => renderField(field))}
+      {/* Standard card (or a template without an activity block): append the
+          panel for saved records; it renders nothing when the module is off. */}
+      {mode === "edit" && recordId != null && !layoutHasActivity(cardLayout) && (
+        <div className="pt-2" data-testid="card-activity-standard">
+          <ActivityPanel entityId={entityId} recordId={recordId} pageId={pageId ?? null} />
+        </div>
+      )}
       {writeThroughEdit && (
         <RecordEditModal
           entityId={writeThroughEdit.entityId}

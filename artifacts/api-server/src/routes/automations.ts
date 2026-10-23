@@ -244,6 +244,11 @@ async function validateSpec(
   };
 
   for (const a of actions) {
+    if (a.type === "notify" || a.type === "create_task") {
+      if (!a.userIds.length && !a.userFieldKeys.length && !a.taskAssignee) return "Выберите получателя уведомления или ответственного задачи";
+      if (a.taskAssignee && trigger.type !== "task_due" && trigger.type !== "task_completed") return "Ответственный задачи доступен только для событий задач";
+      for (const key of a.userFieldKeys) if (keys.get(key) !== "user") return `Получатель должен быть полем пользователя: ${key}`;
+    }
     if (a.type === "set_field") {
       // A set_field can target a page-local field (targetFieldSource "page") on
       // a mirror page of this entity; the value must be a writable scalar.

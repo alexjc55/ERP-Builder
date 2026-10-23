@@ -122,6 +122,12 @@ import { useML, useT } from "@/lib/i18n";
 import { usePagePathLabel } from "@/lib/pagePath";
 import { normalizeSelectOptions } from "@/lib/selectOptions";
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
+import { ActivityTriggerHint, ActivityTriggerOptions } from "@/components/automation/ActivityTriggerOptions";
+import { RecipientActionEditor } from "@/components/automation/RecipientActionEditor";
+import {
+  applyMonitor, buildRecipientAction, emptyMonitor, emptyRecipients, isMonitorTrigger, monitorFromTrigger, recipientsFromAction,
+  type MonitorDraft, type MonitorError, type RecipientDraft, type RecipientError,
+} from "@/lib/activityAutomation";
 
 type MLValue = { ru?: string; en?: string; he?: string };
 type FilenameTemplate = string | { sections: DriveNameSection[] };
@@ -200,6 +206,8 @@ type ActionDraft = {
   targetFileFieldKey: string;
   filenameTemplate: FilenameTemplate;
   overwrite: "replace" | "error";
+  /** notify / create_task: message, task template and recipients. */
+  recipients: RecipientDraft;
 };
 
 function extractError(err: unknown): string {
@@ -230,6 +238,11 @@ const TRIGGER_TYPES: { value: AutomationTriggerType; labelKey: string; label: st
   { value: "status_changed", labelKey: "auto.trig.status_changed", label: "Смена статуса" },
   { value: "date_reached", labelKey: "auto.trig.date_reached", label: "Наступление даты" },
   { value: "page_field_changed", labelKey: "auto.trig.page_field_changed", label: "Изменение поля страницы" },
+  { value: "activity_logged", labelKey: "auto.trig.activity_logged", label: "Записана активность (звонок, письмо, встреча, заметка)" },
+  { value: "task_completed", labelKey: "auto.trig.task_completed", label: "Задача выполнена" },
+  { value: "inactivity", labelKey: "auto.trig.inactivity", label: "Нет активности N дней (по расписанию)" },
+  { value: "status_age", labelKey: "auto.trig.status_age", label: "В статусе дольше N дней (по расписанию)" },
+  { value: "task_due", labelKey: "auto.trig.task_due", label: "Срок задачи (по расписанию)" },
 ];
 
 const ACTION_TYPES: { value: AutomationActionType; labelKey: string; label: string }[] = [
@@ -240,6 +253,8 @@ const ACTION_TYPES: { value: AutomationActionType; labelKey: string; label: stri
   { value: "update_records_where", labelKey: "auto.act.update_records_where", label: "Обновить записи (по условию)" },
   { value: "webhook", labelKey: "auto.act.webhook", label: "Webhook" },
   { value: "generate_document", labelKey: "auto.act.generate_document", label: "Generate document" },
+  { value: "notify", labelKey: "auto.act.notify", label: "Уведомление во входящие ERP" },
+  { value: "create_task", labelKey: "auto.act.create_task", label: "Создать задачу по записи" },
 ];
 
 function noValueOp(op: AutomationConditionOperator): boolean {
@@ -271,6 +286,7 @@ function emptyAction(defaultFieldKey: string): ActionDraft {
     targetFileFieldKey: "",
     filenameTemplate: { sections: [{ kind: "text", text: "document" }] },
     overwrite: "replace",
+    recipients: emptyRecipients(),
   };
 }
 
@@ -426,6 +442,8 @@ export default function EntityAutomationsPage() {
   const [conditions, setConditions] = useState<ConditionDraft[]>([]);
   const [conditionConjunction, setConditionConjunction] = useState<"and" | "or">("and");
   const [actions, setActions] = useState<ActionDraft[]>([]);
+  const [monitor, setMonitor] = useState<MonitorDraft>(emptyMonitor);
+  const [monitorError, setMonitorError] = useState<MonitorError | null>(null);
 
   const { data: entities = [] } = useListEntities();
   const entity = entities.find((e: Entity) => e.id === entityId);
@@ -591,6 +609,8 @@ export default function EntityAutomationsPage() {
     setTrigOffset("0");
     setTrigPageId("");
     setTrigPageFieldKey("");
+    setMonitor(emptyMonitor());
+    setMonitorError(null);
     setConditions([]);
     setConditionConjunction("and");
     setActions([emptyAction(fields[0]?.fieldKey ?? "")]);
@@ -611,6 +631,8 @@ export default function EntityAutomationsPage() {
     setTrigOffset(String(trig.offsetDays ?? 0));
     setTrigPageId(trig.type === "page_field_changed" && trig.pageId != null ? String(trig.pageId) : "");
     setTrigPageFieldKey(trig.type === "page_field_changed" ? trig.fieldKey ?? "" : "");
+    setMonitor(monitorFromTrigger(trig));
+    setMonitorError(null);
     setConditions((a.conditionsJson ?? []).map(conditionToDraft));
     setConditionConjunction(a.conditionConjunction === "or" ? "or" : "and");
     setActions((a.actionsJson ?? []).map(actionToDraft));
@@ -660,6 +682,7 @@ export default function EntityAutomationsPage() {
     targetFileFieldKey: a.output?.targetFileFieldKey ?? "",
     filenameTemplate: a.output?.filenameTemplate ?? "document",
     overwrite: a.output?.overwrite ?? "replace",
+    recipients: a.type === "notify" || a.type === "create_task" ? recipientsFromAction(a) : emptyRecipients(),
   });
 
   /** Coerce a string to a field's stored type for conditions/values. */
@@ -734,6 +757,10 @@ export default function EntityAutomationsPage() {
       trigger.pageId = Number(trigPageId);
       trigger.fieldKey = trigPageFieldKey;
     }
+    // Schedule / repeats / activity options (monitoring triggers; optional for date_reached).
+    const monErr = applyMonitor(trigger as AutomationTrigger & Record<string, unknown>, monitor);
+    setMonitorError(monErr);
+    if (monErr) { toast({ title: t("auto.err.triggerOptions", "Проверьте параметры триггера"), variant: "destructive" }); return; }
 
     // Build actions.
     const builtActions: AutomationAction[] = [];
@@ -820,6 +847,20 @@ export default function EntityAutomationsPage() {
           ? { outputFormat: a.outputFormat, destination: "local" as const, localFolderId: Number(a.localFolderId), targetFileFieldKey: a.targetFileFieldKey, filenameTemplate, overwrite: a.overwrite }
           : { outputFormat: a.outputFormat, destination: "gdrive" as const, driveFolderId: a.driveFolderId, targetFileFieldKey: a.targetFileFieldKey, filenameTemplate, overwrite: a.overwrite };
         builtActions.push({ type: "generate_document", revisionId: Number(a.revisionId), output });
+      } else if (a.type === "notify" || a.type === "create_task") {
+        const r = buildRecipientAction(a.type, a.recipients, triggerType);
+        if (!r.ok) {
+          const msg: Record<RecipientError, string> = {
+            message: t("auto.err.notifyMessage", "Укажите текст уведомления"),
+            title: t("auto.err.taskTitle", "Укажите название задачи"),
+            dueInHours: t("auto.err.taskDue", "Укажите срок задачи в часах (0 или больше)"),
+            recipients: t("auto.rcpt.required", "Выберите хотя бы одного получателя."),
+            taskAssigneeTrigger: t("auto.rcpt.assigneeOnlyTaskDue", "«Исполнитель задачи» доступен только для триггера «Срок задачи». Уберите его или смените триггер."),
+          };
+          toast({ title: msg[r.error], variant: "destructive" });
+          return;
+        }
+        builtActions.push(r.action as unknown as AutomationAction);
       }
     }
     if (builtActions.length === 0) { toast({ title: t("auto.noActions", "Добавьте хотя бы одно действие"), variant: "destructive" }); return; }
@@ -867,6 +908,7 @@ export default function EntityAutomationsPage() {
       const pg = mirrorPages.find((p) => p.id === trig.pageId);
       return `${base}: ${pg ? pageLabel(pg) : `#${trig.pageId}`} · ${trig.fieldKey}`;
     }
+    if ((trig.type === "inactivity" || trig.type === "status_age") && trig.days != null) return `${base}: ${trig.days} ${t("auto.unit.days", "дней")}`;
     if (trig.type === "status_changed") {
       const f = trig.fromStatusId == null ? "*" : ml(statusById.get(trig.fromStatusId)?.nameJson) || `#${trig.fromStatusId}`;
       const to = trig.toStatusId == null ? "*" : ml(statusById.get(trig.toStatusId)?.nameJson) || `#${trig.toStatusId}`;
@@ -884,6 +926,7 @@ export default function EntityAutomationsPage() {
       return `${base} → ${te ? ml(te.nameJson) : `#${a.targetEntityId}`}`;
     }
     if (a.type === "webhook") return `${base}`;
+    if (a.type === "create_task" && a.title) return `${base}: ${a.title}`;
     return base;
   };
 
@@ -1307,6 +1350,12 @@ export default function EntityAutomationsPage() {
                   </>
                 )}
               </div>
+              <ActivityTriggerHint type={triggerType} />
+              <ActivityTriggerOptions type={triggerType} value={monitor} error={monitorError}
+                onChange={(patch) => { setMonitor((m) => ({ ...m, ...patch })); setMonitorError(null); }} />
+              {!isMonitorTrigger(triggerType) && triggerType !== "date_reached" && (
+                <p className="text-[11px] text-slate-400">{t("auto.immediate", "Срабатывает сразу при событии, без расписания.")}</p>
+              )}
               {triggerType === "page_field_changed" && mirrorPages.length === 0 && (
                 <p className="text-xs text-amber-600">{t("auto.noMirrorPages", "Нет зеркальных страниц этой сущности с полями страницы.")}</p>
               )}
@@ -1342,6 +1391,8 @@ export default function EntityAutomationsPage() {
                   onRemove={() => removeAction(i)}
                   onMove={(dir) => moveAction(i, dir)}
                   onTargetFieldsLoaded={cacheTargetFields}
+                  triggerType={triggerType}
+                  userOptions={userOptions}
                 />
               ))}
               <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addAction}>
@@ -1610,6 +1661,8 @@ function ActionCard({
   onRemove,
   onMove,
   onTargetFieldsLoaded,
+  triggerType,
+  userOptions,
 }: {
   index: number;
   total: number;
@@ -1629,6 +1682,8 @@ function ActionCard({
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
   onTargetFieldsLoaded: (entityId: number, fields: Field[]) => void;
+  triggerType: AutomationTriggerType;
+  userOptions: UserOption[];
 }): ReactElement {
   const pageLabel = usePagePathLabel();
   const { data: directRelations = [] } = useListEntityRelations(currentEntityId);
@@ -1927,6 +1982,12 @@ function ActionCard({
             </div>
           )}
         </div>
+      )}
+
+      {(draft.type === "notify" || draft.type === "create_task") && (
+        <RecipientActionEditor type={draft.type} index={index} draft={draft.recipients} triggerType={triggerType}
+          userOptions={userOptions} fields={currentFields} ml={ml}
+          onChange={(patch) => onChange({ recipients: { ...draft.recipients, ...patch } })} />
       )}
 
       {draft.type === "webhook" && (

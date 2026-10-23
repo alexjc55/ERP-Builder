@@ -20,6 +20,17 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ActivityAmendment,
+  ActivityEntry,
+  ActivityFeed,
+  ActivityInput,
+  ActivityNotificationList,
+  ActivityPerson,
+  ActivitySettings,
+  ActivityTask,
+  ActivityTaskChange,
+  ActivityTaskInput,
+  ActivityTaskList,
   AdminOperationalAlerts,
   AiAgent,
   AiAgentActsAsCandidate,
@@ -104,6 +115,7 @@ import type {
   FilterValuesQuery,
   FilterValuesResult,
   GeneratedDocument,
+  GetActivitySettingsParams,
   GetEntityRelationOptionsParams,
   GetGoogleDriveNameTemplateParams,
   GoogleDriveAuthUrl,
@@ -129,12 +141,16 @@ import type {
   InboundWebhookAccepted,
   LinkInput,
   LinkedRecord,
+  ListActivityAssigneesParams,
+  ListActivityNotificationsParams,
+  ListActivityTasksParams,
   ListAiAgentActsAsCandidatesParams,
   ListDocumentGenerationRunsParams,
   ListDocumentTemplatesParams,
   ListEventsParams,
   ListInboundIntegrationErrors200,
   ListInboundIntegrationErrorsParams,
+  ListRecordActivityParams,
   ListUserOptionsParams,
   ListUsersParams,
   LocalFolder,
@@ -246,6 +262,787 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
+
+export const getListRecordActivityUrl = (params: ListRecordActivityParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/record-activity?${stringifiedParams}` : `/api/record-activity`
+}
+
+export const listRecordActivity = async (params: ListRecordActivityParams, options?: RequestInit): Promise<ActivityFeed> => {
+
+  return customFetch<ActivityFeed>(getListRecordActivityUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListRecordActivityQueryKey = (params?: ListRecordActivityParams,) => {
+    return [
+    `/api/record-activity`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListRecordActivityQueryOptions = <TData = Awaited<ReturnType<typeof listRecordActivity>>, TError = ErrorType<unknown>>(params: ListRecordActivityParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRecordActivity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListRecordActivityQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listRecordActivity>>> = ({ signal }) => listRecordActivity(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listRecordActivity>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListRecordActivityQueryResult = NonNullable<Awaited<ReturnType<typeof listRecordActivity>>>
+export type ListRecordActivityQueryError = ErrorType<unknown>
+
+
+
+export function useListRecordActivity<TData = Awaited<ReturnType<typeof listRecordActivity>>, TError = ErrorType<unknown>>(
+ params: ListRecordActivityParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRecordActivity>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListRecordActivityQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateRecordActivityUrl = () => {
+
+
+
+
+  return `/api/record-activity`
+}
+
+export const createRecordActivity = async (activityInput: ActivityInput, options?: RequestInit): Promise<ActivityEntry> => {
+
+  return customFetch<ActivityEntry>(getCreateRecordActivityUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      activityInput,)
+  }
+);}
+
+
+
+
+export const getCreateRecordActivityMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRecordActivity>>, TError,{data: BodyType<ActivityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createRecordActivity>>, TError,{data: BodyType<ActivityInput>}, TContext> => {
+
+const mutationKey = ['createRecordActivity'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createRecordActivity>>, {data: BodyType<ActivityInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createRecordActivity(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateRecordActivityMutationResult = NonNullable<Awaited<ReturnType<typeof createRecordActivity>>>
+    export type CreateRecordActivityMutationBody = BodyType<ActivityInput>
+    export type CreateRecordActivityMutationError = ErrorType<unknown>
+
+    export const useCreateRecordActivity = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createRecordActivity>>, TError,{data: BodyType<ActivityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createRecordActivity>>,
+        TError,
+        {data: BodyType<ActivityInput>},
+        TContext
+      > => {
+      return useMutation(getCreateRecordActivityMutationOptions(options));
+    }
+
+export const getAmendRecordActivityUrl = (id: number,) => {
+
+
+
+
+  return `/api/record-activity/${id}`
+}
+
+export const amendRecordActivity = async (id: number,
+    activityAmendment: ActivityAmendment, options?: RequestInit): Promise<ActivityEntry> => {
+
+  return customFetch<ActivityEntry>(getAmendRecordActivityUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      activityAmendment,)
+  }
+);}
+
+
+
+
+export const getAmendRecordActivityMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof amendRecordActivity>>, TError,{id: number;data: BodyType<ActivityAmendment>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof amendRecordActivity>>, TError,{id: number;data: BodyType<ActivityAmendment>}, TContext> => {
+
+const mutationKey = ['amendRecordActivity'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof amendRecordActivity>>, {id: number;data: BodyType<ActivityAmendment>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  amendRecordActivity(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AmendRecordActivityMutationResult = NonNullable<Awaited<ReturnType<typeof amendRecordActivity>>>
+    export type AmendRecordActivityMutationBody = BodyType<ActivityAmendment>
+    export type AmendRecordActivityMutationError = ErrorType<unknown>
+
+    export const useAmendRecordActivity = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof amendRecordActivity>>, TError,{id: number;data: BodyType<ActivityAmendment>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof amendRecordActivity>>,
+        TError,
+        {id: number;data: BodyType<ActivityAmendment>},
+        TContext
+      > => {
+      return useMutation(getAmendRecordActivityMutationOptions(options));
+    }
+
+export const getGetActivitySettingsUrl = (params: GetActivitySettingsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/activity-settings?${stringifiedParams}` : `/api/activity-settings`
+}
+
+export const getActivitySettings = async (params: GetActivitySettingsParams, options?: RequestInit): Promise<ActivitySettings> => {
+
+  return customFetch<ActivitySettings>(getGetActivitySettingsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetActivitySettingsQueryKey = (params?: GetActivitySettingsParams,) => {
+    return [
+    `/api/activity-settings`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetActivitySettingsQueryOptions = <TData = Awaited<ReturnType<typeof getActivitySettings>>, TError = ErrorType<unknown>>(params: GetActivitySettingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getActivitySettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetActivitySettingsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getActivitySettings>>> = ({ signal }) => getActivitySettings(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getActivitySettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetActivitySettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getActivitySettings>>>
+export type GetActivitySettingsQueryError = ErrorType<unknown>
+
+
+
+export function useGetActivitySettings<TData = Awaited<ReturnType<typeof getActivitySettings>>, TError = ErrorType<unknown>>(
+ params: GetActivitySettingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getActivitySettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetActivitySettingsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSaveActivitySettingsUrl = () => {
+
+
+
+
+  return `/api/activity-settings`
+}
+
+export const saveActivitySettings = async (activitySettings: ActivitySettings, options?: RequestInit): Promise<ActivitySettings> => {
+
+  return customFetch<ActivitySettings>(getSaveActivitySettingsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      activitySettings,)
+  }
+);}
+
+
+
+
+export const getSaveActivitySettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveActivitySettings>>, TError,{data: BodyType<ActivitySettings>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveActivitySettings>>, TError,{data: BodyType<ActivitySettings>}, TContext> => {
+
+const mutationKey = ['saveActivitySettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveActivitySettings>>, {data: BodyType<ActivitySettings>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveActivitySettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveActivitySettingsMutationResult = NonNullable<Awaited<ReturnType<typeof saveActivitySettings>>>
+    export type SaveActivitySettingsMutationBody = BodyType<ActivitySettings>
+    export type SaveActivitySettingsMutationError = ErrorType<unknown>
+
+    export const useSaveActivitySettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveActivitySettings>>, TError,{data: BodyType<ActivitySettings>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveActivitySettings>>,
+        TError,
+        {data: BodyType<ActivitySettings>},
+        TContext
+      > => {
+      return useMutation(getSaveActivitySettingsMutationOptions(options));
+    }
+
+export const getListActivityAssigneesUrl = (params: ListActivityAssigneesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/activity-assignees?${stringifiedParams}` : `/api/activity-assignees`
+}
+
+export const listActivityAssignees = async (params: ListActivityAssigneesParams, options?: RequestInit): Promise<ActivityPerson[]> => {
+
+  return customFetch<ActivityPerson[]>(getListActivityAssigneesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListActivityAssigneesQueryKey = (params?: ListActivityAssigneesParams,) => {
+    return [
+    `/api/activity-assignees`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListActivityAssigneesQueryOptions = <TData = Awaited<ReturnType<typeof listActivityAssignees>>, TError = ErrorType<unknown>>(params: ListActivityAssigneesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listActivityAssignees>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListActivityAssigneesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listActivityAssignees>>> = ({ signal }) => listActivityAssignees(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listActivityAssignees>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListActivityAssigneesQueryResult = NonNullable<Awaited<ReturnType<typeof listActivityAssignees>>>
+export type ListActivityAssigneesQueryError = ErrorType<unknown>
+
+
+
+export function useListActivityAssignees<TData = Awaited<ReturnType<typeof listActivityAssignees>>, TError = ErrorType<unknown>>(
+ params: ListActivityAssigneesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listActivityAssignees>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListActivityAssigneesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListActivityTasksUrl = (params?: ListActivityTasksParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/activity-tasks?${stringifiedParams}` : `/api/activity-tasks`
+}
+
+export const listActivityTasks = async (params?: ListActivityTasksParams, options?: RequestInit): Promise<ActivityTaskList> => {
+
+  return customFetch<ActivityTaskList>(getListActivityTasksUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListActivityTasksQueryKey = (params?: ListActivityTasksParams,) => {
+    return [
+    `/api/activity-tasks`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListActivityTasksQueryOptions = <TData = Awaited<ReturnType<typeof listActivityTasks>>, TError = ErrorType<unknown>>(params?: ListActivityTasksParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listActivityTasks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListActivityTasksQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listActivityTasks>>> = ({ signal }) => listActivityTasks(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listActivityTasks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListActivityTasksQueryResult = NonNullable<Awaited<ReturnType<typeof listActivityTasks>>>
+export type ListActivityTasksQueryError = ErrorType<unknown>
+
+
+
+export function useListActivityTasks<TData = Awaited<ReturnType<typeof listActivityTasks>>, TError = ErrorType<unknown>>(
+ params?: ListActivityTasksParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listActivityTasks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListActivityTasksQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateActivityTaskUrl = () => {
+
+
+
+
+  return `/api/activity-tasks`
+}
+
+export const createActivityTask = async (activityTaskInput: ActivityTaskInput, options?: RequestInit): Promise<ActivityTask> => {
+
+  return customFetch<ActivityTask>(getCreateActivityTaskUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      activityTaskInput,)
+  }
+);}
+
+
+
+
+export const getCreateActivityTaskMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createActivityTask>>, TError,{data: BodyType<ActivityTaskInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createActivityTask>>, TError,{data: BodyType<ActivityTaskInput>}, TContext> => {
+
+const mutationKey = ['createActivityTask'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createActivityTask>>, {data: BodyType<ActivityTaskInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createActivityTask(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateActivityTaskMutationResult = NonNullable<Awaited<ReturnType<typeof createActivityTask>>>
+    export type CreateActivityTaskMutationBody = BodyType<ActivityTaskInput>
+    export type CreateActivityTaskMutationError = ErrorType<unknown>
+
+    export const useCreateActivityTask = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createActivityTask>>, TError,{data: BodyType<ActivityTaskInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createActivityTask>>,
+        TError,
+        {data: BodyType<ActivityTaskInput>},
+        TContext
+      > => {
+      return useMutation(getCreateActivityTaskMutationOptions(options));
+    }
+
+export const getChangeActivityTaskUrl = (id: number,) => {
+
+
+
+
+  return `/api/activity-tasks/${id}`
+}
+
+export const changeActivityTask = async (id: number,
+    activityTaskChange: ActivityTaskChange, options?: RequestInit): Promise<ActivityTask> => {
+
+  return customFetch<ActivityTask>(getChangeActivityTaskUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      activityTaskChange,)
+  }
+);}
+
+
+
+
+export const getChangeActivityTaskMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeActivityTask>>, TError,{id: number;data: BodyType<ActivityTaskChange>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof changeActivityTask>>, TError,{id: number;data: BodyType<ActivityTaskChange>}, TContext> => {
+
+const mutationKey = ['changeActivityTask'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof changeActivityTask>>, {id: number;data: BodyType<ActivityTaskChange>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  changeActivityTask(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ChangeActivityTaskMutationResult = NonNullable<Awaited<ReturnType<typeof changeActivityTask>>>
+    export type ChangeActivityTaskMutationBody = BodyType<ActivityTaskChange>
+    export type ChangeActivityTaskMutationError = ErrorType<unknown>
+
+    export const useChangeActivityTask = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeActivityTask>>, TError,{id: number;data: BodyType<ActivityTaskChange>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof changeActivityTask>>,
+        TError,
+        {id: number;data: BodyType<ActivityTaskChange>},
+        TContext
+      > => {
+      return useMutation(getChangeActivityTaskMutationOptions(options));
+    }
+
+export const getListActivityNotificationsUrl = (params?: ListActivityNotificationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/activity-notifications?${stringifiedParams}` : `/api/activity-notifications`
+}
+
+export const listActivityNotifications = async (params?: ListActivityNotificationsParams, options?: RequestInit): Promise<ActivityNotificationList> => {
+
+  return customFetch<ActivityNotificationList>(getListActivityNotificationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListActivityNotificationsQueryKey = (params?: ListActivityNotificationsParams,) => {
+    return [
+    `/api/activity-notifications`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListActivityNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof listActivityNotifications>>, TError = ErrorType<unknown>>(params?: ListActivityNotificationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listActivityNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListActivityNotificationsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listActivityNotifications>>> = ({ signal }) => listActivityNotifications(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listActivityNotifications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListActivityNotificationsQueryResult = NonNullable<Awaited<ReturnType<typeof listActivityNotifications>>>
+export type ListActivityNotificationsQueryError = ErrorType<unknown>
+
+
+
+export function useListActivityNotifications<TData = Awaited<ReturnType<typeof listActivityNotifications>>, TError = ErrorType<unknown>>(
+ params?: ListActivityNotificationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listActivityNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListActivityNotificationsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getReadActivityNotificationUrl = (id: number,) => {
+
+
+
+
+  return `/api/activity-notifications/${id}/read`
+}
+
+export const readActivityNotification = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getReadActivityNotificationUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getReadActivityNotificationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof readActivityNotification>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof readActivityNotification>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['readActivityNotification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof readActivityNotification>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  readActivityNotification(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReadActivityNotificationMutationResult = NonNullable<Awaited<ReturnType<typeof readActivityNotification>>>
+
+    export type ReadActivityNotificationMutationError = ErrorType<unknown>
+
+    export const useReadActivityNotification = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof readActivityNotification>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof readActivityNotification>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getReadActivityNotificationMutationOptions(options));
+    }
 
 export const getListCardTemplatesUrl = () => {
 

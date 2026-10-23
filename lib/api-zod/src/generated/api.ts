@@ -8,6 +8,286 @@
 import * as zod from 'zod';
 
 
+export const ListRecordActivityQueryParams = zod.object({
+  "entityId": zod.coerce.number(),
+  "recordId": zod.coerce.number(),
+  "pageId": zod.coerce.number().optional(),
+  "beforeId": zod.coerce.number().optional()
+})
+
+export const ListRecordActivityResponse = zod.object({
+  "enabled": zod.boolean(),
+  "canWrite": zod.boolean(),
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "recordId": zod.number(),
+  "kind": zod.string(),
+  "body": zod.string(),
+  "outcome": zod.string(),
+  "occurredAt": zod.coerce.date(),
+  "createdAt": zod.coerce.date(),
+  "actorId": zod.number().nullish(),
+  "actorName": zod.string(),
+  "taskId": zod.number().nullish(),
+  "version": zod.number(),
+  "deleted": zod.boolean(),
+  "canAmend": zod.boolean()
+})),
+  "nextBeforeId": zod.number().nullable()
+})
+
+
+export const createRecordActivityBodyBodyMax = 10000;
+
+export const createRecordActivityBodyNextTaskTitleMax = 500;
+
+export const createRecordActivityBodyNextTaskDescriptionMax = 10000;
+
+export const createRecordActivityBodyNextTaskReminderMinutesMin = 0;
+export const createRecordActivityBodyNextTaskReminderMinutesMax = 43200;
+
+
+
+export const CreateRecordActivityBody = zod.object({
+  "entityId": zod.number(),
+  "recordId": zod.number(),
+  "pageId": zod.number().nullish(),
+  "kind": zod.enum(['call', 'email', 'meeting', 'note']),
+  "body": zod.string().min(1).max(createRecordActivityBodyBodyMax),
+  "outcome": zod.enum(['successful', 'attempted', 'none']).optional(),
+  "occurredAt": zod.coerce.date().optional(),
+  "nextTask": zod.object({
+  "entityId": zod.number(),
+  "recordId": zod.number(),
+  "pageId": zod.number().nullish(),
+  "title": zod.string().min(1).max(createRecordActivityBodyNextTaskTitleMax),
+  "description": zod.string().max(createRecordActivityBodyNextTaskDescriptionMax).optional(),
+  "kind": zod.enum(['call', 'email', 'meeting', 'task']),
+  "dueAt": zod.coerce.date(),
+  "assigneeId": zod.number(),
+  "reminderMinutes": zod.number().min(createRecordActivityBodyNextTaskReminderMinutesMin).max(createRecordActivityBodyNextTaskReminderMinutesMax).nullish()
+}).optional()
+})
+
+
+export const AmendRecordActivityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const amendRecordActivityBodyReasonMax = 1000;
+
+export const amendRecordActivityBodyBodyMax = 10000;
+
+
+
+export const AmendRecordActivityBody = zod.object({
+  "expectedVersion": zod.number(),
+  "action": zod.enum(['edit', 'delete']),
+  "reason": zod.string().min(1).max(amendRecordActivityBodyReasonMax),
+  "body": zod.string().min(1).max(amendRecordActivityBodyBodyMax).optional(),
+  "pageId": zod.number().nullish()
+})
+
+export const AmendRecordActivityResponse = zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "recordId": zod.number(),
+  "kind": zod.string(),
+  "body": zod.string(),
+  "outcome": zod.string(),
+  "occurredAt": zod.coerce.date(),
+  "createdAt": zod.coerce.date(),
+  "actorId": zod.number().nullish(),
+  "actorName": zod.string(),
+  "taskId": zod.number().nullish(),
+  "version": zod.number(),
+  "deleted": zod.boolean(),
+  "canAmend": zod.boolean()
+})
+
+
+export const GetActivitySettingsQueryParams = zod.object({
+  "entityId": zod.coerce.number()
+})
+
+export const GetActivitySettingsResponse = zod.object({
+  "entityId": zod.number(),
+  "enabled": zod.boolean()
+})
+
+
+export const SaveActivitySettingsBody = zod.object({
+  "entityId": zod.number(),
+  "enabled": zod.boolean()
+})
+
+export const SaveActivitySettingsResponse = zod.object({
+  "entityId": zod.number(),
+  "enabled": zod.boolean()
+})
+
+
+export const ListActivityAssigneesQueryParams = zod.object({
+  "entityId": zod.coerce.number(),
+  "recordId": zod.coerce.number(),
+  "pageId": zod.coerce.number().optional()
+})
+
+export const ListActivityAssigneesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+})
+export const ListActivityAssigneesResponse = zod.array(ListActivityAssigneesResponseItem)
+
+
+export const listActivityTasksQueryFilterDefault = `open`;
+export const listActivityTasksQueryOffsetMin = 0;
+
+
+
+export const ListActivityTasksQueryParams = zod.object({
+  "entityId": zod.coerce.number().optional(),
+  "recordId": zod.coerce.number().optional(),
+  "pageId": zod.coerce.number().optional(),
+  "filter": zod.enum(['open', 'overdue', 'today', 'upcoming', 'completed', 'cancelled', 'all']).default(listActivityTasksQueryFilterDefault),
+  "offset": zod.coerce.number().min(listActivityTasksQueryOffsetMin).optional()
+})
+
+export const listActivityTasksResponseItemsItemOneTitleMax = 500;
+
+export const listActivityTasksResponseItemsItemOneDescriptionMax = 10000;
+
+export const listActivityTasksResponseItemsItemOneReminderMinutesMin = 0;
+export const listActivityTasksResponseItemsItemOneReminderMinutesMax = 43200;
+
+
+
+export const ListActivityTasksResponse = zod.object({
+  "items": zod.array(zod.object({
+  "entityId": zod.number(),
+  "recordId": zod.number(),
+  "pageId": zod.number().nullish(),
+  "title": zod.string().min(1).max(listActivityTasksResponseItemsItemOneTitleMax),
+  "description": zod.string().max(listActivityTasksResponseItemsItemOneDescriptionMax).optional(),
+  "kind": zod.enum(['call', 'email', 'meeting', 'task']),
+  "dueAt": zod.coerce.date(),
+  "assigneeId": zod.number(),
+  "reminderMinutes": zod.number().min(listActivityTasksResponseItemsItemOneReminderMinutesMin).max(listActivityTasksResponseItemsItemOneReminderMinutesMax).nullish()
+}).and(zod.object({
+  "id": zod.number(),
+  "status": zod.enum(['open', 'completed', 'cancelled']),
+  "version": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "assigneeName": zod.string(),
+  "canManage": zod.boolean(),
+  "result": zod.string(),
+  "recordLabel": zod.string(),
+  "recordUrl": zod.string().nullish()
+}))),
+  "nextOffset": zod.number().nullable()
+})
+
+
+export const createActivityTaskBodyTitleMax = 500;
+
+export const createActivityTaskBodyDescriptionMax = 10000;
+
+export const createActivityTaskBodyReminderMinutesMin = 0;
+export const createActivityTaskBodyReminderMinutesMax = 43200;
+
+
+
+export const CreateActivityTaskBody = zod.object({
+  "entityId": zod.number(),
+  "recordId": zod.number(),
+  "pageId": zod.number().nullish(),
+  "title": zod.string().min(1).max(createActivityTaskBodyTitleMax),
+  "description": zod.string().max(createActivityTaskBodyDescriptionMax).optional(),
+  "kind": zod.enum(['call', 'email', 'meeting', 'task']),
+  "dueAt": zod.coerce.date(),
+  "assigneeId": zod.number(),
+  "reminderMinutes": zod.number().min(createActivityTaskBodyReminderMinutesMin).max(createActivityTaskBodyReminderMinutesMax).nullish()
+})
+
+
+export const ChangeActivityTaskParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const changeActivityTaskBodyResultMax = 10000;
+
+
+
+export const ChangeActivityTaskBody = zod.object({
+  "expectedVersion": zod.number(),
+  "action": zod.enum(['complete', 'reschedule', 'cancel']),
+  "pageId": zod.number().nullish(),
+  "dueAt": zod.coerce.date().optional(),
+  "result": zod.string().max(changeActivityTaskBodyResultMax).optional(),
+  "outcome": zod.enum(['successful', 'attempted', 'none']).optional()
+})
+
+export const changeActivityTaskResponseOneTitleMax = 500;
+
+export const changeActivityTaskResponseOneDescriptionMax = 10000;
+
+export const changeActivityTaskResponseOneReminderMinutesMin = 0;
+export const changeActivityTaskResponseOneReminderMinutesMax = 43200;
+
+
+
+export const ChangeActivityTaskResponse = zod.object({
+  "entityId": zod.number(),
+  "recordId": zod.number(),
+  "pageId": zod.number().nullish(),
+  "title": zod.string().min(1).max(changeActivityTaskResponseOneTitleMax),
+  "description": zod.string().max(changeActivityTaskResponseOneDescriptionMax).optional(),
+  "kind": zod.enum(['call', 'email', 'meeting', 'task']),
+  "dueAt": zod.coerce.date(),
+  "assigneeId": zod.number(),
+  "reminderMinutes": zod.number().min(changeActivityTaskResponseOneReminderMinutesMin).max(changeActivityTaskResponseOneReminderMinutesMax).nullish()
+}).and(zod.object({
+  "id": zod.number(),
+  "status": zod.enum(['open', 'completed', 'cancelled']),
+  "version": zod.number(),
+  "createdAt": zod.coerce.date(),
+  "assigneeName": zod.string(),
+  "canManage": zod.boolean(),
+  "result": zod.string(),
+  "recordLabel": zod.string(),
+  "recordUrl": zod.string().nullish()
+}))
+
+
+export const listActivityNotificationsQueryOffsetMin = 0;
+
+
+
+export const ListActivityNotificationsQueryParams = zod.object({
+  "offset": zod.coerce.number().min(listActivityNotificationsQueryOffsetMin).optional()
+})
+
+export const ListActivityNotificationsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "entityId": zod.number(),
+  "recordId": zod.number(),
+  "message": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "readAt": zod.coerce.date().nullable(),
+  "recordLabel": zod.string(),
+  "recordUrl": zod.string().nullish()
+})),
+  "nextOffset": zod.number().nullable()
+})
+
+
+export const ReadActivityNotificationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
 export const ListCardTemplatesResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -7527,6 +7807,23 @@ export const ListEntityAutomationsParams = zod.object({
   "entityId": zod.coerce.number()
 })
 
+export const listEntityAutomationsResponseTriggerJsonScheduleHourMin = 0;
+export const listEntityAutomationsResponseTriggerJsonScheduleHourMax = 23;
+
+export const listEntityAutomationsResponseTriggerJsonScheduleDayMax = 28;
+
+
+
+export const listEntityAutomationsResponseTriggerJsonDaysMin = 0.01;
+
+export const listEntityAutomationsResponseActionsJsonItemMessageMax = 2000;
+
+export const listEntityAutomationsResponseActionsJsonItemTitleMax = 500;
+
+export const listEntityAutomationsResponseActionsJsonItemDescriptionMax = 10000;
+
+export const listEntityAutomationsResponseActionsJsonItemDueInHoursMin = 0;
+
 
 
 
@@ -7593,7 +7890,21 @@ export const ListEntityAutomationsResponseItem = zod.object({
 }),
   "isActive": zod.boolean(),
   "triggerJson": zod.object({
-  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
+  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed', 'inactivity', 'status_age', 'task_due', 'activity_logged', 'task_completed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
+  "schedule": zod.object({
+  "frequency": zod.enum(['minute', 'hour', 'day', 'month']),
+  "hour": zod.number().min(listEntityAutomationsResponseTriggerJsonScheduleHourMin).max(listEntityAutomationsResponseTriggerJsonScheduleHourMax),
+  "day": zod.number().min(1).max(listEntityAutomationsResponseTriggerJsonScheduleDayMax),
+  "timezone": zod.string()
+}).optional(),
+  "repeatHours": zod.number().min(1).nullish(),
+  "maxRuns": zod.number().min(1).nullish(),
+  "days": zod.number().min(listEntityAutomationsResponseTriggerJsonDaysMin).optional(),
+  "kinds": zod.array(zod.enum(['call', 'email', 'meeting', 'note'])).optional(),
+  "successfulOnly": zod.boolean().optional(),
+  "baseline": zod.enum(['created', 'status']).optional(),
+  "skipWithFutureTask": zod.boolean().optional(),
+  "offsetMinutes": zod.number().optional(),
   "fieldKey": zod.string().optional(),
   "fromStatusId": zod.number().nullish(),
   "toStatusId": zod.number().nullish(),
@@ -7611,7 +7922,15 @@ export const ListEntityAutomationsResponseItem = zod.object({
 })),
   "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document', 'notify', 'create_task']),
+  "message": zod.string().max(listEntityAutomationsResponseActionsJsonItemMessageMax).optional(),
+  "userIds": zod.array(zod.number()).optional(),
+  "userFieldKeys": zod.array(zod.string()).optional(),
+  "taskAssignee": zod.boolean().optional(),
+  "title": zod.string().max(listEntityAutomationsResponseActionsJsonItemTitleMax).optional(),
+  "description": zod.string().max(listEntityAutomationsResponseActionsJsonItemDescriptionMax).optional(),
+  "kind": zod.enum(['call', 'email', 'meeting', 'task']).optional(),
+  "dueInHours": zod.number().min(listEntityAutomationsResponseActionsJsonItemDueInHoursMin).optional(),
   "relationId": zod.number().min(1).optional().describe('Required for set_related_status; selects the normalized relation to traverse.'),
   "relationDirection": zod.enum(['forward', 'reverse']).optional().describe('Traversal direction for set_related_status. Required for self-relations.'),
   "fieldKey": zod.string().optional(),
@@ -7714,8 +8033,26 @@ export const CreateEntityAutomationParams = zod.object({
   "entityId": zod.coerce.number()
 })
 
+export const createEntityAutomationBodyTriggerJsonScheduleHourMin = 0;
+export const createEntityAutomationBodyTriggerJsonScheduleHourMax = 23;
+
+export const createEntityAutomationBodyTriggerJsonScheduleDayMax = 28;
+
+
+
+export const createEntityAutomationBodyTriggerJsonDaysMin = 0.01;
+
 export const createEntityAutomationBodyConditionsJsonDefault = [];
 export const createEntityAutomationBodyConditionConjunctionDefault = `and`;
+export const createEntityAutomationBodyActionsJsonItemMessageMax = 2000;
+
+export const createEntityAutomationBodyActionsJsonItemTitleMax = 500;
+
+export const createEntityAutomationBodyActionsJsonItemDescriptionMax = 10000;
+
+export const createEntityAutomationBodyActionsJsonItemDueInHoursMin = 0;
+
+
 
 
 export const createEntityAutomationBodyActionsJsonItemIdempotencyKeyMax = 200;
@@ -7779,7 +8116,21 @@ export const CreateEntityAutomationBody = zod.object({
 }).optional(),
   "isActive": zod.boolean().optional(),
   "triggerJson": zod.object({
-  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
+  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed', 'inactivity', 'status_age', 'task_due', 'activity_logged', 'task_completed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
+  "schedule": zod.object({
+  "frequency": zod.enum(['minute', 'hour', 'day', 'month']),
+  "hour": zod.number().min(createEntityAutomationBodyTriggerJsonScheduleHourMin).max(createEntityAutomationBodyTriggerJsonScheduleHourMax),
+  "day": zod.number().min(1).max(createEntityAutomationBodyTriggerJsonScheduleDayMax),
+  "timezone": zod.string()
+}).optional(),
+  "repeatHours": zod.number().min(1).nullish(),
+  "maxRuns": zod.number().min(1).nullish(),
+  "days": zod.number().min(createEntityAutomationBodyTriggerJsonDaysMin).optional(),
+  "kinds": zod.array(zod.enum(['call', 'email', 'meeting', 'note'])).optional(),
+  "successfulOnly": zod.boolean().optional(),
+  "baseline": zod.enum(['created', 'status']).optional(),
+  "skipWithFutureTask": zod.boolean().optional(),
+  "offsetMinutes": zod.number().optional(),
   "fieldKey": zod.string().optional(),
   "fromStatusId": zod.number().nullish(),
   "toStatusId": zod.number().nullish(),
@@ -7797,7 +8148,15 @@ export const CreateEntityAutomationBody = zod.object({
 })).default(createEntityAutomationBodyConditionsJsonDefault),
   "conditionConjunction": zod.enum(['and', 'or']).default(createEntityAutomationBodyConditionConjunctionDefault),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document', 'notify', 'create_task']),
+  "message": zod.string().max(createEntityAutomationBodyActionsJsonItemMessageMax).optional(),
+  "userIds": zod.array(zod.number()).optional(),
+  "userFieldKeys": zod.array(zod.string()).optional(),
+  "taskAssignee": zod.boolean().optional(),
+  "title": zod.string().max(createEntityAutomationBodyActionsJsonItemTitleMax).optional(),
+  "description": zod.string().max(createEntityAutomationBodyActionsJsonItemDescriptionMax).optional(),
+  "kind": zod.enum(['call', 'email', 'meeting', 'task']).optional(),
+  "dueInHours": zod.number().min(createEntityAutomationBodyActionsJsonItemDueInHoursMin).optional(),
   "relationId": zod.number().min(1).optional().describe('Required for set_related_status; selects the normalized relation to traverse.'),
   "relationDirection": zod.enum(['forward', 'reverse']).optional().describe('Traversal direction for set_related_status. Required for self-relations.'),
   "fieldKey": zod.string().optional(),
@@ -7918,6 +8277,23 @@ export const GetAutomationParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const getAutomationResponseTriggerJsonScheduleHourMin = 0;
+export const getAutomationResponseTriggerJsonScheduleHourMax = 23;
+
+export const getAutomationResponseTriggerJsonScheduleDayMax = 28;
+
+
+
+export const getAutomationResponseTriggerJsonDaysMin = 0.01;
+
+export const getAutomationResponseActionsJsonItemMessageMax = 2000;
+
+export const getAutomationResponseActionsJsonItemTitleMax = 500;
+
+export const getAutomationResponseActionsJsonItemDescriptionMax = 10000;
+
+export const getAutomationResponseActionsJsonItemDueInHoursMin = 0;
+
 
 
 
@@ -7984,7 +8360,21 @@ export const GetAutomationResponse = zod.object({
 }),
   "isActive": zod.boolean(),
   "triggerJson": zod.object({
-  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
+  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed', 'inactivity', 'status_age', 'task_due', 'activity_logged', 'task_completed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
+  "schedule": zod.object({
+  "frequency": zod.enum(['minute', 'hour', 'day', 'month']),
+  "hour": zod.number().min(getAutomationResponseTriggerJsonScheduleHourMin).max(getAutomationResponseTriggerJsonScheduleHourMax),
+  "day": zod.number().min(1).max(getAutomationResponseTriggerJsonScheduleDayMax),
+  "timezone": zod.string()
+}).optional(),
+  "repeatHours": zod.number().min(1).nullish(),
+  "maxRuns": zod.number().min(1).nullish(),
+  "days": zod.number().min(getAutomationResponseTriggerJsonDaysMin).optional(),
+  "kinds": zod.array(zod.enum(['call', 'email', 'meeting', 'note'])).optional(),
+  "successfulOnly": zod.boolean().optional(),
+  "baseline": zod.enum(['created', 'status']).optional(),
+  "skipWithFutureTask": zod.boolean().optional(),
+  "offsetMinutes": zod.number().optional(),
   "fieldKey": zod.string().optional(),
   "fromStatusId": zod.number().nullish(),
   "toStatusId": zod.number().nullish(),
@@ -8002,7 +8392,15 @@ export const GetAutomationResponse = zod.object({
 })),
   "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document', 'notify', 'create_task']),
+  "message": zod.string().max(getAutomationResponseActionsJsonItemMessageMax).optional(),
+  "userIds": zod.array(zod.number()).optional(),
+  "userFieldKeys": zod.array(zod.string()).optional(),
+  "taskAssignee": zod.boolean().optional(),
+  "title": zod.string().max(getAutomationResponseActionsJsonItemTitleMax).optional(),
+  "description": zod.string().max(getAutomationResponseActionsJsonItemDescriptionMax).optional(),
+  "kind": zod.enum(['call', 'email', 'meeting', 'task']).optional(),
+  "dueInHours": zod.number().min(getAutomationResponseActionsJsonItemDueInHoursMin).optional(),
   "relationId": zod.number().min(1).optional().describe('Required for set_related_status; selects the normalized relation to traverse.'),
   "relationDirection": zod.enum(['forward', 'reverse']).optional().describe('Traversal direction for set_related_status. Required for self-relations.'),
   "fieldKey": zod.string().optional(),
@@ -8104,6 +8502,23 @@ export const UpdateAutomationParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateAutomationBodyTriggerJsonScheduleHourMin = 0;
+export const updateAutomationBodyTriggerJsonScheduleHourMax = 23;
+
+export const updateAutomationBodyTriggerJsonScheduleDayMax = 28;
+
+
+
+export const updateAutomationBodyTriggerJsonDaysMin = 0.01;
+
+export const updateAutomationBodyActionsJsonItemMessageMax = 2000;
+
+export const updateAutomationBodyActionsJsonItemTitleMax = 500;
+
+export const updateAutomationBodyActionsJsonItemDescriptionMax = 10000;
+
+export const updateAutomationBodyActionsJsonItemDueInHoursMin = 0;
+
 
 
 
@@ -8168,7 +8583,21 @@ export const UpdateAutomationBody = zod.object({
 }).optional(),
   "isActive": zod.boolean().optional(),
   "triggerJson": zod.object({
-  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
+  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed', 'inactivity', 'status_age', 'task_due', 'activity_logged', 'task_completed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
+  "schedule": zod.object({
+  "frequency": zod.enum(['minute', 'hour', 'day', 'month']),
+  "hour": zod.number().min(updateAutomationBodyTriggerJsonScheduleHourMin).max(updateAutomationBodyTriggerJsonScheduleHourMax),
+  "day": zod.number().min(1).max(updateAutomationBodyTriggerJsonScheduleDayMax),
+  "timezone": zod.string()
+}).optional(),
+  "repeatHours": zod.number().min(1).nullish(),
+  "maxRuns": zod.number().min(1).nullish(),
+  "days": zod.number().min(updateAutomationBodyTriggerJsonDaysMin).optional(),
+  "kinds": zod.array(zod.enum(['call', 'email', 'meeting', 'note'])).optional(),
+  "successfulOnly": zod.boolean().optional(),
+  "baseline": zod.enum(['created', 'status']).optional(),
+  "skipWithFutureTask": zod.boolean().optional(),
+  "offsetMinutes": zod.number().optional(),
   "fieldKey": zod.string().optional(),
   "fromStatusId": zod.number().nullish(),
   "toStatusId": zod.number().nullish(),
@@ -8186,7 +8615,15 @@ export const UpdateAutomationBody = zod.object({
 })).optional(),
   "conditionConjunction": zod.enum(['and', 'or']).optional(),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document', 'notify', 'create_task']),
+  "message": zod.string().max(updateAutomationBodyActionsJsonItemMessageMax).optional(),
+  "userIds": zod.array(zod.number()).optional(),
+  "userFieldKeys": zod.array(zod.string()).optional(),
+  "taskAssignee": zod.boolean().optional(),
+  "title": zod.string().max(updateAutomationBodyActionsJsonItemTitleMax).optional(),
+  "description": zod.string().max(updateAutomationBodyActionsJsonItemDescriptionMax).optional(),
+  "kind": zod.enum(['call', 'email', 'meeting', 'task']).optional(),
+  "dueInHours": zod.number().min(updateAutomationBodyActionsJsonItemDueInHoursMin).optional(),
   "relationId": zod.number().min(1).optional().describe('Required for set_related_status; selects the normalized relation to traverse.'),
   "relationDirection": zod.enum(['forward', 'reverse']).optional().describe('Traversal direction for set_related_status. Required for self-relations.'),
   "fieldKey": zod.string().optional(),
@@ -8278,6 +8715,23 @@ export const UpdateAutomationBody = zod.object({
   "sortOrder": zod.number().optional()
 })
 
+export const updateAutomationResponseTriggerJsonScheduleHourMin = 0;
+export const updateAutomationResponseTriggerJsonScheduleHourMax = 23;
+
+export const updateAutomationResponseTriggerJsonScheduleDayMax = 28;
+
+
+
+export const updateAutomationResponseTriggerJsonDaysMin = 0.01;
+
+export const updateAutomationResponseActionsJsonItemMessageMax = 2000;
+
+export const updateAutomationResponseActionsJsonItemTitleMax = 500;
+
+export const updateAutomationResponseActionsJsonItemDescriptionMax = 10000;
+
+export const updateAutomationResponseActionsJsonItemDueInHoursMin = 0;
+
 
 
 
@@ -8344,7 +8798,21 @@ export const UpdateAutomationResponse = zod.object({
 }),
   "isActive": zod.boolean(),
   "triggerJson": zod.object({
-  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
+  "type": zod.enum(['record_created', 'record_created_or_status_changed', 'record_updated', 'field_changed', 'status_changed', 'date_reached', 'page_field_changed', 'inactivity', 'status_age', 'task_due', 'activity_logged', 'task_completed']).describe('record_created_or_status_changed matches record.created or status.changed only, never record.updated. It has no from\/to status selectors; use common conditions (including __status__) to constrain the record\'s current status.'),
+  "schedule": zod.object({
+  "frequency": zod.enum(['minute', 'hour', 'day', 'month']),
+  "hour": zod.number().min(updateAutomationResponseTriggerJsonScheduleHourMin).max(updateAutomationResponseTriggerJsonScheduleHourMax),
+  "day": zod.number().min(1).max(updateAutomationResponseTriggerJsonScheduleDayMax),
+  "timezone": zod.string()
+}).optional(),
+  "repeatHours": zod.number().min(1).nullish(),
+  "maxRuns": zod.number().min(1).nullish(),
+  "days": zod.number().min(updateAutomationResponseTriggerJsonDaysMin).optional(),
+  "kinds": zod.array(zod.enum(['call', 'email', 'meeting', 'note'])).optional(),
+  "successfulOnly": zod.boolean().optional(),
+  "baseline": zod.enum(['created', 'status']).optional(),
+  "skipWithFutureTask": zod.boolean().optional(),
+  "offsetMinutes": zod.number().optional(),
   "fieldKey": zod.string().optional(),
   "fromStatusId": zod.number().nullish(),
   "toStatusId": zod.number().nullish(),
@@ -8362,7 +8830,15 @@ export const UpdateAutomationResponse = zod.object({
 })),
   "conditionConjunction": zod.enum(['and', 'or']),
   "actionsJson": zod.array(zod.object({
-  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document']),
+  "type": zod.enum(['set_field', 'change_status', 'set_related_status', 'create_record', 'update_records_where', 'webhook', 'generate_document', 'notify', 'create_task']),
+  "message": zod.string().max(updateAutomationResponseActionsJsonItemMessageMax).optional(),
+  "userIds": zod.array(zod.number()).optional(),
+  "userFieldKeys": zod.array(zod.string()).optional(),
+  "taskAssignee": zod.boolean().optional(),
+  "title": zod.string().max(updateAutomationResponseActionsJsonItemTitleMax).optional(),
+  "description": zod.string().max(updateAutomationResponseActionsJsonItemDescriptionMax).optional(),
+  "kind": zod.enum(['call', 'email', 'meeting', 'task']).optional(),
+  "dueInHours": zod.number().min(updateAutomationResponseActionsJsonItemDueInHoursMin).optional(),
   "relationId": zod.number().min(1).optional().describe('Required for set_related_status; selects the normalized relation to traverse.'),
   "relationDirection": zod.enum(['forward', 'reverse']).optional().describe('Traversal direction for set_related_status. Required for self-relations.'),
   "fieldKey": zod.string().optional(),

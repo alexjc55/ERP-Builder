@@ -38,6 +38,114 @@ tags:
     description: Entity-bound DOCX document templates and generation
 
 paths:
+  /record-activity:
+    get:
+      operationId: listRecordActivity
+      parameters:
+        - { name: entityId, in: query, required: true, schema: { type: integer } }
+        - { name: recordId, in: query, required: true, schema: { type: integer } }
+        - { name: pageId, in: query, schema: { type: integer } }
+        - { name: beforeId, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: Permission-scoped activity feed
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActivityFeed" } } }
+    post:
+      operationId: createRecordActivity
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ActivityInput" } } }
+      responses:
+        "201":
+          description: Activity and optional next task created atomically
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActivityEntry" } } }
+  /record-activity/{id}:
+    put:
+      operationId: amendRecordActivity
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ActivityAmendment" } } }
+      responses:
+        "200":
+          description: Amendment preserved in history
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActivityEntry" } } }
+  /activity-settings:
+    get:
+      operationId: getActivitySettings
+      parameters: [{ name: entityId, in: query, required: true, schema: { type: integer } }]
+      responses:
+        "200":
+          description: Entity activity settings
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActivitySettings" } } }
+    post:
+      operationId: saveActivitySettings
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ActivitySettings" } } }
+      responses:
+        "200":
+          description: Settings saved by entity administrator
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActivitySettings" } } }
+  /activity-assignees:
+    get:
+      operationId: listActivityAssignees
+      parameters:
+        - { name: entityId, in: query, required: true, schema: { type: integer } }
+        - { name: recordId, in: query, required: true, schema: { type: integer } }
+        - { name: pageId, in: query, schema: { type: integer } }
+      responses:
+        "200":
+          description: Active human users allowed to view this record
+          content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ActivityPerson" } } } }
+  /activity-tasks:
+    get:
+      operationId: listActivityTasks
+      parameters:
+        - { name: entityId, in: query, schema: { type: integer } }
+        - { name: recordId, in: query, schema: { type: integer } }
+        - { name: pageId, in: query, schema: { type: integer } }
+        - { name: filter, in: query, schema: { type: string, enum: [open, overdue, today, upcoming, completed, cancelled, all], default: open } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: My tasks or permitted record tasks
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActivityTaskList" } } }
+    post:
+      operationId: createActivityTask
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ActivityTaskInput" } } }
+      responses:
+        "201":
+          description: Task created
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActivityTask" } } }
+  /activity-tasks/{id}:
+    put:
+      operationId: changeActivityTask
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ActivityTaskChange" } } }
+      responses:
+        "200":
+          description: Updated task with permanent change history
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActivityTask" } } }
+  /activity-notifications:
+    get:
+      operationId: listActivityNotifications
+      parameters:
+        - { name: offset, in: query, schema: { type: integer, minimum: 0 } }
+      responses:
+        "200":
+          description: Personal inbox with live record permissions
+          content: { application/json: { schema: { $ref: "#/components/schemas/ActivityNotificationList" } } }
+  /activity-notifications/{id}/read:
+    post:
+      operationId: readActivityNotification
+      parameters: [{ name: id, in: path, required: true, schema: { type: integer } }]
+      responses:
+        "204": { description: Read }
   /card-templates:
     get:
       operationId: listCardTemplates
@@ -4953,6 +5061,127 @@ components:
       scheme: bearer
       description: Opaque one-time-disclosed inbound integration secret
   schemas:
+    ActivitySettings:
+      type: object
+      required: [entityId, enabled]
+      properties:
+        entityId: { type: integer }
+        enabled: { type: boolean }
+    ActivityPerson:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+    ActivityTaskInput:
+      type: object
+      required: [entityId, recordId, title, kind, dueAt, assigneeId]
+      properties:
+        entityId: { type: integer }
+        recordId: { type: integer }
+        pageId: { type: ["integer", "null"] }
+        title: { type: string, minLength: 1, maxLength: 500 }
+        description: { type: string, maxLength: 10000 }
+        kind: { type: string, enum: [call, email, meeting, task] }
+        dueAt: { type: string, format: date-time }
+        assigneeId: { type: integer }
+        reminderMinutes: { type: ["integer", "null"], minimum: 0, maximum: 43200 }
+    ActivityInput:
+      type: object
+      required: [entityId, recordId, kind, body]
+      properties:
+        entityId: { type: integer }
+        recordId: { type: integer }
+        pageId: { type: ["integer", "null"] }
+        kind: { type: string, enum: [call, email, meeting, note] }
+        body: { type: string, minLength: 1, maxLength: 10000 }
+        outcome: { type: string, enum: [successful, attempted, none] }
+        occurredAt: { type: string, format: date-time }
+        nextTask: { $ref: "#/components/schemas/ActivityTaskInput" }
+    ActivityAmendment:
+      type: object
+      required: [expectedVersion, action, reason]
+      properties:
+        expectedVersion: { type: integer }
+        action: { type: string, enum: [edit, delete] }
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+        body: { type: string, minLength: 1, maxLength: 10000 }
+        pageId: { type: ["integer", "null"] }
+    ActivityEntry:
+      type: object
+      required: [id, entityId, recordId, kind, body, outcome, occurredAt, createdAt, actorName, version, deleted, canAmend]
+      properties:
+        id: { type: integer }
+        entityId: { type: integer }
+        recordId: { type: integer }
+        kind: { type: string }
+        body: { type: string }
+        outcome: { type: string }
+        occurredAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        actorId: { type: ["integer", "null"] }
+        actorName: { type: string }
+        taskId: { type: ["integer", "null"] }
+        version: { type: integer }
+        deleted: { type: boolean }
+        canAmend: { type: boolean }
+    ActivityFeed:
+      type: object
+      required: [enabled, canWrite, items, nextBeforeId]
+      properties:
+        enabled: { type: boolean }
+        canWrite: { type: boolean }
+        items: { type: array, items: { $ref: "#/components/schemas/ActivityEntry" } }
+        nextBeforeId: { type: ["integer", "null"] }
+    ActivityTask:
+      allOf:
+        - $ref: "#/components/schemas/ActivityTaskInput"
+        - type: object
+          required: [id, status, version, createdAt, assigneeName, canManage, result, recordLabel]
+          properties:
+            id: { type: integer }
+            status: { type: string, enum: [open, completed, cancelled] }
+            version: { type: integer }
+            createdAt: { type: string, format: date-time }
+            assigneeName: { type: string }
+            canManage: { type: boolean }
+            result: { type: string }
+            recordLabel: { type: string }
+            recordUrl: { type: ["string", "null"] }
+    ActivityTaskChange:
+      type: object
+      required: [expectedVersion, action]
+      properties:
+        expectedVersion: { type: integer }
+        action: { type: string, enum: [complete, reschedule, cancel] }
+        pageId: { type: ["integer", "null"] }
+        dueAt: { type: string, format: date-time }
+        result: { type: string, maxLength: 10000 }
+        outcome: { type: string, enum: [successful, attempted, none] }
+    ActivityTaskList:
+      type: object
+      required: [items, nextOffset]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ActivityTask" } }
+        nextOffset: { type: ["integer", "null"] }
+    ActivityNotification:
+      type: object
+      required: [id, entityId, recordId, message, createdAt, readAt, recordLabel]
+      properties:
+        id: { type: integer }
+        entityId: { type: integer }
+        recordId: { type: integer }
+        message: { type: string }
+        createdAt: { type: string, format: date-time }
+        readAt: { type: ["string", "null"], format: date-time }
+        recordLabel: { type: string }
+        recordUrl: { type: ["string", "null"] }
+    ActivityNotificationList:
+      type: object
+      required: [items, nextOffset]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ActivityNotification" } }
+        nextOffset: { type: ["integer", "null"] }
     SecurityReviewSelection:
       type: object
       required: [events]
@@ -9933,18 +10162,35 @@ components:
           type: string
           description: The triggering record's field key to read when valueSource is "field".
 
+    AutomationCheckSchedule:
+      type: object
+      required: [frequency, hour, day, timezone]
+      properties:
+        frequency: { type: string, enum: [minute, hour, day, month] }
+        hour: { type: integer, minimum: 0, maximum: 23 }
+        day: { type: integer, minimum: 1, maximum: 28 }
+        timezone: { type: string }
     AutomationTrigger:
       type: object
       required: [type]
       properties:
         type:
           type: string
-          enum: [record_created, record_created_or_status_changed, record_updated, field_changed, status_changed, date_reached, page_field_changed]
+          enum: [record_created, record_created_or_status_changed, record_updated, field_changed, status_changed, date_reached, page_field_changed, inactivity, status_age, task_due, activity_logged, task_completed]
           description: >-
             record_created_or_status_changed matches record.created or
             status.changed only, never record.updated. It has no from/to
             status selectors; use common conditions (including __status__)
             to constrain the record's current status.
+        schedule: { $ref: "#/components/schemas/AutomationCheckSchedule" }
+        repeatHours: { type: ["number", "null"], minimum: 1 }
+        maxRuns: { type: ["integer", "null"], minimum: 1 }
+        days: { type: number, minimum: 0.01 }
+        kinds: { type: array, items: { type: string, enum: [call, email, meeting, note] } }
+        successfulOnly: { type: boolean }
+        baseline: { type: string, enum: [created, status] }
+        skipWithFutureTask: { type: boolean }
+        offsetMinutes: { type: integer }
         fieldKey:
           type: string
         fromStatusId:
@@ -10004,7 +10250,15 @@ components:
       properties:
         type:
           type: string
-          enum: [set_field, change_status, set_related_status, create_record, update_records_where, webhook, generate_document]
+          enum: [set_field, change_status, set_related_status, create_record, update_records_where, webhook, generate_document, notify, create_task]
+        message: { type: string, maxLength: 2000 }
+        userIds: { type: array, items: { type: integer } }
+        userFieldKeys: { type: array, items: { type: string } }
+        taskAssignee: { type: boolean }
+        title: { type: string, maxLength: 500 }
+        description: { type: string, maxLength: 10000 }
+        kind: { type: string, enum: [call, email, meeting, task] }
+        dueInHours: { type: number, minimum: 0 }
         relationId:
           type: integer
           minimum: 1

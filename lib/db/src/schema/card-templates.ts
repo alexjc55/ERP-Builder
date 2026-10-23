@@ -23,7 +23,7 @@ const textRun = z.object({
 const textRuns = z.array(textRun).max(500).refine(runs => runs.reduce((sum, run) => sum + run.text.length, 0) <= 10000, "Text is too long");
 const block = z.object({
   id: z.string().min(1).max(100),
-  kind: z.enum(["field", "text", "divider", "relatedTable"]),
+  kind: z.enum(["field", "text", "divider", "relatedTable", "activity"]),
   fieldKey: z.string().max(200).nullable().optional(),
   label: ml.optional(),
   text: ml.optional(),
