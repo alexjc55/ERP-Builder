@@ -43,10 +43,10 @@ function ActivityPanelBody({ entityId, recordId, pageId, variant }: { entityId: 
   const { t } = L;
   const ctx = { entityId, recordId, pageId };
   const feedParams = { entityId, recordId, ...(pageId != null ? { pageId } : {}) };
-  const feed = useListRecordActivity(feedParams, { query: { queryKey: getListRecordActivityQueryKey(feedParams), refetchInterval: ACTIVITY_REFRESH_MS, refetchIntervalInBackground: false } });
+  const feed = useListRecordActivity(feedParams, { query: { queryKey: getListRecordActivityQueryKey(feedParams), refetchOnMount: "always", refetchInterval: ACTIVITY_REFRESH_MS, refetchIntervalInBackground: false } });
   const enabled = feed.data?.enabled === true;
   const taskParams = { entityId, recordId, ...(pageId != null ? { pageId } : {}), filter: "open" as const };
-  const tasks = useListActivityTasks(taskParams, { query: { enabled, queryKey: getListActivityTasksQueryKey(taskParams), refetchInterval: ACTIVITY_REFRESH_MS, refetchIntervalInBackground: false } });
+  const tasks = useListActivityTasks(taskParams, { query: { enabled, queryKey: getListActivityTasksQueryKey(taskParams), refetchOnMount: "always", refetchInterval: ACTIVITY_REFRESH_MS, refetchIntervalInBackground: false } });
   const [planning, setPlanning] = useState(false);
 
   if (feed.isLoading) {

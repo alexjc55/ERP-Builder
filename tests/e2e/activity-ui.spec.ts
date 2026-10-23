@@ -99,6 +99,21 @@ test("my tasks: complete a task and mark a notification read", async ({ page }) 
 
 test("record card: log a call with a next task; deep link params are cleaned", async ({ page }) => {
   await auth(page);
+  await page.addInitScript(() => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      if (String(input).includes("/collaboration/") && String(input).includes("/stream")) {
+        return new Response(new ReadableStream({
+          start(controller) {
+            const send = (type: string) => controller.enqueue(new TextEncoder().encode(`event: ${type}\ndata: ${JSON.stringify({ type, presence: [] })}\n\n`));
+            (window as any).sendActivityTableChange = () => send("table_changed");
+            send("snapshot");
+          },
+        }), { headers: { "Content-Type": "text/event-stream" } });
+      }
+      return originalFetch(input, init);
+    };
+  });
   const record = { id: 50, entityId: E, statusId: null, valuesJson: { title: "Client 50" }, version: 2, archivedAt: null, createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z" };
   const entries: any[] = [
     { id: 298, entityId: E, recordId: 50, kind: "status_changed", body: "Статус записи изменён", outcome: "none",
@@ -159,4 +174,22 @@ test("record card: log a call with a next task; deep link params are cleaned", a
   await expect(panel.getByTestId("text-task-title-400")).toHaveText("Follow up on approval");
   await expect(panel.getByTestId("text-no-next-step")).toHaveCount(0);
   await expect(panel.getByTestId("input-activity-body")).toHaveValue("");
+
+  // A foreign status change must update the open feed before the 30s poll,
+  // without discarding the unfinished interaction text.
+  await panel.getByTestId("input-activity-body").fill("Unsaved call notes");
+  entries.unshift({ ...entries[0], id: 901, kind: "status_changed", canAmend: false,
+    statusChange: { from: ml("In progress"), to: ml("Approved"), cleared: false } });
+  await page.evaluate(() => (window as any).sendActivityTableChange());
+  await expect(panel.getByTestId("activity-entry-901")).toContainText("In progress → Approved", { timeout: 5000 });
+  await expect(panel.getByTestId("input-activity-body")).toHaveValue("Unsaved call notes");
+  await panel.getByTestId("input-activity-body").fill("");
+
+  // A fresh cache must not suppress the read on reopening the card, even
+  // when no SSE event arrived while the panel was closed.
+  await page.getByTestId("record-dialog").getByRole("button", { name: "Закрыть", exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  entries.unshift({ ...entries[0], id: 902, statusChange: { from: ml("Approved"), to: ml("Completed"), cleared: false } });
+  await page.getByTestId("record-view-button").first().click();
+  await expect(panel.getByTestId("activity-entry-902")).toContainText("Approved → Completed", { timeout: 5000 });
 });

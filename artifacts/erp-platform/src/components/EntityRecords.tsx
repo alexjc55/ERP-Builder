@@ -220,6 +220,7 @@ import type { FieldFormatRule, CustomFilterPick, CustomFilter, CustomFilterInput
 import { filterUserOptionsByRoles } from "@/lib/userFieldRoles";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCollaboration, type CollaborationPresence } from "@/lib/useCollaboration";
+import { invalidateEntityActivity } from "@/lib/activityQueries";
 import { CollaborationNotice } from "@/components/CollaborationNotice";
 import { useManualDataRefresh } from "@/lib/manualDataRefresh";
 import { Plus, Pencil, Trash2, Loader2, Inbox, X, Search, LayoutList, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown, Star, ShieldAlert, Archive, ArchiveRestore, History, Settings2, Check, Filter, Upload, FileText, FileQuestion, Columns3, CircleDot, Share2, Workflow, Calendar as CalendarIcon, Cloud, ExternalLink, UserPlus, Zap, ChevronsUpDown, ChevronsDownUp, ArrowUp, ArrowDown, ArrowUpDown, ListChecks, Merge, RefreshCw, Eye } from "lucide-react";
@@ -5316,6 +5317,7 @@ export function EntityRecords({
   }, [entityId, queryKey, refreshTick, permPageId, recordsBootstrapReady]);
 
   const invalidate = () => {
+    void invalidateEntityActivity(queryClient, entityId);
     queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/records`] });
     setRefreshTick((t) => t + 1);
   };
@@ -6698,6 +6700,8 @@ export function EntityRecords({
   useEffect(() => {
     const msg = collab.lastMessage;
     if (!msg || msg.type === "snapshot" || msg.type === "presence") return;
+    // Independent of table editor deferral: don't reset forms or wait for polling.
+    void invalidateEntityActivity(queryClient, entityId);
     if (msg.type === "table_changed") {
       setRealtimeTick((tick) => tick + 1);
       return;
@@ -6719,7 +6723,11 @@ export function EntityRecords({
       return;
     }
     setRealtimeTick((tick) => tick + 1);
-  }, [collab.lastMessage]);
+  }, [collab.lastMessage, queryClient, entityId]);
+
+  useEffect(() => {
+    if (collab.subscriptionKey) void invalidateEntityActivity(queryClient, entityId);
+  }, [collab.subscriptionKey, queryClient, entityId]);
 
   useEffect(() => {
     if (editingCell) {
