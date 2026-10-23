@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { duplicatePage } from "../lib/duplicate-page";
-import { changesSystemPage, isAdminPath } from "../lib/system-pages";
+import { changesSystemPage, isReservedSystemPath } from "../lib/system-pages";
 import {
   db,
   pagesTable,
@@ -145,7 +145,7 @@ router.post("/pages", requireAuth, requireAdmin("pages"), async (req, res): Prom
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  if (isAdminPath(parsed.data.path)) {
+  if (isReservedSystemPath(parsed.data.path)) {
     res.status(403).json({ error: "Administrative routes are reserved for system pages" });
     return;
   }
@@ -431,7 +431,7 @@ router.put("/pages/:id", requireAuth, requireAdmin("pages"), async (req, res): P
     res.status(403).json({ error: "System pages only allow changes to names, descriptions, icons, order and default menu expansion" });
     return;
   }
-  if (!protectedPage.isSystem && isAdminPath(body.path)) {
+  if (!protectedPage.isSystem && isReservedSystemPath(body.path)) {
     res.status(403).json({ error: "Administrative routes are reserved for system pages" });
     return;
   }

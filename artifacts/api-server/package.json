@@ -11,6 +11,7 @@
     "test:card-published-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/card-published.db.test.ts",
     "test:record-activity-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/routes/record-activity.db.test.ts",
     "test:settings": "tsx --test src/lib/app-settings-validation.test.ts",
+    "test:system-pages": "tsx --test src/lib/system-pages.test.ts",
     "test:page-custom-filters-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/lib/page-custom-filters.db.test.ts",
     "test:inbound-safety-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/lib/inbound-safety.db.test.ts",
     "test:duplicate-page-db": "bash ../../scripts/with-validation-lock.sh tsx --test --test-concurrency=1 src/lib/duplicate-page.db.test.ts",

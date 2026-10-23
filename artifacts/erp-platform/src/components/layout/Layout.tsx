@@ -179,6 +179,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   // A page is visible if: superAdmin (all), the home page ("/"), an admin builder
   // page whose capability is granted, or a content page whose id is granted.
   const isPageVisible = (page: Page): boolean => {
+    if (page.path === "/my-tasks") return !isGuest;
     if (isSuperAdmin) return true;
     const path = page.path || "";
     // The home dashboard link hides when every role explicitly denies it
@@ -192,6 +193,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const pages = pagesData || [];
+  const tasksPage = pages.find((p: Page) => p.path === "/my-tasks");
+  const TasksIcon = getIconComponent(tasksPage?.icon, ListChecks);
   const topPages = pages.filter((p: Page) => !p.parentPageId && p.isActive);
   const subPages = pages.filter((p: Page) => p.parentPageId && p.isActive);
 
@@ -260,9 +263,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </div>
 
       <nav className={cn("flex-1 overflow-y-auto py-4 space-y-1", collapsed ? "px-2" : "px-3")}>
-        {!isGuest && (
-          <SidebarItem name={t("activity.myTitle", "Мои задачи")} icon="list-checks" route="/my-tasks" collapsed={collapsed} />
-        )}
         {topPages.sort((a: Page, b: Page) => a.sortOrder - b.sortOrder).map((page: Page) => {
           const name = ml(page.nameJson);
           const children = getSubPages(page.id);
@@ -362,8 +362,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/my-tasks" className="flex items-center w-full cursor-pointer" data-testid="link-my-tasks">
-                <ListChecks className="w-4 h-4 mr-2" />
-                {t("activity.myTitle", "Мои задачи")}
+                <TasksIcon className="w-4 h-4 mr-2" />
+                {tasksPage ? ml(tasksPage.nameJson) : t("activity.myTitle", "Мои задачи")}
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>

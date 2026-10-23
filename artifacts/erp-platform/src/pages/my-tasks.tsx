@@ -9,11 +9,16 @@ import { TASK_FILTERS, apiErrorMessage, type TaskFilter } from "@/lib/activity";
 import { useActivityLabels } from "@/components/activity/activityShared";
 import { TaskRow } from "@/components/activity/TaskRow";
 import { NotificationInbox } from "@/components/activity/NotificationInbox";
+import { useListPages } from "@workspace/api-client-react";
+import { useML } from "@/lib/i18n";
 
 /** Personal workspace: own tasks across all records + internal inbox. */
 export default function MyTasksPage() {
   const L = useActivityLabels();
   const { t } = L;
+  const ml = useML();
+  const { data: pages } = useListPages();
+  const tasksPage = pages?.find(page => page.path === "/my-tasks");
   const [filter, setFilter] = useState<TaskFilter>("open");
   const params = { filter };
   const q = useListActivityTasks(params, { query: { queryKey: getListActivityTasksQueryKey(params), refetchInterval: ACTIVITY_REFRESH_MS, refetchIntervalInBackground: false } });
@@ -42,7 +47,7 @@ export default function MyTasksPage() {
         <div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-blue-600">
           <ClipboardList className="h-3.5 w-3.5" />{t("activity.myKicker", "Личное")}
         </div>
-        <h1 className="text-2xl font-bold text-slate-900">{t("activity.myTitle", "Мои задачи")}</h1>
+        <h1 className="text-2xl font-bold text-slate-900">{tasksPage ? ml(tasksPage.nameJson) : t("activity.myTitle", "Мои задачи")}</h1>
         <p className="mt-1 max-w-2xl text-sm text-slate-500">{t("activity.mySubtitle", "Звонки, письма и встречи, назначенные вам по всем записям. Отметки выполнения сразу попадают в историю записи.")}</p>
       </div>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">

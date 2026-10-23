@@ -54,4 +54,10 @@ CREATE TABLE IF NOT EXISTS activity_rule_states (
   last_fired_at timestamptz
 );
 CREATE UNIQUE INDEX IF NOT EXISTS activity_rule_states_unique ON activity_rule_states(automation_id,record_id,subject_key);
+LOCK TABLE pages IN SHARE ROW EXCLUSIVE MODE;
+INSERT INTO pages (name_json, icon, path, sort_order, is_active, is_system)
+SELECT '{"ru":"Мои задачи","en":"My tasks","he":"המשימות שלי"}'::jsonb,
+       'list-checks', '/my-tasks', 0, true, true
+WHERE NOT EXISTS (SELECT 1 FROM pages WHERE path = '/my-tasks');
+UPDATE pages SET is_system = true WHERE path = '/my-tasks' AND NOT is_system;
 COMMIT;

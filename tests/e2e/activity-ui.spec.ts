@@ -6,7 +6,10 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 const E = 890101, PAGE = 890201, ME = 1;
 const ml = (en: string) => ({ en, ru: en, he: en });
 const entities = [{ id: E, pageId: PAGE, entityKey: "act_clients", nameJson: ml("Clients"), isActive: true, allowNoStatus: true, defaultPageSize: 50 }];
-const pages = [{ id: PAGE, path: "/act-clients", nameJson: ml("Clients"), isActive: true }];
+const pages = [
+  { id: PAGE, path: "/act-clients", nameJson: ml("Clients"), isActive: true, sortOrder: 0 },
+  { id: PAGE + 1, path: "/my-tasks", nameJson: ml("Personal follow-ups"), icon: "star", isSystem: true, isActive: true, sortOrder: 10 },
+];
 const fields = [{ id: 1, entityId: E, fieldKey: "title", nameJson: ml("Title"), fieldType: "text", sortOrder: 1, isActive: true, showInTable: true, permissionsJson: {}, optionsJson: [], isRequired: false }];
 const me = {
   id: ME, email: "act@example.test", firstName: "Dana", roleId: 1, roleIds: [1], language: "en", direction: "ltr", isActive: true,
@@ -68,6 +71,11 @@ test("my tasks: complete a task and mark a notification read", async ({ page }) 
   });
 
   await page.goto("/my-tasks");
+  await expect(page.getByRole("heading", { name: "Personal follow-ups", exact: true })).toBeVisible();
+  const taskLink = page.locator("nav a[href='/my-tasks']:visible");
+  await expect(taskLink).toHaveCount(1);
+  await expect(taskLink).toContainText("Personal follow-ups");
+  await expect(taskLink.locator("svg.lucide-star")).toHaveCount(1);
   await expect(page.getByTestId("page-my-tasks")).toBeVisible();
   await expect(page.getByTestId("text-task-title-71")).toHaveText("Call back 71");
   // The record link points at the table deep-link format.

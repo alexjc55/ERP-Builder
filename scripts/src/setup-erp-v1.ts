@@ -198,6 +198,14 @@ async function main() {
       .returning({ id: pagesTable.id });
 
     // ── 2b. Administration menu (builder pages) ─────────────────────────────
+    await tx.insert(pagesTable).values({
+      nameJson: ml("Мои задачи", "My tasks", "המשימות שלי"),
+      icon: "list-checks",
+      path: "/my-tasks",
+      sortOrder: 0,
+      isSystem: true,
+    });
+
     // These rows make the admin constructor reachable from the sidebar. The
     // sidebar is built entirely from the `pages` table, so the wipe above also
     // removed the admin menu — it must be recreated. Visibility is driven by
