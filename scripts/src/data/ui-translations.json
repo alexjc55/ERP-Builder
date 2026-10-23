@@ -1,4 +1,7 @@
 [
+  { "key": "activity.noStatus", "ru": "Без статуса", "en": "No status", "he": "ללא סטטוס" },
+  { "key": "activity.statusUnavailable", "ru": "Статус недоступен", "en": "Status unavailable", "he": "הסטטוס אינו זמין" },
+  { "key": "activity.statusNotRecorded", "ru": "Статус изменён. Название не сохранено в старой истории.", "en": "Status changed. Its name was not saved in the old history.", "he": "הסטטוס השתנה. שמו לא נשמר בהיסטוריה הישנה." },
   { "key": "cards.appearanceLibrary", "ru": "Шаблоны оформления", "en": "Appearance presets", "he": "תבניות עיצוב" },
   { "key": "cards.appearanceHint", "ru": "Общие для проекта. Применяется только оформление — поля и структура не меняются. Затем сохраните карточку.", "en": "Shared across the project. Applies appearance only, without changing fields or structure. Save the card afterwards.", "he": "משותפות לפרויקט. העיצוב בלבד מוחל, ללא שינוי שדות או מבנה. לאחר מכן יש לשמור את הכרטיס." },
   { "key": "cards.appearanceChoose", "ru": "Выберите шаблон", "en": "Choose a preset", "he": "בחרו תבנית" },

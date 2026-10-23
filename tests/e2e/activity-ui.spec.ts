@@ -100,7 +100,14 @@ test("my tasks: complete a task and mark a notification read", async ({ page }) 
 test("record card: log a call with a next task; deep link params are cleaned", async ({ page }) => {
   await auth(page);
   const record = { id: 50, entityId: E, statusId: null, valuesJson: { title: "Client 50" }, version: 2, archivedAt: null, createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z" };
-  const entries: any[] = [];
+  const entries: any[] = [
+    { id: 298, entityId: E, recordId: 50, kind: "status_changed", body: "Статус записи изменён", outcome: "none",
+      occurredAt: inHours(-4), createdAt: inHours(-4), actorName: "Dana", version: 1, deleted: false, canAmend: false,
+      statusChange: { from: ml("New"), to: ml("In progress"), cleared: false } },
+    { id: 299, entityId: E, recordId: 50, kind: "task_rescheduled", body: "Call tomorrow\n2031-05-04T10:30:00.000Z",
+      outcome: "none", occurredAt: inHours(-3), createdAt: inHours(-3), actorName: "Dana", version: 1, deleted: false, canAmend: false,
+      taskContext: { kind: "call", assigneeName: "Lior" } },
+  ];
   const tasks: any[] = [];
   const posts: any[] = [];
   await page.route("**/api/**", async route => {
@@ -114,7 +121,7 @@ test("record card: log a call with a next task; deep link params are cleaned", a
     if (path === "/api/activity-assignees") return reply([{ id: ME, name: "Dana" }, { id: 2, name: "Lior" }]);
     if (path === "/api/record-activity" && req.method() === "POST") {
       const body = req.postDataJSON(); posts.push(body);
-      const entry = { id: 300 + entries.length, entityId: E, recordId: 50, kind: body.kind, body: body.body, outcome: body.outcome ?? "none", occurredAt: new Date().toISOString(), createdAt: new Date().toISOString(), actorId: ME, actorName: "Dana", taskId: null, version: 1, deleted: false, canAmend: true };
+      const entry = { id: 300 + posts.length - 1, entityId: E, recordId: 50, kind: body.kind, body: body.body, outcome: body.outcome ?? "none", occurredAt: new Date().toISOString(), createdAt: new Date().toISOString(), actorId: ME, actorName: "Dana", taskId: null, version: 1, deleted: false, canAmend: true };
       entries.unshift(entry);
       if (body.nextTask) tasks.push(task(400, { ...body.nextTask, version: 1 }));
       return reply(entry, 201);
@@ -130,6 +137,12 @@ test("record card: log a call with a next task; deep link params are cleaned", a
   await page.goto("/act-clients?recordId=50&keep=1");
   const panel = page.getByTestId("activity-panel");
   await expect(panel).toBeVisible();
+  await expect(panel.getByTestId("activity-entry-298")).toContainText("New → In progress");
+  await expect(panel.getByTestId("activity-entry-298")).toContainText("Status changed");
+  await expect(panel.getByTestId("activity-entry-298")).not.toContainText("status_changed");
+  await expect(panel.getByTestId("activity-entry-299")).toContainText("Task rescheduled");
+  await expect(panel.getByTestId("activity-entry-299")).toContainText("Lior");
+  await expect(panel.getByTestId("activity-entry-299")).not.toContainText("T10:30:00.000Z");
   await expect(page).toHaveURL(/\/act-clients\?keep=1$/);
   await expect(panel.getByTestId("text-no-next-step")).toBeVisible();
 

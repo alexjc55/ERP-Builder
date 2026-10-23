@@ -3,7 +3,8 @@ import { z } from "zod/v4";
 import { and, eq, desc, asc, lt, gte, lte, inArray, sql } from "drizzle-orm";
 import { db, activitySettingsTable, recordActivityTable as entries, activityTasksTable as tasks, activityNotificationsTable as notifications, entityRecordsTable, usersTable, appSettingsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/auth";
-import { requireAdmin } from "../middlewares/permissions";
+import { requireAdmin, effectiveStatusVisibility } from "../middlewares/permissions";
+import { entityStatusesTable, type RolePermissions } from "@workspace/db";
 import { ActivityError, activityAccess, activityEnabled, eligibleAssignee, humanUserWhere } from "../lib/activity-access";
 import { dispatchActivityEvent } from "../lib/activity-automation";
 import { invalidateEntityTables } from "../lib/collaboration";
@@ -57,12 +58,28 @@ async function taskCreate(tx: Tx, input: z.infer<typeof taskInput>, actorId: num
     reminderAt: input.reminderMinutes == null ? null : new Date(dueAt.getTime() - input.reminderMinutes * 60_000),
   }).returning();
   await tx.insert(entries).values({ entityId: input.entityId, recordId: input.recordId, taskId: row.id, actorId, kind: "task_created",
+    details: { assigneeId: input.assigneeId, taskKind: input.kind },
     body: `${input.title}\n${dueAt.toISOString()}\n${input.description}` });
   return row;
 }
-async function entryDto(row: typeof entries.$inferSelect, userId: number, canWrite: boolean, superAdmin: boolean) {
+async function entryDto(row: typeof entries.$inferSelect, userId: number, canWrite: boolean, superAdmin: boolean, perms?: RolePermissions) {
   const [user] = row.actorId ? await db.select().from(usersTable).where(eq(usersTable.id, row.actorId)) : [];
-  return { ...row, actorName: user ? `${user.firstName} ${user.lastName}`.trim() : "Система",
+  const { details, ...safeRow } = row;
+  const [assignee] = typeof details.assigneeId === "number"
+    ? await db.select({ firstName: usersTable.firstName, lastName: usersTable.lastName }).from(usersTable).where(eq(usersTable.id, details.assigneeId)) : [];
+  const taskContext = row.kind.startsWith("task_") ? {
+    kind: typeof details.taskKind === "string" ? details.taskKind : undefined,
+    assigneeName: assignee ? `${assignee.firstName} ${assignee.lastName}`.trim() : undefined,
+  } : undefined;
+  let statusChange;
+  if (row.kind === "status_changed" && Object.hasOwn(details, "toStatusId") && perms) {
+    const hidden = effectiveStatusVisibility(perms, row.entityId).hiddenRowStatusIds;
+    const ids = [details.fromStatusId, details.toStatusId].filter((v): v is number => typeof v === "number" && !hidden.includes(v));
+    const statuses = ids.length ? await db.select().from(entityStatusesTable).where(and(eq(entityStatusesTable.entityId, row.entityId), inArray(entityStatusesTable.id, ids))) : [];
+    const label = (id: unknown) => statuses.find(s => s.id === id)?.nameJson ?? null;
+    statusChange = { from: label(details.fromStatusId), to: label(details.toStatusId), cleared: details.toStatusId === null };
+  }
+  return { ...safeRow, statusChange, taskContext, actorName: user ? `${user.firstName} ${user.lastName}`.trim() : "Система",
     canAmend: canWrite && !row.deleted && ["call", "email", "meeting", "note"].includes(row.kind) && (row.actorId === userId || superAdmin) };
 }
 async function taskDto(req: any, row: typeof tasks.$inferSelect, pageId?: number | null) {
@@ -89,7 +106,7 @@ router.get("/record-activity", async (req, res) => {
   const enabled = await activityEnabled(query.entityId);
   const rows = enabled ? await db.select().from(entries).where(and(eq(entries.recordId, query.recordId),
     query.beforeId ? lt(entries.id, query.beforeId) : undefined)).orderBy(desc(entries.id)).limit(51) : [];
-  res.json({ enabled, canWrite: ctx.canWrite && enabled, items: await Promise.all(rows.slice(0, 50).map(r => entryDto(r, req.user!.userId, ctx.canWrite, ctx.perms.superAdmin))),
+  res.json({ enabled, canWrite: ctx.canWrite && enabled, items: await Promise.all(rows.slice(0, 50).map(r => entryDto(r, req.user!.userId, ctx.canWrite, ctx.perms.superAdmin, ctx.perms))),
     nextBeforeId: rows.length > 50 ? rows[49].id : null });
 });
 router.post("/record-activity", async (req, res) => {
@@ -198,6 +215,8 @@ router.put("/activity-tasks/:id", async (req, res) => {
     }).where(eq(tasks.id, taskId)).returning();
     await tx.insert(entries).values({ entityId: current.entityId, recordId: current.recordId, actorId: req.user!.userId, taskId,
       kind: `task_${body.action === "complete" ? "completed" : body.action === "cancel" ? "cancelled" : "rescheduled"}`,
+      outcome: body.outcome,
+      details: { assigneeId: current.assigneeId, taskKind: current.kind },
       body: `${current.title}\n${body.action === "reschedule" ? `${current.dueAt.toISOString()} → ${dueAt.toISOString()}\n` : ""}${body.result}` });
     if (body.action === "complete" && current.kind !== "task") await tx.insert(entries).values({
       entityId: current.entityId, recordId: current.recordId, actorId: req.user!.userId, taskId, kind: current.kind,

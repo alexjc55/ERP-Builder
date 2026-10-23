@@ -5,8 +5,12 @@
  * Production ERP Builder API
  * OpenAPI spec version: 0.1.0
  */
+import type { ActivityEntryStatusChange } from './activityEntryStatusChange';
+import type { ActivityEntryTaskContext } from './activityEntryTaskContext';
 
 export interface ActivityEntry {
+  taskContext?: ActivityEntryTaskContext;
+  statusChange?: ActivityEntryStatusChange;
   id: number;
   entityId: number;
   recordId: number;

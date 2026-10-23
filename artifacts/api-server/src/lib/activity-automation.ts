@@ -56,7 +56,8 @@ export async function runActivityAction(action: Extract<AutomationAction, { type
         if (!task) return;
         count++;
         await tx.insert(entries).values({ entityId: record.entityId, recordId: record.id, taskId: task.id,
-          kind: "task_created", body: `${action.title}\n${dueAt.toISOString()}` });
+          kind: "task_created", body: `${action.title}\n${dueAt.toISOString()}\n${action.description ?? ""}`,
+          details: { assigneeId: userId, taskKind: action.kind } });
       });
     }
   }
@@ -195,9 +196,10 @@ export async function runActivityReminders(now = new Date()) {
 export async function recordStatusActivity(event: { entityId: number | null; recordId: number | null; payloadJson: unknown }) {
   if (!event.entityId || !event.recordId || !await activityEnabled(event.entityId)) return;
   const data = (event.payloadJson ?? {}) as Record<string, unknown>;
-  // Do not copy historical field values/status names: their current permissions
-  // can differ from the moment of the event.
+  // Keep IDs, resolve names under the viewer's current status permissions.
   await db.insert(entries).values({ entityId: event.entityId, recordId: event.recordId,
     actorId: typeof data.actorUserId === "number" ? data.actorUserId : null,
-    kind: "status_changed", body: "Статус записи изменён" });
+    kind: "status_changed", body: "Статус записи изменён",
+    details: { fromStatusId: typeof data.from === "number" ? data.from : null,
+      toStatusId: typeof data.to === "number" ? data.to : null } });
 }

@@ -108,7 +108,32 @@ export interface ActivityAmendment {
   pageId?: number | null;
 }
 
+export type ActivityEntryTaskContext = {
+  kind?: string;
+  assigneeName?: string;
+};
+
+/**
+ * @nullable
+ */
+export type ActivityEntryStatusChangeFrom = {[key: string]: string} | null;
+
+/**
+ * @nullable
+ */
+export type ActivityEntryStatusChangeTo = {[key: string]: string} | null;
+
+export type ActivityEntryStatusChange = {
+  /** @nullable */
+  from?: ActivityEntryStatusChangeFrom;
+  /** @nullable */
+  to?: ActivityEntryStatusChangeTo;
+  cleared?: boolean;
+};
+
 export interface ActivityEntry {
+  taskContext?: ActivityEntryTaskContext;
+  statusChange?: ActivityEntryStatusChange;
   id: number;
   entityId: number;
   recordId: number;

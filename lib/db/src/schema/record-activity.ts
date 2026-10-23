@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, boolean, text, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, boolean, text, timestamp, index, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { entitiesTable } from "./entities";
 import { entityRecordsTable } from "./records";
@@ -44,6 +44,7 @@ export const recordActivityTable = pgTable("record_activity", {
   actorId: integer("actor_id").references(() => usersTable.id, { onDelete: "set null" }),
   kind: text("kind").notNull(),
   body: text("body").notNull(),
+  details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
   outcome: text("outcome").notNull().default("none"),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

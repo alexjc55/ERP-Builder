@@ -1,3 +1,4 @@
+import { localizedActivityLabel } from "./activityLabels";
 import { useCallback } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { Mail, MessageSquareText, Phone, Users, ListChecks, type LucideIcon } from "lucide-react";
@@ -29,13 +30,7 @@ export const KIND_TONE: Record<EntryKind | TaskKind, string> = {
 export function useActivityLabels() {
   const t = useT();
   const { lang } = useLang();
-  const kind = useCallback((k: string) => ({
-    call: t("activity.kind.call", "Звонок"),
-    email: t("activity.kind.email", "Письмо"),
-    meeting: t("activity.kind.meeting", "Встреча"),
-    note: t("activity.kind.note", "Заметка"),
-    task: t("activity.kind.task", "Задача"),
-  } as Record<string, string>)[k] ?? k, [t]);
+  const kind = useCallback((k: string) => t(`activity.kind.${k}`, localizedActivityLabel(k, lang)), [t, lang]);
   const outcome = useCallback((o: string) => ({
     successful: t("activity.outcome.successful", "Состоялся / результат есть"),
     attempted: t("activity.outcome.attempted", "Попытка, без ответа"),
@@ -62,7 +57,7 @@ export function useActivityLabels() {
     if (m % 60 === 0) return `${m / 60} ${t("activity.unit.hourShort", "ч")} ${t("activity.reminder.before", "до срока")}`;
     return `${m} ${t("activity.unit.minShort", "мин")} ${t("activity.reminder.before", "до срока")}`;
   }, [t]);
-  return { kind, outcome, filter, dateTime, reminder, t };
+  return { kind, outcome, filter, dateTime, reminder, t, lang };
 }
 
 export function KindMarker({ kind, className }: { kind: string; className?: string }) {

@@ -10,6 +10,8 @@ import { nextActivityCheck } from "../lib/activity-schedule";
 import { automationTriggerSchema } from "@workspace/db";
 import { activitySettingsTable, recordActivityTable } from "@workspace/db";
 import { withLatestActivity } from "../lib/latest-record-activity";
+import { entityStatusesTable } from "@workspace/db";
+import { recordStatusActivity } from "../lib/activity-automation";
 import { presentRecord, validateValues } from "./records";
 
 test("record activities: permissions, atomic next action, history, CAS, reminders and repeat control", async t => {
@@ -162,6 +164,27 @@ test("record activities: permissions, atomic next action, history, CAS, reminder
       await runActivityRule(rule, trigger, new Date(now.getTime() + 2 * 3600000)); assert.equal(await count(), 1);
       await runActivityRule(rule, trigger, new Date(now.getTime() + 3 * 86400000)); assert.equal(await count(), 3);
       // Both records have become inactive; each has its own notification dedupe identity.
+    });
+    await t.test("status history stores target, hides restricted history and summary names current status", async () => {
+      const [before, after] = await db.insert(entityStatusesTable).values([
+        { entityId: entity.id, statusKey: "before", nameJson: { ru: "Новый" } },
+        { entityId: entity.id, statusKey: "after", nameJson: { ru: "В работе" } },
+      ]).returning();
+      await recordStatusActivity({ entityId: entity.id, recordId: record.id,
+        payloadJson: { from: before.id, to: after.id, actorUserId: admin.id } });
+      const feed = await call(`/record-activity?${query}`);
+      assert.deepEqual(feed.body.items[0].statusChange, { from: { ru: "Новый" }, to: { ru: "В работе" }, cleared: false });
+      assert.equal(feed.body.items[0].details, undefined);
+      await db.update(rolesTable).set({ permissionsJson: { ...NO_ACCESS_PERMS, records: {
+        [entity.id]: { view: true, update: true, create: false, delete: false, scope: "own", scopeFieldKeys: ["owner"], hiddenRowStatusIds: [before.id] },
+      } } }).where(eq(rolesTable.id, workerRole.id));
+      const restricted = await call(`/record-activity?${query}`, undefined, worker);
+      assert.equal(restricted.body.items[0].statusChange.from, null);
+      assert.deepEqual(restricted.body.items[0].statusChange.to, { ru: "В работе" });
+      await db.update(entityRecordsTable).set({ statusId: after.id, statusChangedAt: new Date(Date.now() + 1000) }).where(eq(entityRecordsTable.id, record.id));
+      const [enriched] = await withLatestActivity([{ id: record.id, valuesJson: { latest: null } }],
+        [{ fieldType: "activity", fieldKey: "latest" }]);
+      assert.deepEqual((enriched.valuesJson.latest as any).statusNameJson, { ru: "В работе" });
     });
   } finally {
     if (server) await new Promise<void>(resolve => server!.close(() => resolve()));

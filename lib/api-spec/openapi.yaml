@@ -5157,6 +5157,21 @@ components:
       type: object
       required: [id, entityId, recordId, kind, body, outcome, occurredAt, createdAt, actorName, version, deleted, canAmend]
       properties:
+        taskContext:
+          type: object
+          properties:
+            kind: { type: string }
+            assigneeName: { type: string }
+        statusChange:
+          type: object
+          properties:
+            from:
+              type: [object, "null"]
+              additionalProperties: { type: string }
+            to:
+              type: [object, "null"]
+              additionalProperties: { type: string }
+            cleared: { type: boolean }
         id: { type: integer }
         entityId: { type: integer }
         recordId: { type: integer }

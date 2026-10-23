@@ -1,7 +1,7 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
-export type LatestActivity = { kind: string; occurredAt: string };
+export type LatestActivity = { kind: string; occurredAt: string; statusNameJson?: Record<string, string> };
 export function chooseLatestActivity(
   statusChangedAt: Date | string | null,
   activity: LatestActivity | null,
@@ -15,7 +15,8 @@ export function chooseLatestActivity(
 /**
  * Enrich already permission-filtered responses, never the stored values.
  * One batched query, with indexed per-record lookups; no text, actors or
- * historical status names are exposed. Missing/hidden fields stay absent.
+ * historical status names are exposed. Current status belongs to the already
+ * permission-filtered record. Missing/hidden fields stay absent.
  */
 export async function withLatestActivity<T extends { id: number; valuesJson: unknown }>(
   records: T[], fields: { fieldType: string; fieldKey: string }[],
@@ -24,8 +25,9 @@ export async function withLatestActivity<T extends { id: number; valuesJson: unk
   const visible = records.filter(r => keys.some(k => Object.hasOwn((r.valuesJson ?? {}) as object, k)));
   if (!keys.length || !visible.length) return records;
   const result = await db.execute(sql`
-    SELECT r.id, r.status_changed_at, a.kind, a.occurred_at
+    SELECT r.id, r.status_changed_at, s.name_json AS status_name_json, a.kind, a.occurred_at
     FROM entity_records r
+    LEFT JOIN entity_statuses s ON s.id = r.status_id AND s.entity_id = r.entity_id
     LEFT JOIN LATERAL (
       SELECT a.kind, a.occurred_at
       FROM record_activity a
@@ -39,10 +41,12 @@ export async function withLatestActivity<T extends { id: number; valuesJson: unk
   `);
   const values = new Map<number, LatestActivity | null>();
   for (const row of result.rows) {
-    values.set(Number(row.id), chooseLatestActivity(
+    const latest = chooseLatestActivity(
       row.status_changed_at as Date | string | null,
       row.kind ? { kind: String(row.kind), occurredAt: new Date(row.occurred_at as string).toISOString() } : null,
-    ));
+    );
+    if (latest?.kind === "status_changed" && row.status_name_json) latest.statusNameJson = row.status_name_json as Record<string, string>;
+    values.set(Number(row.id), latest);
   }
   return records.map(record => {
     const next = { ...((record.valuesJson ?? {}) as Record<string, unknown>) };

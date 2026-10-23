@@ -19,6 +19,15 @@ export const ListRecordActivityResponse = zod.object({
   "enabled": zod.boolean(),
   "canWrite": zod.boolean(),
   "items": zod.array(zod.object({
+  "taskContext": zod.object({
+  "kind": zod.string().optional(),
+  "assigneeName": zod.string().optional()
+}).optional(),
+  "statusChange": zod.object({
+  "from": zod.record(zod.string(), zod.string()).nullish(),
+  "to": zod.record(zod.string(), zod.string()).nullish(),
+  "cleared": zod.boolean().optional()
+}).optional(),
   "id": zod.number(),
   "entityId": zod.number(),
   "recordId": zod.number(),
@@ -90,6 +99,15 @@ export const AmendRecordActivityBody = zod.object({
 })
 
 export const AmendRecordActivityResponse = zod.object({
+  "taskContext": zod.object({
+  "kind": zod.string().optional(),
+  "assigneeName": zod.string().optional()
+}).optional(),
+  "statusChange": zod.object({
+  "from": zod.record(zod.string(), zod.string()).nullish(),
+  "to": zod.record(zod.string(), zod.string()).nullish(),
+  "cleared": zod.boolean().optional()
+}).optional(),
   "id": zod.number(),
   "entityId": zod.number(),
   "recordId": zod.number(),

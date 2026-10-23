@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { apiErrorMessage, apiErrorStatus } from "@/lib/activity";
 import { KindMarker, invalidateActivity, useActivityLabels } from "./activityShared";
+import { activityStatusName } from "./activityLabels";
 
 interface Ctx { entityId: number; recordId: number; pageId?: number | null }
 
@@ -60,6 +61,7 @@ export function ActivityFeed({ ctx, items, nextBeforeId }: { ctx: Ctx; items: Ac
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                 <span className="font-semibold text-slate-800">{L.kind(e.kind)}</span>
+                {e.taskContext?.kind && <span className="text-slate-500">· {L.kind(e.taskContext.kind)}</span>}
                 {e.kind !== "note" && e.outcome && e.outcome !== "none" && (
                   <span className="inline-flex items-center gap-1 text-slate-500"><span className={cn("h-1.5 w-1.5 rounded-full", OUTCOME_DOT[e.outcome] ?? "bg-slate-300")} />{L.outcome(e.outcome)}</span>
                 )}
@@ -83,11 +85,25 @@ export function ActivityFeed({ ctx, items, nextBeforeId }: { ctx: Ctx; items: Ac
               {e.deleted ? (
                 <p className="mt-1 text-xs italic text-slate-400" data-testid={`text-entry-deleted-${e.id}`}>{t("activity.deletedEntry", "Запись удалена. История изменений сохранена.")}</p>
               ) : (
-                <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700" dir="auto">{e.body}</p>
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm text-slate-700" dir="auto">
+                  {e.kind === "status_changed"
+                    ? e.statusChange
+                      ? [activityStatusName(e.statusChange.from, L.lang),
+                          e.statusChange.cleared ? t("activity.noStatus", "Без статуса")
+                            : activityStatusName(e.statusChange.to, L.lang) || t("activity.statusUnavailable", "Статус недоступен")]
+                          .filter(Boolean).join(" → ")
+                      : t("activity.statusNotRecorded", "Статус изменён. Название не сохранено в старой истории.")
+                    : e.kind.startsWith("task_")
+                      ? e.body.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, iso => L.dateTime(iso))
+                      : e.body}
+                </p>
               )}
               {e.version > 1 && !e.deleted && (
                 <p className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-slate-400"><History className="h-3 w-3" />{t("activity.edited", "исправлено")}</p>
               )}
+              {!e.deleted && e.taskContext?.assigneeName && <p className="mt-1 text-xs text-slate-500">
+                {t("activity.assignee", "Ответственный")}: {e.taskContext.assigneeName}
+              </p>}
             </div>
           </li>
         ))}
