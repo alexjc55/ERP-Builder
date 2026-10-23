@@ -35,7 +35,7 @@ type FixtureRecord = {
   updatedAt: string;
 };
 
-async function installFixture(page: Page, options: { adminPages?: boolean; statusScope?: { statusIds: number[]; includeNoStatus: boolean; allowAllChanges: boolean }; language?: Locale; collaborationStatus?: number; editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null; tintColumns?: boolean; statusTitleHover?: boolean } = {}) {
+async function installFixture(page: Page, options: { latestActivity?: boolean; adminPages?: boolean; statusScope?: { statusIds: number[]; includeNoStatus: boolean; allowAllChanges: boolean }; language?: Locale; collaborationStatus?: number; editable?: boolean; manyCards?: boolean; viewMode?: "single" | "none" | "multiple-no-default"; cardDirection?: "ltr" | "rtl" | null; tintColumns?: boolean; statusTitleHover?: boolean } = {}) {
   const queries: Query[] = [];
   const writes: { id: number; body: Record<string, unknown> }[] = [];
   const unexpectedWrites: string[] = [];
@@ -54,7 +54,7 @@ async function installFixture(page: Page, options: { adminPages?: boolean; statu
     displayTags: options.statusScope ? [{ id: 11, nameJson: { en: "Department tag" } }] : [] }));
   const makeRecord = (id: number, statusId: number | null): FixtureRecord => ({
     id, entityId, statusId,
-    valuesJson: { title: `Item ${id}`, summary: `Summary ${id}`, detail: `Full detail ${id}`, empty: "" },
+    valuesJson: { title: `Item ${id}`, summary: `Summary ${id}`, detail: `Full detail ${id}`, empty: "", last_activity: { kind: "email", occurredAt: "2026-10-23T09:15:00Z" } },
     version: 7, archivedAt: null, createdAt: "2025-01-01T00:00:00Z", updatedAt: "2025-01-01T00:00:00Z",
   });
   // More than one page in two lanes lets pagination prove lane independence.
@@ -95,9 +95,9 @@ async function installFixture(page: Page, options: { adminPages?: boolean; statu
     if (path === `/api/entities/${entityId}`) return reply(entity);
     if (path === `/api/entities/${entityId}/statuses`) return reply(statuses);
     if (path === `/api/entities/${entityId}/fields`) return reply(
-      ["title", "summary", "detail", "empty"].map((fieldKey, i) => ({
+      ["title", "summary", "detail", "empty", ...(options.latestActivity ? ["last_activity"] : [])].map((fieldKey, i) => ({
         id: i + 1, entityId, fieldKey, nameJson: { en: fieldKey === "detail" ? "Full detail" : fieldKey },
-        fieldType: "text", isActive: true, showInTable: true, sortOrder: i, permissionsJson: {},
+        fieldType: fieldKey === "last_activity" ? "activity" : "text", isActive: true, showInTable: true, sortOrder: i, permissionsJson: {},
       })),
     );
     if (path === `/api/pages/${pageId}/fields`) return reply([]);
@@ -105,7 +105,7 @@ async function installFixture(page: Page, options: { adminPages?: boolean; statu
       ...options.viewMode === "single" ? [] : [
       { id: boardViewId - 1, entityId, pageId, nameJson: { en: "Table fixture" }, isDefault: options.viewMode !== "multiple-no-default", sortOrder: 0, configJson: {} }],
       { id: boardViewId, entityId, pageId, nameJson: { en: "Board fixture" }, isDefault: false, sortOrder: 1,
-        configJson: { viewType: "kanban", kanban: { titleField: "title", fields: ["summary", "empty"], showLabels: true, hideEmptyFields: true, textDirection: options.cardDirection, tintColumns: options.tintColumns, statusTitleHover: options.statusTitleHover } } },
+        configJson: { viewType: "kanban", kanban: { titleField: "title", fields: ["summary", "empty", ...(options.latestActivity ? ["last_activity"] : [])], showLabels: true, hideEmptyFields: true, textDirection: options.cardDirection, tintColumns: options.tintColumns, statusTitleHover: options.statusTitleHover } } },
     ]);
     if (path === `/api/entities/${entityId}/records/query`) {
       const query = request.postDataJSON() as Query;
@@ -184,6 +184,19 @@ async function selectBoard(page: Page) {
 function lane(page: Page, key: string) {
   return page.getByTestId(`lane-kanban-${key}`);
 }
+
+test("latest activity displays kind and timestamp in table and Kanban", async ({ page }) => {
+  const fixture = await installFixture(page, { latestActivity: true });
+  await page.goto(fixturePath);
+  const time = page.locator('time[datetime="2026-10-23T09:15:00.000Z"]');
+  await expect(time.first()).toBeVisible();
+  await expect(time.first().locator("..")).toContainText("Email");
+  await selectBoard(page);
+  const card = page.getByTestId("card-kanban-1000");
+  await expect(card).toContainText("Email");
+  await expect(card.locator("time")).toHaveAttribute("datetime", "2026-10-23T09:15:00.000Z");
+  expect(fixture.errors).toEqual([]);
+});
 
 for (const [status, reason, message] of [
   [401, "session_expired", "Сессия истекла"],

@@ -51,6 +51,7 @@ export const recordActivityTable = pgTable("record_activity", {
   version: integer("version").notNull().default(1),
 }, t => [
   index("record_activity_feed_idx").on(t.recordId, t.id),
+  index("record_activity_latest_idx").on(t.recordId, t.occurredAt, t.id).where(sql`NOT ${t.deleted}`),
   index("record_activity_contact_idx").on(t.recordId, t.kind, t.occurredAt).where(sql`NOT ${t.deleted}`),
 ]);
 export const activityNotificationsTable = pgTable("activity_notifications", {

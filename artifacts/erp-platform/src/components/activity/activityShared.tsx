@@ -9,7 +9,7 @@ export function invalidateActivity(qc: QueryClient) {
   return qc.invalidateQueries({
     predicate: q => {
       const k = q.queryKey[0];
-      return typeof k === "string" && (k.startsWith("/api/record-activity") || k.startsWith("/api/activity-tasks") || k.startsWith("/api/activity-notifications"));
+      return typeof k === "string" && (k.startsWith("/api/record-activity") || k.startsWith("/api/activity-tasks") || k.startsWith("/api/activity-notifications") || k.startsWith("/api/records/") || /^\/api\/entities\/\d+\/records/.test(k));
     },
   });
 }

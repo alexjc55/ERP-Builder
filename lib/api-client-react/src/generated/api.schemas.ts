@@ -3731,6 +3731,7 @@ export const FieldType = {
   lookup: 'lookup',
   percent: 'percent',
   created_at: 'created_at',
+  activity: 'activity',
   page_ref: 'page_ref',
 } as const;
 

@@ -1,5 +1,6 @@
 import { memo, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useId, useContext, createContext, Fragment, cloneElement, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { resolveDataDirection, type DataDirection } from "@/lib/dataDirection";
+import { LatestActivityValue } from "./activity/LatestActivityValue";
 import { CellCollabTooltip } from "./CellCollabTooltip";
 import { sameAggregateTopology } from "@/lib/aggregateSnapshot";
 import { isGroupExpanded, toggleGroupException, groupedQueryOptions } from "@/lib/groupAccordion";
@@ -986,6 +987,7 @@ function supportsBulkFieldValue(field: Field): boolean {
     field.fieldType !== "relation" &&
     field.fieldType !== "lookup" &&
     field.fieldType !== "created_at" &&
+    field.fieldType !== "activity" &&
     field.fieldType !== "file" &&
     !field.lockAfterCreate &&
     !field.dependencyConfigJson?.dependsOnFieldKey
@@ -1085,6 +1087,7 @@ function formToValues(fields: Field[], form: FormState, clearEmpty = false): Rec
       field.fieldType === "function" ||
       field.fieldType === "relation" ||
       field.fieldType === "lookup" ||
+      field.fieldType === "activity" ||
       field.fieldType === "created_at"
     ) {
       continue;
@@ -1168,6 +1171,9 @@ function renderCellValue(field: Field, value: unknown, t: (key: string, def: str
         <AffixedNumericValue config={field.formulaConfigJson}>{shown}</AffixedNumericValue>
       </span>
     );
+  }
+  if (field.fieldType === "activity") {
+    return <LatestActivityValue value={value} />;
   }
   if (field.fieldType === "date" || field.fieldType === "datetime" || field.fieldType === "created_at") {
     // Stored value is ISO (yyyy-MM-dd or full ISO datetime). Display it in the
@@ -9306,7 +9312,7 @@ export function EntityRecords({
                           effFieldAccess(f) === "edit" &&
                           f.fieldType !== "function" &&
                           f.fieldType !== "lookup" &&
-                          f.fieldType !== "created_at";
+                          f.fieldType !== "created_at" && f.fieldType !== "activity";
                         const addRowRelInfo = relCreateDepInfo(f, newRow);
                         return (
                           <td key={col.pinKey} className="px-2 py-1.5 align-top max-w-[260px]" style={{ ...pinStyle(col.pinKey, "#eff6ff"), ...colWidthStyle(col.pinKey) }}>
@@ -11323,7 +11329,7 @@ function RecordFormBody({
           // presentation-only, so render them through the same id→name map
           // used by table cells instead of showing an implementation id.
           roBox(renderCellValue(field, form[field.fieldKey], t, userNames, undefined, ml))
-        ) : field.fieldType === "created_at" ? (
+        ) : field.fieldType === "created_at" || field.fieldType === "activity" ? (
           // Системная дата создания записи — read-only. On edit it shows the
           // server-injected timestamp; on create the value doesn't exist yet.
           roBox(

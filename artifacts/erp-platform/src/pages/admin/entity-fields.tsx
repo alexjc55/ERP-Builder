@@ -34,6 +34,7 @@ import { useML, useT } from "@/lib/i18n";
 // is created/edited); these are just human-readable fallbacks when a translation
 // key is missing.
 const FIELD_TYPE_LABELS: Record<string, string> = {
+  activity: "Последняя активность",
   text: "Текст",
   textarea: "Многострочный текст",
   number: "Число",

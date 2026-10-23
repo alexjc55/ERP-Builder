@@ -350,7 +350,7 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
       parsed.data.fieldType === "function" ||
       parsed.data.fieldType === "relation" ||
       parsed.data.fieldType === "lookup" ||
-      parsed.data.fieldType === "created_at")
+      parsed.data.fieldType === "created_at" || parsed.data.fieldType === "activity")
   ) {
     res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
@@ -365,7 +365,7 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
     (parsed.data.fieldType === "file" ||
       parsed.data.fieldType === "function" ||
       parsed.data.fieldType === "lookup" ||
-      parsed.data.fieldType === "created_at")
+      parsed.data.fieldType === "created_at" || parsed.data.fieldType === "activity")
   ) {
     res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция» и «поле подстановки»" });
     return;
@@ -410,6 +410,7 @@ router.post("/entities/:entityId/fields", requireAuth, requireAdmin("entities"),
       .insert(entityFieldsTable)
       .values({
         ...parsed.data,
+        ...(parsed.data.fieldType === "activity" ? { isRequired: false, isFilterable: false } : {}),
         // Validated above; the generated API type is looser than the db union.
         formatInheritJson: (parsed.data.formatInheritJson ?? []) as FormatInheritSource[],
         // Generated API type for name-template sections is looser than the db union.
@@ -628,14 +629,14 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   const nextLock = body.lockAfterCreate ?? current.lockAfterCreate;
   if (
     nextIsKey &&
-    (nextType === "file" || nextType === "function" || nextType === "relation" || nextType === "lookup" || nextType === "created_at")
+    (nextType === "file" || nextType === "function" || nextType === "relation" || nextType === "lookup" || nextType === "created_at" || nextType === "activity")
   ) {
     res.status(400).json({ error: "Ключевое поле недоступно для полей типа «файл», «функция», «связанное поле» и «поле подстановки»" });
     return;
   }
   if (
     nextLock &&
-    (nextType === "file" || nextType === "function" || nextType === "lookup" || nextType === "created_at")
+    (nextType === "file" || nextType === "function" || nextType === "lookup" || nextType === "created_at" || nextType === "activity")
   ) {
     res.status(400).json({ error: "Запрет изменения недоступен для полей типа «файл», «функция» и «поле подстановки»" });
     return;
@@ -762,6 +763,10 @@ router.put("/fields/:id", requireAuth, requireAdmin("entities"), async (req, res
   if (body.isActive != null) updateData.isActive = body.isActive;
   if (body.permissionsJson != null) updateData.permissionsJson = body.permissionsJson;
   if (body.isFilterable != null) updateData.isFilterable = body.isFilterable;
+  if (nextType === "activity") {
+    updateData.isRequired = false;
+    updateData.isFilterable = false;
+  }
   if (body.pivotEnabled != null) updateData.pivotEnabled = body.pivotEnabled;
   if (body.showInTable != null) updateData.showInTable = body.showInTable;
   if (body.isPinned != null) updateData.isPinned = body.isPinned;

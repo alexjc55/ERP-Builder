@@ -380,6 +380,17 @@ export function initCollaborationBridge(): void {
   bridgeStarted = true;
   stopBridge = subscribe("*", (event) => { void bridge(event); });
 }
+/** Opaque invalidation only: activity changes do not alter record CAS versions. */
+export async function invalidateEntityTables(entityId: number): Promise<void> {
+  try {
+    const pages = await db.select({ id: pagesTable.id }).from(pagesTable)
+      .leftJoin(entitiesTable, eq(entitiesTable.pageId, pagesTable.id))
+      .where(or(eq(entitiesTable.id, entityId), eq(pagesTable.mirrorEntityId, entityId)));
+    for (const page of pages) broadcast(page.id, "table_changed", {});
+  } catch (err) {
+    logger.error({ err, entityId }, "Activity table invalidation failed");
+  }
+}
 async function bridge(event: SystemEvent): Promise<void> {
   try {
     const payload = (event.payloadJson ?? {}) as Record<string, unknown>;

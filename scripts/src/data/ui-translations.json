@@ -1,4 +1,5 @@
 [
+  { "key": "fields.type.activity", "ru": "Последняя активность", "en": "Latest activity", "he": "פעילות אחרונה" },
   { "key": "aiAgents.accessPolicy", "ru": "Работа от лица пользователя недоступна, если у него есть суперадминистратор или хотя бы одно административное разрешение — в основной или дополнительной роли. Ключ будет возвращать 401, даже в режиме «Только чтение». Это проверяется и после изменения прав пользователя.", "en": "Acting as a user is unavailable if any primary or additional role grants superadmin or any administrative permission. The key will return 401, even in read-only mode. This is checked again after user permissions change.", "he": "פעולה בשם משתמש אינה זמינה אם תפקיד ראשי או נוסף שלו מעניק הרשאת מנהל־על או הרשאת ניהול כלשהי. המפתח יחזיר 401 גם במצב קריאה בלבד. הבדיקה מתבצעת גם לאחר שינוי הרשאות המשתמש." },
   { "key": "aiAgents.issueModuleDisabled", "ru": "Модуль «ИИ-агенты» выключен.", "en": "The AI agents module is disabled.", "he": "מודול סוכני הבינה המלאכותית כבוי." },
   { "key": "aiAgents.issueAgentDisabled", "ru": "Агент отключён.", "en": "The agent is disabled.", "he": "הסוכן מושבת." },

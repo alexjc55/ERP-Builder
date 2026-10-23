@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { withLatestActivity } from "../lib/latest-record-activity";
 import { pageStatusChangeAllowed } from "../lib/page-status-scope";
 import { createRecordRelationSelections } from "../lib/record-relation-selections";
 import { recordLinkUniqueMessage } from "../lib/record-links";
@@ -404,6 +405,7 @@ export function validateValues(
       field.fieldType === "function" ||
       field.fieldType === "relation" ||
       field.fieldType === "lookup" ||
+      field.fieldType === "activity" ||
       field.fieldType === "created_at"
     )
       continue;
@@ -1016,6 +1018,9 @@ export function presentRecord<T extends { valuesJson: unknown; createdAt: Date |
   const out = stripHidden(record, hidden);
   const sysKeys = fields.filter((f) => f.fieldType === "created_at" && !hidden.has(f.fieldKey));
   const values = { ...((out.valuesJson as Record<string, unknown>) ?? {}) };
+  for (const f of fields) {
+    if (f.fieldType === "activity" && !hidden.has(f.fieldKey)) values[f.fieldKey] = null;
+  }
   // Resolver inputs are evaluation-only capabilities. Never serialize them:
   // their keys may reveal linked/page schema and their values may be derived
   // from a formula the viewer is not allowed to inspect.
@@ -1598,11 +1603,11 @@ router.get("/entities/:entityId/records", requireAuth, requireRecordParam("view"
       })), groupConfigs),
     );
   }
-  res.json(records.map((r) => presentRecord(
+  res.json(await withLatestActivity(records.map((r) => presentRecord(
     { ...r, valuesJson: formulaValues.get(r.id) ?? r.valuesJson },
     hidden,
     fields,
-  )));
+  )), fields));
 });
 
 router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam("view"), async (req, res): Promise<void> => {
@@ -3181,11 +3186,11 @@ router.post("/entities/:entityId/records/query", requireAuth, requireRecordParam
   }
 
   res.json({
-    data: data.map((r) => presentRecord(
+    data: await withLatestActivity(data.map((r) => presentRecord(
       { ...r, valuesJson: dataFormulaValues.get(r.id) ?? r.valuesJson },
       hidden,
       fields,
-    )),
+    )), fields),
     total: countRow?.count ?? 0,
     ...(Object.keys(presentedPageFormulaValues).length > 0
       ? { pageFormulaValues: presentedPageFormulaValues }
@@ -4368,7 +4373,7 @@ router.post("/entities/:entityId/records", requireAuth, requireRecordParam("crea
     linkedInputs: createInputs,
     formulaOptions: await loadFormulaOptions(),
   });
-  res.status(201).json(presentRecord({ ...record, valuesJson: createFormulaValues.get(record.id) ?? record.valuesJson }, hidden, fields));
+  res.status(201).json((await withLatestActivity([presentRecord({ ...record, valuesJson: createFormulaValues.get(record.id) ?? record.valuesJson }, hidden, fields)], fields))[0]);
 });
 
 router.get("/records/:id", requireAuth, async (req, res): Promise<void> => {
@@ -4418,7 +4423,7 @@ router.get("/records/:id", requireAuth, async (req, res): Promise<void> => {
     linkedInputs: readInputs,
     formulaOptions: await loadFormulaOptions(),
   });
-  res.json(presentRecord({ ...record, valuesJson: readFormulaValues.get(record.id) ?? record.valuesJson }, hidden, fields));
+  res.json((await withLatestActivity([presentRecord({ ...record, valuesJson: readFormulaValues.get(record.id) ?? record.valuesJson }, hidden, fields)], fields))[0]);
 });
 
 type TrashReason = "record_deleted" | "field_cleared" | "field_replaced";
@@ -4989,7 +4994,7 @@ router.put("/records/:id", requireAuth, async (req, res): Promise<void> => {
     linkedInputs: updateInputs,
     formulaOptions: await loadFormulaOptions(),
   });
-  res.json(presentRecord({ ...record, valuesJson: updateFormulaValues.get(record.id) ?? record.valuesJson }, hidden, fields));
+  res.json((await withLatestActivity([presentRecord({ ...record, valuesJson: updateFormulaValues.get(record.id) ?? record.valuesJson }, hidden, fields)], fields))[0]);
 });
 
 router.delete("/records/:id", requireAuth, async (req, res): Promise<void> => {
@@ -5239,7 +5244,7 @@ async function setArchived(
   }
 
   const { hidden } = await fieldAccessContext(req, existing.entityId, fields, pageId);
-  res.json(presentRecord(record, hidden, fields));
+  res.json((await withLatestActivity([presentRecord(record, hidden, fields)], fields))[0]);
 }
 
 /**
@@ -5381,6 +5386,7 @@ router.post("/records/bulk-field", requireAuth, async (req, res): Promise<void> 
     field.fieldType === "relation" ||
     field.fieldType === "lookup" ||
     field.fieldType === "created_at" ||
+    field.fieldType === "activity" ||
     field.fieldType === "file"
   )) {
     res.status(400).json({ error: `Field "${fieldKey}" cannot be changed in bulk` });
@@ -6020,7 +6026,7 @@ router.post("/records/merge", requireAuth, requireSuperAdmin(), async (req, res)
     const targetValues = { ...((target.valuesJson as Record<string, unknown>) ?? {}) };
     const auditEntries: InsertAuditLog[] = [];
     for (const f of fields) {
-      if (f.fieldType === "relation" || f.fieldType === "lookup" || f.fieldType === "function" || f.fieldType === "created_at") continue;
+      if (f.fieldType === "relation" || f.fieldType === "lookup" || f.fieldType === "function" || f.fieldType === "created_at" || f.fieldType === "activity") continue;
       if (!mergeValueEmpty(targetValues[f.fieldKey])) continue;
       for (const srcId of sourceIds) {
         const srcValues = (byId.get(srcId)!.valuesJson as Record<string, unknown>) ?? {};

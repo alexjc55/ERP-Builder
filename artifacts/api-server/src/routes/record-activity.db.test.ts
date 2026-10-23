@@ -8,6 +8,9 @@ import { signToken } from "../lib/jwt";
 import { runActivityReminders, runActivityRule } from "../lib/activity-automation";
 import { nextActivityCheck } from "../lib/activity-schedule";
 import { automationTriggerSchema } from "@workspace/db";
+import { activitySettingsTable, recordActivityTable } from "@workspace/db";
+import { withLatestActivity } from "../lib/latest-record-activity";
+import { presentRecord, validateValues } from "./records";
 
 test("record activities: permissions, atomic next action, history, CAS, reminders and repeat control", async t => {
   assert.equal(process.env.REPLIT_ENVIRONMENT, "development");
@@ -42,6 +45,43 @@ test("record activities: permissions, atomic next action, history, CAS, reminder
     const since = new Date(Date.now() - 4 * 86400000);
     const [record] = await db.insert(entityRecordsTable).values({ entityId: entity.id, valuesJson: { owner: worker.id, title: "Customer" }, createdAt: since, statusChangedAt: since }).returning();
     const app = express(); app.use(express.json()); app.use(router);
+    await t.test("latest activity: status fallback, disabled contacts, edits, deletion, hidden fields and read-only values", async () => {
+      const [field] = await db.insert(entityFieldsTable).values({
+        entityId: entity.id, fieldKey: "last_activity", nameJson: {}, fieldType: "activity",
+      }).returning();
+      const [sample] = await db.insert(entityRecordsTable).values({
+        entityId: entity.id, valuesJson: { last_activity: "forged" },
+        statusChangedAt: since,
+      }).returning();
+      const read = async (hidden = new Set<string>()) => {
+        const [r] = await withLatestActivity([presentRecord(sample, hidden, [field])], [field]);
+        return r.valuesJson as Record<string, any>;
+      };
+      assert.equal((await read()).last_activity.kind, "status_changed");
+      assert.deepEqual(validateValues([field], { last_activity: "forged" }, false), { values: {} });
+      await db.insert(activitySettingsTable).values({ entityId: entity.id, enabled: true });
+      const contactAt = new Date(since.getTime() + 3600000);
+      const [contact] = await db.insert(recordActivityTable).values({
+        entityId: entity.id, recordId: sample.id, kind: "call", body: "Private content", occurredAt: contactAt,
+      }).returning();
+      await db.insert(recordActivityTable).values({
+        entityId: entity.id, recordId: sample.id, kind: "activity_edited", body: "Changed text",
+      });
+      assert.deepEqual((await read()).last_activity, { kind: "call", occurredAt: contactAt.toISOString() });
+      assert.equal(Object.hasOwn(await read(new Set(["last_activity"])), "last_activity"), false);
+      await db.update(activitySettingsTable).set({ enabled: false }).where(eq(activitySettingsTable.entityId, entity.id));
+      assert.equal((await read()).last_activity.kind, "status_changed");
+      await db.update(activitySettingsTable).set({ enabled: true }).where(eq(activitySettingsTable.entityId, entity.id));
+      await db.update(recordActivityTable).set({ deleted: true }).where(eq(recordActivityTable.id, contact.id));
+      assert.equal((await read()).last_activity.kind, "status_changed");
+      await db.update(entityRecordsTable).set({ statusChangedAt: null }).where(eq(entityRecordsTable.id, sample.id));
+      assert.equal((await read()).last_activity, null);
+      // Restore the disabled default required by the following access tests.
+      await db.delete(activitySettingsTable).where(eq(activitySettingsTable.entityId, entity.id));
+      await db.delete(recordActivityTable).where(eq(recordActivityTable.recordId, sample.id));
+      await db.delete(entityRecordsTable).where(eq(entityRecordsTable.id, sample.id));
+      await db.delete(entityFieldsTable).where(eq(entityFieldsTable.id, field.id));
+    });
     app.use((error: any, _req: any, res: any, _next: any) => res.status(500).json({ error: String(error) }));
     server = app.listen(0, "127.0.0.1");
     await new Promise<void>(resolve => server!.once("listening", resolve));

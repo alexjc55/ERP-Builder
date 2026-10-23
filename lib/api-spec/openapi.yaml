@@ -8407,6 +8407,7 @@ components:
         - lookup
         - percent
         - created_at
+        - activity
         - page_ref
 
     FormatOperator:

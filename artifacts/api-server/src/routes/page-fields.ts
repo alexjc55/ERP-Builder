@@ -705,7 +705,7 @@ router.post("/pages/:pageId/fields", requireAuth, requireAdmin("pages"), async (
   }
   // created_at mirrors the record's SYSTEM creation timestamp — a page-local
   // "created_at" field would store an unrelated user value under a system type.
-  if (parsed.data.fieldType === "created_at") {
+  if (parsed.data.fieldType === "created_at" || parsed.data.fieldType === "activity") {
     res.status(400).json({ error: "Поле «Системная дата» недоступно для страничных полей" });
     return;
   }
@@ -905,7 +905,7 @@ router.put("/page-fields/:id", requireAuth, requireAdmin("pages"), async (req, r
     updateData.fieldKey = key;
   }
   const nextType = body.fieldType ?? current.fieldType;
-  if (nextType === "created_at") {
+  if (nextType === "created_at" || nextType === "activity") {
     res.status(400).json({ error: "Поле «Системная дата» недоступно для страничных полей" });
     return;
   }

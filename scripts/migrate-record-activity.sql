@@ -61,3 +61,5 @@ SELECT '{"ru":"Мои задачи","en":"My tasks","he":"המשימות שלי"
 WHERE NOT EXISTS (SELECT 1 FROM pages WHERE path = '/my-tasks');
 UPDATE pages SET is_system = true WHERE path = '/my-tasks' AND NOT is_system;
 COMMIT;
+CREATE INDEX IF NOT EXISTS record_activity_latest_idx
+  ON record_activity (record_id, occurred_at, id) WHERE NOT deleted;

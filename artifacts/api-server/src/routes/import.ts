@@ -88,7 +88,7 @@ function mlName(j: unknown, fallback: string): string {
 
 const norm = (s: string) => s.trim().toLowerCase();
 
-const NON_IMPORTABLE = new Set(["file", "function", "relation", "lookup", "created_at"]);
+const NON_IMPORTABLE = new Set(["file", "function", "relation", "lookup", "created_at", "activity"]);
 
 /** Minimal field shape coerceValue needs — satisfied by both entity and page fields. */
 type CoercibleField = { fieldKey: string; fieldType: string; nameJson: unknown; optionsJson: unknown };

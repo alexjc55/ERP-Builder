@@ -6,6 +6,7 @@ import { requireAuth } from "../middlewares/auth";
 import { requireAdmin } from "../middlewares/permissions";
 import { ActivityError, activityAccess, activityEnabled, eligibleAssignee, humanUserWhere } from "../lib/activity-access";
 import { dispatchActivityEvent } from "../lib/activity-automation";
+import { invalidateEntityTables } from "../lib/collaboration";
 
 const router = Router();
 const id = z.coerce.number().int().positive();
@@ -30,11 +31,19 @@ router.use((req, res, next) => {
   next();
 });
 router.use(requireAuth);
+router.use((req, res, next) => {
+  if (req.method === "POST" || req.method === "PUT") res.on("finish", () => {
+    const entityId = (req as any).activityEntityId;
+    if (res.statusCode < 300 && typeof entityId === "number") void invalidateEntityTables(entityId);
+  });
+  next();
+});
 
 async function access(req: any, entityId: number, recordId: number, pageId?: number | null, tx?: Tx, write = false) {
   const result = await activityAccess(req, entityId, recordId, pageId, tx);
   if (!result) throw new ActivityError(404, "Запись недоступна");
   if (write && (!result.canWrite || !await activityEnabled(entityId, tx))) throw new ActivityError(403, "Активность отключена или нет права изменения записи");
+  req.activityEntityId = entityId;
   return result;
 }
 async function lockRecord(tx: Tx, recordId: number) {
@@ -71,6 +80,7 @@ router.get("/activity-settings", async (req, res) => {
 router.post("/activity-settings", requireAdmin("entities"), async (req, res) => {
   const body = z.object({ entityId: id, enabled: z.boolean() }).parse(req.body);
   await db.insert(activitySettingsTable).values(body).onConflictDoUpdate({ target: activitySettingsTable.entityId, set: { enabled: body.enabled } });
+  await invalidateEntityTables(body.entityId);
   res.json(body);
 });
 router.get("/record-activity", async (req, res) => {

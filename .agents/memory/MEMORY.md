@@ -1,4 +1,5 @@
 - [CRM activity requirements](crm-activity-requirements.md) — история общения и задачи по записи; контроль через существующие автоматизации с отдельной частотой проверок.
+- [Latest activity field](latest-activity-field.md) — вид и время последнего события; обычные правки записи не считаются, контакты учитываются только при включённой активности.
 - [Marketing and sales boundary](marketing-sales-boundary.md) — marketing finds prospects willing to share project information; sales owns document collection, quotes and signing.
 - [Login protection](login-protection.md) — shared bounded login throttles; migration before API, no permanent account lock or IP allowlist.
 - [ERP platform core](erp-platform-core.md) — key foundational decisions for the metadata-driven Production ERP Builder (contract-first, metadata-driven, multilingual JSONB, custom JWT).

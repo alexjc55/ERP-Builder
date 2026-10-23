@@ -1,3 +1,4 @@
+import { withLatestActivity } from "../lib/latest-record-activity";
 import { Router, type IRouter } from "express";
 import { guardedRelationRequiresFieldSurface } from "../lib/relation-selection-integrity";
 import {
@@ -433,7 +434,7 @@ router.get("/records/:recordId/links", requireAuth, async (req, res): Promise<vo
       linkId: link.id,
       relationId: link.relationId,
       direction: link.sourceRecordId === recordId ? "source" : "target",
-      record: presentRecord(record, ctx.hidden, ctx.fields),
+      record: (await withLatestActivity([presentRecord(record, ctx.hidden, ctx.fields)], ctx.fields))[0],
     });
   }
 

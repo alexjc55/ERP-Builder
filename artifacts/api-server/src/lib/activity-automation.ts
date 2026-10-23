@@ -1,3 +1,4 @@
+import { invalidateEntityTables } from "./collaboration";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, gt, lte, isNull, inArray, asc, sql } from "drizzle-orm";
 import {
@@ -59,6 +60,7 @@ export async function runActivityAction(action: Extract<AutomationAction, { type
       });
     }
   }
+  if (count && action.type === "create_task") await invalidateEntityTables(record.entityId);
   return count;
 }
 

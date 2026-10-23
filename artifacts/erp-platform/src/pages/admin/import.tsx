@@ -62,7 +62,7 @@ import {
 } from "lucide-react";
 
 // Field types that cannot be filled from a spreadsheet cell.
-const NON_IMPORTABLE = new Set(["file", "function", "relation", "lookup", "created_at"]);
+const NON_IMPORTABLE = new Set(["file", "function", "relation", "lookup", "created_at", "activity"]);
 
 const STATUS_HEADER = "Статус / Status";
 
